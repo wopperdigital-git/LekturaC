@@ -7,11 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 npm run dev       # Vite dev server (localhost:5173)
 npm run build     # tsc -b && vite build — type-checks before bundling
-npm run lint      # oxlint
+npm run lint      # oxlint (type-aware rules enabled via oxlint-tsgolint, see .oxlintrc.json)
+npm run test      # vitest run
 npm run preview   # preview a production build
 ```
 
-There is no test suite/framework configured in this project.
+Test coverage is intentionally narrow: Vitest unit tests exist only for pure, high-value logic — `engine/layoutEngine.test.ts` (the layout classifier) and `lib/theme-tokens.test.ts` (`darken`/`applyTheme`). No component/integration tests. `.github/workflows/ci.yml` runs typecheck, lint, test, and build on push/PR.
 
 ### Environment
 
@@ -35,8 +36,8 @@ There is intentionally no "regenerate" path — one topic per project. `CreatePa
 ### Content model & layout engine (`src/engine/`)
 
 - `contentBlocks.ts` defines `ContentBlock` as a zod discriminated union (`heading`, `paragraph`, `bulletList`, `stat`, `image`, `quote`, `timelineStep`, `comparisonGroup`) and `Card` (`id`, `orderIndex`, `blocks`, `layout`).
-- `layoutEngine.ts`'s `chooseLayout(blocks, context)` is a **rule-based classifier** (no LLM call) that inspects what block types a card actually contains and picks one of: `hero`, `statHero`, `comparison`, `timeline`, `iconGrid`, `gallery`, `standardSplit`, `standard`. `context.isFirstCard` is how the opening card gets a shot at the cinematic `hero` treatment instead of the generic fallback. `resolveLayout` defers to this whenever `card.layout === 'auto'` (the only value anything ever sets it to now — the manual per-card layout override UI was removed).
-- `components/layouts/LayoutRenderer.tsx` dispatches a resolved layout to its one dedicated component in `components/layouts/*` (`HeroLayout`, `StatHeroLayout`, `ComparisonLayout`, `TimelineLayout`, `IconGridLayout`, `GalleryLayout`, `StandardLayout`, `StandardSplitLayout`). All heading sizes across these are deliberately uniform (`h2`) except the opening `HeroLayout` (`h1`) — don't reintroduce per-layout heading-size variance.
+- `layoutEngine.ts`'s `chooseLayout(blocks, context)` is a **rule-based classifier** (no LLM call) that inspects what block types a card actually contains and picks one of: `hero`, `statHero`, `statGrid`, `comparison`, `timeline`, `quote`, `iconGrid`, `numberedList`, `textFocus`, `gallery`, `standardSplit`, `standard`. `context.isFirstCard` is how the opening card gets a shot at the cinematic `hero` treatment instead of the generic fallback. `resolveLayout` defers to this whenever `card.layout === 'auto'` (the only value anything ever sets it to now — the manual per-card layout override UI was removed).
+- `components/layouts/LayoutRenderer.tsx` dispatches a resolved layout to its one dedicated component in `components/layouts/*` (`HeroLayout`, `StatHeroLayout`, `StatGridLayout`, `ComparisonLayout`, `TimelineLayout`, `QuoteLayout`, `IconGridLayout`, `NumberedListLayout`, `TextFocusLayout`, `GalleryLayout`, `StandardLayout`, `StandardSplitLayout`). All heading sizes across these are deliberately uniform (`h2`, via the shared `Heading` component in `BlockRenderer.tsx`) except the opening `HeroLayout` (`h1`) — don't reintroduce per-layout heading-size variance.
 - Cards in `CardCanvas`/`PresentPage` have **no fixed aspect ratio or height** — they size purely to their content (this was a deliberate reversal of an earlier fixed-16:9-aspect-ratio design; don't reintroduce `aspect-video` on the card container).
 
 ### Theme system: two CSS token namespaces (the main thing to understand before touching styling)

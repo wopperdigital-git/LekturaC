@@ -20,7 +20,7 @@ export function EditorPage() {
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
-    if (id) store.loadDeck(id)
+    if (id) void store.loadDeck(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 

@@ -35,12 +35,33 @@ function newId() {
   return crypto.randomUUID()
 }
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-function scheduleSave(fn: () => Promise<void>, delayMs = 500) {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    fn().catch((err) => console.error('[presentationStore] save failed', err))
-  }, delayMs)
+// Keyed per-field so scheduling one field's save (e.g. theme) doesn't cancel
+// another field's pending save (e.g. title) that hasn't fired yet.
+const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+function scheduleSave(key: string, fn: () => Promise<void>, delayMs = 500) {
+  const existing = saveTimers.get(key)
+  if (existing) clearTimeout(existing)
+  saveTimers.set(
+    key,
+    setTimeout(() => {
+      saveTimers.delete(key)
+      void fn()
+    }, delayMs),
+  )
+}
+
+type StatusSetter = (partial: Partial<PresentationState>) => void
+
+// Drives the status/errorMessage fields TopBar reads to show "Saving…" / "Save failed".
+async function runSave(set: StatusSetter, persist: () => Promise<void>) {
+  set({ status: 'saving' })
+  try {
+    await persist()
+    set({ status: 'idle', errorMessage: null })
+  } catch (err) {
+    console.error('[presentationStore] save failed', err)
+    set({ status: 'error', errorMessage: err instanceof Error ? err.message : String(err) })
+  }
 }
 
 async function persistPresentationPatch(id: string, patch: Record<string, unknown>) {
@@ -50,23 +71,25 @@ async function persistPresentationPatch(id: string, patch: Record<string, unknow
   if (error) throw error
 }
 
-async function persistCardUpsert(presentationId: string, card: Card) {
-  if (!supabaseConfigured || !supabase) return
-  await ensureSession()
-  const { error } = await supabase.from('cards').upsert({
-    id: card.id,
-    presentation_id: presentationId,
-    order_index: card.orderIndex,
-    blocks: card.blocks,
-    layout: card.layout,
-  })
-  if (error) throw error
-}
-
 async function persistCardDelete(cardId: string) {
   if (!supabaseConfigured || !supabase) return
   await ensureSession()
   const { error } = await supabase.from('cards').delete().eq('id', cardId)
+  if (error) throw error
+}
+
+async function persistCardsReorder(presentationId: string, cards: Card[]) {
+  if (!supabaseConfigured || !supabase) return
+  await ensureSession()
+  const { error } = await supabase.from('cards').upsert(
+    cards.map((c) => ({
+      id: c.id,
+      presentation_id: presentationId,
+      order_index: c.orderIndex,
+      blocks: c.blocks,
+      layout: c.layout,
+    })),
+  )
   if (error) throw error
 }
 
@@ -186,13 +209,21 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   setTitle(title) {
     set({ title })
     const id = get().presentationId
-    if (id) scheduleSave(() => persistPresentationPatch(id, { title }))
+    if (id) {
+      scheduleSave('title', () =>
+        runSave(set, () => persistPresentationPatch(id, { title })),
+      )
+    }
   },
 
   setTheme(theme) {
     set({ theme })
     const id = get().presentationId
-    if (id) scheduleSave(() => persistPresentationPatch(id, { theme }))
+    if (id) {
+      scheduleSave('theme', () =>
+        runSave(set, () => persistPresentationPatch(id, { theme })),
+      )
+    }
   },
 
   deleteCard(cardId) {
@@ -201,7 +232,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         .filter((c) => c.id !== cardId)
         .map((c, i) => ({ ...c, orderIndex: i })),
     }))
-    persistCardDelete(cardId).catch((err) => console.error(err))
+    void runSave(set, () => persistCardDelete(cardId))
   },
 
   reorderCards(orderedIds) {
@@ -217,9 +248,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     })
     const id = get().presentationId
     if (id) {
-      for (const card of get().cards) {
-        persistCardUpsert(id, card).catch((err) => console.error(err))
-      }
+      void runSave(set, () => persistCardsReorder(id, get().cards))
     }
   },
 

@@ -18,7 +18,7 @@ export function HomePage() {
   }
 
   useEffect(() => {
-    refresh()
+    void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -63,7 +63,7 @@ export function HomePage() {
                 <button
                   onClick={async () => {
                     await deleteDeck(deck.id)
-                    refresh()
+                    await refresh()
                   }}
                   className="cursor-pointer text-xs text-red-600 hover:underline"
                 >

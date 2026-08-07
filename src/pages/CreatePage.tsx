@@ -113,7 +113,7 @@ export function CreatePage() {
         guidance: finalGuidance,
       })
       const id = await createDeckFromGeneration(deck)
-      navigate(`/deck/${id}`)
+      void navigate(`/deck/${id}`)
     } catch (err) {
       setError(err instanceof AIProviderError ? err.message : 'Generation failed. Try again.')
       setIsGenerating(false)
@@ -161,13 +161,13 @@ export function CreatePage() {
   function submitGuidance(finalGuidance: string) {
     setGuidance(finalGuidance)
     if (topic && slideCount && audience && detailLevel && tone) {
-      startGeneration(topic, slideCount, audience, detailLevel, tone, finalGuidance)
+      void startGeneration(topic, slideCount, audience, detailLevel, tone, finalGuidance)
     }
   }
 
   async function handleSkip() {
     const id = await createDeck()
-    navigate(`/deck/${id}`)
+    void navigate(`/deck/${id}`)
   }
 
   return (
