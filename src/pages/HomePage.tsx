@@ -1,0 +1,79 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { usePresentationStore, type DeckSummary } from '@/store/presentationStore'
+import { supabaseConfigured } from '@/lib/supabaseClient'
+import { Button } from '@/components/ui/Button'
+
+export function HomePage() {
+  const navigate = useNavigate()
+  const { listDecks, deleteDeck } = usePresentationStore()
+  const [decks, setDecks] = useState<DeckSummary[]>([])
+  const [loading, setLoading] = useState(true)
+
+  async function refresh() {
+    setLoading(true)
+    const list = await listDecks().catch(() => [])
+    setDecks(list)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div className="min-h-screen bg-app-canvas">
+      <div className="mx-auto max-w-3xl px-6 py-16">
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-3xl font-semibold text-app-foreground">Your presentations</h1>
+          <Button variant="primary" onClick={() => navigate('/new')}>
+            + New presentation
+          </Button>
+        </div>
+
+        {!supabaseConfigured && (
+          <div className="mb-6 rounded-app-sm bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+            Supabase isn't configured yet, so decks won't be saved between sessions. Add
+            VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to a .env file (see .env.example) to enable
+            persistence. You can still create a deck now to try the editor.
+          </div>
+        )}
+
+        {loading ? (
+          <p className="text-app-muted">Loading…</p>
+        ) : decks.length === 0 ? (
+          <p className="text-app-muted">No presentations yet — create one to get started.</p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {decks.map((deck) => (
+              <li
+                key={deck.id}
+                className="flex items-center justify-between rounded-app bg-app-background px-5 py-4 shadow-app transition-transform hover:-translate-y-0.5"
+              >
+                <button
+                  className="flex-1 cursor-pointer text-left"
+                  onClick={() => navigate(`/deck/${deck.id}`)}
+                >
+                  <div className="font-medium text-app-foreground">{deck.title}</div>
+                  <div className="text-xs text-app-muted">
+                    Updated {new Date(deck.updatedAt).toLocaleString()}
+                  </div>
+                </button>
+                <button
+                  onClick={async () => {
+                    await deleteDeck(deck.id)
+                    refresh()
+                  }}
+                  className="cursor-pointer text-xs text-red-600 hover:underline"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}

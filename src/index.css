@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+/*
+  Two parallel token namespaces:
+  - app-*   : the editor/UI chrome (topbar, sidebar, buttons, modals, Home/Create
+              pages). Fixed values in :root, never touched at runtime.
+  - slide-* : a deck's visual theme (colors/fonts/radius/shadow). Applied by
+              ThemeProvider onto a *scoped* wrapper element (not documentElement),
+              so switching a deck's theme only restyles the slides rendered
+              inside that wrapper — the rest of the app is unaffected.
+  --spacing (Tailwind's own built-in spacing multiplier) is likewise overridden
+  only on that same scoped wrapper, so a theme's spacing density never leaks
+  into app chrome either.
+*/
+@theme inline {
+  --color-app-background: var(--app-background);
+  --color-app-canvas: var(--app-canvas);
+  --color-app-foreground: var(--app-foreground);
+  --color-app-accent: var(--app-accent);
+  --color-app-accent-foreground: var(--app-accent-foreground);
+  --color-app-muted: var(--app-muted);
+  --color-app-border: var(--app-border);
+  --color-app-surface: var(--app-surface);
+  --font-app: var(--app-font);
+  --radius-app: var(--app-radius);
+  --radius-app-sm: var(--app-radius-sm);
+  --shadow-app: var(--app-shadow);
+
+  --color-slide-background: var(--slide-background);
+  --color-slide-canvas: var(--slide-canvas-background);
+  --color-slide-foreground: var(--slide-foreground);
+  --color-slide-accent: var(--slide-accent);
+  --color-slide-accent-foreground: var(--slide-accent-foreground);
+  --color-slide-muted: var(--slide-muted);
+  --color-slide-border: var(--slide-border);
+  --color-slide-surface: var(--slide-surface);
+  --font-slide-heading: var(--slide-font-heading);
+  --font-slide-body: var(--slide-font-body);
+  --radius-slide: var(--slide-radius);
+  --radius-slide-sm: var(--slide-radius-sm);
+  --shadow-slide: var(--slide-shadow);
+}
+
+:root {
+  /* App chrome — static, defines the whole app's UI regardless of any deck's theme */
+  --app-background: #ffffff;
+  --app-canvas: #f0f0f2;
+  --app-foreground: #111114;
+  --app-accent: #4f46e5;
+  --app-accent-foreground: #ffffff;
+  --app-muted: #6b7280;
+  --app-border: #e5e7eb;
+  --app-surface: #f8f8fa;
+  --app-font: 'Inter', system-ui, sans-serif;
+  --app-radius: 1rem;
+  --app-radius-sm: 0.5rem;
+  --app-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
+
+  /* Slide theme fallback — used only where no ThemeProvider scope overrides it */
+  --slide-background: #ffffff;
+  --slide-canvas-background: #f0f0f2;
+  --slide-foreground: #111114;
+  --slide-accent: #4f46e5;
+  --slide-accent-foreground: #ffffff;
+  --slide-muted: #6b7280;
+  --slide-border: #e5e7eb;
+  --slide-surface: #f8f8fa;
+  --slide-font-heading: 'Inter', system-ui, sans-serif;
+  --slide-font-body: 'Inter', system-ui, sans-serif;
+  --slide-radius: 1rem;
+  --slide-radius-sm: 0.5rem;
+  --slide-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
+  --slide-size-h1: 2.75rem;
+  --slide-size-h2: 1.875rem;
+  --slide-size-h3: 1.375rem;
+  --slide-size-body: 1rem;
+  --slide-line-height: 1.5;
+  --slide-letter-spacing: 0;
+
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-app-canvas);
+  color: var(--color-app-foreground);
+  font-family: var(--font-app);
+  -webkit-font-smoothing: antialiased;
+}
