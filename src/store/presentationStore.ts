@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
 import { DEFAULT_THEME, type ThemeTokens } from '@/lib/theme-tokens'
-import type { Card, ContentBlock, LayoutType } from '@/engine/contentBlocks'
+import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 
 export interface DeckSummary {
   id: string
@@ -20,7 +20,9 @@ interface PresentationState {
 
   listDecks: () => Promise<DeckSummary[]>
   createDeck: (title?: string) => Promise<string>
-  createDeckFromGeneration: (deck: { title: string; cards: { blocks: ContentBlock[] }[] }) => Promise<string>
+  createDeckFromGeneration: (
+    deck: { title: string; cards: { blocks: ContentBlock[]; visualStyle: VisualStyle }[] },
+  ) => Promise<string>
   loadDeck: (id: string) => Promise<void>
   deleteDeck: (id: string) => Promise<void>
 
@@ -88,6 +90,7 @@ async function persistCardsReorder(presentationId: string, cards: Card[]) {
       order_index: c.orderIndex,
       blocks: c.blocks,
       layout: c.layout,
+      visual_style: c.visualStyle,
     })),
   )
   if (error) throw error
@@ -137,6 +140,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       orderIndex: i,
       blocks: c.blocks,
       layout: 'auto',
+      visualStyle: c.visualStyle,
     }))
 
     if (supabaseConfigured && supabase) {
@@ -157,6 +161,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
           order_index: c.orderIndex,
           blocks: c.blocks,
           layout: c.layout,
+          visual_style: c.visualStyle,
         })),
       )
       if (cardsError) throw cardsError
@@ -187,6 +192,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
             orderIndex: row.order_index,
             blocks: row.blocks as ContentBlock[],
             layout: row.layout as LayoutType,
+            visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
           })),
           status: 'idle',
         })

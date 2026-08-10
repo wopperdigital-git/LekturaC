@@ -31,5 +31,5 @@ const LAYOUT_COMPONENTS = {
 export function LayoutRenderer({ card, context }: { card: Card; context?: LayoutContext }) {
   const resolved = resolveLayout(card.layout, card.blocks, context)
   const Component = LAYOUT_COMPONENTS[resolved]
-  return <Component blocks={card.blocks} />
+  return <Component blocks={card.blocks} variant={card.visualStyle} />
 }

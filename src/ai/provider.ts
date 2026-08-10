@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { contentBlockSchema } from '@/engine/contentBlocks'
+import { contentBlockSchema, visualStyleSchema } from '@/engine/contentBlocks'
 import type { GenerationBrief } from './prompts'
 
 export type { GenerationBrief }
 
 const generatedCardSchema = z
-  .object({ blocks: z.array(contentBlockSchema).min(1) })
+  .object({ blocks: z.array(contentBlockSchema).min(1), visualStyle: visualStyleSchema })
   .refine((card) => card.blocks[0]?.type === 'heading', {
     message: 'blocks[0] must be a heading block (every card must start with its title)',
   })

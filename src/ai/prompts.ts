@@ -30,7 +30,7 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
 {
   "title": string,
   "cards": [
-    { "blocks": ContentBlock[] }
+    { "blocks": ContentBlock[], "visualStyle": "structured" | "expressive" }
   ]
 }
 
@@ -48,6 +48,7 @@ Do not use any block type other than the ones listed above (in particular, do no
 STRUCTURE RULES:
 - Follow the "Slide count" line below. If it gives an exact number, produce EXACTLY that many cards — no fixed range, no default cap. If it instead asks you to choose, pick the count that best fits how much this topic actually has to say at the requested detail level — don't default to a round number out of habit. Either way, use the cards to tell a coherent story: an opening title card, body cards covering the material at the requested depth, and a closing card. If the count is large (or you chose a large count), do not pad with filler or repeat the same point — cover more distinct sub-topics/angles instead. If the count is small, prioritize the most important points rather than compressing everything in.
 - Every card's "blocks" array MUST start with exactly one "heading" block — this is the card's title and is required, not optional.
+- Every card also needs a "visualStyle": "structured" or "expressive" — this picks between two visual treatments of whatever layout the card ends up with, independent of block content. Use "expressive" for cards that should feel bold or visually striking (a pivotal stat, a big turning point, a rallying quote); use "structured" for calmer, more informational cards. Vary it across the deck rather than defaulting to one value throughout — but don't force a mechanical alternation either; let it follow the actual rhythm of the content.
 - The opening card should be a clean title moment: just a "heading" (the deck's core message, not just its topic) plus at most one short "paragraph" as a subtitle. Do not front-load detail onto the opening card.
 - Each card should have ONE clear idea. Do not cram multiple unrelated topics into one card.
 - Vary the block types across cards on purpose so the deck doesn't look repetitive — do not let more than two consecutive cards use the same block-type pattern:

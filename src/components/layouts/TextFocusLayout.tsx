@@ -1,10 +1,11 @@
-import { blocksOfType, type ContentBlock } from '@/engine/contentBlocks'
+import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
 
 /** Flowing multi-paragraph prose for narrative cards with no natural list/number structure. */
-export function TextFocusLayout({ blocks }: { blocks: ContentBlock[] }) {
+export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfType(blocks, 'heading')
   const paragraphs = blocksOfType(blocks, 'paragraph')
+  const expressive = variant === 'expressive'
 
   return (
     <div className="flex flex-col gap-5">
@@ -16,7 +17,7 @@ export function TextFocusLayout({ blocks }: { blocks: ContentBlock[] }) {
           <p
             key={i}
             className={
-              i === 0
+              expressive && i === 0
                 ? 'text-[length:var(--slide-size-h3)] leading-snug text-slide-foreground'
                 : 'text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90'
             }

@@ -11,18 +11,18 @@ import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 // actual card, no screenshot/canvas capture needed.
 const THUMB_BASE_WIDTH = 800
 const THUMB_BASE_HEIGHT = 450
-const THUMB_DISPLAY_WIDTH = 184
+const THUMB_DISPLAY_WIDTH = 136
 const THUMB_SCALE = THUMB_DISPLAY_WIDTH / THUMB_BASE_WIDTH
 const THUMB_DISPLAY_HEIGHT = THUMB_BASE_HEIGHT * THUMB_SCALE
 
 function CardThumbnail({ card, index }: { card: Card; index: number }) {
   return (
     <div
-      className="relative overflow-hidden rounded-app-sm bg-slide-background"
+      className="relative overflow-hidden rounded-slide bg-slide-background shadow-slide"
       style={{ width: THUMB_DISPLAY_WIDTH, height: THUMB_DISPLAY_HEIGHT }}
     >
       <div
-        className="pointer-events-none absolute left-0 top-0 origin-top-left bg-slide-background p-10"
+        className="pointer-events-none absolute left-0 top-0 origin-top-left bg-slide-background p-8 sm:p-10"
         style={{ width: THUMB_BASE_WIDTH, height: THUMB_BASE_HEIGHT, transform: `scale(${THUMB_SCALE})` }}
       >
         <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
@@ -59,7 +59,7 @@ function SortableRow({
         isActive ? 'border-app-accent' : 'border-transparent hover:border-app-border'
       }`}
     >
-      <button onClick={onSelect} className="block cursor-pointer">
+      <button onClick={onSelect} className="block cursor-pointer text-left">
         <CardThumbnail card={card} index={index} />
       </button>
       <button
@@ -111,11 +111,11 @@ export function CardOutlineSidebar({
   }
 
   return (
-    <div className="flex h-full flex-col gap-2 overflow-y-auto p-3">
+    <div className="flex h-full flex-col gap-1.5 overflow-y-auto p-2">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <ThemeProvider theme={theme}>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               {sorted.map((card, i) => (
                 <SortableRow
                   key={card.id}

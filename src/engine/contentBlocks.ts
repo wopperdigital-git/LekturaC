@@ -85,11 +85,16 @@ export const layoutTypeSchema = z.enum([
 
 export type LayoutType = z.infer<typeof layoutTypeSchema>
 
+export const visualStyleSchema = z.enum(['structured', 'expressive'])
+
+export type VisualStyle = z.infer<typeof visualStyleSchema>
+
 export const cardSchema = z.object({
   id: z.string(),
   orderIndex: z.number(),
   blocks: z.array(contentBlockSchema).min(1),
   layout: layoutTypeSchema,
+  visualStyle: visualStyleSchema,
 })
 
 export type Card = z.infer<typeof cardSchema>

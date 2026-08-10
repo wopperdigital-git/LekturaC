@@ -9,6 +9,8 @@ import { CardCanvas } from '@/components/editor/CardCanvas'
 import { SettingsModal } from '@/components/editor/SettingsModal'
 import { supabaseConfigured } from '@/lib/supabaseClient'
 
+const SIDEBAR_WIDTH_PX = 160
+
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const store = usePresentationStore()
@@ -45,9 +47,7 @@ export function EditorPage() {
         onTitleChange={store.setTitle}
         presentationId={id}
         saveStatus={store.status}
-        outlineOpen={outlineOpen}
         themeOpen={themeOpen}
-        onToggleOutline={() => setOutlineOpen((v) => !v)}
         onToggleTheme={() => setThemeOpen((v) => !v)}
         onOpenSettings={() => setShowSettings(true)}
       />
@@ -60,22 +60,31 @@ export function EditorPage() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <aside
-          className={`shrink-0 overflow-hidden border-r border-app-border bg-app-surface transition-[width] duration-200 ${
-            outlineOpen ? 'w-52' : 'w-0'
-          }`}
-        >
-          <div className="h-full w-52">
-            <CardOutlineSidebar
-              cards={store.cards}
-              theme={store.theme}
-              activeCardId={activeCardId}
-              onSelect={scrollToCard}
-              onReorder={store.reorderCards}
-              onDelete={store.deleteCard}
-            />
-          </div>
-        </aside>
+        <div className="relative flex shrink-0 items-stretch py-3">
+          <aside
+            className="h-full overflow-hidden rounded-[16px] border border-app-border bg-app-surface shadow-app transition-all duration-200"
+            style={{ width: outlineOpen ? SIDEBAR_WIDTH_PX : 0, marginLeft: outlineOpen ? 12 : 0 }}
+          >
+            <div className="h-full" style={{ width: SIDEBAR_WIDTH_PX }}>
+              <CardOutlineSidebar
+                cards={store.cards}
+                theme={store.theme}
+                activeCardId={activeCardId}
+                onSelect={scrollToCard}
+                onReorder={store.reorderCards}
+                onDelete={store.deleteCard}
+              />
+            </div>
+          </aside>
+
+          <button
+            onClick={() => setOutlineOpen((v) => !v)}
+            aria-label={outlineOpen ? 'Collapse outline' : 'Expand outline'}
+            className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app hover:text-app-foreground"
+          >
+            {outlineOpen ? '‹' : '›'}
+          </button>
+        </div>
 
         <main className="flex-1 overflow-y-auto bg-app-canvas">
           {store.cards.length === 0 ? (

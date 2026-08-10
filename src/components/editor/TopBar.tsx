@@ -7,9 +7,7 @@ export function TopBar({
   onTitleChange,
   presentationId,
   saveStatus,
-  outlineOpen,
   themeOpen,
-  onToggleOutline,
   onToggleTheme,
   onOpenSettings,
 }: {
@@ -17,9 +15,7 @@ export function TopBar({
   onTitleChange: (title: string) => void
   presentationId: string
   saveStatus: 'idle' | 'loading' | 'saving' | 'error'
-  outlineOpen: boolean
   themeOpen: boolean
-  onToggleOutline: () => void
   onToggleTheme: () => void
   onOpenSettings: () => void
 }) {
@@ -29,13 +25,6 @@ export function TopBar({
         <Link to="/" className="text-sm text-app-muted hover:text-app-foreground">
           ← Home
         </Link>
-        <Button
-          variant="ghost"
-          onClick={onToggleOutline}
-          className={outlineOpen ? 'bg-app-surface text-app-accent' : ''}
-        >
-          Outline
-        </Button>
         <Input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
