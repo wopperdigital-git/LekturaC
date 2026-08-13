@@ -54,7 +54,7 @@ export const useAuthStore = create<AuthState>(() => ({
 // automatically when a user clicks an email-confirmation or
 // password-reset link.
 if (supabaseConfigured && supabase) {
-  supabase.auth.getSession().then(({ data }) => {
+  void supabase.auth.getSession().then(({ data }) => {
     useAuthStore.setState({
       user: data.session?.user ?? null,
       status: data.session ? 'authenticated' : 'unauthenticated',
