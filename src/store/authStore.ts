@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { User } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 import { supabase, supabaseConfigured } from '@/lib/supabaseClient'
 
 interface AuthState {
@@ -48,6 +48,16 @@ export const useAuthStore = create<AuthState>(() => ({
   },
 }))
 
+// A leftover anonymous session (from before this login feature existed)
+// must not count as authenticated — anonymous auth is fully removed.
+function resolveAuthState(session: Session | null) {
+  const isRealUser = !!session && !session.user.is_anonymous
+  return {
+    user: isRealUser ? session.user : null,
+    status: isRealUser ? ('authenticated' as const) : ('unauthenticated' as const),
+  }
+}
+
 // Runs once at module load (this store is an app-wide singleton, same as
 // usePresentationStore) — hydrates the current session, then keeps `user`/
 // `status` live for login, logout, and the session Supabase creates
@@ -55,15 +65,9 @@ export const useAuthStore = create<AuthState>(() => ({
 // password-reset link.
 if (supabaseConfigured && supabase) {
   void supabase.auth.getSession().then(({ data }) => {
-    useAuthStore.setState({
-      user: data.session?.user ?? null,
-      status: data.session ? 'authenticated' : 'unauthenticated',
-    })
+    useAuthStore.setState(resolveAuthState(data.session))
   })
   supabase.auth.onAuthStateChange((_event, session) => {
-    useAuthStore.setState({
-      user: session?.user ?? null,
-      status: session ? 'authenticated' : 'unauthenticated',
-    })
+    useAuthStore.setState(resolveAuthState(session))
   })
 }
