@@ -24,7 +24,7 @@ export function LoginPage() {
   const [forgotSubmitted, setForgotSubmitted] = useState(false)
 
   useEffect(() => {
-    if (status === 'authenticated') navigate('/', { replace: true })
+    if (status === 'authenticated') void navigate('/', { replace: true })
   }, [status, navigate])
 
   async function handleSubmit(e: FormEvent) {
