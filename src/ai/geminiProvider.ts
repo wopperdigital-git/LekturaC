@@ -18,44 +18,60 @@ interface GeminiContent {
   parts: [{ text: string }]
 }
 
+// 503 ("model overloaded") and 429 (rate limit) are both transient per
+// Google's own guidance — retry with backoff before surfacing an error,
+// since a spike has usually cleared within a few seconds.
+const RETRYABLE_STATUS = new Set([429, 503])
+const MAX_RETRIES = 3
+const BASE_DELAY_MS = 1000
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function callGemini(
   apiKey: string,
   systemInstruction: string,
   contents: GeminiContent[],
   maxOutputTokens: number,
 ): Promise<string> {
-  const res = await fetch(GEMINI_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemInstruction }] },
-      contents,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens,
-        responseMimeType: 'application/json',
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
       },
-    }),
-  })
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens,
+          responseMimeType: 'application/json',
+        },
+      }),
+    })
 
-  if (!res.ok) {
+    if (res.ok) {
+      const data = await res.json()
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      if (typeof text !== 'string') {
+        const finishReason = data?.candidates?.[0]?.finishReason
+        throw new AIProviderError(
+          `Gemini API returned an unexpected response shape${finishReason ? ` (finishReason: ${finishReason})` : ''}`,
+        )
+      }
+      return text
+    }
+
     const body = await res.json().catch(() => null)
     const message = body?.error?.message || (await res.text().catch(() => '')) || res.statusText
-    throw new AIProviderError(`Gemini API error (${res.status}): ${message}`)
+    if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
+      throw new AIProviderError(`Gemini API error (${res.status}): ${message}`)
+    }
+    await sleep(BASE_DELAY_MS * 2 ** attempt)
   }
-
-  const data = await res.json()
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (typeof text !== 'string') {
-    const finishReason = data?.candidates?.[0]?.finishReason
-    throw new AIProviderError(
-      `Gemini API returned an unexpected response shape${finishReason ? ` (finishReason: ${finishReason})` : ''}`,
-    )
-  }
-  return text
 }
 
 function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } {
