@@ -18,7 +18,7 @@ Test coverage is intentionally narrow: Vitest unit tests exist only for pure, hi
 
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in `.env` (see `.env.example`) enable Supabase persistence. If absent, `supabaseConfigured` (`src/lib/supabaseClient.ts`) is `false` and every store method that touches Supabase no-ops gracefully — the app still runs fully in-memory for local dev without any backend.
 - The Gemini API key comes from `VITE_GEMINI_API_KEY` in `.env`, read directly in `CreatePage.tsx` (baked into the client bundle at build time — convenient for local/personal dev, but readable by anyone with access to the built app, so don't rely on it for a deployment other people can reach). There is no in-app way to enter a key anymore (the old Settings modal was removed) and no server-side proxy for AI calls by design; the key is sent directly from the browser to Google's Generative Language API.
-- Supabase anonymous sign-in must be enabled on the Supabase project (Auth → Sign In / Providers) for persistence to work — `ensureSession()` in `supabaseClient.ts` calls `signInAnonymously()` on first use so every browser gets a persistent `auth.uid()` with no login screen.
+- Accounts are required: every route except `/login` and `/reset-password` is wrapped in `<RequireAuth>` (`src/components/auth/RequireAuth.tsx`), which redirects unauthenticated visitors to `/login`. There is no anonymous/guest mode. Auth state lives in `src/store/authStore.ts` (email/password via Supabase Auth, email confirmation required — toggle at Auth → Providers → Email → "Confirm email" in the Supabase dashboard). `ensureSession()` in `supabaseClient.ts` only waits for the client's session to finish hydrating from storage; it no longer creates a session itself.
 
 ## Architecture
 
@@ -60,6 +60,10 @@ Two independent slide-in/out side panels, not a shared mode switcher: a left out
 ### Persistence (Supabase)
 
 `supabase/migrations/0001_init.sql` defines `presentations`, `cards`, and `themes` (the `themes` table is legacy/unused now that custom themes were removed — harmless to leave, not read from). `0002_add_visual_style.sql` adds `cards.visual_style` (`not null default 'structured'`) — run it against any project created before this field existed. RLS on every table is scoped to `owner_id = auth.uid()`, with `cards` checked via a join back to its parent `presentations` row. `store/presentationStore.ts` debounces text/theme field saves (`scheduleSave`, 500ms) but persists structural changes (card delete/reorder) immediately.
+
+### Auth
+
+`src/store/authStore.ts` is a zustand store, initialized once at module load (subscribing to `supabase.auth.onAuthStateChange`), exposing `user`/`status` plus `signUp`/`signIn`/`signOut`/`resetPasswordForEmail`/`updatePassword`. `resolveAuthState()` treats a session where `session.user.is_anonymous` is `true` the same as no session at all — this matters because browsers that used the app before this feature shipped may still be holding a leftover anonymous Supabase session in `localStorage`, and without this check that stale session would silently satisfy `RequireAuth` and skip the login screen entirely. `LoginPage.tsx` (route `/login`) handles login, signup, and forgot-password as one page via local mode state, rather than three separate routes. `ResetPasswordPage.tsx` (route `/reset-password`) is the landing page for the password-reset email link — Supabase's client auto-detects the recovery session from the URL. Decks created under the old anonymous-auth model (before this feature) are orphaned rows in Supabase, invisible to any real account under RLS — harmless to leave, or delete manually from the Supabase dashboard.
 
 ### Path alias
 

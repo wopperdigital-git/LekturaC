@@ -12,20 +12,15 @@ export const supabase = supabaseConfigured
 let ensureSessionPromise: Promise<void> | null = null
 
 /**
- * Every browser gets a persistent anonymous auth.uid() so decks are scoped
- * per-user via RLS with no login screen. Anonymous sign-ins must be enabled
- * in the Supabase project's Auth settings.
+ * Waits for the Supabase client to finish hydrating any existing session
+ * from storage. Callers (in presentationStore.ts) always run after
+ * RequireAuth has already confirmed a real session exists, so this never
+ * creates a session itself — it's just a hydration-ordering guard.
  */
 export function ensureSession(): Promise<void> {
   if (!supabase) return Promise.resolve()
   if (!ensureSessionPromise) {
-    ensureSessionPromise = (async () => {
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        const { error } = await supabase.auth.signInAnonymously()
-        if (error) throw error
-      }
-    })()
+    ensureSessionPromise = supabase.auth.getSession().then(() => undefined)
   }
   return ensureSessionPromise
 }

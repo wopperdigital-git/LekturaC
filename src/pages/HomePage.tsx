@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePresentationStore, type DeckSummary } from '@/store/presentationStore'
+import { useAuthStore } from '@/store/authStore'
 import { supabaseConfigured } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/Button'
 
 export function HomePage() {
   const navigate = useNavigate()
   const { listDecks, deleteDeck } = usePresentationStore()
+  const user = useAuthStore((s) => s.user)
+  const signOut = useAuthStore((s) => s.signOut)
   const [decks, setDecks] = useState<DeckSummary[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -27,9 +30,22 @@ export function HomePage() {
       <div className="mx-auto max-w-3xl px-6 py-16">
         <div className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-semibold text-app-foreground">Your presentations</h1>
-          <Button variant="primary" onClick={() => navigate('/new')}>
-            + New presentation
-          </Button>
+          <div className="flex items-center gap-3">
+            {user && (
+              <div className="flex items-center gap-2 text-xs text-app-muted">
+                <span>{user.email}</span>
+                <button
+                  onClick={() => void signOut()}
+                  className="cursor-pointer hover:text-app-foreground hover:underline"
+                >
+                  Log out
+                </button>
+              </div>
+            )}
+            <Button variant="primary" onClick={() => navigate('/new')}>
+              + New presentation
+            </Button>
+          </div>
         </div>
 
         {!supabaseConfigured && (
