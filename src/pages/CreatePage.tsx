@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
-import { GroqProvider } from '@/ai/groqProvider'
+import { GeminiProvider } from '@/ai/geminiProvider'
 import { AIProviderError, type GenerationBrief } from '@/ai/provider'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
 
-// Temporarily on Groq instead of Gemini (Gemini's been returning 503s under
-// high demand). To switch back: swap this import/usage for GeminiProvider
-// and GEMINI_API_KEY below — geminiProvider.ts and VITE_GEMINI_API_KEY are
-// both left in place for exactly that.
-const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
+// Back on Gemini (was temporarily on Groq while Gemini was returning 503s
+// under high demand). To switch back to Groq: swap this import/usage for
+// GroqProvider and GROQ_API_KEY below — groqProvider.ts and
+// VITE_GROQ_API_KEY are both left in place for exactly that.
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
 
 type DetailLevel = GenerationBrief['detailLevel']
 type Tone = GenerationBrief['tone']
@@ -98,14 +98,14 @@ export function CreatePage() {
     finalTone: Tone,
     finalGuidance: string,
   ) {
-    if (!GROQ_API_KEY) {
-      setError('Add VITE_GROQ_API_KEY to your .env file and restart the dev server.')
+    if (!GEMINI_API_KEY) {
+      setError('Add VITE_GEMINI_API_KEY to your .env file and restart the dev server.')
       return
     }
     setIsGenerating(true)
     setError(null)
     try {
-      const provider = new GroqProvider(GROQ_API_KEY)
+      const provider = new GeminiProvider(GEMINI_API_KEY)
       const deck = await provider.generateDeck(finalTopic, {
         slideCount: count,
         audience: finalAudience,
