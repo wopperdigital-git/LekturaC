@@ -6,7 +6,6 @@ import { ThemePanel } from '@/components/theme/ThemePanel'
 import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
 import { CardCanvas } from '@/components/editor/CardCanvas'
-import { supabaseConfigured } from '@/lib/supabaseClient'
 
 const SIDEBAR_WIDTH_PX = 160
 
@@ -48,13 +47,6 @@ export function EditorPage() {
         themeOpen={themeOpen}
         onToggleTheme={() => setThemeOpen((v) => !v)}
       />
-
-      {!supabaseConfigured && (
-        <div className="bg-yellow-50 px-4 py-2 text-xs text-yellow-800">
-          Supabase isn't configured — changes in this session won't be saved. Add
-          VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY to .env to enable persistence.
-        </div>
-      )}
 
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex shrink-0 items-stretch py-3">

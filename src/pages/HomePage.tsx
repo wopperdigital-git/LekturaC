@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePresentationStore, type DeckSummary } from '@/store/presentationStore'
 import { useAuthStore } from '@/store/authStore'
-import { supabaseConfigured } from '@/lib/supabaseClient'
 import { Button } from '@/components/ui/Button'
 
 export function HomePage() {
@@ -47,14 +46,6 @@ export function HomePage() {
             </Button>
           </div>
         </div>
-
-        {!supabaseConfigured && (
-          <div className="mb-6 rounded-app-sm bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-            Supabase isn't configured yet, so decks won't be saved between sessions. Add
-            VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to a .env file (see .env.example) to enable
-            persistence. You can still create a deck now to try the editor.
-          </div>
-        )}
 
         {loading ? (
           <p className="text-app-muted">Loading…</p>
