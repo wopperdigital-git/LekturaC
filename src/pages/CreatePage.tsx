@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
-import { useSettingsStore } from '@/store/settingsStore'
 import { GeminiProvider } from '@/ai/geminiProvider'
 import { AIProviderError, type GenerationBrief } from '@/ai/provider'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
-import { SettingsModal } from '@/components/editor/SettingsModal'
+
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
 
 type DetailLevel = GenerationBrief['detailLevel']
 type Tone = GenerationBrief['tone']
@@ -65,7 +65,6 @@ function ChipGroup<T extends string>({
 export function CreatePage() {
   const navigate = useNavigate()
   const { createDeckFromGeneration, createDeck } = usePresentationStore()
-  const { geminiApiKey } = useSettingsStore()
 
   const [topic, setTopic] = useState<string | null>(null)
   const [topicDraft, setTopicDraft] = useState('')
@@ -80,7 +79,6 @@ export function CreatePage() {
 
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -96,15 +94,14 @@ export function CreatePage() {
     finalTone: Tone,
     finalGuidance: string,
   ) {
-    if (!geminiApiKey.trim()) {
-      setShowSettings(true)
-      setError("Add a Gemini API key first — it's free at aistudio.google.com/apikey.")
+    if (!GEMINI_API_KEY) {
+      setError('Add VITE_GEMINI_API_KEY to your .env file and restart the dev server.')
       return
     }
     setIsGenerating(true)
     setError(null)
     try {
-      const provider = new GeminiProvider(geminiApiKey)
+      const provider = new GeminiProvider(GEMINI_API_KEY)
       const deck = await provider.generateDeck(finalTopic, {
         slideCount: count,
         audience: finalAudience,
@@ -172,13 +169,10 @@ export function CreatePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-app-canvas">
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex items-center px-6 py-4">
         <Link to="/" className="text-sm text-app-muted hover:text-app-foreground">
           ← Home
         </Link>
-        <Button variant="secondary" onClick={() => setShowSettings(true)}>
-          Settings
-        </Button>
       </div>
 
       <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-6 pb-16">
@@ -338,8 +332,6 @@ export function CreatePage() {
           <div ref={bottomRef} />
         </div>
       </div>
-
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

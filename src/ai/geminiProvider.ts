@@ -79,7 +79,7 @@ export class GeminiProvider implements AIProvider {
 
   async generateDeck(topic: string, brief: GenerationBrief): Promise<GeneratedDeck> {
     if (!this.apiKey.trim()) {
-      throw new AIProviderError('No Gemini API key configured. Add one in Settings.')
+      throw new AIProviderError('No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file.')
     }
 
     const userPrompt = buildDeckUserPrompt(topic, brief)

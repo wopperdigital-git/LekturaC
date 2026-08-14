@@ -9,7 +9,6 @@ export function TopBar({
   saveStatus,
   themeOpen,
   onToggleTheme,
-  onOpenSettings,
 }: {
   title: string
   onTitleChange: (title: string) => void
@@ -17,7 +16,6 @@ export function TopBar({
   saveStatus: 'idle' | 'loading' | 'saving' | 'error'
   themeOpen: boolean
   onToggleTheme: () => void
-  onOpenSettings: () => void
 }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-app-border bg-app-background px-4 py-3">
@@ -43,10 +41,7 @@ export function TopBar({
         >
           Theme
         </Button>
-        <Button variant="secondary" onClick={onOpenSettings}>
-          Settings
-        </Button>
-        <Link to={`/deck/${presentationId}/present`} target="_blank" rel="noreferrer">
+        <Link to={`/deck/${presentationId}/present`}>
           <Button variant="primary">Present</Button>
         </Link>
       </div>

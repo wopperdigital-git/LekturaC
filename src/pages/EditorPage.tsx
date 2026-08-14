@@ -6,7 +6,6 @@ import { ThemePanel } from '@/components/theme/ThemePanel'
 import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
 import { CardCanvas } from '@/components/editor/CardCanvas'
-import { SettingsModal } from '@/components/editor/SettingsModal'
 import { supabaseConfigured } from '@/lib/supabaseClient'
 
 const SIDEBAR_WIDTH_PX = 160
@@ -18,7 +17,6 @@ export function EditorPage() {
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const [outlineOpen, setOutlineOpen] = useState(true)
   const [themeOpen, setThemeOpen] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
@@ -49,7 +47,6 @@ export function EditorPage() {
         saveStatus={store.status}
         themeOpen={themeOpen}
         onToggleTheme={() => setThemeOpen((v) => !v)}
-        onOpenSettings={() => setShowSettings(true)}
       />
 
       {!supabaseConfigured && (
@@ -109,8 +106,6 @@ export function EditorPage() {
           </div>
         </aside>
       </div>
-
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

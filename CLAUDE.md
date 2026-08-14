@@ -17,7 +17,7 @@ Test coverage is intentionally narrow: Vitest unit tests exist only for pure, hi
 ### Environment
 
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` in `.env` (see `.env.example`) enable Supabase persistence. If absent, `supabaseConfigured` (`src/lib/supabaseClient.ts`) is `false` and every store method that touches Supabase no-ops gracefully — the app still runs fully in-memory for local dev without any backend.
-- The Gemini API key is **not** an env var — it's entered once in the in-app Settings modal and kept in `localStorage` (`src/store/settingsStore.ts`), then sent directly from the browser to Google's Generative Language API. There is no server-side proxy for AI calls by design.
+- The Gemini API key comes from `VITE_GEMINI_API_KEY` in `.env`, read directly in `CreatePage.tsx` (baked into the client bundle at build time — convenient for local/personal dev, but readable by anyone with access to the built app, so don't rely on it for a deployment other people can reach). There is no in-app way to enter a key anymore (the old Settings modal was removed) and no server-side proxy for AI calls by design; the key is sent directly from the browser to Google's Generative Language API.
 - Supabase anonymous sign-in must be enabled on the Supabase project (Auth → Sign In / Providers) for persistence to work — `ensureSession()` in `supabaseClient.ts` calls `signInAnonymously()` on first use so every browser gets a persistent `auth.uid()` with no login screen.
 
 ## Architecture
