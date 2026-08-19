@@ -2,10 +2,35 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabaseConfigured } from '@/lib/supabaseClient'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
-import { Input, Label } from '@/components/ui/Input'
+import { Field, Input, PasswordInput } from '@/components/ui/Input'
 
 type Mode = 'login' | 'signup' | 'forgot'
+
+const MIN_PASSWORD_LENGTH = 6
+
+const COPY: Record<Mode, { title: string; subtitle: string }> = {
+  login: { title: 'Welcome back', subtitle: 'Log in to pick up where you left off.' },
+  signup: { title: 'Create your account', subtitle: 'Turn a single brief into a finished deck.' },
+  forgot: { title: 'Reset your password', subtitle: "We'll email you a link to set a new one." },
+}
+
+function validateEmail(value: string): string | null {
+  if (!value.trim()) return 'Enter your email address.'
+  // deliberately loose — the real check is the confirmation email landing
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Enter a valid email address.'
+  return null
+}
+
+function validatePassword(value: string, mode: Mode): string | null {
+  if (!value) return 'Enter your password.'
+  if (mode === 'signup' && value.length < MIN_PASSWORD_LENGTH) {
+    return `Use at least ${MIN_PASSWORD_LENGTH} characters.`
+  }
+  return null
+}
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -17,8 +42,9 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [forgotEmail, setForgotEmail] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
   const [forgotSubmitted, setForgotSubmitted] = useState(false)
@@ -27,126 +53,170 @@ export function LoginPage() {
     if (status === 'authenticated') void navigate('/', { replace: true })
   }, [status, navigate])
 
+  function switchMode(next: Mode) {
+    setMode(next)
+    setEmailError(null)
+    setPasswordError(null)
+    setFormError(null)
+    setSignupSuccess(false)
+    setForgotSubmitted(false)
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setError(null)
+    setFormError(null)
+
+    const nextEmailError = validateEmail(email)
+    setEmailError(nextEmailError)
+
+    if (mode === 'forgot') {
+      if (nextEmailError) return
+      setSubmitting(true)
+      await resetPasswordForEmail(email)
+      setSubmitting(false)
+      setForgotSubmitted(true)
+      return
+    }
+
+    const nextPasswordError = validatePassword(password, mode)
+    setPasswordError(nextPasswordError)
+    if (nextEmailError || nextPasswordError) return
+
     setSubmitting(true)
     if (mode === 'login') {
-      const { error: signInError } = await signIn(email, password)
-      if (signInError) setError(signInError)
+      const { error } = await signIn(email, password)
+      if (error) setFormError(error)
     } else {
-      const { error: signUpError, needsVerification } = await signUp(email, password)
-      if (signUpError) setError(signUpError)
+      const { error, needsVerification } = await signUp(email, password)
+      if (error) setFormError(error)
       else if (needsVerification) setSignupSuccess(true)
     }
     setSubmitting(false)
   }
 
-  async function handleForgotSubmit(e: FormEvent) {
-    e.preventDefault()
-    setSubmitting(true)
-    await resetPasswordForEmail(forgotEmail)
-    setSubmitting(false)
-    setForgotSubmitted(true)
+  if (!supabaseConfigured) {
+    return (
+      <AuthLayout title="Accounts unavailable" subtitle="This app isn't connected to a backend yet.">
+        <Alert tone="info">
+          Supabase isn't configured, so accounts aren't available — add <code>VITE_SUPABASE_URL</code>{' '}
+          and <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env</code>.
+        </Alert>
+      </AuthLayout>
+    )
   }
 
-  function switchMode(next: Mode) {
-    setMode(next)
-    setError(null)
-    setSignupSuccess(false)
-    setForgotSubmitted(false)
+  // terminal states: the form is replaced by a confirmation message
+  if (signupSuccess || forgotSubmitted) {
+    return (
+      <AuthLayout
+        title={signupSuccess ? 'Check your inbox' : 'Check your inbox'}
+        subtitle={signupSuccess ? 'One more step to finish signing up.' : 'A reset link is on its way.'}
+      >
+        <div className="auth-fade-in flex flex-col gap-4">
+          <Alert tone="success">
+            {signupSuccess
+              ? `We sent a confirmation link to ${email}. Confirm your address, then log in.`
+              : `If an account exists for ${email}, we've sent a link to reset its password.`}
+          </Alert>
+          <Button type="button" variant="secondary" onClick={() => switchMode('login')}>
+            Back to log in
+          </Button>
+        </div>
+      </AuthLayout>
+    )
   }
+
+  const submitLabel = mode === 'login' ? 'Log in' : mode === 'signup' ? 'Create account' : 'Send reset link'
+  const pendingLabel =
+    mode === 'login' ? 'Logging in…' : mode === 'signup' ? 'Creating account…' : 'Sending…'
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-app-canvas px-6">
-      <div className="w-full max-w-sm rounded-app bg-app-background p-8 shadow-app">
-        <h1 className="mb-6 text-xl font-semibold text-app-foreground">
-          {mode === 'login' ? 'Log in' : mode === 'signup' ? 'Sign up' : 'Reset password'}
-        </h1>
-
-        {!supabaseConfigured ? (
-          <p className="text-sm text-app-muted">
-            Supabase isn't configured, so accounts aren't available — add VITE_SUPABASE_URL /
-            VITE_SUPABASE_ANON_KEY to .env.
-          </p>
-        ) : mode === 'forgot' ? (
-          forgotSubmitted ? (
-            <p className="text-sm text-app-muted">
-              If an account exists for that email, we've sent a reset link.
-            </p>
-          ) : (
-            <form onSubmit={handleForgotSubmit} className="flex flex-col gap-3">
-              <div>
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  required
-                  autoFocus
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                />
-              </div>
-              <Button type="submit" variant="primary" disabled={submitting}>
-                Send reset link
-              </Button>
-            </form>
-          )
-        ) : signupSuccess ? (
-          <p className="text-sm text-app-muted">Check your email to confirm your account, then log in.</p>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <div>
-              <Label>Email</Label>
-              <Input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div>
-              <Label>Password</Label>
-              <Input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" variant="primary" disabled={submitting}>
-              {mode === 'login' ? 'Log in' : 'Sign up'}
-            </Button>
-          </form>
-        )}
-
-        {supabaseConfigured && mode !== 'forgot' && !signupSuccess && (
-          <div className="mt-4 flex flex-col gap-1.5 text-xs">
+    <AuthLayout
+      title={COPY[mode].title}
+      subtitle={COPY[mode].subtitle}
+      footer={
+        <div className="flex flex-col gap-2 text-sm">
+          {mode === 'forgot' ? (
             <button
               type="button"
-              onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-              className="cursor-pointer text-left text-app-muted hover:text-app-foreground hover:underline"
+              onClick={() => switchMode('login')}
+              className="cursor-pointer text-left text-app-muted transition-colors hover:text-app-foreground"
             >
-              {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+              ← Back to log in
             </button>
-            {mode === 'login' && (
+          ) : (
+            <p className="text-app-muted">
+              {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
               <button
                 type="button"
-                onClick={() => switchMode('forgot')}
-                className="cursor-pointer text-left text-app-muted hover:text-app-foreground hover:underline"
+                onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
+                className="cursor-pointer font-medium text-app-accent-text underline-offset-4 transition-colors hover:underline"
               >
-                Forgot password?
+                {mode === 'login' ? 'Sign up' : 'Log in'}
               </button>
+            </p>
+          )}
+        </div>
+      }
+    >
+      <form key={mode} onSubmit={handleSubmit} noValidate className="auth-fade-in flex flex-col gap-4">
+        <Field
+          label="Email"
+          error={emailError}
+          render={(fieldProps) => (
+            <Input
+              {...fieldProps}
+              type="email"
+              autoComplete="email"
+              autoFocus
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (emailError) setEmailError(null)
+              }}
+              onBlur={() => email && setEmailError(validateEmail(email))}
+            />
+          )}
+        />
+
+        {mode !== 'forgot' && (
+          <Field
+            label="Password"
+            error={passwordError}
+            hint={mode === 'signup' ? `At least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
+            render={(fieldProps) => (
+              <PasswordInput
+                {...fieldProps}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (passwordError) setPasswordError(null)
+                }}
+                onBlur={() => password && setPasswordError(validatePassword(password, mode))}
+              />
             )}
-          </div>
+          />
         )}
 
-        {supabaseConfigured && mode === 'forgot' && (
+        {mode === 'login' && (
           <button
             type="button"
-            onClick={() => switchMode('login')}
-            className="mt-4 cursor-pointer text-xs text-app-muted hover:text-app-foreground hover:underline"
+            onClick={() => switchMode('forgot')}
+            className="-mt-1 cursor-pointer self-end text-xs text-app-muted transition-colors hover:text-app-accent-text"
           >
-            Back to log in
+            Forgot password?
           </button>
         )}
-      </div>
-    </div>
+
+        {formError && <Alert tone="error">{formError}</Alert>}
+
+        <Button type="submit" variant="primary" loading={submitting} className="mt-1 w-full py-2.5">
+          {submitting ? pendingLabel : submitLabel}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }

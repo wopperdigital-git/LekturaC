@@ -17,7 +17,7 @@ export function ThemePanel({
           <button
             key={t.id}
             onClick={() => onSelect(t)}
-            className={`flex cursor-pointer items-center gap-3 rounded-app-sm border p-2 text-left transition-colors ${
+            className={`flex cursor-pointer items-center gap-3 rounded-app-sm border p-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
               isActive ? 'border-app-accent bg-app-surface' : 'border-transparent hover:bg-app-surface'
             }`}
           >

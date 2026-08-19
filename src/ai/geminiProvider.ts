@@ -25,8 +25,23 @@ const RETRYABLE_STATUS = new Set([429, 503])
 const MAX_RETRIES = 3
 const BASE_DELAY_MS = 1000
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/** Abortable delay, so cancelling during backoff doesn't wait out the timer. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer)
+        reject(new DOMException('Aborted', 'AbortError'))
+      },
+      { once: true },
+    )
+  })
 }
 
 async function callGemini(
@@ -34,10 +49,12 @@ async function callGemini(
   systemInstruction: string,
   contents: GeminiContent[],
   maxOutputTokens: number,
+  signal?: AbortSignal,
 ): Promise<string> {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(GEMINI_ENDPOINT, {
       method: 'POST',
+      signal,
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
@@ -70,7 +87,7 @@ async function callGemini(
     if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
       throw new AIProviderError(`Gemini API error (${res.status}): ${message}`)
     }
-    await sleep(BASE_DELAY_MS * 2 ** attempt)
+    await sleep(BASE_DELAY_MS * 2 ** attempt, signal)
   }
 }
 
@@ -93,7 +110,11 @@ export class GeminiProvider implements AIProvider {
     this.apiKey = apiKey
   }
 
-  async generateDeck(topic: string, brief: GenerationBrief): Promise<GeneratedDeck> {
+  async generateDeck(
+    topic: string,
+    brief: GenerationBrief,
+    signal?: AbortSignal,
+  ): Promise<GeneratedDeck> {
     if (!this.apiKey.trim()) {
       throw new AIProviderError('No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file.')
     }
@@ -108,7 +129,7 @@ export class GeminiProvider implements AIProvider {
     const maxOutputTokens =
       brief.slideCount === 'auto' ? 8192 : Math.min(8192, Math.max(4096, brief.slideCount * 260 + 800))
 
-    const first = await callGemini(this.apiKey, DECK_SYSTEM_PROMPT, contents, maxOutputTokens)
+    const first = await callGemini(this.apiKey, DECK_SYSTEM_PROMPT, contents, maxOutputTokens, signal)
     const firstResult = tryParseDeck(first)
     if ('deck' in firstResult) return firstResult.deck
 
@@ -126,7 +147,13 @@ export class GeminiProvider implements AIProvider {
         ],
       },
     ]
-    const second = await callGemini(this.apiKey, DECK_SYSTEM_PROMPT, retryContents, maxOutputTokens)
+    const second = await callGemini(
+      this.apiKey,
+      DECK_SYSTEM_PROMPT,
+      retryContents,
+      maxOutputTokens,
+      signal,
+    )
     const secondResult = tryParseDeck(second)
     if ('deck' in secondResult) return secondResult.deck
 

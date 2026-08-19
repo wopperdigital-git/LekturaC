@@ -69,7 +69,7 @@ export function EditorPage() {
           <button
             onClick={() => setOutlineOpen((v) => !v)}
             aria-label={outlineOpen ? 'Collapse outline' : 'Expand outline'}
-            className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app hover:text-app-foreground"
+            className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
           >
             {outlineOpen ? '‹' : '›'}
           </button>

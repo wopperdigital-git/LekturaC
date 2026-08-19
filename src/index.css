@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 /*
+  Bind Tailwind's `dark:` variant to the data-theme attribute that
+  lib/appTheme.ts writes onto <html>, instead of the OS preference — the
+  in-app toggle has to win over the system setting once the user picks a side.
+*/
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
   Two parallel token namespaces:
   - app-*   : the editor/UI chrome (topbar, sidebar, buttons, modals, Home/Create
               pages). Fixed values in :root, never touched at runtime.
@@ -18,6 +25,11 @@
   --color-app-foreground: var(--app-foreground);
   --color-app-accent: var(--app-accent);
   --color-app-accent-foreground: var(--app-accent-foreground);
+  --color-app-accent-text: var(--app-accent-text);
+  --color-app-secondary: var(--app-secondary);
+  --color-app-highlight: var(--app-highlight);
+  --color-app-highlight-text: var(--app-highlight-text);
+  --color-app-highlight-foreground: var(--app-highlight-foreground);
   --color-app-muted: var(--app-muted);
   --color-app-border: var(--app-border);
   --color-app-surface: var(--app-surface);
@@ -42,15 +54,37 @@
 }
 
 :root {
-  /* App chrome — static, defines the whole app's UI regardless of any deck's theme */
-  --app-background: #ffffff;
-  --app-canvas: #f0f0f2;
-  --app-foreground: #111114;
-  --app-accent: #4f46e5;
+  /*
+    App chrome. Source palette (realtimecolors.com):
+      text #13091b · background #faf4fb · primary #9f50c3 · secondary #dace95 · accent #96cb67
+
+    `--app-accent` is the primary (#9f50c3) and stays the button/interactive fill.
+    `--app-accent-text` is that same primary nudged darker purely so accent-colored
+    *text* clears WCAG AA on the background (#9f50c3 lands at 4.40:1, just under).
+    Dark-mode overrides live in the [data-theme='dark'] block below.
+  */
+  --app-background: #faf4fb;
+  /* barely-tinted near-white — the previous darken(background, 5) formula produced a
+     visibly pink/lavender canvas because this background sits near-white in HSL, where
+     saturation swings hard on any lightness change. Hand-tuned instead: same hue, far
+     less saturation, so the page reads as white with cards floating via shadow, not tint. */
+  --app-canvas: #f7f5f8;
+  --app-foreground: #13091b;
+  --app-accent: #9f50c3;
   --app-accent-foreground: #ffffff;
-  --app-muted: #6b7280;
-  --app-border: #e5e7eb;
-  --app-surface: #f8f8fa;
+  --app-accent-text: #9449b8;
+  --app-secondary: #dace95;
+  --app-highlight: #96cb67;
+  /* same accent, darkened for text/icon contrast (#96cb67 is 1.76:1 on the background) */
+  --app-highlight-text: #4f752c;
+  /* dark text for use ON TOP of a solid --app-highlight fill (e.g. an avatar badge) —
+     distinct from --app-highlight-text, which is for highlight-colored text on the
+     page background. Ink already clears AA here (10.19:1), same value the dark
+     theme lands on independently below, so this isn't a coincidence of the math. */
+  --app-highlight-foreground: #13091b;
+  --app-muted: #726080;
+  --app-border: #e6e0eb;
+  --app-surface: #f5f0f8;
   --app-font: 'Inter', system-ui, sans-serif;
   --app-radius: 1rem;
   --app-radius-sm: 0.5rem;
@@ -80,6 +114,44 @@
   color-scheme: light;
 }
 
+/*
+  Dark app chrome. Set by lib/appTheme.ts as data-theme="dark" on <html>.
+
+  Only the app-* namespace flips — slide-* deck themes are chosen per deck and
+  stay exactly as authored, so a Minimal deck still renders light in dark mode.
+
+  This is NOT the light palette darkened — it's a separate, purpose-built dark
+  palette (realtimecolors.com: text #eee4f6, background #0a040b, primary #8a3caf,
+  secondary #6a5e25, accent #639834). Reusing the light palette's own colors here
+  read as visibly purple even at low lightness, because #13091b/#f2e1f4-style
+  darkening keeps real chroma; this palette's background is a near-neutral black
+  instead (only ~3% lightness, so its HSL saturation number doesn't read as color
+  to the eye the way it does near white).
+*/
+[data-theme='dark'] {
+  --app-background: #17131b;
+  --app-canvas: #0a040b;
+  --app-foreground: #eee4f6;
+  --app-accent: #8a3caf;
+  --app-accent-foreground: #ffffff;
+  /* lightened primary — #8a3caf as text on this ground is only 3.23:1 */
+  --app-accent-text: #a75fc8;
+  --app-secondary: #6a5e25;
+  --app-highlight: #639834;
+  /* on this ground the accent already clears AA at 5.87:1, so use it as-is */
+  --app-highlight-text: #639834;
+  /* dark text for a solid --app-highlight fill — #eee4f6 (the theme's own
+     foreground) only reaches 2.81:1 on this green, so it can't be reused here */
+  --app-highlight-foreground: #0a040b;
+  --app-muted: #a18eb4;
+  --app-border: #332a3c;
+  --app-surface: #211c26;
+  --app-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
@@ -92,4 +164,75 @@ body {
   color: var(--color-app-foreground);
   font-family: var(--font-app);
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+  Auth screen decoration (components/auth/AuthVisualPanel.tsx).
+  Only `transform` and `opacity` are animated, so these stay on the compositor
+  and never trigger layout or paint on the main thread.
+*/
+@keyframes auth-blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6%, -8%, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-5%, 6%, 0) scale(0.95);
+  }
+}
+
+.auth-blob {
+  animation: auth-blob-drift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+.auth-blob-delayed {
+  animation-duration: 24s;
+  animation-delay: -6s;
+}
+
+.auth-blob-slow {
+  animation-duration: 30s;
+  animation-delay: -12s;
+}
+
+@keyframes auth-fade-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.auth-fade-in {
+  animation: auth-fade-in 260ms ease-out;
+}
+
+/* Dashboard loading skeletons (components/home/DeckCardSkeleton.tsx) */
+@keyframes dash-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.dash-skeleton {
+  animation: dash-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-blob,
+  .auth-fade-in,
+  .dash-skeleton {
+    animation: none;
+  }
 }

@@ -59,13 +59,16 @@ function SortableRow({
         isActive ? 'border-app-accent' : 'border-transparent hover:border-app-border'
       }`}
     >
-      <button onClick={onSelect} className="block cursor-pointer text-left">
+      <button
+        onClick={onSelect}
+        className="block cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+      >
         <CardThumbnail card={card} index={index} />
       </button>
       <button
         {...attributes}
         {...listeners}
-        className="absolute left-1 top-1 cursor-grab touch-none rounded bg-black/60 px-1 text-xs text-white opacity-0 active:cursor-grabbing group-hover:opacity-100"
+        className="absolute left-1 top-1 cursor-grab touch-none rounded bg-black/60 px-1 text-xs text-white opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         aria-label="Drag to reorder"
       >
         ⠿
@@ -75,7 +78,7 @@ function SortableRow({
           e.stopPropagation()
           onDelete()
         }}
-        className="absolute right-1 top-1 cursor-pointer rounded bg-black/60 px-1.5 text-xs text-white opacity-0 hover:bg-red-600 group-hover:opacity-100"
+        className="absolute right-1 top-1 cursor-pointer rounded bg-black/60 px-1.5 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         aria-label="Delete card"
       >
         ✕

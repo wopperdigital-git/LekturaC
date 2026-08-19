@@ -18,7 +18,15 @@ export const generatedDeckSchema = z.object({
 export type GeneratedDeck = z.infer<typeof generatedDeckSchema>
 
 export interface AIProvider {
-  generateDeck(topic: string, brief: GenerationBrief): Promise<GeneratedDeck>
+  /**
+   * `signal` is optional so a provider may ignore it; `GeminiProvider` threads it
+   * into both the fetch and the retry backoff so Cancel takes effect immediately.
+   */
+  generateDeck(
+    topic: string,
+    brief: GenerationBrief,
+    signal?: AbortSignal,
+  ): Promise<GeneratedDeck>
 }
 
 export class AIProviderError extends Error {}

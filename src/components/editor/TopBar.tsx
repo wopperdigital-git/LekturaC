@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 export function TopBar({
   title,
@@ -20,7 +21,10 @@ export function TopBar({
   return (
     <div className="flex items-center justify-between gap-4 border-b border-app-border bg-app-background px-4 py-3">
       <div className="flex items-center gap-3">
-        <Link to="/" className="text-sm text-app-muted hover:text-app-foreground">
+        <Link
+          to="/"
+          className="rounded-app-sm text-sm text-app-muted transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+        >
           ← Home
         </Link>
         <Input
@@ -34,6 +38,7 @@ export function TopBar({
           {saveStatus === 'saving' && 'Saving…'}
           {saveStatus === 'error' && 'Save failed'}
         </span>
+        <ThemeToggle />
         <Button
           variant="secondary"
           onClick={onToggleTheme}

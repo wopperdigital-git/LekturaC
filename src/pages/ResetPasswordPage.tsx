@@ -1,8 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { AuthLayout } from '@/components/auth/AuthLayout'
+import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
-import { Input, Label } from '@/components/ui/Input'
+import { Field, PasswordInput } from '@/components/ui/Input'
+
+const MIN_PASSWORD_LENGTH = 6
 
 export function ResetPasswordPage() {
   const navigate = useNavigate()
@@ -10,55 +14,76 @@ export function ResetPasswordPage() {
 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    setError(null)
-    if (password !== confirm) {
-      setError('Passwords do not match.')
-      return
-    }
+    setFormError(null)
+
+    const nextPasswordError =
+      password.length < MIN_PASSWORD_LENGTH
+        ? `Use at least ${MIN_PASSWORD_LENGTH} characters.`
+        : null
+    const nextConfirmError = password !== confirm ? 'Passwords do not match.' : null
+    setPasswordError(nextPasswordError)
+    setConfirmError(nextConfirmError)
+    if (nextPasswordError || nextConfirmError) return
+
     setSubmitting(true)
-    const { error: updateError } = await updatePassword(password)
+    const { error } = await updatePassword(password)
     setSubmitting(false)
-    if (updateError) setError(updateError)
+    if (error) setFormError(error)
     else void navigate('/', { replace: true })
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-app-canvas px-6">
-      <div className="w-full max-w-sm rounded-app bg-app-background p-8 shadow-app">
-        <h1 className="mb-6 text-xl font-semibold text-app-foreground">Set a new password</h1>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div>
-            <Label>New password</Label>
-            <Input
-              type="password"
-              required
-              minLength={6}
+    <AuthLayout title="Set a new password" subtitle="Choose a password to finish resetting your account.">
+      <form onSubmit={handleSubmit} noValidate className="auth-fade-in flex flex-col gap-4">
+        <Field
+          label="New password"
+          error={passwordError}
+          hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}
+          render={(fieldProps) => (
+            <PasswordInput
+              {...fieldProps}
+              autoComplete="new-password"
               autoFocus
+              placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                if (passwordError) setPasswordError(null)
+              }}
             />
-          </div>
-          <div>
-            <Label>Confirm password</Label>
-            <Input
-              type="password"
-              required
-              minLength={6}
+          )}
+        />
+
+        <Field
+          label="Confirm password"
+          error={confirmError}
+          render={(fieldProps) => (
+            <PasswordInput
+              {...fieldProps}
+              autoComplete="new-password"
+              placeholder="••••••••"
               value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
+              onChange={(e) => {
+                setConfirm(e.target.value)
+                if (confirmError) setConfirmError(null)
+              }}
             />
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" variant="primary" disabled={submitting}>
-            Update password
-          </Button>
-        </form>
-      </div>
-    </div>
+          )}
+        />
+
+        {formError && <Alert tone="error">{formError}</Alert>}
+
+        <Button type="submit" variant="primary" loading={submitting} className="mt-1 w-full py-2.5">
+          {submitting ? 'Updating…' : 'Update password'}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }
