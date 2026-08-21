@@ -229,10 +229,27 @@ body {
   animation: dash-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
+/* Create-flow step transitions (components/create/ConversationStep.tsx) */
+@keyframes create-step-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.create-step-in {
+  animation: create-step-in 180ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-blob,
   .auth-fade-in,
-  .dash-skeleton {
+  .dash-skeleton,
+  .create-step-in {
     animation: none;
   }
 }

@@ -1,29 +1,40 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
-import { GeminiProvider } from '@/ai/geminiProvider'
-import { AIProviderError, type GenerationBrief } from '@/ai/provider'
+import { GroqProvider } from '@/ai/groqProvider'
+import { AIProviderError, type AIProvider } from '@/ai/provider'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
+import { AgentHeader } from '@/components/create/AgentHeader'
+import { AnswerPill, OptionCards, StepBlock } from '@/components/create/ConversationStep'
+import { ArrowLeftIcon, CheckIcon } from '@/components/create/icons'
+import {
+  STEP_ORDER,
+  answeredCount,
+  deleteDraft,
+  emptyDraft,
+  getDraft,
+  saveDraft,
+  type Answers,
+  type BriefDraft,
+  type DetailLevel,
+  type StepKey,
+  type Tone,
+} from '@/lib/briefDrafts'
 
-// Back on Gemini (was temporarily on Groq while Gemini was returning 503s
-// under high demand). To switch back to Groq: swap this import/usage for
-// GroqProvider and GROQ_API_KEY below — groqProvider.ts and
-// VITE_GROQ_API_KEY are both left in place for exactly that.
-const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
-
-type DetailLevel = GenerationBrief['detailLevel']
-type Tone = GenerationBrief['tone']
+// Temporarily on Groq. To switch back to Gemini: swap this import/usage for
+// GeminiProvider and VITE_GEMINI_API_KEY — geminiProvider.ts and the Gemini
+// key are both left in place for exactly that.
+//
+// One thing the Gemini path gives you that this one does not: `GeminiProvider`
+// retries transient 503/429s with backoff, and Groq's free tier has a tight TPM
+// cap that larger decks can hit, so a spike that Gemini would ride out fails
+// outright here. Both providers do honour the AbortSignal, so Cancel genuinely
+// stops an in-flight request either way.
+const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
 
 /**
  * Upper bound on the slide count.
@@ -33,9 +44,6 @@ type Tone = GenerationBrief['tone']
  * the JSON mid-deck, so the request is rejected here instead of failing slowly.
  */
 const MAX_SLIDES = 30
-
-/** Answers persist here so a refresh mid-brief doesn't discard the whole thing. */
-const DRAFT_KEY = 'lekturac:create-draft'
 
 const DETAIL_OPTIONS: { value: DetailLevel; label: string; description: string }[] = [
   { value: 'simplified', label: 'Simplified', description: 'Quick & easy to skim' },
@@ -49,118 +57,8 @@ const TONE_OPTIONS: { value: Tone; label: string; description: string }[] = [
   { value: 'bold', label: 'Bold', description: 'Punchy & high-energy' },
 ]
 
-type StepKey = 'topic' | 'slideCount' | 'audience' | 'detailLevel' | 'tone' | 'guidance'
-
-interface Answers {
-  topic: string | null
-  slideCount: number | 'auto' | null
-  audience: string | null
-  detailLevel: DetailLevel | null
-  tone: Tone | null
-  /** `''` is a real answer here (the user skipped it); `null` means unanswered. */
-  guidance: string | null
-}
-
-const NO_ANSWERS: Answers = {
-  topic: null,
-  slideCount: null,
-  audience: null,
-  detailLevel: null,
-  tone: null,
-  guidance: null,
-}
-
 /** `answering` covers both the initial brief and any post-error edit. */
 type Phase = 'answering' | 'generating' | 'failed' | 'done'
-
-function loadDraft(): Answers {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY)
-    if (!raw) return NO_ANSWERS
-    // spread over the defaults so an older/partial payload can't leave holes
-    return { ...NO_ANSWERS, ...(JSON.parse(raw) as Partial<Answers>) }
-  } catch {
-    return NO_ANSWERS
-  }
-}
-
-function AssistantBubble({ id, children }: { id?: string; children: ReactNode }) {
-  return (
-    <div
-      id={id}
-      className="max-w-[85%] self-start rounded-app-sm bg-app-surface px-4 py-3 text-sm text-app-foreground"
-    >
-      {children}
-    </div>
-  )
-}
-
-function UserBubble({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-app-sm bg-app-accent px-4 py-3 text-sm text-app-accent-foreground">
-      {children}
-    </div>
-  )
-}
-
-/**
- * An answered step: the reply plus the affordance to change it. Without this the
- * only way to fix a typo three questions back was reloading the page.
- */
-function AnsweredRow({
-  children,
-  onEdit,
-  editLabel,
-}: {
-  children: ReactNode
-  onEdit?: () => void
-  editLabel: string
-}) {
-  return (
-    <div className="flex max-w-[85%] items-center gap-2 self-end">
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={editLabel}
-          className="cursor-pointer rounded-app-sm px-1.5 py-1 text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-        >
-          Edit
-        </button>
-      )}
-      <UserBubble>{children}</UserBubble>
-    </div>
-  )
-}
-
-function ChipGroup<T extends string>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: { value: T; label: string; description: string }[]
-  selected?: T | null
-  onSelect: (value: T) => void
-}) {
-  return (
-    <div className="flex flex-wrap gap-2 self-start">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onSelect(opt.value)}
-          aria-pressed={selected === opt.value}
-          className={`cursor-pointer rounded-app-sm border bg-app-background px-4 py-2 text-left transition-colors hover:border-app-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
-            selected === opt.value ? 'border-app-accent' : 'border-app-border'
-          }`}
-        >
-          <div className="text-sm font-medium text-app-foreground">{opt.label}</div>
-          <div className="text-xs text-app-muted">{opt.description}</div>
-        </button>
-      ))}
-    </div>
-  )
-}
 
 export function CreatePage() {
   const navigate = useNavigate()
@@ -169,18 +67,36 @@ export function CreatePage() {
   const uid = useId()
   const qid = (step: StepKey) => `${uid}-q-${step}`
 
-  const [answers, setAnswers] = useState<Answers>(loadDraft)
+  // `?draft=<id>` resumes an existing brief; anything else starts a fresh one.
+  // Resolved once and held in a ref so the identity can't change underfoot and
+  // fork the draft into two rows mid-brief.
+  const [searchParams] = useSearchParams()
+  const resumedRef = useRef<BriefDraft | null>(null)
+  if (resumedRef.current === null) {
+    const requested = searchParams.get('draft')
+    resumedRef.current = (requested && getDraft(requested)) || emptyDraft()
+  }
+  const resumed = resumedRef.current
+  const draftId = resumed.id
+
+  const [answers, setAnswers] = useState<Answers>(resumed.answers)
   const [editing, setEditing] = useState<StepKey | null>(null)
 
-  const [topicDraft, setTopicDraft] = useState('')
+  // The unsubmitted text belongs to whichever question was open when the draft
+  // was saved, so it's restored into that step's field and left blank elsewhere.
+  const resumedStep = STEP_ORDER.find((step) => resumed.answers[step] === null) ?? null
+  const restore = (step: StepKey) => (resumedStep === step ? resumed.pendingText : '')
+
+  const [topicDraft, setTopicDraft] = useState(() => restore('topic'))
   const [slideCountDraft, setSlideCountDraft] = useState('8')
-  const [audienceDraft, setAudienceDraft] = useState('')
-  const [guidanceDraft, setGuidanceDraft] = useState('')
+  const [audienceDraft, setAudienceDraft] = useState(() => restore('audience'))
+  const [guidanceDraft, setGuidanceDraft] = useState(() => restore('guidance'))
 
   const [phase, setPhase] = useState<Phase>('answering')
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [skipping, setSkipping] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -190,20 +106,12 @@ export function CreatePage() {
 
   // Checked up front rather than inside startGeneration: without this the user
   // answered all six questions before being told the app has no key.
-  const missingKey = !GEMINI_API_KEY
+  const missingKey = !GROQ_API_KEY
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [answers, editing, phase, error])
-
-  // Persist the brief, so a refresh or an accidental back-navigation is recoverable.
-  useEffect(() => {
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(answers))
-    } catch {
-      // private mode / quota — the flow still works, it just isn't recoverable
-    }
-  }, [answers])
 
   // Elapsed counter: a long generation with a bare spinner looks indistinguishable
   // from a hang, and the provider can retry for several seconds before succeeding.
@@ -227,12 +135,11 @@ export function CreatePage() {
   // Abandoning the page mid-request should stop it, not leave it running.
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  function clearDraft() {
-    try {
-      localStorage.removeItem(DRAFT_KEY)
-    } catch {
-      // nothing to do — the deck is already created either way
-    }
+  /** Confirmed exit mid-generation: stop the request, keep the brief as a draft. */
+  function cancelAndLeave() {
+    abortRef.current?.abort()
+    setConfirmLeave(false)
+    void navigate('/')
   }
 
   async function startGeneration(brief: Answers) {
@@ -251,7 +158,7 @@ export function CreatePage() {
     setError(null)
 
     try {
-      const provider = new GeminiProvider(GEMINI_API_KEY)
+      const provider: AIProvider = new GroqProvider(GROQ_API_KEY)
       const deck = await provider.generateDeck(
         t,
         {
@@ -264,7 +171,7 @@ export function CreatePage() {
         controller.signal,
       )
       const id = await createDeckFromGeneration(deck)
-      clearDraft()
+      deleteDraft(draftId)
       setPhase('done')
       void navigate(`/deck/${id}`)
     } catch (err) {
@@ -323,7 +230,7 @@ export function CreatePage() {
     setError(null)
     try {
       const id = await createDeck()
-      clearDraft()
+      deleteDraft(draftId)
       void navigate(`/deck/${id}`)
     } catch (err) {
       // previously unhandled: the button just looked dead on a failure
@@ -340,343 +247,469 @@ export function CreatePage() {
     tone !== null &&
     guidance !== null
 
+  const completedCount = answeredCount(answers)
+
+  /**
+   * The step wearing the active-card treatment. Not simply the last one on
+   * screen: reopening an earlier answer via Edit makes *that* step active again
+   * while the later answers stay collapsed below it.
+   */
+  const activeStep: StepKey | null =
+    editing ?? STEP_ORDER.find((step) => answers[step] === null) ?? null
+
   /** Answers lock while a request is in flight, so the brief can't drift under it. */
   const canEdit = phase !== 'generating' && phase !== 'done'
   const editHandler = (step: StepKey) => (canEdit ? () => beginEdit(step) : undefined)
+
+  /**
+   * Text sitting in the open question. Only one step is active at a time, so a
+   * single slot covers all three text fields — and it's what makes a brief
+   * abandoned mid-sentence resumable rather than just mid-question.
+   */
+  const pendingText =
+    activeStep === 'topic'
+      ? topicDraft
+      : activeStep === 'audience'
+        ? audienceDraft
+        : activeStep === 'guidance'
+          ? guidanceDraft
+          : ''
+
+  // Persist on every keystroke and every answer, so leaving costs nothing —
+  // there's no confirmation on the way out for exactly this reason.
+  useEffect(() => {
+    if (phase === 'done') return
+    saveDraft({ id: draftId, answers, pendingText, savedAt: Date.now() })
+  }, [draftId, answers, pendingText, phase])
+
+  const subtleButton =
+    'cursor-pointer rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent'
 
   const skipButton = (
     <button
       type="button"
       onClick={() => void handleSkip()}
       disabled={skipping}
-      className="cursor-pointer rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50"
+      className={`${subtleButton} disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {skipping ? 'Creating…' : 'Skip and start with a blank canvas instead'}
     </button>
   )
 
   return (
-    <div className="flex min-h-screen flex-col bg-app-canvas">
+    <div className="min-h-screen bg-app-canvas">
       <div className="flex items-center px-6 py-4">
         <Link
           to="/"
-          className="rounded-app-sm text-sm text-app-muted transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+          onClick={(e) => {
+            // Leaving mid-brief is free — the draft is already saved, and it's
+            // waiting under Drafts. Only an in-flight generation is worth
+            // interrupting for, since cancelling it wastes real work.
+            // Left as a real <Link> so middle-click / open-in-new-tab still work.
+            if (!isGenerating) return
+            e.preventDefault()
+            setConfirmLeave(true)
+          }}
+          className="group inline-flex items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-sm font-medium text-app-muted transition-colors hover:bg-app-border/40 hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
         >
-          ← Home
+          <ArrowLeftIcon className="size-3.5 transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transform-none" />
+          Home
         </Link>
       </div>
 
-      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-6 pb-16">
-        <div
-          // role="log" so a screen reader announces each new question as it
-          // appears — the whole interaction is questions arriving one at a time
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions text"
-          className="flex flex-1 flex-col gap-4 rounded-app bg-app-background p-8 shadow-md"
-        >
-          {missingKey ? (
-            <>
-              <Alert tone="error">
-                No AI key configured. Add <code className="font-mono text-xs">VITE_GEMINI_API_KEY</code>{' '}
-                to your <code className="font-mono text-xs">.env</code> file and restart the dev
-                server.
-              </Alert>
-              <div className="self-start">{skipButton}</div>
-              {/* the blank-canvas path is the only action here, so its failures
-                  need somewhere to land on this branch too */}
-              {error && <Alert tone="error">{error}</Alert>}
-            </>
-          ) : (
-            <>
-              <AssistantBubble id={qid('topic')}>What's this presentation about?</AssistantBubble>
-              {topic === null || editing === 'topic' ? (
-                <form
-                  onSubmit={(e: FormEvent) => {
-                    e.preventDefault()
-                    if (topicDraft.trim()) answer({ topic: topicDraft.trim() })
-                  }}
-                  className="flex w-full flex-col gap-2 self-start"
+      {/*
+        Natural height: the container starts compact and grows as the
+        conversation accumulates, rather than filling the viewport up front.
+      */}
+      <div className="mx-auto w-full max-w-2xl px-4 pb-20 sm:px-6">
+        <div className="overflow-hidden rounded-app border border-app-border bg-app-background shadow-app">
+          <AgentHeader
+            completed={completedCount}
+            total={STEP_ORDER.length}
+            showProgress={!missingKey}
+          />
+
+          <div
+            // role="log" so a screen reader announces each new question as it
+            // appears — the whole interaction is questions arriving one at a
+            // time. The header sits outside it deliberately: its step counter
+            // changes every turn and would otherwise be re-announced each time.
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions text"
+            className="px-5 py-4 sm:px-6 sm:py-5"
+          >
+            {missingKey ? (
+              <div className="flex flex-col gap-4">
+                <Alert tone="error">
+                  No AI key configured. Add{' '}
+                  <code className="font-mono text-xs">VITE_GROQ_API_KEY</code> to your{' '}
+                  <code className="font-mono text-xs">.env</code> file and restart the dev server.
+                </Alert>
+                <div className="self-start">{skipButton}</div>
+                {/* the blank-canvas path is the only action here, so its failures
+                    need somewhere to land on this branch too */}
+                {error && <Alert tone="error">{error}</Alert>}
+              </div>
+            ) : (
+              <>
+                <StepBlock
+                  active={activeStep === 'topic'}
+                  question="What's this presentation about?"
+                  hint="Describe it in a sentence or two — the more specific, the better the deck."
+                  questionId={qid('topic')}
                 >
-                  <Textarea
-                    rows={3}
-                    autoFocus
-                    aria-labelledby={qid('topic')}
-                    placeholder="e.g. a pitch for a solar panel startup called Helios"
-                    value={topicDraft}
-                    onChange={(e) => setTopicDraft(e.target.value)}
-                    onKeyDown={handleTopicKeyDown}
-                  />
-                  <div className="flex items-center justify-between gap-3">
-                    {editing === 'topic' ? (
-                      <Button variant="ghost" type="button" onClick={() => setEditing(null)}>
-                        Cancel
-                      </Button>
-                    ) : (
-                      skipButton
-                    )}
-                    <Button type="submit" variant="primary" disabled={!topicDraft.trim()}>
-                      {editing === 'topic' ? 'Save' : 'Next'}
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <AnsweredRow onEdit={editHandler('topic')} editLabel="Edit the topic">
-                  {topic}
-                </AnsweredRow>
-              )}
-
-              {topic !== null && (
-                <>
-                  <AssistantBubble id={qid('slideCount')}>How many slides?</AssistantBubble>
-                  {slideCount === null || editing === 'slideCount' ? (
+                  {activeStep === 'topic' ? (
                     <form
                       onSubmit={(e: FormEvent) => {
                         e.preventDefault()
-                        if (!slideCountError) answer({ slideCount: parsedSlideCount })
+                        if (topicDraft.trim()) answer({ topic: topicDraft.trim() })
                       }}
-                      className="flex w-full max-w-[280px] flex-col gap-2 self-start"
-                    >
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={MAX_SLIDES}
-                          autoFocus
-                          aria-labelledby={qid('slideCount')}
-                          aria-describedby={slideCountError ? `${uid}-slide-error` : undefined}
-                          invalid={Boolean(slideCountError)}
-                          value={slideCountDraft}
-                          onChange={(e) => setSlideCountDraft(e.target.value)}
-                        />
-                        <Button type="submit" variant="primary" disabled={Boolean(slideCountError)}>
-                          {editing === 'slideCount' ? 'Save' : 'Next'}
-                        </Button>
-                      </div>
-                      {slideCountError && (
-                        <p id={`${uid}-slide-error`} className="text-xs text-red-600">
-                          {slideCountError}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => answer({ slideCount: 'auto' })}
-                          className="cursor-pointer rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-                        >
-                          Not sure — let AI decide
-                        </button>
-                        {editing === 'slideCount' && (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            className="cursor-pointer rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </form>
-                  ) : (
-                    <AnsweredRow
-                      onEdit={editHandler('slideCount')}
-                      editLabel="Edit the slide count"
-                    >
-                      {slideCount === 'auto' ? 'Let AI decide' : slideCount}
-                    </AnsweredRow>
-                  )}
-                </>
-              )}
-
-              {slideCount !== null && (
-                <>
-                  <AssistantBubble id={qid('audience')}>
-                    Who's this presentation for?
-                  </AssistantBubble>
-                  {audience === null || editing === 'audience' ? (
-                    <form
-                      onSubmit={(e: FormEvent) => {
-                        e.preventDefault()
-                        if (audienceDraft.trim()) answer({ audience: audienceDraft.trim() })
-                      }}
-                      className="flex w-full flex-col gap-2 self-start"
-                    >
-                      <div className="flex gap-2">
-                        <Input
-                          autoFocus
-                          aria-labelledby={qid('audience')}
-                          placeholder="e.g. investors, customers, my team, students..."
-                          value={audienceDraft}
-                          onChange={(e) => setAudienceDraft(e.target.value)}
-                        />
-                        <Button type="submit" variant="primary" disabled={!audienceDraft.trim()}>
-                          {editing === 'audience' ? 'Save' : 'Next'}
-                        </Button>
-                      </div>
-                      {editing === 'audience' && (
-                        <button
-                          type="button"
-                          onClick={() => setEditing(null)}
-                          className="cursor-pointer self-start rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </form>
-                  ) : (
-                    <AnsweredRow onEdit={editHandler('audience')} editLabel="Edit the audience">
-                      {audience}
-                    </AnsweredRow>
-                  )}
-                </>
-              )}
-
-              {audience !== null && (
-                <>
-                  <AssistantBubble id={qid('detailLevel')}>
-                    How much detail should it go into?
-                  </AssistantBubble>
-                  {detailLevel === null || editing === 'detailLevel' ? (
-                    <ChipGroup
-                      options={DETAIL_OPTIONS}
-                      selected={detailLevel}
-                      onSelect={(value) => answer({ detailLevel: value })}
-                    />
-                  ) : (
-                    <AnsweredRow
-                      onEdit={editHandler('detailLevel')}
-                      editLabel="Edit the detail level"
-                    >
-                      {DETAIL_OPTIONS.find((o) => o.value === detailLevel)?.label}
-                    </AnsweredRow>
-                  )}
-                </>
-              )}
-
-              {detailLevel !== null && (
-                <>
-                  <AssistantBubble id={qid('tone')}>What tone fits best?</AssistantBubble>
-                  {tone === null || editing === 'tone' ? (
-                    <ChipGroup
-                      options={TONE_OPTIONS}
-                      selected={tone}
-                      onSelect={(value) => answer({ tone: value })}
-                    />
-                  ) : (
-                    <AnsweredRow onEdit={editHandler('tone')} editLabel="Edit the tone">
-                      {TONE_OPTIONS.find((o) => o.value === tone)?.label}
-                    </AnsweredRow>
-                  )}
-                </>
-              )}
-
-              {tone !== null && (
-                <>
-                  <AssistantBubble id={qid('guidance')}>
-                    Anything specific it should focus on—or steer clear of? (optional)
-                  </AssistantBubble>
-                  {guidance === null || editing === 'guidance' ? (
-                    <form
-                      onSubmit={(e: FormEvent) => {
-                        e.preventDefault()
-                        answer({ guidance: guidanceDraft.trim() }, { generate: editing === null })
-                      }}
-                      className="flex w-full flex-col gap-2 self-start"
+                      className="flex w-full flex-col gap-3"
                     >
                       <Textarea
-                        rows={2}
+                        rows={3}
                         autoFocus
-                        aria-labelledby={qid('guidance')}
-                        placeholder="e.g. don't make up statistics, stick to the facts I gave you; or emphasize the pricing story"
-                        value={guidanceDraft}
-                        onChange={(e) => setGuidanceDraft(e.target.value)}
+                        aria-labelledby={qid('topic')}
+                        placeholder="e.g. a pitch for a solar panel startup called Helios"
+                        value={topicDraft}
+                        onChange={(e) => setTopicDraft(e.target.value)}
+                        onKeyDown={handleTopicKeyDown}
                       />
-                      <div className="flex items-center justify-between gap-3">
-                        {editing === 'guidance' ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        {editing === 'topic' ? (
                           <Button variant="ghost" type="button" onClick={() => setEditing(null)}>
                             Cancel
                           </Button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => answer({ guidance: '' }, { generate: true })}
-                            className="cursor-pointer rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-                          >
-                            Skip
-                          </button>
+                          skipButton
                         )}
-                        <Button type="submit" variant="primary">
-                          {editing === 'guidance' ? 'Save' : 'Generate'}
+                        <Button type="submit" variant="primary" disabled={!topicDraft.trim()}>
+                          {editing === 'topic' ? 'Save' : 'Next'}
                         </Button>
                       </div>
                     </form>
                   ) : (
-                    <AnsweredRow onEdit={editHandler('guidance')} editLabel="Edit the guidance">
-                      {guidance || '(none)'}
-                    </AnsweredRow>
+                    <AnswerPill onEdit={editHandler('topic')} editLabel="Edit the topic">
+                      {topic}
+                    </AnswerPill>
                   )}
-                </>
-              )}
+                </StepBlock>
 
-              {phase === 'generating' && (
-                <AssistantBubble>
-                  <span className="flex items-center gap-3">
-                    <Spinner className="size-4 shrink-0 text-app-muted" />
-                    <span>
-                      Generating your presentation…
-                      <span className="ml-1 text-app-muted">{elapsed}s</span>
-                    </span>
+                {topic !== null && (
+                  <StepBlock
+                    active={activeStep === 'slideCount'}
+                    question="How many slides?"
+                    hint={`Up to ${MAX_SLIDES}. Not sure? Let the agent pick a length that fits.`}
+                    questionId={qid('slideCount')}
+                  >
+                    {activeStep === 'slideCount' ? (
+                      <form
+                        onSubmit={(e: FormEvent) => {
+                          e.preventDefault()
+                          if (!slideCountError) answer({ slideCount: parsedSlideCount })
+                        }}
+                        className="flex w-full max-w-[300px] flex-col gap-2"
+                      >
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={MAX_SLIDES}
+                            autoFocus
+                            aria-labelledby={qid('slideCount')}
+                            aria-describedby={slideCountError ? `${uid}-slide-error` : undefined}
+                            invalid={Boolean(slideCountError)}
+                            value={slideCountDraft}
+                            onChange={(e) => setSlideCountDraft(e.target.value)}
+                          />
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={Boolean(slideCountError)}
+                          >
+                            {editing === 'slideCount' ? 'Save' : 'Next'}
+                          </Button>
+                        </div>
+                        {slideCountError && (
+                          <p id={`${uid}-slide-error`} className="text-xs text-red-600">
+                            {slideCountError}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <button
+                            type="button"
+                            onClick={() => answer({ slideCount: 'auto' })}
+                            className={subtleButton}
+                          >
+                            Not sure — let AI decide
+                          </button>
+                          {editing === 'slideCount' && (
+                            <button
+                              type="button"
+                              onClick={() => setEditing(null)}
+                              className={subtleButton}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </form>
+                    ) : (
+                      <AnswerPill
+                        onEdit={editHandler('slideCount')}
+                        editLabel="Edit the slide count"
+                      >
+                        {slideCount === 'auto' ? 'Let AI decide' : `${slideCount} slides`}
+                      </AnswerPill>
+                    )}
+                  </StepBlock>
+                )}
+
+                {slideCount !== null && (
+                  <StepBlock
+                    active={activeStep === 'audience'}
+                    question="Who's this presentation for?"
+                    hint="Who's in the room? This shapes the language and the level it pitches at."
+                    questionId={qid('audience')}
+                  >
+                    {activeStep === 'audience' ? (
+                      <form
+                        onSubmit={(e: FormEvent) => {
+                          e.preventDefault()
+                          if (audienceDraft.trim()) answer({ audience: audienceDraft.trim() })
+                        }}
+                        className="flex w-full flex-col gap-2"
+                      >
+                        <div className="flex gap-2">
+                          <Input
+                            autoFocus
+                            aria-labelledby={qid('audience')}
+                            placeholder="e.g. investors, customers, my team, students..."
+                            value={audienceDraft}
+                            onChange={(e) => setAudienceDraft(e.target.value)}
+                          />
+                          <Button type="submit" variant="primary" disabled={!audienceDraft.trim()}>
+                            {editing === 'audience' ? 'Save' : 'Next'}
+                          </Button>
+                        </div>
+                        {editing === 'audience' && (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className={`self-start ${subtleButton}`}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </form>
+                    ) : (
+                      <AnswerPill onEdit={editHandler('audience')} editLabel="Edit the audience">
+                        {audience}
+                      </AnswerPill>
+                    )}
+                  </StepBlock>
+                )}
+
+                {audience !== null && (
+                  <StepBlock
+                    active={activeStep === 'detailLevel'}
+                    question="How much detail should it go into?"
+                    hint="How deep each slide digs into the material."
+                    questionId={qid('detailLevel')}
+                  >
+                    {activeStep === 'detailLevel' ? (
+                      <div className="flex flex-col gap-3">
+                        <OptionCards
+                          options={DETAIL_OPTIONS}
+                          selected={detailLevel}
+                          onSelect={(value) => answer({ detailLevel: value })}
+                        />
+                        {editing === 'detailLevel' && (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className={`self-start ${subtleButton}`}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <AnswerPill
+                        onEdit={editHandler('detailLevel')}
+                        editLabel="Edit the detail level"
+                      >
+                        {DETAIL_OPTIONS.find((o) => o.value === detailLevel)?.label}
+                      </AnswerPill>
+                    )}
+                  </StepBlock>
+                )}
+
+                {detailLevel !== null && (
+                  <StepBlock
+                    active={activeStep === 'tone'}
+                    question="What tone fits best?"
+                    hint="Choose the voice your presentation should speak in."
+                    questionId={qid('tone')}
+                  >
+                    {activeStep === 'tone' ? (
+                      <div className="flex flex-col gap-3">
+                        <OptionCards
+                          options={TONE_OPTIONS}
+                          selected={tone}
+                          onSelect={(value) => answer({ tone: value })}
+                        />
+                        {editing === 'tone' && (
+                          <button
+                            type="button"
+                            onClick={() => setEditing(null)}
+                            className={`self-start ${subtleButton}`}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <AnswerPill onEdit={editHandler('tone')} editLabel="Edit the tone">
+                        {TONE_OPTIONS.find((o) => o.value === tone)?.label}
+                      </AnswerPill>
+                    )}
+                  </StepBlock>
+                )}
+
+                {tone !== null && (
+                  <StepBlock
+                    active={activeStep === 'guidance'}
+                    question="Anything to focus on — or steer clear of?"
+                    hint="Optional. A hard constraint that overrides the agent's general content rules."
+                    questionId={qid('guidance')}
+                  >
+                    {activeStep === 'guidance' ? (
+                      <form
+                        onSubmit={(e: FormEvent) => {
+                          e.preventDefault()
+                          answer({ guidance: guidanceDraft.trim() }, { generate: editing === null })
+                        }}
+                        className="flex w-full flex-col gap-3"
+                      >
+                        <Textarea
+                          rows={2}
+                          autoFocus
+                          aria-labelledby={qid('guidance')}
+                          placeholder="e.g. don't make up statistics, stick to the facts I gave you; or emphasize the pricing story"
+                          value={guidanceDraft}
+                          onChange={(e) => setGuidanceDraft(e.target.value)}
+                        />
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          {editing === 'guidance' ? (
+                            <Button variant="ghost" type="button" onClick={() => setEditing(null)}>
+                              Cancel
+                            </Button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => answer({ guidance: '' }, { generate: true })}
+                              className={subtleButton}
+                            >
+                              Skip
+                            </button>
+                          )}
+                          <Button type="submit" variant="primary">
+                            {editing === 'guidance' ? 'Save' : 'Generate'}
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <AnswerPill onEdit={editHandler('guidance')} editLabel="Edit the guidance">
+                        {guidance || 'None'}
+                      </AnswerPill>
+                    )}
+                  </StepBlock>
+                )}
+
+                {phase === 'generating' && (
+                  <div className="create-step-in mt-3 flex items-center gap-3 rounded-app border border-app-border bg-app-surface/50 p-4 sm:p-5">
+                    <Spinner className="size-4 shrink-0 text-app-accent-text" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-app-foreground">
+                        Generating your presentation…
+                      </p>
+                      <p className="mt-0.5 text-xs tabular-nums text-app-muted">
+                        Writing slides from your brief · {elapsed}s
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => abortRef.current?.abort()}
-                      className="ml-auto shrink-0 cursor-pointer rounded-app-sm px-1.5 py-1 text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+                      className={`shrink-0 ${subtleButton}`}
                     >
                       Cancel
                     </button>
-                  </span>
-                </AssistantBubble>
-              )}
+                  </div>
+                )}
 
-              {phase === 'failed' && error && (
-                <div className="flex max-w-[85%] flex-col gap-2 self-start">
-                  <Alert tone="error">{error}</Alert>
-                  <Button
-                    variant="secondary"
-                    className="self-start"
-                    onClick={() => void startGeneration(answers)}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              )}
+                {phase === 'failed' && error && (
+                  <div className="mt-3 flex flex-col gap-3">
+                    <Alert tone="error">{error}</Alert>
+                    <Button
+                      variant="primary"
+                      className="self-start"
+                      onClick={() => void startGeneration(answers)}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                )}
 
-              {/* Reachable after cancelling or editing once the brief is complete. */}
-              {phase === 'answering' && answeredAll && editing === null && (
-                <Button
-                  variant="primary"
-                  className="self-start"
-                  onClick={() => void startGeneration(answers)}
-                >
-                  Generate
-                </Button>
-              )}
+                {/* Reachable after cancelling or editing once the brief is complete. */}
+                {phase === 'answering' && answeredAll && editing === null && (
+                  <div className="mt-4 flex justify-end border-t border-app-border pt-4">
+                    <Button variant="primary" onClick={() => void startGeneration(answers)}>
+                      Generate presentation
+                    </Button>
+                  </div>
+                )}
 
-              {phase === 'done' && (
-                <AssistantBubble>All set — taking you to your presentation…</AssistantBubble>
-              )}
+                {phase === 'done' && (
+                  <div className="mt-3 flex items-center gap-2.5 rounded-app border border-app-border bg-app-surface/50 p-4 sm:p-5">
+                    <CheckIcon className="size-4 shrink-0 text-app-accent-text" />
+                    <p className="text-sm text-app-foreground">
+                      All set — taking you to your presentation…
+                    </p>
+                  </div>
+                )}
 
-              {/* Blank-canvas failures surface here too, not just at step one. */}
-              {phase !== 'failed' && error && (
-                <div className="max-w-[85%] self-start">
-                  <Alert tone="error">{error}</Alert>
-                </div>
-              )}
-            </>
-          )}
+                {/* Blank-canvas failures surface here too, not just at step one. */}
+                {phase !== 'failed' && error && (
+                  <div className="mt-3">
+                    <Alert tone="error">{error}</Alert>
+                  </div>
+                )}
+              </>
+            )}
 
-          <div ref={bottomRef} />
+            <div ref={bottomRef} />
+          </div>
         </div>
       </div>
+
+      {confirmLeave && (
+        <Modal title="Cancel this generation?" onClose={() => setConfirmLeave(false)}>
+          <p className="text-sm text-app-muted">
+            Your presentation is still being generated. Leaving now cancels it — your brief is
+            saved under Drafts, so you can come back and run it again.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmLeave(false)}>
+              Keep waiting
+            </Button>
+            <Button variant="danger" onClick={cancelAndLeave}>
+              Cancel and go home
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
