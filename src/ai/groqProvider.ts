@@ -7,11 +7,22 @@ import {
 } from './provider'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
 
-// Groq's free tier has a per-model TPM (tokens/minute) cap that's tight for
-// this model (~8000 on prior testing) — large/auto-sized decks can hit it.
-// Swap the model below if you see 429s; this is meant as a temporary
-// fallback while Gemini is unavailable, not a permanent replacement.
-const MODEL = 'llama-3.3-70b-versatile'
+// Was `llama-3.3-70b-versatile` until Groq decommissioned it (the endpoint
+// now 404s with "model does not exist"). `openai/gpt-oss-120b` is the current
+// pick: it's the largest general-purpose model on the catalog and it honours
+// `response_format: json_object`, which this provider depends on — verified
+// against /v1/models and a live JSON-mode call. `qwen/qwen3.6-27b` was the
+// other candidate and fails JSON validation, so don't reach for it.
+//
+// Groq's free tier also has a per-model TPM (tokens/minute) cap that's tight
+// (~8000 on prior testing) — large/auto-sized decks can hit it, and there is
+// no retry here. Meant as a temporary fallback while Gemini is unavailable,
+// not a permanent replacement.
+//
+// The AbortSignal *is* honoured (threaded into fetch), which the create flow
+// depends on: cancelling a generation has to actually stop the request, or a
+// deck the user walked away from lands minutes later and hijacks navigation.
+const MODEL = 'openai/gpt-oss-120b'
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
 
 interface GroqMessage {
@@ -23,9 +34,11 @@ async function callGroq(
   apiKey: string,
   messages: GroqMessage[],
   maxTokens: number,
+  signal?: AbortSignal,
 ): Promise<string> {
   const res = await fetch(GROQ_ENDPOINT, {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
@@ -75,7 +88,11 @@ export class GroqProvider implements AIProvider {
     this.apiKey = apiKey
   }
 
-  async generateDeck(topic: string, brief: GenerationBrief): Promise<GeneratedDeck> {
+  async generateDeck(
+    topic: string,
+    brief: GenerationBrief,
+    signal?: AbortSignal,
+  ): Promise<GeneratedDeck> {
     if (!this.apiKey.trim()) {
       throw new AIProviderError('No Groq API key configured. Add VITE_GROQ_API_KEY to your .env file.')
     }
@@ -91,7 +108,7 @@ export class GroqProvider implements AIProvider {
     const maxTokens =
       brief.slideCount === 'auto' ? 8192 : Math.min(8192, Math.max(4096, brief.slideCount * 260 + 800))
 
-    const first = await callGroq(this.apiKey, messages, maxTokens)
+    const first = await callGroq(this.apiKey, messages, maxTokens, signal)
     const firstResult = tryParseDeck(first)
     if ('deck' in firstResult) return firstResult.deck
 
@@ -105,7 +122,7 @@ export class GroqProvider implements AIProvider {
         content: `That response failed schema validation with these errors: ${firstResult.error}. Reply again with ONLY the corrected JSON object, no other text.`,
       },
     ]
-    const second = await callGroq(this.apiKey, retryMessages, maxTokens)
+    const second = await callGroq(this.apiKey, retryMessages, maxTokens, signal)
     const secondResult = tryParseDeck(second)
     if ('deck' in secondResult) return secondResult.deck
 
