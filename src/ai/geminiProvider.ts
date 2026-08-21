@@ -6,6 +6,7 @@ import {
   type GenerationBrief,
 } from './provider'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
+import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
 
 // "-latest" alias instead of a pinned version — new API keys lose access to
 // older pinned model generations over time (e.g. gemini-2.5-flash 404s for
@@ -16,32 +17,6 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 interface GeminiContent {
   role: 'user' | 'model'
   parts: [{ text: string }]
-}
-
-// 503 ("model overloaded") and 429 (rate limit) are both transient per
-// Google's own guidance — retry with backoff before surfacing an error,
-// since a spike has usually cleared within a few seconds.
-const RETRYABLE_STATUS = new Set([429, 503])
-const MAX_RETRIES = 3
-const BASE_DELAY_MS = 1000
-
-/** Abortable delay, so cancelling during backoff doesn't wait out the timer. */
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'))
-      return
-    }
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        reject(new DOMException('Aborted', 'AbortError'))
-      },
-      { once: true },
-    )
-  })
 }
 
 async function callGemini(
@@ -87,7 +62,7 @@ async function callGemini(
     if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
       throw new AIProviderError(`Gemini API error (${res.status}): ${message}`)
     }
-    await sleep(BASE_DELAY_MS * 2 ** attempt, signal)
+    await sleep(backoffDelayMs(attempt, res.headers.get('retry-after')), signal)
   }
 }
 

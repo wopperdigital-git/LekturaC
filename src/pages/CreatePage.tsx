@@ -29,11 +29,11 @@ import {
 // GeminiProvider and VITE_GEMINI_API_KEY — geminiProvider.ts and the Gemini
 // key are both left in place for exactly that.
 //
-// One thing the Gemini path gives you that this one does not: `GeminiProvider`
-// retries transient 503/429s with backoff, and Groq's free tier has a tight TPM
-// cap that larger decks can hit, so a spike that Gemini would ride out fails
-// outright here. Both providers do honour the AbortSignal, so Cancel genuinely
-// stops an in-flight request either way.
+// The two paths are now close to equivalent operationally: both retry transient
+// 503/429s through the shared policy in `ai/retry.ts`, and both honour the
+// AbortSignal, so Cancel genuinely stops an in-flight request either way. What
+// still differs is the ceiling — Groq's free tier has a tight TPM cap that a
+// large deck can exhaust faster than the retries can clear it.
 const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
 
 /**

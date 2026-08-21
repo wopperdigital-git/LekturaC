@@ -6,6 +6,7 @@ import {
   type GenerationBrief,
 } from './provider'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
+import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
 
 // Was `llama-3.3-70b-versatile` until Groq decommissioned it (the endpoint
 // now 404s with "model does not exist"). `openai/gpt-oss-120b` is the current
@@ -15,9 +16,10 @@ import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
 // other candidate and fails JSON validation, so don't reach for it.
 //
 // Groq's free tier also has a per-model TPM (tokens/minute) cap that's tight
-// (~8000 on prior testing) — large/auto-sized decks can hit it, and there is
-// no retry here. Meant as a temporary fallback while Gemini is unavailable,
-// not a permanent replacement.
+// (~8000 on prior testing) — large/auto-sized decks can hit it. That's what
+// the shared retry policy is for: a saturated TPM window is transient, and
+// Groq sends a `Retry-After` saying when it reopens. Meant as a temporary
+// fallback while Gemini is unavailable, not a permanent replacement.
 //
 // The AbortSignal *is* honoured (threaded into fetch), which the create flow
 // depends on: cancelling a generation has to actually stop the request, or a
@@ -36,37 +38,42 @@ async function callGroq(
   maxTokens: number,
   signal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetch(GROQ_ENDPOINT, {
-    method: 'POST',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      temperature: 0.7,
-      max_tokens: maxTokens,
-      response_format: { type: 'json_object' },
-    }),
-  })
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(GROQ_ENDPOINT, {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        temperature: 0.7,
+        max_tokens: maxTokens,
+        response_format: { type: 'json_object' },
+      }),
+    })
 
-  if (!res.ok) {
+    if (res.ok) {
+      const data = await res.json()
+      const text = data?.choices?.[0]?.message?.content
+      if (typeof text !== 'string') {
+        const finishReason = data?.choices?.[0]?.finish_reason
+        throw new AIProviderError(
+          `Groq API returned an unexpected response shape${finishReason ? ` (finish_reason: ${finishReason})` : ''}`,
+        )
+      }
+      return text
+    }
+
     const body = await res.json().catch(() => null)
     const message = body?.error?.message || (await res.text().catch(() => '')) || res.statusText
-    throw new AIProviderError(`Groq API error (${res.status}): ${message}`)
+    if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
+      throw new AIProviderError(`Groq API error (${res.status}): ${message}`)
+    }
+    await sleep(backoffDelayMs(attempt, res.headers.get('retry-after')), signal)
   }
-
-  const data = await res.json()
-  const text = data?.choices?.[0]?.message?.content
-  if (typeof text !== 'string') {
-    const finishReason = data?.choices?.[0]?.finish_reason
-    throw new AIProviderError(
-      `Groq API returned an unexpected response shape${finishReason ? ` (finish_reason: ${finishReason})` : ''}`,
-    )
-  }
-  return text
 }
 
 function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } {
