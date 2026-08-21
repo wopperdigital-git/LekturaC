@@ -19,8 +19,9 @@ export type GeneratedDeck = z.infer<typeof generatedDeckSchema>
 
 export interface AIProvider {
   /**
-   * `signal` is optional so a provider may ignore it; `GeminiProvider` threads it
-   * into both the fetch and the retry backoff so Cancel takes effect immediately.
+   * `signal` is optional so a third provider may ignore it, but both current
+   * implementations thread it into the fetch and the retry backoff alike, so
+   * Cancel takes effect immediately rather than waiting a timer out.
    */
   generateDeck(
     topic: string,
