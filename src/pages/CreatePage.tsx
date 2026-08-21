@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { GroqProvider } from '@/ai/groqProvider'
+import { GeminiProvider } from '@/ai/geminiProvider'
+import { FallbackProvider, type NamedProvider } from '@/ai/fallbackProvider'
 import { AIProviderError, type AIProvider } from '@/ai/provider'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
@@ -25,16 +27,28 @@ import {
   type Tone,
 } from '@/lib/briefDrafts'
 
-// Temporarily on Groq. To switch back to Gemini: swap this import/usage for
-// GeminiProvider and VITE_GEMINI_API_KEY — geminiProvider.ts and the Gemini
-// key are both left in place for exactly that.
-//
-// The two paths are now close to equivalent operationally: both retry transient
-// 503/429s through the shared policy in `ai/retry.ts`, and both honour the
-// AbortSignal, so Cancel genuinely stops an in-flight request either way. What
-// still differs is the ceiling — Groq's free tier has a tight TPM cap that a
-// large deck can exhaust faster than the retries can clear it.
 const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
+
+/**
+ * Groq first, Gemini behind it — built once at module load.
+ *
+ * Both paths are operationally equivalent (each retries transient 503/429s via
+ * `ai/retry.ts` and honours the AbortSignal); what differs is the ceiling.
+ * Groq's free tier has a tight per-minute token cap that a large deck can
+ * exhaust faster than the retries clear it, and that's exactly when
+ * `FallbackProvider` reaches for Gemini. Only an out-of-capacity failure falls
+ * through — see `fallbackProvider.ts` for why an auth failure must not.
+ *
+ * A provider with no key is left out of the chain entirely rather than added
+ * and allowed to fail: dropping `VITE_GROQ_API_KEY` from `.env` makes this a
+ * Gemini-only app with no code change, which is what the old "swap the import"
+ * comment used to ask for by hand.
+ */
+const PROVIDER_CHAIN: NamedProvider[] = [
+  ...(GROQ_API_KEY ? [{ name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) }] : []),
+  ...(GEMINI_API_KEY ? [{ name: 'Gemini', provider: new GeminiProvider(GEMINI_API_KEY) }] : []),
+]
 
 /**
  * Upper bound on the slide count.
@@ -105,8 +119,9 @@ export function CreatePage() {
   const isGenerating = phase === 'generating'
 
   // Checked up front rather than inside startGeneration: without this the user
-  // answered all six questions before being told the app has no key.
-  const missingKey = !GROQ_API_KEY
+  // answered all six questions before being told the app has no key. One key is
+  // enough — the chain simply has one link.
+  const missingKey = PROVIDER_CHAIN.length === 0
 
 
   useEffect(() => {
@@ -158,7 +173,7 @@ export function CreatePage() {
     setError(null)
 
     try {
-      const provider: AIProvider = new GroqProvider(GROQ_API_KEY)
+      const provider: AIProvider = new FallbackProvider(PROVIDER_CHAIN)
       const deck = await provider.generateDeck(
         t,
         {
@@ -343,7 +358,8 @@ export function CreatePage() {
               <div className="flex flex-col gap-4">
                 <Alert tone="error">
                   No AI key configured. Add{' '}
-                  <code className="font-mono text-xs">VITE_GROQ_API_KEY</code> to your{' '}
+                  <code className="font-mono text-xs">VITE_GROQ_API_KEY</code> or{' '}
+                  <code className="font-mono text-xs">VITE_GEMINI_API_KEY</code> to your{' '}
                   <code className="font-mono text-xs">.env</code> file and restart the dev server.
                 </Alert>
                 <div className="self-start">{skipButton}</div>

@@ -30,4 +30,38 @@ export interface AIProvider {
   ): Promise<GeneratedDeck>
 }
 
-export class AIProviderError extends Error {}
+/**
+ * Why a generation attempt failed, at the granularity a caller needs to decide
+ * whether trying a *different* provider could plausibly help.
+ *
+ * - `capacity`  — 429/503. The provider is busy or this key's quota is spent.
+ *                 Nothing is wrong with the request, so another provider is
+ *                 likely to succeed with it. The only kind worth failing over.
+ * - `auth`      — 401/403, or no key configured at all. A misconfigured key is
+ *                 a problem the user has to fix; silently succeeding on a
+ *                 second provider would bury it.
+ * - `request`   — other 4xx. We sent something the API rejected; it will be
+ *                 rejected everywhere.
+ * - `response`  — the call succeeded but the content wasn't a usable deck.
+ * - `unknown`   — anything unclassified, treated as non-failoverable.
+ */
+export type AIFailureKind = 'capacity' | 'auth' | 'request' | 'response' | 'unknown'
+
+export function kindForStatus(status: number): AIFailureKind {
+  if (status === 429 || status === 503) return 'capacity'
+  if (status === 401 || status === 403) return 'auth'
+  if (status >= 400 && status < 500) return 'request'
+  return 'unknown'
+}
+
+export class AIProviderError extends Error {
+  readonly kind: AIFailureKind
+  readonly status?: number
+
+  constructor(message: string, options?: { kind?: AIFailureKind; status?: number }) {
+    super(message)
+    this.name = 'AIProviderError'
+    this.kind = options?.kind ?? 'unknown'
+    this.status = options?.status
+  }
+}

@@ -1,6 +1,7 @@
 import {
   AIProviderError,
   generatedDeckSchema,
+  kindForStatus,
   type AIProvider,
   type GeneratedDeck,
   type GenerationBrief,
@@ -62,6 +63,7 @@ async function callGroq(
         const finishReason = data?.choices?.[0]?.finish_reason
         throw new AIProviderError(
           `Groq API returned an unexpected response shape${finishReason ? ` (finish_reason: ${finishReason})` : ''}`,
+          { kind: 'response' },
         )
       }
       return text
@@ -70,7 +72,10 @@ async function callGroq(
     const body = await res.json().catch(() => null)
     const message = body?.error?.message || (await res.text().catch(() => '')) || res.statusText
     if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
-      throw new AIProviderError(`Groq API error (${res.status}): ${message}`)
+      throw new AIProviderError(`Groq API error (${res.status}): ${message}`, {
+        kind: kindForStatus(res.status),
+        status: res.status,
+      })
     }
     await sleep(backoffDelayMs(attempt, res.headers.get('retry-after')), signal)
   }
@@ -101,7 +106,9 @@ export class GroqProvider implements AIProvider {
     signal?: AbortSignal,
   ): Promise<GeneratedDeck> {
     if (!this.apiKey.trim()) {
-      throw new AIProviderError('No Groq API key configured. Add VITE_GROQ_API_KEY to your .env file.')
+      throw new AIProviderError('No Groq API key configured. Add VITE_GROQ_API_KEY to your .env file.', {
+        kind: 'auth',
+      })
     }
 
     const userPrompt = buildDeckUserPrompt(topic, brief)
@@ -133,6 +140,8 @@ export class GroqProvider implements AIProvider {
     const secondResult = tryParseDeck(second)
     if ('deck' in secondResult) return secondResult.deck
 
-    throw new AIProviderError('The AI returned content that could not be parsed into a deck. Try again.')
+    throw new AIProviderError('The AI returned content that could not be parsed into a deck. Try again.', {
+      kind: 'response',
+    })
   }
 }
