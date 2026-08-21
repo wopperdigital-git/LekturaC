@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { HomePage } from '@/pages/HomePage'
 import { CreatePage } from '@/pages/CreatePage'
+import { DraftsPage } from '@/pages/DraftsPage'
 import { EditorPage } from '@/pages/EditorPage'
 import { PresentPage } from '@/pages/PresentPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -26,6 +27,14 @@ function App() {
           element={
             <RequireAuth>
               <CreatePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/drafts"
+          element={
+            <RequireAuth>
+              <DraftsPage />
             </RequireAuth>
           }
         />

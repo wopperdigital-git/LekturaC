@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LogoSlot } from '@/components/ui/LogoSlot'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { useDrafts } from '@/lib/briefDrafts'
 
 /**
  * The dashboard's dark rail.
@@ -40,7 +41,7 @@ function OverviewIcon() {
   )
 }
 
-function PlaceholderIcon() {
+function DraftsIcon() {
   return (
     <svg
       className="size-4"
@@ -48,10 +49,12 @@ function PlaceholderIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
+      strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M2 4.5A1.5 1.5 0 013.5 3h2.2l1.2 1.6h5.6A1.5 1.5 0 0114 6.1v6.4a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 12.5z" />
+      <path d="M8.8 2H4.5A1.5 1.5 0 003 3.5v9A1.5 1.5 0 004.5 14h7a1.5 1.5 0 001.5-1.5V8" />
+      <path d="M11.4 1.9l2 2-4.2 4.2-2.4.4.4-2.4z" />
     </svg>
   )
 }
@@ -125,6 +128,10 @@ export function AppSidebar({
   const searchRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
   const { pathname } = useLocation()
+
+  // Read here rather than passed in, so the badge stays right on every page
+  // that renders the rail without each one having to thread the count through.
+  const draftCount = useDrafts().length
 
   // the ⌘F / Ctrl+F chip in the field has to actually do something, so take over
   // the browser's find shortcut while the dashboard is open
@@ -201,7 +208,7 @@ export function AppSidebar({
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
               placeholder="Search"
-              aria-label="Search presentations"
+              aria-label="Search"
               className="w-full rounded-app-sm border border-white/10 bg-white/5 py-2.5 pr-14 pl-9 text-sm text-white outline-none transition-colors duration-150 placeholder:text-white/35 focus:border-white/25 focus:bg-white/8 [&::-webkit-search-cancel-button]:hidden"
             />
             <kbd
@@ -224,8 +231,16 @@ export function AppSidebar({
                 onClose()
               }}
             />
-            {/* placeholder rung — no destination wired up yet */}
-            <SidebarLink label="Nav 2" icon={<PlaceholderIcon />} />
+            <SidebarLink
+              label="Drafts"
+              icon={<DraftsIcon />}
+              active={pathname === '/drafts'}
+              badge={draftCount > 0 ? draftCount : undefined}
+              onClick={() => {
+                void navigate('/drafts')
+                onClose()
+              }}
+            />
           </SidebarSection>
 
           {/*
