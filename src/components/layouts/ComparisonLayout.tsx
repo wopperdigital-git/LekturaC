@@ -1,5 +1,6 @@
 import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
+import { idx } from './blockTags'
 
 export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfType(blocks, 'heading')
@@ -9,14 +10,18 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
     return (
       <div className="flex flex-col gap-6">
         {headings.map((h, i) => (
-          <Heading key={i} text={h.text} />
+          <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
         ))}
         <div className="flex flex-col divide-y divide-slide-border">
           {groups.map((group, i) => {
             const featured = i === 0
             return (
-              <div key={i} className="flex flex-col gap-3 py-4">
-                <div className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
+              <div key={i} data-block-index={idx(blocks, group)} className="flex flex-col gap-3 py-4">
+                <div
+                  data-block-index={idx(blocks, group)}
+                  data-text-path="heading"
+                  className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
+                >
                   {group.heading}
                 </div>
                 <ul className="flex flex-col gap-2">
@@ -27,7 +32,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                           featured ? 'bg-slide-accent' : 'bg-slide-muted'
                         }`}
                       />
-                      <span>{item}</span>
+                      <span data-block-index={idx(blocks, group)} data-text-path={`items.${j}`}>{item}</span>
                     </li>
                   ))}
                 </ul>
@@ -42,7 +47,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
   return (
     <div className="flex flex-col gap-6">
       {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+        <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
       ))}
       <div
         className="grid gap-4"
@@ -57,7 +62,11 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                 featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
               }`}
             >
-              <div className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
+              <div
+                data-block-index={idx(blocks, group)}
+                data-text-path="heading"
+                className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
+              >
                 {group.heading}
               </div>
               <ul className="flex flex-col gap-2">
@@ -68,7 +77,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                         featured ? 'bg-slide-accent' : 'bg-slide-muted'
                       }`}
                     />
-                    <span>{item}</span>
+                    <span data-block-index={idx(blocks, group)} data-text-path={`items.${j}`}>{item}</span>
                   </li>
                 ))}
               </ul>

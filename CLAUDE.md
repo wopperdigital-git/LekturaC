@@ -12,7 +12,7 @@ npm run test      # vitest run
 npm run preview   # preview a production build
 ```
 
-Test coverage is intentionally narrow: Vitest unit tests exist only for pure, high-value logic — `engine/layoutEngine.test.ts` (the layout classifier), `lib/theme-tokens.test.ts` (`darken`/`applyTheme`), `lib/briefDrafts.test.ts` (per-user draft namespacing, the sign-in purge, and the legacy-key migration — storage rules with privacy consequences, exercised against a stubbed auth store and an in-memory `localStorage`), `ai/retry.test.ts` (the shared backoff policy: exponential steps, `Retry-After` parsing in both its seconds and HTTP-date forms, the clamp, and the abortable `sleep`), and `ai/fallbackProvider.test.ts` (which failure kinds hand off and — more importantly — which must not, against stub providers that count their calls). No component/integration tests. `.github/workflows/ci.yml` runs typecheck, lint, test, and build on push/PR.
+Test coverage is intentionally narrow: Vitest unit tests exist only for pure, high-value logic — `engine/layoutEngine.test.ts` (the layout classifier), `lib/theme-tokens.test.ts` (`darken`/`applyTheme`), `lib/briefDrafts.test.ts` (per-user draft namespacing, the sign-in purge, and the legacy-key migration — storage rules with privacy consequences, exercised against a stubbed auth store and an in-memory `localStorage`), `ai/retry.test.ts` (the shared backoff policy: exponential steps, `Retry-After` parsing in both its seconds and HTTP-date forms, the clamp, and the abortable `sleep`), `ai/fallbackProvider.test.ts` (which failure kinds hand off and — more importantly — which must not, against stub providers that count their calls), `engine/blockText.test.ts` (the `data-text-path` grammar behind inline editing: which paths address text on which block type, and the refusal to write blank into a `min(1)` field), and `store/cardMutations.test.ts` (the array/block moves behind delete, reorder, and editing). No component/integration tests. `.github/workflows/ci.yml` runs typecheck, lint, test, and build on push/PR.
 
 ### Environment
 
@@ -22,7 +22,9 @@ Test coverage is intentionally narrow: Vitest unit tests exist only for pure, hi
 
 ## Architecture
 
-This is a Gamma-style AI presentation generator: describe a topic once, get a full deck, view/reorder/present it. **There is no manual content editing** — a project's cards are generated once at creation time and are read-only afterward in the editor (only reordering and deleting cards is possible). To change content, start a new project.
+This is a Gamma-style AI presentation generator: describe a topic once, get a full deck, then refine and present it. **Content is generated once and edited, never regenerated** — a deck's cards come from a single AI call at creation time, and afterwards the editor can revise what is there but not ask for more: text is editable in place, blocks and cards can be deleted and reordered, but nothing adds a block, a card, or a new generation. To get different content, start a new project.
+
+This is a deliberate narrowing of an earlier, stricter rule (cards were entirely read-only after generation). What has *not* changed is the direction of authority: the AI decides what a card says and which blocks it holds, the layout engine decides how that renders, and editing corrects the output rather than driving it.
 
 ### Data flow: creation → generation → storage
 
@@ -100,13 +102,38 @@ A two-column app shell: an always-dark `AppSidebar` rail (logo, search, nav slot
 
 ### Editor layout (`pages/EditorPage.tsx`)
 
-Two independent slide-in/out side panels, not a shared mode switcher: a left outline panel (`CardOutlineSidebar.tsx`) and a right `Theme` panel, both animated via width transition (`w-0` ↔ fixed width, `overflow-hidden`) and able to be open simultaneously. The right panel is toggled from `TopBar`; the left panel floats (rounded corners, margin, shadow — not flush against the window edge) and is toggled by its own arrow button pinned to the vertical center of its right edge, not a `TopBar` button.
+A left outline panel (`CardOutlineSidebar.tsx`) and a right dock, both animated via width transition (inline `width` ↔ 0, `overflow-hidden`) and able to be open simultaneously. The left panel floats (rounded corners, margin, shadow — not flush against the window edge) and is toggled by its own arrow button pinned to the vertical center of its right edge, not a `TopBar` button.
+
+The **right dock holds one panel at a time** — `ThemePanel` or `ScriptPanel` — driven by a single `RightPanel` (`'theme' | 'script' | null`, exported from `TopBar.tsx`) state and two toggle buttons in `TopBar`. One dock rather than two stacked asides because two 250–300px panels side by side would eat the canvas. Its width follows the active panel (theme 256, script 320), and both the width and the rendered panel read from `lastRightPanel` — a ref holding the last non-null value — so a closing dock keeps its content and size while the transition runs instead of blanking and jumping to zero on the same frame.
+
+`ScriptPanel` is the per-card narration script slot: **a container with no source behind it yet**. There is no voice/AI integration, no `cards` column, and no store field — it takes `script` as an optional prop that nothing passes, so it always renders its empty state today. Wiring a real source later should touch the call site in `EditorPage` and nothing inside the panel.
+
+### Canvas editing (`components/editor/CardCanvas.tsx`)
+
+The editor finds what you clicked through **two data attributes on the rendered DOM**, not through React state threaded into the twelve layout components:
+
+- `data-block-index` — the block's position in `card.blocks`. On the block's wrapper *and* on each of its text nodes, so `closest()` from any click lands on a block.
+- `data-text-path` — which text on that block a node renders (`text`, `label`, `items.3`, …). Only nodes carrying this are editable.
+
+`components/layouts/blockTags.ts`'s `idx()` recovers a block's index by identity, because layouts pick blocks with `blocksOfType` and hold the object but not its position. Blocks are never copied between a card and its render, so reference equality is exact. **A layout that renders text without these attributes is invisible to selection and editing** — that's the thing to remember when adding or changing a layout.
+
+`engine/blockText.ts` is the only module that knows what a path means; `getTextAtPath`/`setTextAtPath` keep the renderer, the click handler, and the store generic across eight block types with differently-named text fields. `setTextAtPath` returns `null` for a blank value rather than writing it: every text field in the zod schema is `min(1)`, so a blank write produces a card that no longer validates.
+
+**Inline editing edits the node the layout already rendered** (`contentEditable` toggled imperatively), rather than positioning an input over it — the text keeps its font, size, colour and wrapping for free, which is what preserving the slide design actually requires. The store is written **once on commit** (blur or Enter; Escape reverts), never per keystroke: React never re-renders the node mid-edit so the caret cannot jump, and the entire edit collapses into one undo step without any coalescing logic. Emptying a field reverts it.
+
+**The selection box is a measured overlay**, an absolutely-positioned sibling inside the card, never a ring or border on the selected node — layouts are flex/grid children, so styling the node itself would nudge its neighbours and make selecting a thing change how it looks. It re-measures through a `ResizeObserver` on both the card and the block, so it tracks theme switches and text growing under the cursor.
+
+Editing text can never change a card's layout (`chooseLayout` classifies on block *types*), but deleting a block can — so `deleteBlock` pins `card.layout` to its currently-resolved value first, via `withLayoutPinned`. `layout` is an existing column that already accepts any `LayoutType`, and `resolveLayout` only consults the engine while it is `'auto'`, so this needs no schema change and is the field working as designed.
+
+**Undo/redo (`past`/`future` in `presentationStore.ts`) is snapshot-based** over the whole `cards` array rather than a list of inverse operations: edit, delete, and reorder then need no bespoke undo each, and redo is the same machinery run backwards. It covers card delete/reorder as well as block edits, resets on `loadDeck`, and caps at 50. Two things it depends on: `persistCardsSync` diffs the previous card list against the next so a redo of a delete removes the row again and an undo re-inserts it (the id is preserved, so an upsert restores it — no `deleted_at` column, no trash table); and `cancelScheduledSaves('cards')` kills the pending debounced write before applying, or a ⌘Z landing 200ms into the 500ms save window would be overwritten by the timer firing with the text the user just took back. History is in-memory and dies with the tab.
+
+Keyboard, all in one `EditorPage` listener that returns early when the event target is `contentEditable`/`input`/`textarea`: ⌘Z undo, ⌘⇧Z (or ⌘Y) redo, Delete/Backspace removes the selected block, Escape clears the selection.
 
 `CardOutlineSidebar`'s thumbnails are **not screenshots** — each is the real `LayoutRenderer` output rendered at a fixed offscreen size (800×450) and shrunk with `transform: scale()`, so they're always pixel-accurate to the live card and update instantly with theme/content changes.
 
 ### Persistence (Supabase)
 
-`supabase/migrations/0001_init.sql` defines `presentations`, `cards`, and `themes` (the `themes` table is legacy/unused now that custom themes were removed — harmless to leave, not read from). `0002_add_visual_style.sql` adds `cards.visual_style` (`not null default 'structured'`) — run it against any project created before this field existed. RLS on every table is scoped to `owner_id = auth.uid()`, with `cards` checked via a join back to its parent `presentations` row. `store/presentationStore.ts` debounces text/theme field saves (`scheduleSave`, 500ms) but persists structural changes (card delete/reorder) immediately.
+`supabase/migrations/0001_init.sql` defines `presentations`, `cards`, and `themes` (the `themes` table is legacy/unused now that custom themes were removed — harmless to leave, not read from). `0002_add_visual_style.sql` adds `cards.visual_style` (`not null default 'structured'`) — run it against any project created before this field existed. RLS on every table is scoped to `owner_id = auth.uid()`, with `cards` checked via a join back to its parent `presentations` row. `store/presentationStore.ts` debounces title/theme and inline text edits (`scheduleSave`, 500ms — tabbing through several fields is one write) but persists structural changes (card or block delete, reorder, undo/redo) immediately. All card writes go through one `persistCardsSync(presentationId, previous, next)`, which deletes the rows that dropped out of `next` and upserts the rest — a plain upsert cannot express a deletion, which undo/redo crossing a delete in either direction requires.
 
 ### Auth
 

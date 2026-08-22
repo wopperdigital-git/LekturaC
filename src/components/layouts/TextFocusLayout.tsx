@@ -1,5 +1,6 @@
 import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
+import { idx } from './blockTags'
 
 /** Flowing multi-paragraph prose for narrative cards with no natural list/number structure. */
 export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -10,12 +11,14 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
   return (
     <div className="flex flex-col gap-5">
       {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+        <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
       ))}
       <div className="flex max-w-prose flex-col gap-4">
         {paragraphs.map((p, i) => (
           <p
             key={i}
+            data-block-index={idx(blocks, p)}
+            data-text-path="text"
             className={
               expressive && i === 0
                 ? 'text-[length:var(--slide-size-h3)] leading-snug text-slide-foreground'

@@ -1,5 +1,6 @@
 import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading, StatBlockView } from './BlockRenderer'
+import { idx } from './blockTags'
 
 export function StatGridLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfType(blocks, 'heading')
@@ -9,7 +10,7 @@ export function StatGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
   return (
     <div className="flex flex-col gap-8">
       {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+        <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
       ))}
       <div className="grid gap-6" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
         {stats.map((stat, i) => (
@@ -21,7 +22,7 @@ export function StatGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
                 : 'border-t-2 border-slide-accent pt-4'
             }
           >
-            <StatBlockView value={stat.value} label={stat.label} />
+            <StatBlockView value={stat.value} label={stat.label} blockIndex={idx(blocks, stat)} />
           </div>
         ))}
       </div>
