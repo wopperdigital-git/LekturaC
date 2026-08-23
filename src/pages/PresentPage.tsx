@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
+import { SlideSurface } from '@/components/theme/SlideSurface'
 
 export function PresentPage() {
   const { id } = useParams<{ id: string }>()
@@ -89,9 +90,9 @@ export function PresentPage() {
               className="flex h-full shrink-0 items-center justify-center overflow-y-auto px-6 py-10 sm:px-10"
               style={{ width: `${100 / count}%` }}
             >
-              <div className="w-full max-w-5xl rounded-slide bg-slide-background p-8 shadow-slide sm:p-10">
+              <SlideSurface className="w-full max-w-5xl rounded-slide p-8 shadow-slide sm:p-10">
                 <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
-              </div>
+              </SlideSurface>
             </div>
           ))}
         </div>

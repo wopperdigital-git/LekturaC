@@ -1,16 +1,8 @@
 import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
-import { DEFAULT_THEME, type ThemeTokens } from '@/lib/theme-tokens'
+import { DEFAULT_THEME, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
-import { resolveLayout } from '@/engine/layoutEngine'
-import { getTextAtPath, setTextAtPath } from '@/engine/blockText'
-import {
-  inOrder,
-  withBlockRemoved,
-  withBlockReplaced,
-  withLayoutPinned,
-  withoutCard,
-} from './cardMutations'
+import { inOrder, withoutCard } from './cardMutations'
 
 export interface DeckSummary {
   id: string
@@ -43,8 +35,6 @@ interface PresentationState {
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
 
-  editBlockText: (cardId: string, blockIndex: number, path: string, text: string) => void
-  deleteBlock: (cardId: string, blockIndex: number) => void
   undo: () => void
   redo: () => void
 }
@@ -66,18 +56,6 @@ function scheduleSave(key: string, fn: () => Promise<void>, delayMs = 500) {
       void fn()
     }, delayMs),
   )
-}
-
-// Undo has to win against a debounced save that is still in flight: typing
-// schedules a write 500ms out, and a ⌘Z 200ms later would otherwise be
-// overwritten by that timer firing with the text the user just took back.
-function cancelScheduledSaves(prefix: string) {
-  for (const [key, timer] of saveTimers) {
-    if (key.startsWith(prefix)) {
-      clearTimeout(timer)
-      saveTimers.delete(key)
-    }
-  }
 }
 
 const MAX_HISTORY = 50
@@ -143,13 +121,9 @@ type Getter = () => PresentationState
 
 /*
   History is snapshot-based over the whole `cards` array rather than a list of
-  inverse operations: move/edit/delete/reorder then need no bespoke undo each,
-  and a redo is the same machinery run backwards. Cards are small and capped at
+  inverse operations: delete and reorder then need no bespoke undo each, and a
+  redo is the same machinery run backwards. Cards are small and capped at
   MAX_SLIDES, so the memory cost is nil next to the branching it removes.
-
-  One entry per user action falls out of the UI contract rather than any
-  coalescing logic here: inline editing keeps its text in the DOM and calls
-  `editBlockText` once, when the edit is committed — never per keystroke.
 */
 function pushHistory(set: StatusSetter, get: Getter) {
   set({ past: [...get().past, get().cards].slice(-MAX_HISTORY), future: [] })
@@ -247,7 +221,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         set({
           presentationId: id,
           title: pres.title,
-          theme: (pres.theme as ThemeTokens) ?? DEFAULT_THEME,
+          // Resolved by id rather than used as-is: a deck saved before a theme
+          // redesign carries that older shape. See `resolveTheme`.
+          theme: resolveTheme(pres.theme),
           cards: (cardRows ?? []).map((row) => ({
             id: row.id,
             orderIndex: row.order_index,
@@ -316,52 +292,10 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     }
   },
 
-  editBlockText(cardId, blockIndex, path, text) {
-    const previous = get().cards
-    const block = previous.find((c) => c.id === cardId)?.blocks[blockIndex]
-    if (!block) return
-
-    const next = setTextAtPath(block, path, text)
-    // A blank value or a path this block has no text at: keep what was there.
-    if (!next) return
-    // Committing an untouched field must not spend an undo step.
-    if (getTextAtPath(block, path) === text.trim()) return
-
-    pushHistory(set, get)
-    set({ cards: withBlockReplaced(previous, cardId, blockIndex, next) })
-
-    const id = get().presentationId
-    if (id) {
-      // Debounced: tabbing through several fields in a row is one write, and
-      // the pending timer is what `cancelScheduledSaves` cancels on undo.
-      scheduleSave('cards', () => runSave(set, () => persistCardsSync(id, get().cards, get().cards)))
-    }
-  },
-
-  deleteBlock(cardId, blockIndex) {
-    const previous = get().cards
-    const index = previous.findIndex((c) => c.id === cardId)
-    const card = previous[index]
-    if (!card || blockIndex < 0 || blockIndex >= card.blocks.length) return
-
-    pushHistory(set, get)
-    // Pin the layout *before* the block list changes: chooseLayout classifies on
-    // which block types a card holds, so an unpinned card can jump to a
-    // different layout the moment one is removed.
-    const resolved = resolveLayout(card.layout, card.blocks, { isFirstCard: index === 0 })
-    set({ cards: withBlockRemoved(withLayoutPinned(previous, cardId, resolved), cardId, blockIndex) })
-
-    const id = get().presentationId
-    if (id) {
-      void runSave(set, () => persistCardsSync(id, previous, get().cards))
-    }
-  },
-
   undo() {
     const { past, cards, future, presentationId } = get()
     const restored = past[past.length - 1]
     if (!restored) return
-    cancelScheduledSaves('cards')
     set({ cards: restored, past: past.slice(0, -1), future: [cards, ...future].slice(0, MAX_HISTORY) })
     if (presentationId) {
       void runSave(set, () => persistCardsSync(presentationId, cards, restored))
@@ -372,7 +306,6 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     const { past, cards, future, presentationId } = get()
     const restored = future[0]
     if (!restored) return
-    cancelScheduledSaves('cards')
     set({ cards: restored, past: [...past, cards].slice(-MAX_HISTORY), future: future.slice(1) })
     if (presentationId) {
       void runSave(set, () => persistCardsSync(presentationId, cards, restored))

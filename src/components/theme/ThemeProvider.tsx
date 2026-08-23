@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { applyTheme, type ThemeTokens } from '@/lib/theme-tokens'
+import { SlideThemeContext } from './slideThemeContext'
 
 /**
  * Scopes a ThemeTokens object to its own DOM subtree via a wrapper element,
@@ -15,8 +16,10 @@ export function ThemeProvider({ theme, children }: { theme: ThemeTokens; childre
   }, [theme])
 
   return (
-    <div ref={scopeRef} className="contents">
-      {children}
-    </div>
+    <SlideThemeContext.Provider value={theme}>
+      <div ref={scopeRef} className="contents">
+        {children}
+      </div>
+    </SlideThemeContext.Provider>
   )
 }

@@ -8,7 +8,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
   if (variant === 'expressive') {
     return (
       <div className="flex gap-6 py-14">
-        <span className="w-1.5 shrink-0 rounded-full bg-slide-accent" />
+        <span className="w-1.5 shrink-0 rounded-full bg-gradient-to-b from-slide-accent to-slide-accent-soft" />
         <div className="flex flex-col gap-5 text-left">
           {heading && (
             <h1
@@ -33,7 +33,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
 
   return (
     <div className="flex flex-col items-center gap-5 py-14 text-center">
-      <span className="h-1.5 w-14 rounded-full bg-slide-accent" />
+      <span className="h-1.5 w-14 rounded-full bg-gradient-to-r from-slide-accent to-slide-accent-soft" />
       {heading && (
         <h1
           className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"

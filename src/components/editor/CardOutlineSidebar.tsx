@@ -5,6 +5,7 @@ import type { Card } from '@/engine/contentBlocks'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
+import { SlideSurface } from '@/components/theme/SlideSurface'
 
 // Live-scaled preview: the real layout is rendered at full size inside a fixed
 // offscreen box, then shrunk with a CSS transform — always in sync with the
@@ -21,11 +22,16 @@ function CardThumbnail({ card, index }: { card: Card; index: number }) {
       className="relative overflow-hidden rounded-slide bg-slide-background shadow-slide"
       style={{ width: THUMB_DISPLAY_WIDTH, height: THUMB_DISPLAY_HEIGHT }}
     >
+      {/* Rendered at full slide size and shrunk with a transform, so the
+          backdrop's stars and rings scale with everything else instead of
+          needing their own thumbnail-sized values. */}
       <div
-        className="pointer-events-none absolute left-0 top-0 origin-top-left bg-slide-background p-8 sm:p-10"
+        className="pointer-events-none absolute left-0 top-0 origin-top-left"
         style={{ width: THUMB_BASE_WIDTH, height: THUMB_BASE_HEIGHT, transform: `scale(${THUMB_SCALE})` }}
       >
-        <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
+        <SlideSurface className="h-full w-full p-8 sm:p-10">
+          <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
+        </SlideSurface>
       </div>
       <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
         {index + 1}

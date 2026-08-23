@@ -1,6 +1,5 @@
 import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading, StatBlockView } from './BlockRenderer'
-import { idx } from './blockTags'
 
 export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfType(blocks, 'heading')
@@ -10,16 +9,14 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
   if (variant === 'expressive') {
     return (
       <div className="flex flex-col items-center gap-6 rounded-slide-sm bg-slide-surface p-8 sm:flex-row sm:items-center sm:gap-10">
-        {stat && <StatBlockView value={stat.value} label={stat.label} blockIndex={idx(blocks, stat)} />}
+        {stat && <StatBlockView value={stat.value} label={stat.label} />}
         <div className="flex flex-col gap-3 text-center sm:text-left">
           {headings.map((h, i) => (
-            <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
+            <Heading key={i} text={h.text} />
           ))}
           {paragraphs.map((p, i) => (
             <p
               key={i}
-              data-block-index={idx(blocks, p)}
-              data-text-path="text"
               className="max-w-md text-slide-foreground/80"
             >
               {p.text}
@@ -33,14 +30,12 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">
       {headings.map((h, i) => (
-        <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
+        <Heading key={i} text={h.text} />
       ))}
-      {stat && <StatBlockView value={stat.value} label={stat.label} blockIndex={idx(blocks, stat)} />}
+      {stat && <StatBlockView value={stat.value} label={stat.label} />}
       {paragraphs.map((p, i) => (
         <p
               key={i}
-              data-block-index={idx(blocks, p)}
-              data-text-path="text"
               className="max-w-md text-slide-foreground/80"
             >
           {p.text}

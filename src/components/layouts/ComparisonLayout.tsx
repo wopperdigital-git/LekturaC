@@ -1,6 +1,5 @@
 import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
-import { idx } from './blockTags'
 
 export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfType(blocks, 'heading')
@@ -10,16 +9,14 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
     return (
       <div className="flex flex-col gap-6">
         {headings.map((h, i) => (
-          <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
+          <Heading key={i} text={h.text} />
         ))}
         <div className="flex flex-col divide-y divide-slide-border">
           {groups.map((group, i) => {
             const featured = i === 0
             return (
-              <div key={i} data-block-index={idx(blocks, group)} className="flex flex-col gap-3 py-4">
+              <div key={i} className="flex flex-col gap-3 py-4">
                 <div
-                  data-block-index={idx(blocks, group)}
-                  data-text-path="heading"
                   className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
                 >
                   {group.heading}
@@ -32,7 +29,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                           featured ? 'bg-slide-accent' : 'bg-slide-muted'
                         }`}
                       />
-                      <span data-block-index={idx(blocks, group)} data-text-path={`items.${j}`}>{item}</span>
+                      <span>{item}</span>
                     </li>
                   ))}
                 </ul>
@@ -47,7 +44,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
   return (
     <div className="flex flex-col gap-6">
       {headings.map((h, i) => (
-        <Heading key={i} text={h.text} blockIndex={idx(blocks, h)} path="text" />
+        <Heading key={i} text={h.text} />
       ))}
       <div
         className="grid gap-4"
@@ -63,8 +60,6 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
               }`}
             >
               <div
-                data-block-index={idx(blocks, group)}
-                data-text-path="heading"
                 className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
               >
                 {group.heading}
@@ -77,7 +72,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                         featured ? 'bg-slide-accent' : 'bg-slide-muted'
                       }`}
                     />
-                    <span data-block-index={idx(blocks, group)} data-text-path={`items.${j}`}>{item}</span>
+                    <span>{item}</span>
                   </li>
                 ))}
               </ul>

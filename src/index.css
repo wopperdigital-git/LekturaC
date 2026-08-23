@@ -43,6 +43,7 @@
   --color-slide-foreground: var(--slide-foreground);
   --color-slide-accent: var(--slide-accent);
   --color-slide-accent-foreground: var(--slide-accent-foreground);
+  --color-slide-accent-soft: var(--slide-accent-soft);
   --color-slide-muted: var(--slide-muted);
   --color-slide-border: var(--slide-border);
   --color-slide-surface: var(--slide-surface);
@@ -90,15 +91,20 @@
   --app-radius-sm: 0.5rem;
   --app-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
 
-  /* Slide theme fallback — used only where no ThemeProvider scope overrides it */
-  --slide-background: #ffffff;
-  --slide-canvas-background: #f0f0f2;
-  --slide-foreground: #111114;
-  --slide-accent: #4f46e5;
-  --slide-accent-foreground: #ffffff;
-  --slide-muted: #6b7280;
-  --slide-border: #e5e7eb;
-  --slide-surface: #f8f8fa;
+  /* Slide theme fallback — used only where no ThemeProvider scope overrides it.
+     Mirrors the Moonlight preset (the default theme) so an unscoped slide never
+     renders in a palette no theme actually uses. */
+  --slide-background: #f7f5fa;
+  --slide-canvas-background: #ebe6f2;
+  --slide-foreground: #17151c;
+  --slide-accent: #6c63ff;
+  --slide-accent-foreground: #0d0a14;
+  --slide-accent-soft: #a9a3ff;
+  --slide-muted: #6f6a78;
+  --slide-border: #e4e0ee;
+  --slide-surface: #fdfcff;
+  /* The celestial backdrop layer; ThemeProvider replaces it per deck. */
+  --slide-backdrop-image: none;
   --slide-font-heading: 'Inter', system-ui, sans-serif;
   --slide-font-body: 'Inter', system-ui, sans-serif;
   --slide-radius: 1rem;

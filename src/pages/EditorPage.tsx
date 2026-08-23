@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { ThemePanel } from '@/components/theme/ThemePanel'
 import { TopBar, type RightPanel } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
-import { CardCanvas, type BlockSelection, type EditTarget } from '@/components/editor/CardCanvas'
+import { CardCanvas } from '@/components/editor/CardCanvas'
 import { ScriptPanel } from '@/components/editor/ScriptPanel'
 
 const SIDEBAR_WIDTH_PX = 160
@@ -15,10 +15,9 @@ const SCRIPT_PANEL_WIDTH_PX = 320
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const store = usePresentationStore()
-  const { cards, editBlockText, deleteBlock, undo, redo } = store
+  const { cards, undo, redo } = store
 
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
-  const [selection, setSelection] = useState<BlockSelection | null>(null)
   const [outlineOpen, setOutlineOpen] = useState(true)
   const [rightPanel, setRightPanel] = useState<RightPanel>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -44,64 +43,28 @@ export function EditorPage() {
     cardRefs.current.get(cardId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const handleSelect = useCallback((next: BlockSelection | null) => {
-    setSelection(next)
-    if (next) setActiveCardId(next.cardId)
-  }, [])
-
-  const handleEditText = useCallback(
-    (target: EditTarget, text: string) => {
-      editBlockText(target.cardId, target.blockIndex, target.path, text)
-    },
-    [editBlockText],
-  )
-
-  const handleDeleteBlock = useCallback(
-    (target: BlockSelection) => {
-      deleteBlock(target.cardId, target.blockIndex)
-      setSelection(null)
-    },
-    [deleteBlock],
-  )
-
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
-      // Text being edited owns its own keys — including Backspace and ⌘Z.
-      if (
-        target &&
-        (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
-      ) {
-        return
-      }
+      // A field owns its own keys — the deck title in TopBar, above all.
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
 
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
         else undo()
-        setSelection(null)
         return
       }
       if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault()
         redo()
-        setSelection(null)
-        return
-      }
-      if (mod || e.altKey) return
-
-      if (e.key === 'Escape') {
-        setSelection(null)
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
-        e.preventDefault()
-        handleDeleteBlock(selection)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selection, handleDeleteBlock, undo, redo])
+  }, [undo, redo])
 
   const sortedCards = [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
   const activeIndex = sortedCards.findIndex((c) => c.id === activeCardId)
@@ -122,14 +85,8 @@ export function EditorPage() {
         onToggleRightPanel={(panel) => setRightPanel((current) => (current === panel ? null : panel))}
         canUndo={store.past.length > 0}
         canRedo={store.future.length > 0}
-        onUndo={() => {
-          undo()
-          setSelection(null)
-        }}
-        onRedo={() => {
-          redo()
-          setSelection(null)
-        }}
+        onUndo={undo}
+        onRedo={redo}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -167,14 +124,7 @@ export function EditorPage() {
             </div>
           ) : (
             <ThemeProvider theme={store.theme}>
-              <CardCanvas
-                cards={cards}
-                cardRefs={cardRefs}
-                selection={selection}
-                onSelect={handleSelect}
-                onEditText={handleEditText}
-                onDeleteBlock={handleDeleteBlock}
-              />
+              <CardCanvas cards={cards} cardRefs={cardRefs} />
             </ThemeProvider>
           )}
         </main>
