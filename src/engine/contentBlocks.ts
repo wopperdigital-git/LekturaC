@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { textStyleSchema } from './textStyle'
+import { markSchema } from './marks'
 
 export const headingBlockSchema = z.object({
   type: z.literal('heading'),
@@ -95,6 +97,27 @@ export const cardSchema = z.object({
   blocks: z.array(contentBlockSchema).min(1),
   layout: layoutTypeSchema,
   visualStyle: visualStyleSchema,
+  /*
+    Per-card text formatting from the toolbar's Level 2 tools. Optional because
+    it postdates every card already in the database: rows written before
+    migration 0004 have no such column, and the AI never generates one — a deck
+    arrives unstyled and only gains a value if someone edits it.
+  */
+  textStyle: textStyleSchema.optional(),
+  /*
+    Level 3's per-text-element data, keyed by `textRef`. Optional and absent by
+    default: a freshly generated deck has none, and a card only gains an entry
+    for a run of text somebody actually formatted.
+  */
+  inline: z
+    .record(
+      z.string(),
+      z.object({
+        marks: z.array(markSchema).optional(),
+        style: textStyleSchema.optional(),
+      }),
+    )
+    .optional(),
 })
 
 export type Card = z.infer<typeof cardSchema>
@@ -104,4 +127,24 @@ export function blocksOfType<T extends ContentBlock['type']>(
   type: T,
 ): Extract<ContentBlock, { type: T }>[] {
   return blocks.filter((b): b is Extract<ContentBlock, { type: T }> => b.type === type)
+}
+
+/**
+ * Like `blocksOfType`, but keeps each block's position in the original array.
+ *
+ * Layouts filter a card down to the block types they care about, which throws
+ * away the index. Level 3 addresses every run of text by that index (see
+ * `textRef`), so a filtered layout has no way to name its own text without
+ * this. Returning the pair rather than a parallel index array keeps the two
+ * from drifting apart at the call site.
+ */
+export function blocksOfTypeIndexed<T extends ContentBlock['type']>(
+  blocks: ContentBlock[],
+  type: T,
+): { block: Extract<ContentBlock, { type: T }>; index: number }[] {
+  const out: { block: Extract<ContentBlock, { type: T }>; index: number }[] = []
+  blocks.forEach((b, index) => {
+    if (b.type === type) out.push({ block: b as Extract<ContentBlock, { type: T }>, index })
+  })
+  return out
 }
