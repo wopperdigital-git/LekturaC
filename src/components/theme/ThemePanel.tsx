@@ -1,6 +1,7 @@
 import { BUILTIN_THEMES, type ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from './ThemeProvider'
 import { SlideSurface } from './SlideSurface'
+import { SlideStage } from './SlideStage'
 
 // The preview is a real slide rendered at presentation size and shrunk with a
 // transform, exactly like the outline sidebar's thumbnails. Rendering it small
@@ -37,8 +38,16 @@ function ThemePreview({ theme }: { theme: ThemeTokens }) {
           transform: `scale(${PREVIEW_SCALE})`,
         }}
       >
-        <SlideSurface className="h-full w-full" style={{ padding: 48 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* Stage behind, solid card on top — the same composition as the real
+            canvas. The stage's inset is what makes the themes distinguishable
+            here at all now that the decoration lives behind the card rather
+            than inside it. */}
+        <SlideStage className="h-full w-full" style={{ padding: 32 }}>
+          <SlideSurface
+            className="h-full w-full rounded-slide shadow-slide-card"
+            style={{ padding: 40 }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <span
               style={{
                 width: 64,
@@ -65,8 +74,9 @@ function ThemePreview({ theme }: { theme: ThemeTokens }) {
             >
               A friendly guide to biology
             </span>
-          </div>
-        </SlideSurface>
+            </div>
+          </SlideSurface>
+        </SlideStage>
       </div>
     </div>
   )
@@ -88,7 +98,7 @@ export function ThemePanel({
     // against — without it the list just grows past the dock.
     <div className="flex h-full flex-col overflow-hidden p-3">
       <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-app-muted">Theme</p>
-      <div className="flex flex-col gap-2 overflow-y-auto">
+      <div className="scrollbar-subtle flex flex-col gap-2 overflow-y-auto">
         {BUILTIN_THEMES.map((t) => {
           const isActive = t.id === theme.id
           return (

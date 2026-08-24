@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
 import { DEFAULT_THEME, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
+import { EMPTY_TEXT_STYLE, parseTextStyle, type TextStyle } from '@/engine/textStyle'
+import { applyMark, hasMarkThroughout, shiftMarks, type Mark, type MarkType, type TextRange } from '@/engine/marks'
+import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockText'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { inOrder, withoutCard } from './cardMutations'
 
@@ -14,12 +17,13 @@ interface PresentationState {
   presentationId: string | null
   title: string
   theme: ThemeTokens
+  textStyle: TextStyle
   cards: Card[]
   status: 'idle' | 'loading' | 'saving' | 'error'
   errorMessage: string | null
   persisted: boolean
-  past: Card[][]
-  future: Card[][]
+  past: DeckSnapshot[]
+  future: DeckSnapshot[]
 
   listDecks: () => Promise<DeckSummary[]>
   createDeck: (title?: string) => Promise<string>
@@ -31,6 +35,30 @@ interface PresentationState {
 
   setTitle: (title: string) => void
   setTheme: (theme: ThemeTokens) => void
+  /** Merges a partial deck-wide text override; pass `null` for a field to clear it back to the theme's own value. */
+  setTextStyle: (patch: Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>) => void
+  /** Same merge semantics as `setTextStyle`, scoped to one card (toolbar Level 2). */
+  setCardTextStyle: (
+    cardId: string,
+    patch: Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>,
+  ) => void
+  /**
+   * Picks one layout variety for a card: the component that renders it and the
+   * treatment it renders in. `layout: 'auto'` hands the card back to the
+   * classifier, leaving the treatment alone.
+   */
+  setCardVariety: (cardId: string, layout: LayoutType, visualStyle?: VisualStyle) => void
+
+  /** Level 3: replaces one run of a card's text, keeping its marks on the same characters. */
+  setBlockText: (cardId: string, ref: string, nextText: string) => void
+  /** Level 3: toggles bold/italic over a character range within one run. */
+  toggleTextMark: (cardId: string, ref: string, range: TextRange, type: MarkType) => void
+  /** Level 3: font/size/alignment for one whole run of text. */
+  setInlineStyle: (
+    cardId: string,
+    ref: string,
+    patch: Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>,
+  ) => void
 
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
@@ -58,6 +86,21 @@ function scheduleSave(key: string, fn: () => Promise<void>, delayMs = 500) {
   )
 }
 
+/*
+  Drops every pending debounced write.
+
+  Undo/redo must call this before persisting the snapshot they restore.
+  Without it the write being undone is still sitting on a 500ms timer while
+  undo writes immediately, so the *older* value lands last and wins: the user
+  sees the undo take effect on screen, then a reload brings the undone change
+  straight back. Cancelling is safe precisely because the snapshot write that
+  follows covers every field those timers were going to touch.
+*/
+function cancelScheduledSaves() {
+  for (const timer of saveTimers.values()) clearTimeout(timer)
+  saveTimers.clear()
+}
+
 const MAX_HISTORY = 50
 
 type StatusSetter = (partial: Partial<PresentationState>) => void
@@ -81,6 +124,13 @@ async function persistPresentationPatch(id: string, patch: Record<string, unknow
   if (error) throw error
 }
 
+async function persistCardPatch(cardId: string, patch: Record<string, unknown>) {
+  if (!supabaseConfigured || !supabase) return
+  await ensureSession()
+  const { error } = await supabase.from('cards').update(patch).eq('id', cardId)
+  if (error) throw error
+}
+
 function cardRow(presentationId: string, card: Card) {
   return {
     id: card.id,
@@ -89,6 +139,8 @@ function cardRow(presentationId: string, card: Card) {
     blocks: card.blocks,
     layout: card.layout,
     visual_style: card.visualStyle,
+    text_style: card.textStyle ?? {},
+    inline: card.inline ?? {},
   }
 }
 
@@ -120,19 +172,67 @@ async function persistCardsSync(presentationId: string, previous: Card[], next: 
 type Getter = () => PresentationState
 
 /*
-  History is snapshot-based over the whole `cards` array rather than a list of
-  inverse operations: delete and reorder then need no bespoke undo each, and a
-  redo is the same machinery run backwards. Cards are small and capped at
-  MAX_SLIDES, so the memory cost is nil next to the branching it removes.
+  History is snapshot-based over the whole editable deck, not a list of inverse
+  operations: every action then needs no bespoke undo of its own, and a redo is
+  the same machinery run backwards.
+
+  The snapshot covers *everything a user can change* — title, theme, deck text
+  style, and the cards (which carry their own layout, visual style and text
+  style). It used to hold only `cards`, which meant Ctrl+Z silently did nothing
+  after a theme swap or a toolbar toggle, and worse, could jump back past them
+  to undo a card deletion the user had stopped thinking about. Snapshots are
+  small — cards are capped at MAX_SLIDES — so the memory cost is nil next to
+  the branching that per-action inverses would need.
 */
-function pushHistory(set: StatusSetter, get: Getter) {
-  set({ past: [...get().past, get().cards].slice(-MAX_HISTORY), future: [] })
+interface DeckSnapshot {
+  title: string
+  theme: ThemeTokens
+  textStyle: TextStyle
+  cards: Card[]
+}
+
+function snapshotOf(get: Getter): DeckSnapshot {
+  const { title, theme, textStyle, cards } = get()
+  return { title, theme, textStyle, cards }
+}
+
+/*
+  Consecutive edits sharing a coalesce key collapse into one history entry when
+  they land inside this window. Typing a title would otherwise push a snapshot
+  per keystroke and make Ctrl+Z a character-by-character rubout instead of an
+  undo of "renaming the deck".
+*/
+const COALESCE_WINDOW_MS = 700
+let lastPush: { key: string; at: number } | null = null
+
+function pushHistory(set: StatusSetter, get: Getter, coalesceKey?: string) {
+  if (coalesceKey && lastPush && lastPush.key === coalesceKey) {
+    if (Date.now() - lastPush.at < COALESCE_WINDOW_MS) {
+      // Refresh the clock so a continuous burst keeps collapsing rather than
+      // breaking into a new entry every window-length.
+      lastPush.at = Date.now()
+      return
+    }
+  }
+  lastPush = coalesceKey ? { key: coalesceKey, at: Date.now() } : null
+  set({ past: [...get().past, snapshotOf(get)].slice(-MAX_HISTORY), future: [] })
+}
+
+/** Writes a restored snapshot back to Supabase — every field it covers, since any of them may differ. */
+async function persistSnapshot(id: string, previousCards: Card[], snapshot: DeckSnapshot) {
+  await persistPresentationPatch(id, {
+    title: snapshot.title,
+    theme: snapshot.theme,
+    text_style: snapshot.textStyle,
+  })
+  await persistCardsSync(id, previousCards, snapshot.cards)
 }
 
 export const usePresentationStore = create<PresentationState>((set, get) => ({
   presentationId: null,
   title: 'Untitled',
   theme: DEFAULT_THEME,
+  textStyle: EMPTY_TEXT_STYLE,
   cards: [],
   status: 'idle',
   errorMessage: null,
@@ -164,7 +264,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       })
       if (error) throw error
     }
-    set({ presentationId: id, title, theme: DEFAULT_THEME, cards: [], status: 'idle', errorMessage: null })
+    set({ presentationId: id, title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards: [], status: 'idle', errorMessage: null, past: [], future: [] })
     return id
   },
 
@@ -202,7 +302,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       if (cardsError) throw cardsError
     }
 
-    set({ presentationId: id, title: deck.title, theme: DEFAULT_THEME, cards, status: 'idle', errorMessage: null, past: [], future: [] })
+    set({ presentationId: id, title: deck.title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards, status: 'idle', errorMessage: null, past: [], future: [] })
     return id
   },
 
@@ -224,12 +324,15 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
           // Resolved by id rather than used as-is: a deck saved before a theme
           // redesign carries that older shape. See `resolveTheme`.
           theme: resolveTheme(pres.theme),
+          textStyle: parseTextStyle(pres.text_style),
           cards: (cardRows ?? []).map((row) => ({
             id: row.id,
             orderIndex: row.order_index,
             blocks: row.blocks as ContentBlock[],
             layout: row.layout as LayoutType,
             visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
+            textStyle: parseTextStyle(row.text_style),
+            inline: (row.inline as Card['inline']) ?? undefined,
           })),
           status: 'idle',
           past: [],
@@ -252,6 +355,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   setTitle(title) {
+    pushHistory(set, get, 'title')
     set({ title })
     const id = get().presentationId
     if (id) {
@@ -262,6 +366,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   setTheme(theme) {
+    pushHistory(set, get)
     set({ theme })
     const id = get().presentationId
     if (id) {
@@ -269,6 +374,167 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         runSave(set, () => persistPresentationPatch(id, { theme })),
       )
     }
+  },
+
+  setTextStyle(patch) {
+    // `null` clears a field rather than storing null: an absent key is what
+    // "inherit the theme" means on the wire (see engine/textStyle.ts), so a
+    // stored null would be a second encoding of the same state.
+    // Coalesced per field: holding the font-size stepper is one intent, but
+    // bold-then-italic are two and must undo separately.
+    pushHistory(set, get, `deckTextStyle:${Object.keys(patch).join(',')}`)
+    const next: TextStyle = { ...get().textStyle }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === undefined) delete next[key as keyof TextStyle]
+      else Object.assign(next, { [key]: value })
+    }
+    set({ textStyle: next })
+
+    const id = get().presentationId
+    if (id) {
+      scheduleSave('textStyle', () =>
+        runSave(set, () => persistPresentationPatch(id, { text_style: next })),
+      )
+    }
+  },
+
+  setCardTextStyle(cardId, patch) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+
+    pushHistory(set, get, `cardTextStyle:${cardId}:${Object.keys(patch).join(',')}`)
+    const next: TextStyle = { ...(card.textStyle ?? {}) }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === undefined) delete next[key as keyof TextStyle]
+      else Object.assign(next, { [key]: value })
+    }
+
+    const cards = get().cards.map((c) => (c.id === cardId ? { ...c, textStyle: next } : c))
+    set({ cards })
+
+    const id = get().presentationId
+    if (id) {
+      // Keyed per card, so styling two cards in quick succession doesn't have
+      // the second one's timer cancel the first one's save.
+      scheduleSave(`cardTextStyle:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { text_style: next })),
+      )
+    }
+  },
+
+  setBlockText(cardId, ref, nextText) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+    const parsed = parseTextRef(ref)
+    if (!parsed) return
+    const current = blockFieldText(card.blocks, parsed)
+    if (current === null || current === nextText) return
+
+    // Coalesced: typing is one intent, so a burst of keystrokes undoes as a
+    // single edit rather than character by character.
+    pushHistory(set, get, `blockText:${cardId}:${ref}`)
+
+    const blocks = setBlockFieldText(card.blocks, parsed, nextText)
+
+    /*
+      Marks are character offsets into this run, so they have to move with the
+      edit or they drift onto the wrong characters. The exact edit isn't known
+      here (contentEditable reports the whole new string), so the common prefix
+      and suffix are used to derive the smallest change that explains it.
+    */
+    const existing = card.inline?.[ref]
+    let inline = card.inline
+    if (existing?.marks?.length) {
+      let prefix = 0
+      while (prefix < current.length && prefix < nextText.length && current[prefix] === nextText[prefix]) prefix++
+      let suffix = 0
+      while (
+        suffix < current.length - prefix &&
+        suffix < nextText.length - prefix &&
+        current[current.length - 1 - suffix] === nextText[nextText.length - 1 - suffix]
+      ) {
+        suffix++
+      }
+      const removed = current.length - prefix - suffix
+      const inserted = nextText.length - prefix - suffix
+      inline = {
+        ...card.inline,
+        [ref]: { ...existing, marks: shiftMarks(existing.marks, prefix, removed, inserted) },
+      }
+    }
+
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, blocks, inline } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      scheduleSave(`blockText:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { blocks, inline: inline ?? {} })),
+      )
+    }
+  },
+
+  toggleTextMark(cardId, ref, range, type) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card || range.end <= range.start) return
+
+    pushHistory(set, get)
+    const entry = card.inline?.[ref] ?? {}
+    const marks: Mark[] = entry.marks ?? []
+    // Fully-marked selections clear; partially-marked ones fill in, which is
+    // what every editor does and avoids inverting run by run.
+    const on = !hasMarkThroughout(marks, range, type)
+    const inline = { ...card.inline, [ref]: { ...entry, marks: applyMark(marks, range, type, on) } }
+
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, inline } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      scheduleSave(`inline:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { inline })),
+      )
+    }
+  },
+
+  setInlineStyle(cardId, ref, patch) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+
+    pushHistory(set, get, `inlineStyle:${cardId}:${ref}:${Object.keys(patch).join(',')}`)
+    const entry = card.inline?.[ref] ?? {}
+    const style: TextStyle = { ...(entry.style ?? {}) }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === undefined) delete style[key as keyof TextStyle]
+      else Object.assign(style, { [key]: value })
+    }
+    const inline = { ...card.inline, [ref]: { ...entry, style } }
+
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, inline } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      scheduleSave(`inline:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { inline })),
+      )
+    }
+  },
+
+  setCardVariety(cardId, layout, visualStyle) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+    if (card.layout === layout && (visualStyle === undefined || card.visualStyle === visualStyle)) return
+
+    pushHistory(set, get)
+    const nextStyle = visualStyle ?? card.visualStyle
+    set({
+      cards: get().cards.map((c) =>
+        c.id === cardId ? { ...c, layout, visualStyle: nextStyle } : c,
+      ),
+    })
+    // Structural rather than cosmetic, and cheap — persisted immediately, like
+    // card delete/reorder, instead of going through the debounce.
+    void runSave(set, () =>
+      persistCardPatch(cardId, { layout, visual_style: nextStyle }),
+    )
   },
 
   deleteCard(cardId) {
@@ -293,22 +559,31 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   undo() {
-    const { past, cards, future, presentationId } = get()
+    const { past, future, cards, presentationId } = get()
     const restored = past[past.length - 1]
     if (!restored) return
-    set({ cards: restored, past: past.slice(0, -1), future: [cards, ...future].slice(0, MAX_HISTORY) })
+    // Any in-flight coalescing ends here: the next edit must start a fresh
+    // entry rather than merging into the one just undone.
+    lastPush = null
+    // Must precede the snapshot write — see cancelScheduledSaves.
+    cancelScheduledSaves()
+    const current = snapshotOf(get)
+    set({ ...restored, past: past.slice(0, -1), future: [current, ...future].slice(0, MAX_HISTORY) })
     if (presentationId) {
-      void runSave(set, () => persistCardsSync(presentationId, cards, restored))
+      void runSave(set, () => persistSnapshot(presentationId, cards, restored))
     }
   },
 
   redo() {
-    const { past, cards, future, presentationId } = get()
+    const { past, future, cards, presentationId } = get()
     const restored = future[0]
     if (!restored) return
-    set({ cards: restored, past: [...past, cards].slice(-MAX_HISTORY), future: future.slice(1) })
+    lastPush = null
+    cancelScheduledSaves()
+    const current = snapshotOf(get)
+    set({ ...restored, past: [...past, current].slice(-MAX_HISTORY), future: future.slice(1) })
     if (presentationId) {
-      void runSave(set, () => persistCardsSync(presentationId, cards, restored))
+      void runSave(set, () => persistSnapshot(presentationId, cards, restored))
     }
   },
 

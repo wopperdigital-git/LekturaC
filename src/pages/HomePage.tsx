@@ -60,7 +60,7 @@ export function HomePage() {
         onClose={() => setMenuOpen(false)}
       />
 
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="scrollbar-subtle min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10 ">
           <div className="mb-6 flex items-start gap-3">
             <button

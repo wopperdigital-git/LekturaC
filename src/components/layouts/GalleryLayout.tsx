@@ -1,16 +1,17 @@
-import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { blocksOfType, blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
+import { textRef } from '@/engine/marks'
 
 export function GalleryLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
-  const headings = blocksOfType(blocks, 'heading')
+  const headings = blocksOfTypeIndexed(blocks, 'heading')
   const images = blocksOfType(blocks, 'image')
 
   if (variant === 'expressive' && images.length >= 2) {
     const [featured, ...rest] = images
     return (
       <div className="flex flex-col gap-6">
-        {headings.map((h, i) => (
-          <Heading key={i} text={h.text} />
+        {headings.map(({ block, index }) => (
+          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
         ))}
         <div className="grid grid-cols-2 gap-3">
           <figure className="row-span-2 overflow-hidden rounded-slide-sm border border-slide-border">
@@ -38,8 +39,8 @@ export function GalleryLayout({ blocks, variant }: { blocks: ContentBlock[]; var
 
   return (
     <div className="flex flex-col gap-6">
-      {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+      {headings.map(({ block, index }) => (
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
       ))}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {images.map((img, i) => (

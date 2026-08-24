@@ -1,17 +1,27 @@
 import type { ContentBlock } from '@/engine/contentBlocks'
+import { textRef } from '@/engine/marks'
+import { EditableText } from './EditableText'
 
-/** Generic single-block renderer, used by layouts that just need to stack whatever blocks remain. */
-export function BlockRenderer({ block }: { block: ContentBlock }) {
+/**
+ * Generic single-block renderer, used by layouts that just need to stack
+ * whatever blocks remain.
+ *
+ * `index` is the block's position in its card and is what every text run's
+ * address is built from — see `textRef`. Layouts that render blocks themselves
+ * must pass the same index they iterate with, or Level 3 would store a run's
+ * formatting against the wrong block.
+ */
+export function BlockRenderer({ block, index }: { block: ContentBlock; index: number }) {
   switch (block.type) {
     case 'heading':
-      return <Heading text={block.text} />
+      return <Heading text={block.text} textRef={textRef(index, 'text')} />
     case 'paragraph':
       return (
         <p
           className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"
           style={{ fontFamily: 'var(--font-slide-body)' }}
         >
-          {block.text}
+          <EditableText textRef={textRef(index, 'text')} value={block.text} />
         </p>
       )
     case 'bulletList':
@@ -20,13 +30,20 @@ export function BlockRenderer({ block }: { block: ContentBlock }) {
           {block.items.map((item, i) => (
             <li key={i} className="flex items-start gap-2 text-[length:var(--slide-size-body)]">
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slide-accent" />
-              <span>{item}</span>
+              <EditableText textRef={textRef(index, 'items', i)} value={item} />
             </li>
           ))}
         </ul>
       )
     case 'stat':
-      return <StatBlockView value={block.value} label={block.label} />
+      return (
+        <StatBlockView
+          value={block.value}
+          label={block.label}
+          valueRef={textRef(index, 'value')}
+          labelRef={textRef(index, 'label')}
+        />
+      )
     case 'image':
       return (
         <img
@@ -38,10 +55,10 @@ export function BlockRenderer({ block }: { block: ContentBlock }) {
     case 'quote':
       return (
         <blockquote className="max-w-prose border-l-4 border-slide-accent pl-4 italic text-slide-foreground/90">
-          "<span>{block.text}</span>"
+          "<EditableText textRef={textRef(index, 'text')} value={block.text} />"
           {block.attribution && (
             <footer className="mt-2 text-sm not-italic text-slide-muted">
-              — <span>{block.attribution}</span>
+              — <EditableText textRef={textRef(index, 'attribution')} value={block.attribution} />
             </footer>
           )}
         </blockquote>
@@ -49,18 +66,24 @@ export function BlockRenderer({ block }: { block: ContentBlock }) {
     case 'timelineStep':
       return (
         <div>
-          <div className="font-semibold text-slide-accent">{block.label}</div>
-          <div className="text-slide-foreground/90">{block.text}</div>
+          <div className="font-semibold text-slide-accent">
+            <EditableText textRef={textRef(index, 'label')} value={block.label} />
+          </div>
+          <div className="text-slide-foreground/90">
+            <EditableText textRef={textRef(index, 'text')} value={block.text} />
+          </div>
         </div>
       )
     case 'comparisonGroup':
       return (
         <div>
-          <div className="mb-2 font-semibold text-slide-foreground">{block.heading}</div>
+          <div className="mb-2 font-semibold text-slide-foreground">
+            <EditableText textRef={textRef(index, 'heading')} value={block.heading} />
+          </div>
           <ul className="flex flex-col gap-1">
             {block.items.map((item, i) => (
               <li key={i} className="text-sm text-slide-foreground/90">
-                <span>{item}</span>
+                <EditableText textRef={textRef(index, 'items', i)} value={item} />
               </li>
             ))}
           </ul>
@@ -69,28 +92,48 @@ export function BlockRenderer({ block }: { block: ContentBlock }) {
   }
 }
 
-export function Heading({ text, size = 'h2' }: { text: string; size?: 'h1' | 'h2' | 'h3' }) {
+export function Heading({
+  text,
+  textRef: ref,
+  size = 'h2',
+}: {
+  text: string
+  textRef: string
+  size?: 'h1' | 'h2' | 'h3'
+}) {
   const sizeVar = `var(--slide-size-${size})`
   return (
     <h2
       className="font-semibold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
       style={{ fontFamily: 'var(--font-slide-heading)', fontSize: sizeVar, lineHeight: 1.15 }}
     >
-      {text}
+      <EditableText textRef={ref} value={text} />
     </h2>
   )
 }
 
-export function StatBlockView({ value, label }: { value: string; label: string }) {
+export function StatBlockView({
+  value,
+  label,
+  valueRef,
+  labelRef,
+}: {
+  value: string
+  label: string
+  valueRef: string
+  labelRef: string
+}) {
   return (
     <div>
       <div
         className="font-bold text-slide-accent"
         style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1 }}
       >
-        {value}
+        <EditableText textRef={valueRef} value={value} />
       </div>
-      <div className="mt-2 text-slide-muted">{label}</div>
+      <div className="mt-2 text-slide-muted">
+        <EditableText textRef={labelRef} value={label} />
+      </div>
     </div>
   )
 }

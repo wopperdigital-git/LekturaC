@@ -51,6 +51,28 @@ const SHADOW_VALUES: Record<ThemeTokens['shape']['shadow'], string> = {
 /** Canvas sits this many HSL lightness points below the theme background — a subtle, uniform tint in both light and dark themes. */
 const CANVAS_DARKEN_AMOUNT = 5
 
+/*
+  The floating-card shadow, shared by every theme.
+
+  Deliberately *not* `SHADOW_VALUES[shape.shadow]`: those are per-theme
+  statements (Bold's hard 4px offset, Sage's orange flare) that were designed
+  for a card sitting on a flat canvas. Now that the theme's decoration lives
+  behind the cards, an offset slab reads as a sticker on top of the artwork
+  rather than a panel floating above it, so all five themes share one restrained
+  elevation instead.
+
+  Three stacked layers do the lifting — a tight contact shadow, a mid diffusion,
+  and a wide ambient one — which is what separates a modern floating surface
+  from a single blurred drop shadow. The leading hairline ring is what keeps the
+  card readable on the dark themes, where a black shadow has nothing to darken.
+*/
+const CARD_SHADOW = [
+  '0 0 0 1px color-mix(in srgb, var(--slide-border) 45%, transparent)',
+  '0 1px 2px rgba(0, 0, 0, 0.05)',
+  '0 6px 16px rgba(0, 0, 0, 0.09)',
+  '0 20px 44px rgba(0, 0, 0, 0.12)',
+].join(', ')
+
 function hexToHsl(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
@@ -111,10 +133,17 @@ export function darken(hex: string, amount: number): string {
  *
  * Also overrides Tailwind's own `--spacing` multiplier on that same scope, so
  * a theme's spacing density affects only the slides it wraps, never app chrome.
+ *
+ * Writes the *theme's* typography only. The editor toolbar's overrides are
+ * applied per card by `components/theme/TextStyleScope`, which layers inline
+ * custom properties over whatever this wrote — keeping this function a pure
+ * function of the theme, and keeping deck/card precedence in one place.
  */
 export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
   const { typography, colors, spacing, shape } = theme
   const [h1, h2, h3, body] = typography.scale
+  const headingFont = typography.headingFont
+  const bodyFont = typography.bodyFont
 
   const vars: Record<string, string> = {
     '--slide-background': colors.background,
@@ -127,8 +156,8 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
     '--slide-border': colors.border,
     '--slide-surface': colors.surface,
 
-    '--slide-font-heading': typography.headingFont,
-    '--slide-font-body': typography.bodyFont,
+    '--slide-font-heading': headingFont,
+    '--slide-font-body': bodyFont,
 
     '--slide-size-h1': `${h1}rem`,
     '--slide-size-h2': `${h2}rem`,
@@ -140,6 +169,7 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
     '--slide-radius': `${shape.radius}rem`,
     '--slide-radius-sm': `${shape.radiusSm}rem`,
     '--slide-shadow': SHADOW_VALUES[shape.shadow],
+    '--slide-card-shadow': CARD_SHADOW,
 
     // The atmospheric layer. Structured decoration (stars, orbits, bodies) can't
     // be a custom property, so `SlideBackdrop` reads it off the theme object via

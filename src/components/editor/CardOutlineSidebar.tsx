@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -6,32 +7,108 @@ import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { SlideSurface } from '@/components/theme/SlideSurface'
+import { SlideStage } from '@/components/theme/SlideStage'
+import { TextStyleScope } from '@/components/theme/TextStyleScope'
+import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 
-// Live-scaled preview: the real layout is rendered at full size inside a fixed
+// Live-scaled preview: the real layout is rendered at full slide width inside an
 // offscreen box, then shrunk with a CSS transform — always in sync with the
 // actual card, no screenshot/canvas capture needed.
 const THUMB_BASE_WIDTH = 800
-const THUMB_BASE_HEIGHT = 450
-const THUMB_DISPLAY_WIDTH = 136
-const THUMB_SCALE = THUMB_DISPLAY_WIDTH / THUMB_BASE_WIDTH
-const THUMB_DISPLAY_HEIGHT = THUMB_BASE_HEIGHT * THUMB_SCALE
+// Cards size to their content (no fixed aspect ratio — see CardCanvas), so the
+// thumbnail can't assume 16:9 either. This is only the pre-measurement guess
+// used for the very first layout pass.
+const THUMB_FALLBACK_HEIGHT = (THUMB_BASE_WIDTH * 9) / 16
+// A long card would otherwise tower over its neighbours in the rail, so past
+// this height it gets zoomed out further rather than cropped.
+const THUMB_MAX_DISPLAY_HEIGHT = 200
+// Only reached if the frame reports a zero width (measurement happens in a
+// layout effect, i.e. before paint), so this is a guard, not a visible state.
+const THUMB_FALLBACK_DISPLAY_HEIGHT = 76
 
-function CardThumbnail({ card, index }: { card: Card; index: number }) {
+/*
+  Fits the whole card into the rail's width — `contain`, not `cover`.
+
+  The previous version forced the slide into a fixed 800x450 box and clipped the
+  overflow, which cropped the bottom off any card with more than a screenful of
+  content and cut the last words off long headings. Measuring the natural height
+  instead means the thumbnail always shows the entire card at the card's own
+  proportions; nothing is readable at this size anyway, and recognisable is what
+  a thumbnail is for.
+*/
+function CardThumbnail({
+  card,
+  index,
+  deckTextStyle,
+}: {
+  card: Card
+  index: number
+  deckTextStyle: TextStyle
+}) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [frameWidth, setFrameWidth] = useState(0)
+  const [naturalHeight, setNaturalHeight] = useState(THUMB_FALLBACK_HEIGHT)
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current
+    const content = contentRef.current
+    if (!frame || !content) return
+
+    // Measure once up front rather than waiting on the observer's first
+    // callback, which lands after paint and would flash a mis-sized frame.
+    function measure() {
+      if (!frame || !content) return
+      setFrameWidth(frame.clientWidth)
+      // offsetHeight is the pre-transform layout box, so the scale we apply
+      // below can't feed back into the measurement.
+      setNaturalHeight(content.offsetHeight || THUMB_FALLBACK_HEIGHT)
+    }
+    measure()
+
+    // Content height moves after mount too — late webfonts, a theme swap that
+    // changes the spacing multiplier — so keep watching both boxes.
+    const observer = new ResizeObserver(measure)
+    observer.observe(frame)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
+
+  const scale =
+    frameWidth > 0
+      ? Math.min(frameWidth / THUMB_BASE_WIDTH, THUMB_MAX_DISPLAY_HEIGHT / naturalHeight)
+      : 0
+  const displayHeight = scale > 0 ? naturalHeight * scale : THUMB_FALLBACK_DISPLAY_HEIGHT
+  // Centre the card when the height cap made it narrower than the rail.
+  const offsetX = Math.max(0, (frameWidth - THUMB_BASE_WIDTH * scale) / 2)
+
   return (
     <div
-      className="relative overflow-hidden rounded-slide bg-slide-background shadow-slide"
-      style={{ width: THUMB_DISPLAY_WIDTH, height: THUMB_DISPLAY_HEIGHT }}
+      ref={frameRef}
+      className="relative w-full overflow-hidden rounded-slide bg-slide-background shadow-slide"
+      style={{ height: displayHeight }}
     >
-      {/* Rendered at full slide size and shrunk with a transform, so the
+      {/* Rendered at full slide width and shrunk with a transform, so the
           backdrop's stars and rings scale with everything else instead of
           needing their own thumbnail-sized values. */}
       <div
-        className="pointer-events-none absolute left-0 top-0 origin-top-left"
-        style={{ width: THUMB_BASE_WIDTH, height: THUMB_BASE_HEIGHT, transform: `scale(${THUMB_SCALE})` }}
+        ref={contentRef}
+        className="pointer-events-none absolute top-0 origin-top-left"
+        style={{ left: offsetX, width: THUMB_BASE_WIDTH, transform: `scale(${scale})` }}
       >
-        <SlideSurface className="h-full w-full p-8 sm:p-10">
-          <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
-        </SlideSurface>
+        {/* A miniature of the real canvas: themed stage behind, solid card
+            floating on it. The inset padding is what lets the backdrop show
+            around the card — without it the stage would be completely covered
+            and every theme would look identical in the rail. */}
+        <SlideStage className="w-full p-10">
+          {/* Same merged style as the canvas, so a Level 2 edit shows up in the
+              rail immediately rather than only on the big card. */}
+          <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
+            <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
+              <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
+            </SlideSurface>
+          </TextStyleScope>
+        </SlideStage>
       </div>
       <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
         {index + 1}
@@ -46,12 +123,14 @@ function SortableRow({
   isActive,
   onSelect,
   onDelete,
+  deckTextStyle,
 }: {
   card: Card
   index: number
   isActive: boolean
   onSelect: () => void
   onDelete: () => void
+  deckTextStyle: TextStyle
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -65,19 +144,22 @@ function SortableRow({
         isActive ? 'border-app-accent' : 'border-transparent hover:border-app-border'
       }`}
     >
-      <button
-        onClick={onSelect}
-        className="block cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-      >
-        <CardThumbnail card={card} index={index} />
-      </button>
+      {/* The whole thumbnail is the drag handle — press and hold to reorder,
+          click to select. `w-full` is load-bearing: a button shrink-wraps its
+          content even at `display: block`, so the thumbnail's own `w-full`
+          would resolve against a zero-width parent and collapse the preview.
+
+          `touch-manipulation` rather than `touch-none`: the rail scrolls, and
+          taking touch-action away entirely would trap a finger swipe here
+          instead of letting it scroll the list. The hold delay is what
+          separates the two gestures. */}
       <button
         {...attributes}
         {...listeners}
-        className="absolute left-1 top-1 cursor-grab touch-none rounded bg-black/60 px-1 text-xs text-white opacity-0 transition-opacity active:cursor-grabbing group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        aria-label="Drag to reorder"
+        onClick={onSelect}
+        className="block w-full cursor-pointer touch-manipulation text-left active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
       >
-        ⠿
+        <CardThumbnail card={card} index={index} deckTextStyle={deckTextStyle} />
       </button>
       <button
         onClick={(e) => {
@@ -96,6 +178,7 @@ function SortableRow({
 export function CardOutlineSidebar({
   cards,
   theme,
+  deckTextStyle,
   activeCardId,
   onSelect,
   onReorder,
@@ -103,12 +186,24 @@ export function CardOutlineSidebar({
 }: {
   cards: Card[]
   theme: ThemeTokens
+  deckTextStyle: TextStyle
   activeCardId: string | null
   onSelect: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onDelete: (id: string) => void
 }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  /*
+    Press-and-hold to drag, rather than the old dedicated ⠿ handle.
+
+    A delay constraint (not a distance one) is what makes this safe now that the
+    entire thumbnail is the drag source: the rail is a scrolling list, so a
+    distance constraint would turn every attempt to swipe the list into a card
+    drag. Holding still for `delay` starts a drag; moving further than
+    `tolerance` before that cancels it, leaving a plain click — which is what
+    selects the card. dnd-kit swallows the trailing click once a drag actually
+    starts, so a completed reorder never also selects.
+  */
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 150, tolerance: 8 } }))
   const sorted = [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
   function handleDragEnd(event: DragEndEvent) {
@@ -120,7 +215,7 @@ export function CardOutlineSidebar({
   }
 
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-y-auto p-2">
+    <div className="scrollbar-subtle flex h-full flex-col gap-1.5 overflow-y-auto p-2">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <ThemeProvider theme={theme}>
@@ -133,6 +228,7 @@ export function CardOutlineSidebar({
                   isActive={card.id === activeCardId}
                   onSelect={() => onSelect(card.id)}
                   onDelete={() => onDelete(card.id)}
+                  deckTextStyle={deckTextStyle}
                 />
               ))}
             </div>

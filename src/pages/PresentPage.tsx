@@ -4,6 +4,9 @@ import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { SlideSurface } from '@/components/theme/SlideSurface'
+import { SlideStage } from '@/components/theme/SlideStage'
+import { TextStyleScope } from '@/components/theme/TextStyleScope'
+import { mergeTextStyle } from '@/engine/textStyle'
 
 export function PresentPage() {
   const { id } = useParams<{ id: string }>()
@@ -79,7 +82,7 @@ export function PresentPage() {
 
   return (
     <ThemeProvider theme={store.theme}>
-      <div ref={containerRef} className="relative h-screen w-screen overflow-hidden bg-slide-canvas">
+      <SlideStage ref={containerRef} className="h-screen w-screen">
         <div
           className="flex h-full transition-transform duration-300 ease-in-out"
           style={{ width: `${count * 100}%`, transform: `translateX(-${(index * 100) / count}%)` }}
@@ -87,12 +90,14 @@ export function PresentPage() {
           {sorted.map((card, i) => (
             <div
               key={card.id}
-              className="flex h-full shrink-0 items-center justify-center overflow-y-auto px-6 py-10 sm:px-10"
+              className="scrollbar-subtle flex h-full shrink-0 items-center justify-center overflow-y-auto px-6 py-10 sm:px-10"
               style={{ width: `${100 / count}%` }}
             >
-              <SlideSurface className="w-full max-w-5xl rounded-slide p-8 shadow-slide sm:p-10">
-                <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
-              </SlideSurface>
+              <TextStyleScope style={mergeTextStyle(store.textStyle, card.textStyle)}>
+                <SlideSurface className="w-full max-w-5xl rounded-slide p-8 shadow-slide-card sm:p-10">
+                  <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
+                </SlideSurface>
+              </TextStyleScope>
             </div>
           ))}
         </div>
@@ -136,7 +141,7 @@ export function PresentPage() {
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs text-white">
           {index + 1} / {count}
         </div>
-      </div>
+      </SlideStage>
     </ThemeProvider>
   )
 }

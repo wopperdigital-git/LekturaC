@@ -1,25 +1,27 @@
-import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading, StatBlockView } from './BlockRenderer'
+import { textRef } from '@/engine/marks'
+import { EditableText } from './EditableText'
 
 export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
-  const headings = blocksOfType(blocks, 'heading')
-  const stat = blocksOfType(blocks, 'stat')[0]
-  const paragraphs = blocksOfType(blocks, 'paragraph')
+  const headings = blocksOfTypeIndexed(blocks, 'heading')
+  const stat = blocksOfTypeIndexed(blocks, 'stat')[0]
+  const paragraphs = blocksOfTypeIndexed(blocks, 'paragraph')
 
   if (variant === 'expressive') {
     return (
       <div className="flex flex-col items-center gap-6 rounded-slide-sm bg-slide-surface p-8 sm:flex-row sm:items-center sm:gap-10">
-        {stat && <StatBlockView value={stat.value} label={stat.label} />}
+        {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
         <div className="flex flex-col gap-3 text-center sm:text-left">
-          {headings.map((h, i) => (
-            <Heading key={i} text={h.text} />
+          {headings.map(({ block, index }) => (
+            <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
           ))}
-          {paragraphs.map((p, i) => (
+          {paragraphs.map(({ block, index }) => (
             <p
-              key={i}
+              key={index}
               className="max-w-md text-slide-foreground/80"
             >
-              {p.text}
+              <EditableText textRef={textRef(index, 'text')} value={block.text} />
             </p>
           ))}
         </div>
@@ -29,16 +31,16 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
 
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">
-      {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+      {headings.map(({ block, index }) => (
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
       ))}
-      {stat && <StatBlockView value={stat.value} label={stat.label} />}
-      {paragraphs.map((p, i) => (
+      {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
+      {paragraphs.map(({ block, index }) => (
         <p
-              key={i}
+              key={index}
               className="max-w-md text-slide-foreground/80"
             >
-          {p.text}
+          <EditableText textRef={textRef(index, 'text')} value={block.text} />
         </p>
       ))}
     </div>

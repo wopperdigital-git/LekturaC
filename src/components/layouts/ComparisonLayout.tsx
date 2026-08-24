@@ -1,15 +1,17 @@
-import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
+import { textRef } from '@/engine/marks'
+import { EditableText } from './EditableText'
 
 export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
-  const headings = blocksOfType(blocks, 'heading')
-  const groups = blocksOfType(blocks, 'comparisonGroup')
+  const headings = blocksOfTypeIndexed(blocks, 'heading')
+  const groups = blocksOfTypeIndexed(blocks, 'comparisonGroup')
 
   if (variant === 'expressive') {
     return (
       <div className="flex flex-col gap-6">
-        {headings.map((h, i) => (
-          <Heading key={i} text={h.text} />
+        {headings.map(({ block, index }) => (
+          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
         ))}
         <div className="flex flex-col divide-y divide-slide-border">
           {groups.map((group, i) => {
@@ -19,17 +21,17 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                 <div
                   className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
                 >
-                  {group.heading}
+                  <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
                 </div>
                 <ul className="flex flex-col gap-2">
-                  {group.items.map((item, j) => (
+                  {group.block.items.map((item, j) => (
                     <li key={j} className="flex items-start gap-2 text-sm text-slide-foreground/90">
                       <span
                         className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                           featured ? 'bg-slide-accent' : 'bg-slide-muted'
                         }`}
                       />
-                      <span>{item}</span>
+                      <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
                     </li>
                   ))}
                 </ul>
@@ -43,8 +45,8 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
 
   return (
     <div className="flex flex-col gap-6">
-      {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+      {headings.map(({ block, index }) => (
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
       ))}
       <div
         className="grid gap-4"
@@ -62,17 +64,17 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
               <div
                 className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
               >
-                {group.heading}
+                <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
               </div>
               <ul className="flex flex-col gap-2">
-                {group.items.map((item, j) => (
+                {group.block.items.map((item, j) => (
                   <li key={j} className="flex items-start gap-2 text-sm text-slide-foreground/90">
                     <span
                       className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                         featured ? 'bg-slide-accent' : 'bg-slide-muted'
                       }`}
                     />
-                    <span>{item}</span>
+                    <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
                   </li>
                 ))}
               </ul>

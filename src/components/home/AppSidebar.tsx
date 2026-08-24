@@ -220,7 +220,7 @@ export function AppSidebar({
           </div>
         </div>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
+        <nav className="scrollbar-subtle-on-dark min-h-0 flex-1 overflow-y-auto px-4 py-6">
           <SidebarSection label="Workspace">
             <SidebarLink
               label="Overview"

@@ -1,9 +1,11 @@
-import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { textRef } from '@/engine/marks'
+import { EditableText } from './EditableText'
 
 /** Cinematic opening title card: big heading, optional short subtitle, no clutter. */
 export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
-  const heading = blocksOfType(blocks, 'heading')[0]
-  const paragraph = blocksOfType(blocks, 'paragraph')[0]
+  const heading = blocksOfTypeIndexed(blocks, 'heading')[0]
+  const paragraph = blocksOfTypeIndexed(blocks, 'paragraph')[0]
 
   if (variant === 'expressive') {
     return (
@@ -15,7 +17,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
               className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
               style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
             >
-              {heading.text}
+              <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
             </h1>
           )}
           {paragraph && (
@@ -23,7 +25,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
               className="max-w-lg text-[length:var(--slide-size-h3)] text-slide-muted"
               style={{ fontFamily: 'var(--font-slide-body)' }}
             >
-              {paragraph.text}
+              <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
             </p>
           )}
         </div>
@@ -39,7 +41,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
           className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
           style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
         >
-          {heading.text}
+          <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
         </h1>
       )}
       {paragraph && (
@@ -47,7 +49,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
           className="max-w-lg text-[length:var(--slide-size-h3)] text-slide-muted"
           style={{ fontFamily: 'var(--font-slide-body)' }}
         >
-          {paragraph.text}
+          <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
         </p>
       )}
     </div>

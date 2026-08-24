@@ -1,15 +1,16 @@
-import { blocksOfType, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { blocksOfType, blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { Heading } from './BlockRenderer'
+import { textRef } from '@/engine/marks'
 
 export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
-  const headings = blocksOfType(blocks, 'heading')
+  const headings = blocksOfTypeIndexed(blocks, 'heading')
   const steps = blocksOfType(blocks, 'timelineStep')
 
   if (variant === 'expressive') {
     return (
       <div className="flex flex-col gap-6">
-        {headings.map((h, i) => (
-          <Heading key={i} text={h.text} />
+        {headings.map(({ block, index }) => (
+          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
         ))}
         <ol className="flex flex-col gap-4">
           {steps.map((step, i) => (
@@ -30,8 +31,8 @@ export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; va
 
   return (
     <div className="flex flex-col gap-6">
-      {headings.map((h, i) => (
-        <Heading key={i} text={h.text} />
+      {headings.map(({ block, index }) => (
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
       ))}
       <ol className="relative flex flex-col gap-6">
         <div

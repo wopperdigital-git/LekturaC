@@ -7,6 +7,9 @@ import { SlideThemeContext } from './slideThemeContext'
  * instead of writing to document.documentElement. `display: contents` keeps
  * the wrapper out of layout flow — it exists only to host the scoped
  * --slide-* custom properties that descendants read.
+ *
+ * Carries the theme only. The toolbar's text overrides live in
+ * `TextStyleScope`, applied per card inside this scope.
  */
 export function ThemeProvider({ theme, children }: { theme: ThemeTokens; children: ReactNode }) {
   const scopeRef = useRef<HTMLDivElement>(null)

@@ -28,7 +28,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-app bg-app-background p-6 shadow-app"
+        className="scrollbar-subtle max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-app bg-app-background p-6 shadow-app"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">

@@ -52,6 +52,7 @@
   --radius-slide: var(--slide-radius);
   --radius-slide-sm: var(--slide-radius-sm);
   --shadow-slide: var(--slide-shadow);
+  --shadow-slide-card: var(--slide-card-shadow);
 }
 
 :root {
@@ -110,6 +111,10 @@
   --slide-radius: 1rem;
   --slide-radius-sm: 0.5rem;
   --slide-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
+  /* Kept in sync with CARD_SHADOW in lib/theme-tokens.ts. */
+  --slide-card-shadow:
+    0 0 0 1px color-mix(in srgb, var(--slide-border) 45%, transparent), 0 1px 2px rgba(0, 0, 0, 0.05),
+    0 6px 16px rgba(0, 0, 0, 0.09), 0 20px 44px rgba(0, 0, 0, 0.12);
   --slide-size-h1: 2.75rem;
   --slide-size-h2: 1.875rem;
   --slide-size-h3: 1.375rem;
@@ -258,4 +263,116 @@ body {
   .create-step-in {
     animation: none;
   }
+}
+
+/*
+  Subtle scrollbar for the editor's side panels. The platform default is a wide
+  track with stepper arrows at each end, which in a 160px rail eats enough width
+  to clip the thumbnails beside it. `scrollbar-width` wins in Chrome 121+ and
+  Firefox; the `::-webkit-` block is the fallback for older Chromium, where
+  `scrollbar-button { display: none }` is what actually drops the arrows.
+  Colors are app tokens, so this follows the light/dark toggle.
+*/
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border) transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background-color: var(--app-border);
+  border-radius: 999px;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background-color: var(--app-muted);
+}
+
+.scrollbar-subtle::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-subtle::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+  Variant for the always-dark surfaces (the dashboard's AppSidebar rail), which
+  don't follow the light/dark toggle. `--app-border` is near-white in light
+  mode, so the default utility would put a bright bar on that dark rail; these
+  white-alpha values stay quiet on it in both themes. Same convention as
+  ThemeToggle's `onDark` prop.
+*/
+.scrollbar-subtle-on-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.scrollbar-subtle-on-dark::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-subtle-on-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-subtle-on-dark::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
+.scrollbar-subtle-on-dark::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+.scrollbar-subtle-on-dark::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/*
+  Deck-wide bold / italic / alignment from the editor toolbar's Level 1 tools.
+  ThemeProvider writes these data attributes onto its scope element; font family
+  and size travel as --slide-* tokens instead (see applyTheme).
+
+  These need a descendant *element* selector rather than a plain inherited value
+  on the scope. The layout components set their own `font-semibold`, `italic`
+  and `text-center` utilities, which are single-class specificity (0,1,0) and
+  beat anything merely inherited. `:is(h1, h2, …)` contributes an element's
+  (0,0,1) on top of the attribute's (0,1,0), giving (0,1,1) — exactly one notch
+  above a utility, so these win without reaching for `!important`.
+
+  Alignment omits `span`: spans are used inline mid-sentence, where a text-align
+  does nothing but would still override a deliberate parent alignment.
+*/
+[data-deck-bold='true'] :is(h1, h2, h3, h4, p, li, span, blockquote, figcaption) {
+  font-weight: 700;
+}
+
+[data-deck-italic='true'] :is(h1, h2, h3, h4, p, li, span, blockquote, figcaption) {
+  font-style: italic;
+}
+
+[data-deck-align='left'] :is(h1, h2, h3, h4, p, li, blockquote, figcaption) {
+  text-align: left;
+}
+
+[data-deck-align='center'] :is(h1, h2, h3, h4, p, li, blockquote, figcaption) {
+  text-align: center;
+}
+
+[data-deck-align='right'] :is(h1, h2, h3, h4, p, li, blockquote, figcaption) {
+  text-align: right;
 }
