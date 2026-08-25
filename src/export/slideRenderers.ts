@@ -365,11 +365,12 @@ const renderStat: SlideRenderer = (slide, card, theme, style) => {
  *
  * The classifier (`layoutEngine.ts`'s `chooseLayout`) admits 2 to 4
  * comparison groups into this arrangement, so the column count follows the
- * card rather than being fixed at two. A card with more than 4 groups is not
- * reachable through `layout: 'auto'`, but a legacy row could carry an
- * explicit `layout: 'comparison'` with more — that falls back to `renderBody`
- * instead of silently dropping the extra groups, since `flattenBlocks`
- * already renders every `comparisonGroup` as a heading plus indented bullets.
+ * card rather than being fixed at two. A card with no groups, or with more than
+ * 4 groups, is not reachable through `layout: 'auto'`, but a legacy row could
+ * carry an explicit `layout: 'comparison'` with either — both fall back to
+ * `renderBody` instead of silently dropping the extra groups or rendering
+ * nothing, since `flattenBlocks` already renders every `comparisonGroup` as a
+ * heading plus indented bullets.
  */
 const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
   const groups: { heading: string; items: string[]; index: number }[] = []
@@ -378,8 +379,14 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
       groups.push({ heading: block.heading, items: block.items, index: i })
     }
   })
-  if (groups.length === 0) return
-  if (groups.length > 4) {
+  // No groups, or more than four: neither is reachable through `layout: 'auto'`
+  // (the classifier admits exactly 2 to 4), but a legacy row carrying an
+  // explicit `layout: 'comparison'` could be either. Both fall back to
+  // `renderBody`, which draws the heading *and* whatever else the card holds,
+  // so a malformed comparison card degrades into a readable standard slide
+  // rather than a lone heading over an empty backdrop — or, as before, nothing
+  // at all.
+  if (groups.length === 0 || groups.length > 4) {
     renderBody(slide, card, theme, style)
     return
   }
