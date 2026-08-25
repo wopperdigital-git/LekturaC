@@ -17,7 +17,11 @@
 - **Path alias `@/*` → `src/*`.** Use it in all new imports.
 - **Vitest runs with `environment: 'node'`** (`vite.config.ts`). No test may touch `document`, `window`, `Image`, or `canvas`.
 - **Nothing outside `src/export/` may import `pptxgenjs`.**
-- **Nothing inside `src/export/` may import React or any component.**
+- **Nothing inside `src/export/` may import React or any component** — with one
+  exception, `src/export/useExportPptx.ts`, which is a hook and may import
+  `react` and nothing else from the UI. The rule exists so the *exporter* runs
+  without a mounted UI, which is what lets the dashboard export a deck it never
+  opened; a hook importing `react` does not weaken that.
 - **`pptxgenjs` must be loaded via dynamic `import()`**, never a static top-level import, so it stays out of the main bundle.
 - **Slide geometry is fixed:** `pptx.layout = 'LAYOUT_16x9'` → 10in × 5.625in. Margin 0.6in, content width 8.8in.
 - **Backdrop raster size is fixed:** 1920 × 1080.
@@ -848,12 +852,18 @@ describe('celestialSvg', () => {
     expect(svg.endsWith('</svg>')).toBe(true)
   })
 
+  // Not a style preference: an external reference taints the canvas in
+  // `rasterize.ts` and makes `toDataURL` throw. Note this cannot assert the
+  // absence of the substring "http" — the required xmlns declaration contains
+  // it — so it tests for the reference forms themselves.
   it('carries no external reference that could taint a canvas', () => {
     for (const theme of BUILTIN_THEMES) {
       const svg = celestialSvg(theme)
-      expect(svg, theme.id).not.toContain('http')
       expect(svg, theme.id).not.toContain('foreignObject')
       expect(svg, theme.id).not.toContain('<image')
+      expect(svg, theme.id).not.toContain('href')
+      expect(svg, theme.id).not.toContain('url(http')
+      expect(svg, theme.id).not.toContain('@import')
     }
   })
 
