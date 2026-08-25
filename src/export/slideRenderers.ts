@@ -74,6 +74,18 @@ function firstOfType<T extends ContentBlock['type']>(
   return null
 }
 
+/** Every block of one type, each with the index its `textRef` needs. */
+function allOfType<T extends ContentBlock['type']>(
+  card: Card,
+  type: T,
+): { block: Extract<ContentBlock, { type: T }>; index: number }[] {
+  const out: { block: Extract<ContentBlock, { type: T }>; index: number }[] = []
+  card.blocks.forEach((block, i) => {
+    if (block.type === type) out.push({ block: block as Extract<ContentBlock, { type: T }>, index: i })
+  })
+  return out
+}
+
 /** The heading, plus a thin accent rule under it. Shared by every renderer that has one. */
 function addHeading(slide: PptxSlide, card: Card, theme: ThemeTokens, style: TextStyle) {
   const ref = textRef(0, 'text')
@@ -107,15 +119,19 @@ function addHeading(slide: PptxSlide, card: Card, theme: ThemeTokens, style: Tex
  *
  * A card with no paragraph renders the heading alone rather than leaving a gap
  * where a subtitle would be, so the block sits centred either way.
+ *
+ * `textFocus` itself is chosen by the classifier precisely when a card holds
+ * two or more paragraphs (`layoutEngine.ts`), so every paragraph is rendered
+ * — as separate lines in one subtitle box — rather than only the first.
  */
 const renderTitle: SlideRenderer = (slide, card, theme, style) => {
-  const paragraph = firstOfType(card, 'paragraph')
+  const paragraphs = allOfType(card, 'paragraph')
   const headingRef = textRef(0, 'text')
   const headingStyle = styleFor(card, headingRef, style)
 
   slide.addText(markedRuns(headingText(card), marksFor(card, headingRef)), {
     x: MARGIN,
-    y: paragraph ? 1.6 : 2.0,
+    y: paragraphs.length > 0 ? 1.6 : 2.0,
     w: CONTENT_W,
     h: 1.6,
     fontFace: headingFace(theme, headingStyle),
@@ -127,20 +143,34 @@ const renderTitle: SlideRenderer = (slide, card, theme, style) => {
     valign: 'middle',
   })
 
-  if (paragraph) {
-    const ref = textRef(paragraph.index, 'text')
-    const runStyle = styleFor(card, ref, style)
-    slide.addText(markedRuns(paragraph.block.text, marksFor(card, ref)), {
+  if (paragraphs.length > 0) {
+    // Box-level options (face, size, colour, alignment) follow the first
+    // paragraph's resolved style, same as the single-paragraph case did
+    // before; only bold/italic marks vary per run within the box.
+    const boxStyle = styleFor(card, textRef(paragraphs[0].index, 'text'), style)
+    const runs = paragraphs.flatMap(({ block, index }, i) => {
+      const ref = textRef(index, 'text')
+      const marked = markedRuns(block.text, marksFor(card, ref))
+      return marked.map((run, k) => {
+        const options = { ...run.options }
+        if (k === marked.length - 1 && i < paragraphs.length - 1) options.breakLine = true
+        return { text: run.text, options }
+      })
+    })
+
+    slide.addText(runs, {
       x: MARGIN + 0.8,
       y: 3.3,
       w: CONTENT_W - 1.6,
       h: 1.0,
-      fontFace: bodyFace(theme, runStyle),
-      fontSize: pointSize(theme.typography.scale[H3], runStyle.fontScale),
+      fontFace: bodyFace(theme, boxStyle),
+      fontSize: pointSize(theme.typography.scale[H3], boxStyle.fontScale),
       color: hex(theme.colors.muted),
-      italic: runStyle.italic,
-      align: runStyle.align ?? 'center',
+      italic: boxStyle.italic,
+      align: boxStyle.align ?? 'center',
       valign: 'top',
+      // Several paragraphs in a box sized for one must not run off the slide.
+      fit: 'shrink',
     })
   }
 }
@@ -331,15 +361,17 @@ const renderStat: SlideRenderer = (slide, card, theme, style) => {
 /* --------------------------------------------------------------- twoCol --- */
 
 /**
- * `comparison`: two groups side by side.
+ * `comparison`: the groups side by side, one column per group.
  *
- * A card carrying more than two groups renders the first two. The classifier
- * does not produce that today, but a renderer that threw on it would take the
- * whole export down over one slide.
+ * The classifier (`layoutEngine.ts`'s `chooseLayout`) admits 2 to 4
+ * comparison groups into this arrangement, so the column count follows the
+ * card rather than being fixed at two. A card with more than 4 groups is not
+ * reachable through `layout: 'auto'`, but a legacy row could carry an
+ * explicit `layout: 'comparison'` with more — that falls back to `renderBody`
+ * instead of silently dropping the extra groups, since `flattenBlocks`
+ * already renders every `comparisonGroup` as a heading plus indented bullets.
  */
 const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
-  addHeading(slide, card, theme, style)
-
   const groups: { heading: string; items: string[]; index: number }[] = []
   card.blocks.forEach((block, i) => {
     if (block.type === 'comparisonGroup') {
@@ -347,10 +379,19 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
     }
   })
   if (groups.length === 0) return
+  if (groups.length > 4) {
+    renderBody(slide, card, theme, style)
+    return
+  }
 
-  const shown = groups.slice(0, 2)
-  const gap = 0.4
-  const colW = (CONTENT_W - gap) / 2
+  addHeading(slide, card, theme, style)
+
+  const shown = groups.slice(0, 4)
+  const columns = shown.length
+  // A little tighter than the two-column gap once three or four groups have
+  // to share the row, so a column never has to give up more than it needs to.
+  const gap = columns >= 3 ? 0.3 : 0.4
+  const colW = (CONTENT_W - gap * (columns - 1)) / columns
   const top = MARGIN + 1.35
 
   shown.forEach((group, i) => {
