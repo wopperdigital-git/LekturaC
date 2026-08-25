@@ -30,7 +30,7 @@ export function HomePage() {
   const [view, setView] = useState<DeckView>('grid')
   const [filters, setFilters] = useState<DeckFilters>(DEFAULT_FILTERS)
   const [menuOpen, setMenuOpen] = useState(false)
-  const { status: exportStatus, error: exportError, exportDeckById } = useExportPptx()
+  const { error: exportError, exportingId, exportDeckById } = useExportPptx()
 
   async function refresh() {
     setLoading(true)
@@ -135,7 +135,7 @@ export function HomePage() {
                       onOpen={() => navigate(`/deck/${deck.id}`)}
                       onPresent={() => navigate(`/deck/${deck.id}/present`)}
                       onExport={() => void exportDeckById(deck.id)}
-                      exporting={exportStatus === 'working'}
+                      exporting={exportingId === deck.id}
                       onDelete={() => setDeckPendingDelete(deck)}
                     />
                   ))}
@@ -149,7 +149,7 @@ export function HomePage() {
                       onOpen={() => navigate(`/deck/${deck.id}`)}
                       onPresent={() => navigate(`/deck/${deck.id}/present`)}
                       onExport={() => void exportDeckById(deck.id)}
-                      exporting={exportStatus === 'working'}
+                      exporting={exportingId === deck.id}
                       onDelete={() => setDeckPendingDelete(deck)}
                     />
                   ))}

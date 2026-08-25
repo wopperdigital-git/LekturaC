@@ -14,11 +14,30 @@ import { BACKDROP_HEIGHT, BACKDROP_WIDTH, celestialSvg } from './celestialSvg'
   guarantee is the reason the export builds its own SVG rather than
   screenshotting the live `SlideBackdrop`.
 */
+/**
+ * An `<img>` that never fires `onload` or `onerror` would otherwise leave
+ * this promise pending forever — the export spinner running with no way out.
+ */
+const RASTERIZE_TIMEOUT_MS = 15000
+
 export function svgToPngDataUrl(svg: string, width: number, height: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const image = new Image()
+    // Guards against the timeout firing after `onload`/`onerror` already
+    // settled the promise (or the reverse), since a settled promise can only
+    // resolve/reject once but nothing stops both paths from firing.
+    let settled = false
+
+    const timeoutId = setTimeout(() => {
+      if (settled) return
+      settled = true
+      reject(new Error('Timed out rendering the backdrop SVG'))
+    }, RASTERIZE_TIMEOUT_MS)
 
     image.onload = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeoutId)
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
@@ -31,7 +50,12 @@ export function svgToPngDataUrl(svg: string, width: number, height: number): Pro
       resolve(canvas.toDataURL('image/png'))
     }
 
-    image.onerror = () => reject(new Error('The backdrop SVG could not be rendered'))
+    image.onerror = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeoutId)
+      reject(new Error('The backdrop SVG could not be rendered'))
+    }
 
     // A data URL rather than a blob URL: nothing to revoke, and no window in
     // which the object URL could be collected before `onload` fires.

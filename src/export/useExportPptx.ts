@@ -15,15 +15,19 @@ export type ExportStatus = 'idle' | 'working' | 'error'
 export function useExportPptx() {
   const [status, setStatus] = useState<ExportStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  // Which deck is currently exporting, for the dashboard's per-card menu —
+  // `null` while idle and for `exportDeck` (the editor path, which has no id).
+  const [exportingId, setExportingId] = useState<string | null>(null)
   // Guards a double click: a second export while the first is still writing
   // would download two files and race the two spinners.
   const running = useRef(false)
 
-  const run = useCallback(async (load: () => Promise<ExportableDeck | null>) => {
+  const run = useCallback(async (load: () => Promise<ExportableDeck | null>, id: string | null) => {
     if (running.current) return
     running.current = true
     setStatus('working')
     setError(null)
+    setExportingId(id)
     try {
       const deck = await load()
       if (!deck) throw new Error('This deck could not be read')
@@ -34,11 +38,12 @@ export function useExportPptx() {
       setStatus('error')
     } finally {
       running.current = false
+      setExportingId(null)
     }
   }, [])
 
   const exportDeck = useCallback(
-    (deck: ExportableDeck) => run(async () => deck),
+    (deck: ExportableDeck) => run(async () => deck, null),
     [run],
   )
 
@@ -51,9 +56,9 @@ export function useExportPptx() {
         // so beats handing the user a .pptx with no slides in it.
         if (deck && deck.cards.length === 0) throw new Error('This deck has no slides yet')
         return deck
-      }),
+      }, id),
     [run],
   )
 
-  return { status, error, exportDeck, exportDeckById }
+  return { status, error, exportingId, exportDeck, exportDeckById }
 }

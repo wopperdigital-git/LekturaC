@@ -102,6 +102,9 @@ function addHeading(slide: PptxSlide, card: Card, theme: ThemeTokens, style: Tex
     italic: runStyle.italic,
     align: runStyle.align ?? 'left',
     valign: 'middle',
+    // A long heading can wrap to three or more lines at this font size; without
+    // this it overflows the fixed box height onto whatever sits beneath it.
+    fit: 'shrink',
   })
   slide.addShape('rect', {
     x: MARGIN,
@@ -141,6 +144,8 @@ const renderTitle: SlideRenderer = (slide, card, theme, style) => {
     italic: headingStyle.italic,
     align: headingStyle.align ?? 'center',
     valign: 'middle',
+    // Same overflow risk as `addHeading`'s box, at an even larger font size.
+    fit: 'shrink',
   })
 
   if (paragraphs.length > 0) {
@@ -313,11 +318,21 @@ const renderStat: SlideRenderer = (slide, card, theme, style) => {
   })
   if (stats.length === 0) return
 
+  // `layoutEngine.ts` routes any card with exactly one stat to `statHero`
+  // regardless of what else it holds, and `StatHeroLayout` renders that card's
+  // paragraphs on screen — so they have to survive here too, not just the stats.
+  const paragraphs = allOfType(card, 'paragraph')
+
   const columns = Math.min(stats.length, MAX_STAT_COLUMNS)
   const rows = Math.ceil(stats.length / columns)
   const cellW = CONTENT_W / columns
   const areaY = MARGIN + 1.35
-  const areaH = SLIDE_H - areaY - MARGIN
+  const totalH = SLIDE_H - areaY - MARGIN
+  // Paragraphs, when present, take a fixed slice off the bottom of the stat
+  // area rather than shrinking indefinitely as more stat rows are added.
+  const PARAGRAPH_H = 0.9
+  const PARAGRAPH_GAP = 0.15
+  const areaH = paragraphs.length > 0 ? totalH - PARAGRAPH_H - PARAGRAPH_GAP : totalH
   const cellH = areaH / rows
   const single = stats.length === 1
 
@@ -356,6 +371,35 @@ const renderStat: SlideRenderer = (slide, card, theme, style) => {
       valign: 'top',
     })
   })
+
+  if (paragraphs.length > 0) {
+    // Box-level options follow the first paragraph's resolved style, same
+    // pattern as `renderTitle`'s multi-paragraph subtitle box.
+    const boxStyle = styleFor(card, textRef(paragraphs[0].index, 'text'), style)
+    const runs = paragraphs.flatMap(({ block, index }, i) => {
+      const ref = textRef(index, 'text')
+      const marked = markedRuns(block.text, marksFor(card, ref))
+      return marked.map((run, k) => {
+        const options = { ...run.options }
+        if (k === marked.length - 1 && i < paragraphs.length - 1) options.breakLine = true
+        return { text: run.text, options }
+      })
+    })
+
+    slide.addText(runs, {
+      x: MARGIN,
+      y: areaY + areaH + PARAGRAPH_GAP,
+      w: CONTENT_W,
+      h: PARAGRAPH_H,
+      fontFace: bodyFace(theme, boxStyle),
+      fontSize: pointSize(theme.typography.scale[BODY], boxStyle.fontScale),
+      color: hex(theme.colors.muted),
+      italic: boxStyle.italic,
+      align: boxStyle.align ?? 'center',
+      valign: 'top',
+      fit: 'shrink',
+    })
+  }
 }
 
 /* --------------------------------------------------------------- twoCol --- */
@@ -456,13 +500,20 @@ const renderQuote: SlideRenderer = (slide, card, theme, style) => {
     return
   }
 
+  // `renderBody` above already draws its own heading for the no-quote
+  // fallback; drawing it again here too would duplicate it, so this call
+  // sits only on the path where a quote block actually exists.
+  addHeading(slide, card, theme, style)
+
+  // Shifted down from the top of the slide to clear `addHeading`'s box (to
+  // y≈1.5) and its accent rule (to y≈1.6), with a small gap.
   const textRefKey = textRef(quote.index, 'text')
   const quoteStyle = styleFor(card, textRefKey, style)
   slide.addText(markedRuns(`“${quote.block.text}”`, marksFor(card, textRefKey)), {
     x: MARGIN + 0.5,
-    y: 1.2,
+    y: 1.75,
     w: CONTENT_W - 1.0,
-    h: 2.6,
+    h: 2.2,
     fontFace: headingFace(theme, quoteStyle),
     fontSize: pointSize(theme.typography.scale[H3], quoteStyle.fontScale),
     color: hex(theme.colors.foreground),
@@ -477,7 +528,7 @@ const renderQuote: SlideRenderer = (slide, card, theme, style) => {
     const attrStyle = styleFor(card, attrRef, style)
     slide.addText(markedRuns(`— ${quote.block.attribution}`, marksFor(card, attrRef)), {
       x: MARGIN + 0.5,
-      y: 4.0,
+      y: 4.05,
       w: CONTENT_W - 1.0,
       h: 0.6,
       fontFace: bodyFace(theme, attrStyle),

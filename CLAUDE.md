@@ -119,14 +119,16 @@ A two-column app shell: an always-dark `AppSidebar` rail (logo, search, nav slot
 
 A left outline panel (`CardOutlineSidebar.tsx`) and a right dock, both animated via width transition (inline `width` ↔ 0, `overflow-hidden`) and able to be open simultaneously. The left panel floats (rounded corners, margin, shadow — not flush against the window edge) and is toggled by its own arrow button pinned to the vertical center of its right edge, not a `TopBar` button.
 
-The **right dock holds one panel at a time** — `ThemePanel` or `ScriptPanel` — driven by a single `RightPanel` (`'theme' | 'script' | null`, exported from `TopBar.tsx`) state and two toggle buttons in `TopBar`. One dock rather than two stacked asides because two 250–300px panels side by side would eat the canvas. Its width follows the active panel (theme 256, script 320), and both the width and the rendered panel read from `lastRightPanel` — a ref holding the last non-null value — so a closing dock keeps its content and size while the transition runs instead of blanking and jumping to zero on the same frame.
+The **right dock holds one panel at a time** — currently just `ThemePanel` — driven by a single `RightPanel` (`'theme' | null`, exported from `TopBar.tsx`) state, toggled by the theme button in `EditorToolbar` (`onOpenThemes`/`themesOpen`). Its width is fixed at `RIGHT_PANEL_WIDTH_PX` (256) and animates to 0 on close via the wrapping `<aside>`'s width transition, so the dock slides shut rather than snapping away. An earlier revision docked a second, narration-script panel here alongside `ThemePanel` (hence `RightPanel` staying a union instead of a boolean); that panel was removed before this branch and there is currently nothing to route into the second slot.
 
 Undo/redo live in the floating `EditorToolbar`, not `TopBar` — they lead the bar
 at every level and are the one pair whose scope never changes with the
 selection, since the history stack belongs to the deck. `TopBar` holds the deck
-title, Present, Export and the light/dark toggle.
-
-`ScriptPanel` is the per-card narration script slot: **a container with no source behind it yet**. There is no voice/AI integration, no `cards` column, and no store field — it takes `script` as an optional prop that nothing passes, so it always renders its empty state today. Wiring a real source later should touch the call site in `EditorPage` and nothing inside the panel.
+title, Present, Export and the light/dark toggle. `TopBar` also carries a disabled
+"Narrate PPT" button (`title="Narration isn't available yet"`) — the visible
+placeholder for that same removed narration feature, kept non-interactive
+rather than wired to a silent no-op so it reads as "not ready" rather than
+"broken."
 
 ### Canvas (`components/editor/CardCanvas.tsx`)
 

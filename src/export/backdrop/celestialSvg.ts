@@ -64,6 +64,11 @@ function gridSvg(theme: ThemeTokens): string {
   const grid = theme.celestial.grid
   if (!grid) return ''
   const pitch = grid.sizePx * PX_SCALE
+  // A non-positive pitch (a theme declaring `grid.sizePx` as 0 or negative)
+  // would make the loops below never advance past `WIDTH`/`HEIGHT` — an
+  // infinite loop that freezes the tab, which `pptx.ts`'s try/catch cannot
+  // rescue because a tight synchronous loop never yields.
+  if (pitch <= 0) return ''
   const lines: string[] = []
   // The on-screen CSS grid tiles from `background-position: 0 0`, so it draws
   // a line at the top and left edge too — start both loops at 0, not `pitch`.
@@ -104,7 +109,9 @@ function orbitsSvg(theme: ThemeTokens): string {
  * fill, so this only needs to catch a fill authored as a bare colour — it
  * does not attempt to dig a first stop out of an otherwise-malformed
  * gradient string. Decoration must never fail the export: this returns
- * `null` rather than guessing further, and the caller omits `fill` entirely.
+ * `null` rather than guessing further, and the caller falls back to
+ * `fill="none"` — SVG's initial value for `fill` is black, so an unpainted
+ * shape needs `none` written explicitly, not the attribute left off.
  */
 function fallbackBodyColor(fill: string): string | null {
   const trimmed = fill.trim()
@@ -136,9 +143,12 @@ function bodiesSvg(theme: ThemeTokens): { defs: string; shapes: string } {
         defs.push(bodyGradientSvg(gradient, id))
         fill = `url(#${id})`
       } else {
-        fill = fallbackBodyColor(body.fill) ?? ''
+        // No usable fill: emit `fill="none"` explicitly. SVG's initial value
+        // for `fill` is black, so leaving the attribute off does not mean
+        // "invisible" — it paints a solid black disc at the body's opacity.
+        fill = fallbackBodyColor(body.fill) ?? 'none'
       }
-      const fillAttr = fill ? ` fill="${esc(fill)}"` : ''
+      const fillAttr = ` fill="${esc(fill)}"`
 
       let filter = ''
       if (body.blurPx) {

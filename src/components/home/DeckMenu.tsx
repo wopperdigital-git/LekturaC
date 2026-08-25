@@ -55,8 +55,10 @@ export function DeckMenu({
   return (
     <div ref={ref} className={`relative ${className}`}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={`Actions for "${deckTitle}"`}
+        aria-haspopup="menu"
         aria-expanded={open}
         title="Actions"
         className={`flex size-8 cursor-pointer items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ${triggerTone}`}
@@ -70,7 +72,6 @@ export function DeckMenu({
 
       {open && (
         <div
-          role="menu"
           className="absolute right-0 top-full z-30 mt-1 min-w-48 rounded-app border border-app-border bg-app-background p-1 shadow-app"
         >
           <Item label="Open" onClick={() => { setOpen(false); onOpen() }} />
@@ -103,7 +104,6 @@ function Item({
   return (
     <button
       type="button"
-      role="menuitem"
       onClick={onClick}
       disabled={disabled}
       className={`block w-full cursor-pointer rounded-app-sm px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 ${
