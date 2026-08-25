@@ -111,10 +111,6 @@ export function EditorPage() {
         onTitleChange={store.setTitle}
         presentationId={id}
         saveStatus={store.status}
-        canUndo={store.past.length > 0}
-        canRedo={store.future.length > 0}
-        onUndo={undo}
-        onRedo={redo}
       />
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -185,6 +181,10 @@ export function EditorPage() {
               <div className="pt-3">
                 <EditorToolbar
                   level={level}
+                  canUndo={store.past.length > 0}
+                  canRedo={store.future.length > 0}
+                  onUndo={undo}
+                  onRedo={redo}
                   textStyle={
                     level === 3
                       ? (activeInline?.style ?? {})

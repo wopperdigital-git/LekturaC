@@ -37,12 +37,22 @@ import type { VisualStyle } from '@/engine/contentBlocks'
   uses `app-*` tokens, because it is a tool sitting above the deck rather than
   part of it. Giving it the deck's theme would make it restyle itself every time
   the user previewed a different one.
+
+  Undo/redo lead the bar at every level and are the one pair whose scope never
+  changes with the selection: the history stack is the deck's, so what they undo
+  is the last edit made anywhere. They sit here rather than in `TopBar` because
+  the toolbar is where editing verbs live — a user reaching for undo looks at
+  the tools, not at the deck-title strip.
 */
 
 export type ToolbarLevel = 1 | 2 | 3
 
 export function EditorToolbar({
   level = 1,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   textStyle,
   onTextStyleChange,
   themeName,
@@ -58,6 +68,10 @@ export function EditorToolbar({
   hasTextSelection,
 }: {
   level?: ToolbarLevel
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
   textStyle: TextStyle
   onTextStyleChange: (patch: Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>) => void
   themeName: ThemeTokens['name']
@@ -95,6 +109,25 @@ export function EditorToolbar({
       */
       className="pointer-events-auto flex items-center gap-1 rounded-app border border-white/10 bg-app-background/95 px-2 py-1.5 shadow-app supports-[backdrop-filter]:bg-app-background/70 supports-[backdrop-filter]:backdrop-blur-md dark:border-white/10"
     >
+      <ToolButton
+        label="Undo"
+        title="Undo (Ctrl+Z)"
+        disabled={!canUndo}
+        onClick={onUndo}
+      >
+        <UndoIcon />
+      </ToolButton>
+      <ToolButton
+        label="Redo"
+        title="Redo (Ctrl+Shift+Z)"
+        disabled={!canRedo}
+        onClick={onRedo}
+      >
+        <UndoIcon flip />
+      </ToolButton>
+
+      <Divider />
+
       <select
         aria-label="Font style"
         value={activeFont}
@@ -404,6 +437,17 @@ const strokeProps = {
   strokeLinejoin: 'round' as const,
   'aria-hidden': true,
   className: 'size-4',
+}
+
+/* One glyph for both directions — redo is the same arrow mirrored, which is how
+   every editor draws the pair and keeps them unmistakably a pair. */
+function UndoIcon({ flip }: { flip?: boolean }) {
+  return (
+    <svg {...strokeProps} style={flip ? { transform: 'scaleX(-1)' } : undefined}>
+      <path d="M4 9h8.5a3.5 3.5 0 0 1 0 7H8" />
+      <path d="M7 5.5 3.5 9 7 12.5" />
+    </svg>
+  )
 }
 
 function MinusIcon() {

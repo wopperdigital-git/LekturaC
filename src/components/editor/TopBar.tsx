@@ -11,19 +11,11 @@ export function TopBar({
   onTitleChange,
   presentationId,
   saveStatus,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
 }: {
   title: string
   onTitleChange: (title: string) => void
   presentationId: string
   saveStatus: 'idle' | 'loading' | 'saving' | 'error'
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
 }) {
   return (
     /*
@@ -58,20 +50,8 @@ export function TopBar({
           {saveStatus === 'saving' && 'Saving…'}
           {saveStatus === 'error' && 'Save failed'}
         </span>
-        <HistoryButton
-          onClick={onUndo}
-          disabled={!canUndo}
-          label="Undo"
-          hint="Undo (Ctrl+Z)"
-          flip={false}
-        />
-        <HistoryButton
-          onClick={onRedo}
-          disabled={!canRedo}
-          label="Redo"
-          hint="Redo (Ctrl+Shift+Z)"
-          flip
-        />
+        {/* Undo/redo used to live here; they moved into the floating
+            EditorToolbar, next to the other editing verbs. */}
         <ThemeToggle />
         {/* TODO: no behaviour yet — the narration feature this fronts hasn't
             been built. Kept non-interactive rather than wired to a silent no-op
@@ -82,44 +62,5 @@ export function TopBar({
         </Button>
       </div>
     </div>
-  )
-}
-
-function HistoryButton({
-  onClick,
-  disabled,
-  label,
-  hint,
-  flip,
-}: {
-  onClick: () => void
-  disabled: boolean
-  label: string
-  hint: string
-  flip: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={hint}
-      className="flex size-9 cursor-pointer items-center justify-center rounded-app-sm text-app-muted transition-colors hover:bg-app-surface hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-app-muted"
-    >
-      <svg
-        className="size-4"
-        style={flip ? { transform: 'scaleX(-1)' } : undefined}
-        viewBox="0 0 20 20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M4 9h8.5a3.5 3.5 0 0 1 0 7H8" />
-        <path d="M7 5.5 3.5 9 7 12.5" />
-      </svg>
-    </button>
   )
 }
