@@ -120,6 +120,53 @@ function inCenter(x: number, y: number): boolean {
   )
 }
 
+/** One star's placement, in the units both encodings need: position as a percentage, radius in px. */
+export interface Star {
+  x: number
+  y: number
+  radius: number
+  alpha: number
+}
+
+/**
+ * The seeded sky: where the stars are, how big, and how bright.
+ *
+ * Split out from `starFieldCss` so the PPTX export's SVG backdrop can draw the
+ * *same* sky rather than reimplementing the generator and drifting from it.
+ * One generator, two encodings — CSS gradients on screen, `<circle>` elements
+ * in the export.
+ *
+ * The order of `rand()` calls is load-bearing. A star rejected by
+ * `avoidCenter` consumes exactly its x and y draws and no more; drawing radius
+ * and alpha before that rejection would shift every later value and reshuffle
+ * all five themes' skies.
+ */
+export function starPositions(seed: string, field: StarField): Star[] {
+  const rand = mulberry32(hashSeed(seed))
+  const stars: Star[] = []
+
+  // Bounded: a rejected position costs one draw, and the keep-out zone leaves
+  // most of the card available, so this terminates well inside the cap.
+  let attempts = 0
+  while (stars.length < field.count && attempts < field.count * 12) {
+    attempts++
+    const x = rand() * 100
+    const y = rand() * 100
+    if (field.avoidCenter && inCenter(x, y)) continue
+
+    // Uniform stars read as a printed pattern; varying radius and brightness
+    // together is what makes the field look like a sky.
+    stars.push({
+      x,
+      y,
+      radius: 0.5 + rand() * (field.maxRadiusPx - 0.5),
+      alpha: field.opacity * (0.35 + rand() * 0.65),
+    })
+  }
+
+  return stars
+}
+
 /**
  * Builds a star field as a single `background-image` value: one soft
  * `radial-gradient` circle per star.
@@ -128,27 +175,11 @@ function inCenter(x: number, y: number): boolean {
  * which a percentage-sized gradient would not.
  */
 export function starFieldCss(seed: string, field: StarField): string {
-  const rand = mulberry32(hashSeed(seed))
-  const layers: string[] = []
-
-  // Bounded: a rejected position costs one draw, and the keep-out zone leaves
-  // most of the card available, so this terminates well inside the cap.
-  let attempts = 0
-  while (layers.length < field.count && attempts < field.count * 12) {
-    attempts++
-    const x = rand() * 100
-    const y = rand() * 100
-    if (field.avoidCenter && inCenter(x, y)) continue
-
-    // Uniform stars read as a printed pattern; varying radius and brightness
-    // together is what makes the field look like a sky.
-    const radius = 0.5 + rand() * (field.maxRadiusPx - 0.5)
-    const alpha = field.opacity * (0.35 + rand() * 0.65)
-    layers.push(
-      `radial-gradient(circle ${radius.toFixed(2)}px at ${x.toFixed(2)}% ${y.toFixed(2)}%, ` +
+  return starPositions(seed, field)
+    .map(
+      ({ x, y, radius, alpha }) =>
+        `radial-gradient(circle ${radius.toFixed(2)}px at ${x.toFixed(2)}% ${y.toFixed(2)}%, ` +
         `${withAlpha(field.color, alpha)} 0%, transparent 100%)`,
     )
-  }
-
-  return layers.join(', ')
+    .join(', ')
 }
