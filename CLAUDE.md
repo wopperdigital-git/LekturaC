@@ -121,6 +121,11 @@ A left outline panel (`CardOutlineSidebar.tsx`) and a right dock, both animated 
 
 The **right dock holds one panel at a time** — `ThemePanel` or `ScriptPanel` — driven by a single `RightPanel` (`'theme' | 'script' | null`, exported from `TopBar.tsx`) state and two toggle buttons in `TopBar`. One dock rather than two stacked asides because two 250–300px panels side by side would eat the canvas. Its width follows the active panel (theme 256, script 320), and both the width and the rendered panel read from `lastRightPanel` — a ref holding the last non-null value — so a closing dock keeps its content and size while the transition runs instead of blanking and jumping to zero on the same frame.
 
+Undo/redo live in the floating `EditorToolbar`, not `TopBar` — they lead the bar
+at every level and are the one pair whose scope never changes with the
+selection, since the history stack belongs to the deck. `TopBar` holds the deck
+title, Present, Export and the light/dark toggle.
+
 `ScriptPanel` is the per-card narration script slot: **a container with no source behind it yet**. There is no voice/AI integration, no `cards` column, and no store field — it takes `script` as an optional prop that nothing passes, so it always renders its empty state today. Wiring a real source later should touch the call site in `EditorPage` and nothing inside the panel.
 
 ### Canvas (`components/editor/CardCanvas.tsx`)
@@ -136,6 +141,45 @@ Keyboard, all in one `EditorPage` listener that returns early when the event tar
 ### Persistence (Supabase)
 
 `supabase/migrations/0001_init.sql` defines `presentations`, `cards`, and `themes` (the `themes` table is legacy/unused now that custom themes were removed — harmless to leave, not read from). `0002_add_visual_style.sql` adds `cards.visual_style` (`not null default 'structured'`) — run it against any project created before this field existed. RLS on every table is scoped to `owner_id = auth.uid()`, with `cards` checked via a join back to its parent `presentations` row. `store/presentationStore.ts` debounces title and theme (`scheduleSave`, 500ms) but persists structural changes (card delete, reorder, undo/redo) immediately. All card writes go through one `persistCardsSync(presentationId, previous, next)`, which deletes the rows that dropped out of `next` and upserts the rest — a plain upsert cannot express a deletion, which undo/redo crossing a delete in either direction requires.
+
+### PPTX export (`src/export/`)
+
+`exportDeckToPptx(deck)` turns a deck into a `.pptx` of **native, editable**
+PowerPoint slides — real text boxes, not pictures of slides. Design doc:
+`docs/superpowers/specs/2026-08-25-pptx-export-design.md`.
+
+- **The twelve layouts group onto five arrangements** (`slideGroup.ts`:
+  title/body/stat/twoCol/quote). `resolveLayout` runs first — `card.layout` is
+  `'auto'` for nearly every card, so grouping on the stored value would classify
+  the string `'auto'` and put the whole deck in one bucket. The record is
+  exhaustive, so a thirteenth layout is a type error rather than a silent
+  fallthrough. `visualStyle` is not represented.
+- **The backdrop is a rasterized SVG, one PNG per deck.**
+  `backdrop/celestialSvg.ts` emits the theme's `CelestialDecor` as a
+  self-contained 1920×1080 SVG in the same layer order as `SlideBackdrop`, and
+  `backdrop/rasterize.ts` draws it to a canvas. Self-contained is load-bearing:
+  no external refs and no `foreignObject` is what keeps the canvas untainted,
+  and it is why the export builds its own SVG rather than screenshotting the
+  live component. The fixed 16:9 lets it drop the three aspect-ratio workarounds
+  `SlideBackdrop` carries. Decoration never fails the export — an unparseable
+  glow layer is skipped and a raster failure falls back to a flat theme colour.
+- **`starPositions` in `lib/celestial.ts` is shared by both renderers**, so the
+  exported sky cannot differ from the on-screen one. The order of its `rand()`
+  draws is load-bearing: a star rejected by `avoidCenter` consumes exactly its x
+  and y draws, and moving the radius/alpha draws above that `continue` would
+  reshuffle all five themes.
+- **`pptxgenjs` is dynamically imported and confined to `pptx.ts`.** It is ~1MB;
+  nobody who never exports should carry it in the main bundle. The renderers
+  depend on a local structural `PptxSlide` interface rather than the library's
+  types.
+- **Nothing in `src/export/` imports React or a component** (the `useExportPptx`
+  hook aside), which is what lets the dashboard export a deck it never opened.
+  That path goes through `fetchDeck` and **not** `loadDeck`: this store holds
+  exactly one deck, and loading another to export it would overwrite the one the
+  user has open.
+- Composite body lines (a stat's `value — label`, a timeline step's
+  `label — text`) drop their inline bold/italic marks, because they join two
+  separately-addressed runs and no single `textRef` applies.
 
 ### Auth
 

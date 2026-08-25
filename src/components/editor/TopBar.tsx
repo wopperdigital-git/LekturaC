@@ -11,11 +11,17 @@ export function TopBar({
   onTitleChange,
   presentationId,
   saveStatus,
+  onExport,
+  exporting,
+  canExport,
 }: {
   title: string
   onTitleChange: (title: string) => void
   presentationId: string
   saveStatus: 'idle' | 'loading' | 'saving' | 'error'
+  onExport: () => void
+  exporting: boolean
+  canExport: boolean
 }) {
   return (
     /*
@@ -50,8 +56,15 @@ export function TopBar({
           {saveStatus === 'saving' && 'Saving…'}
           {saveStatus === 'error' && 'Save failed'}
         </span>
-        {/* Undo/redo used to live here; they moved into the floating
-            EditorToolbar, next to the other editing verbs. */}
+        <Button
+          variant="secondary"
+          onClick={onExport}
+          loading={exporting}
+          disabled={!canExport}
+          title={canExport ? 'Download this deck as a PowerPoint file' : 'Nothing to export yet'}
+        >
+          Export
+        </Button>
         <ThemeToggle />
         {/* TODO: no behaviour yet — the narration feature this fronts hasn't
             been built. Kept non-interactive rather than wired to a silent no-op

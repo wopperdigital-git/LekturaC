@@ -16,6 +16,7 @@ import {
   type DeckFilters,
   type DeckView,
 } from '@/components/home/deckFilters'
+import { useExportPptx } from '@/export/useExportPptx'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -29,6 +30,7 @@ export function HomePage() {
   const [view, setView] = useState<DeckView>('grid')
   const [filters, setFilters] = useState<DeckFilters>(DEFAULT_FILTERS)
   const [menuOpen, setMenuOpen] = useState(false)
+  const { status: exportStatus, error: exportError, exportDeckById } = useExportPptx()
 
   async function refresh() {
     setLoading(true)
@@ -107,6 +109,11 @@ export function HomePage() {
             />
 
             <div className="p-4 sm:p-5">
+              {exportError && (
+                <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
+                  Export failed: {exportError}
+                </p>
+              )}
               {loading ? (
                 <DeckGridSkeleton view={view} />
               ) : !hasDecks ? (
@@ -126,6 +133,9 @@ export function HomePage() {
                       key={deck.id}
                       deck={deck}
                       onOpen={() => navigate(`/deck/${deck.id}`)}
+                      onPresent={() => navigate(`/deck/${deck.id}/present`)}
+                      onExport={() => void exportDeckById(deck.id)}
+                      exporting={exportStatus === 'working'}
                       onDelete={() => setDeckPendingDelete(deck)}
                     />
                   ))}
@@ -137,6 +147,9 @@ export function HomePage() {
                       key={deck.id}
                       deck={deck}
                       onOpen={() => navigate(`/deck/${deck.id}`)}
+                      onPresent={() => navigate(`/deck/${deck.id}/present`)}
+                      onExport={() => void exportDeckById(deck.id)}
+                      exporting={exportStatus === 'working'}
                       onDelete={() => setDeckPendingDelete(deck)}
                     />
                   ))}

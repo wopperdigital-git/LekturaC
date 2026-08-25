@@ -10,6 +10,7 @@ import { SlideStage } from '@/components/theme/SlideStage'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import { cardKind, layoutVarieties } from '@/engine/layoutEngine'
 import { hasMarkThroughout, type TextRange } from '@/engine/marks'
+import { useExportPptx } from '@/export/useExportPptx'
 
 const SIDEBAR_WIDTH_PX = 160
 const RIGHT_PANEL_WIDTH_PX = 256
@@ -30,6 +31,7 @@ export function EditorPage() {
   const [activeTextRef, setActiveTextRef] = useState<string | null>(null)
   const [textRange, setTextRange] = useState<TextRange | null>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const { status: exportStatus, error: exportError, exportDeck } = useExportPptx()
 
 
   useEffect(() => {
@@ -111,7 +113,22 @@ export function EditorPage() {
         onTitleChange={store.setTitle}
         presentationId={id}
         saveStatus={store.status}
+        canExport={cards.length > 0}
+        exporting={exportStatus === 'working'}
+        onExport={() =>
+          void exportDeck({
+            title: store.title,
+            theme: store.theme,
+            textStyle: store.textStyle,
+            cards,
+          })
+        }
       />
+      {exportError && (
+        <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          Export failed: {exportError}
+        </p>
+      )}
 
       <div className="relative flex flex-1 overflow-hidden">
         {/*

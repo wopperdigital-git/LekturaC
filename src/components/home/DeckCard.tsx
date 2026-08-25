@@ -1,16 +1,23 @@
 import type { CSSProperties } from 'react'
 import type { DeckSummary } from '@/store/presentationStore'
 import { deckSwatch } from './deckSwatch'
+import { DeckMenu } from './DeckMenu'
 import { relativeUpdatedAt } from './relativeTime'
 
 export function DeckCard({
   deck,
   onOpen,
+  onPresent,
+  onExport,
   onDelete,
+  exporting,
 }: {
   deck: DeckSummary
   onOpen: () => void
+  onPresent: () => void
+  onExport: () => void
   onDelete: () => void
+  exporting: boolean
 }) {
   const swatch = deckSwatch(deck.id)
   const initial = deck.title.trim().charAt(0).toUpperCase() || '?'
@@ -44,28 +51,16 @@ export function DeckCard({
         </div>
       </button>
 
-      <button
-        onClick={onDelete}
-        aria-label={`Delete "${deck.title}"`}
-        title="Delete"
-        className="absolute top-3 right-3 flex size-8 cursor-pointer items-center justify-center rounded-full bg-black/25 text-white opacity-100 backdrop-blur-sm transition-opacity duration-150 hover:bg-black/40 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
-      >
-        <svg
-          className="size-4"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M2.5 4h11" />
-          <path d="M5.5 4V2.75c0-.55.45-1 1-1h3c.55 0 1 .45 1 1V4" />
-          <path d="M6.25 7.25v4.5M9.75 7.25v4.5" />
-          <path d="M3.5 4l.6 8.4c.05.6.55 1.1 1.15 1.1h5.5c.6 0 1.1-.5 1.15-1.1l.6-8.4" />
-        </svg>
-      </button>
+      <DeckMenu
+        deckTitle={deck.title}
+        onOpen={onOpen}
+        onPresent={onPresent}
+        onExport={onExport}
+        onDelete={onDelete}
+        exporting={exporting}
+        onDark
+        className="absolute top-3 right-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+      />
     </div>
   )
 }
