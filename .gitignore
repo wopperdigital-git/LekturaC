@@ -28,3 +28,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SDD scratch workspace (ledger, briefs, review packages)
+.superpowers/
