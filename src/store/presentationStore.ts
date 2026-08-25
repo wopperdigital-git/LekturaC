@@ -169,6 +169,53 @@ async function persistCardsSync(presentationId: string, previous: Card[], next: 
   }
 }
 
+/** A deck's content, with no store state attached. */
+export interface DeckContent {
+  title: string
+  theme: ThemeTokens
+  textStyle: TextStyle
+  cards: Card[]
+}
+
+/**
+ * Reads one deck straight from Supabase, without touching store state.
+ *
+ * Split out of `loadDeck` so the dashboard can export a deck it has not
+ * opened. Calling `loadDeck` there would overwrite the deck the user is
+ * currently editing — this store holds exactly one.
+ *
+ * Returns `null` when Supabase is not configured, which is the case `loadDeck`
+ * handles by leaving whatever is in memory alone.
+ */
+export async function fetchDeck(id: string): Promise<DeckContent | null> {
+  if (!supabaseConfigured || !supabase) return null
+  await ensureSession()
+
+  const [{ data: pres, error: presErr }, { data: cardRows, error: cardsErr }] = await Promise.all([
+    supabase.from('presentations').select('*').eq('id', id).single(),
+    supabase.from('cards').select('*').eq('presentation_id', id).order('order_index'),
+  ])
+  if (presErr) throw presErr
+  if (cardsErr) throw cardsErr
+
+  return {
+    title: pres.title,
+    // Resolved by id rather than used as-is: a deck saved before a theme
+    // redesign carries that older shape. See `resolveTheme`.
+    theme: resolveTheme(pres.theme),
+    textStyle: parseTextStyle(pres.text_style),
+    cards: (cardRows ?? []).map((row) => ({
+      id: row.id,
+      orderIndex: row.order_index,
+      blocks: row.blocks as ContentBlock[],
+      layout: row.layout as LayoutType,
+      visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
+      textStyle: parseTextStyle(row.text_style),
+      inline: (row.inline as Card['inline']) ?? undefined,
+    })),
+  }
+}
+
 type Getter = () => PresentationState
 
 /*
@@ -309,39 +356,22 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   async loadDeck(id: string) {
     set({ status: 'loading', errorMessage: null })
     try {
-      if (supabaseConfigured && supabase) {
-        await ensureSession()
-        const [{ data: pres, error: presErr }, { data: cardRows, error: cardsErr }] = await Promise.all([
-          supabase.from('presentations').select('*').eq('id', id).single(),
-          supabase.from('cards').select('*').eq('presentation_id', id).order('order_index'),
-        ])
-        if (presErr) throw presErr
-        if (cardsErr) throw cardsErr
-
-        set({
-          presentationId: id,
-          title: pres.title,
-          // Resolved by id rather than used as-is: a deck saved before a theme
-          // redesign carries that older shape. See `resolveTheme`.
-          theme: resolveTheme(pres.theme),
-          textStyle: parseTextStyle(pres.text_style),
-          cards: (cardRows ?? []).map((row) => ({
-            id: row.id,
-            orderIndex: row.order_index,
-            blocks: row.blocks as ContentBlock[],
-            layout: row.layout as LayoutType,
-            visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
-            textStyle: parseTextStyle(row.text_style),
-            inline: (row.inline as Card['inline']) ?? undefined,
-          })),
-          status: 'idle',
-          past: [],
-          future: [],
-        })
-      } else {
+      const deck = await fetchDeck(id)
+      if (!deck) {
         // Supabase not configured: nothing to load, keep whatever is in memory.
         set({ status: 'idle' })
+        return
       }
+      set({
+        presentationId: id,
+        title: deck.title,
+        theme: deck.theme,
+        textStyle: deck.textStyle,
+        cards: deck.cards,
+        status: 'idle',
+        past: [],
+        future: [],
+      })
     } catch (err) {
       set({ status: 'error', errorMessage: err instanceof Error ? err.message : String(err) })
     }
