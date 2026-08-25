@@ -56,11 +56,22 @@ export async function exportDeckToPptx(deck: ExportableDeck): Promise<void> {
     background = { color: hex(deck.theme.colors.background) }
   }
 
+  /*
+    The backdrop is declared once on a slide master, not assigned to
+    `slide.background` per slide. pptxgenjs embeds a fresh media part for
+    every distinct `background` assignment it sees — setting the same data
+    string on each slide still writes N copies of the image into the file, not
+    a shared reference. A 30-card deck would carry thirty ~1.5MB PNGs instead
+    of one. Every slide is created from this one master instead, so the image
+    part is written once and every slide just points at it.
+  */
+  const MASTER = 'LEKTURA_BACKDROP'
+  pptx.defineSlideMaster({ title: MASTER, background })
+
   const ordered = [...deck.cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
   ordered.forEach((card, index) => {
-    const slide = pptx.addSlide()
-    slide.background = background
+    const slide = pptx.addSlide({ masterName: MASTER })
     const style = mergeTextStyle(deck.textStyle, card.textStyle)
     RENDERERS[slideGroup(card, index === 0)](slide as unknown as PptxSlide, card, deck.theme, style)
   })
