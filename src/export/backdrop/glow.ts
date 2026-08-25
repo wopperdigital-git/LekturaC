@@ -129,3 +129,101 @@ export function glowGradientSvg(layer: GlowLayer, id: string): string {
     `</radialGradient>`
   )
 }
+
+/*
+  A `CelestialBody.fill` is a different grammar from a glow layer: always
+  `radial-gradient(circle at X% Y%, ...)` — the literal keyword `circle`
+  rather than an independent `W% H%` ellipse — with two or more stops rather
+  than exactly two, because the lit-limb shading a body needs (moon, nebula
+  core, planet limb) takes more than a from/to pair. SVG's `fill` attribute
+  accepts a colour or a `url(#id)` paint-server reference, never a CSS
+  gradient function, so this has to become a real `<radialGradient>` def.
+*/
+
+export interface BodyGradientStop {
+  /** `#rrggbb`, or `rgb(r,g,b)` when the source stop was `rgba(...)`. */
+  color: string
+  opacity: number
+  /** Percentage along the gradient, 0-100. */
+  offset: number
+}
+
+export interface BodyGradient {
+  /** Centre, as percentages. */
+  cx: number
+  cy: number
+  stops: BodyGradientStop[]
+}
+
+const BODY_LAYER_RE = /^radial-gradient\(\s*circle\s+at\s+(-?[\d.]+)%\s+(-?[\d.]+)%\s*,\s*(.+)\)$/
+const BODY_STOP_HEX_RE = /^(#[0-9a-fA-F]{6})\s+([\d.]+)%$/
+const BODY_STOP_RGBA_RE =
+  /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)\s+([\d.]+)%$/
+
+function parseBodyStop(raw: string): BodyGradientStop | null {
+  const trimmed = raw.trim()
+  const hex = BODY_STOP_HEX_RE.exec(trimmed)
+  if (hex) {
+    return { color: hex[1], opacity: 1, offset: Number(hex[2]) }
+  }
+  const rgba = BODY_STOP_RGBA_RE.exec(trimmed)
+  if (rgba) {
+    return {
+      color: `rgb(${rgba[1]},${rgba[2]},${rgba[3]})`,
+      opacity: Number(rgba[4]),
+      offset: Number(rgba[5]),
+    }
+  }
+  return null
+}
+
+/**
+ * One `radial-gradient(circle at X% Y%, <stop>, <stop>, ...)` body fill, or
+ * `null` if it is not that shape. Never throws — decoration must never fail
+ * the export.
+ */
+export function parseBodyGradient(css: string): BodyGradient | null {
+  const match = BODY_LAYER_RE.exec(css.trim())
+  if (!match) return null
+
+  const rawStops = splitTopLevel(match[3])
+  if (rawStops.length < 2) return null
+
+  const stops: BodyGradientStop[] = []
+  for (const raw of rawStops) {
+    const stop = parseBodyStop(raw)
+    if (!stop) return null
+    stops.push(stop)
+  }
+
+  return { cx: Number(match[1]), cy: Number(match[2]), stops }
+}
+
+/**
+ * One `<radialGradient>` matching a CSS `radial-gradient(circle at X% Y%, ...)`
+ * body fill.
+ *
+ * `r` is CSS's default extent for a sizeless `circle` — farthest-corner from
+ * the centre, i.e. the largest Euclidean distance from `(cx, cy)` to any of
+ * the box's four corners. In `objectBoundingBox` units a body's box is a
+ * square (it is a circle), so unlike `glowGradientSvg`'s ellipse this needs
+ * no aspect correction — the computed radius is already correct on both axes.
+ */
+export function bodyGradientSvg(g: BodyGradient, id: string): string {
+  const cx = g.cx / 100
+  const cy = g.cy / 100
+  const corners: Array<[number, number]> = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ]
+  const r = Math.max(...corners.map(([x, y]) => Math.hypot(x - cx, y - cy)))
+  const stops = g.stops
+    .map(
+      (stop) =>
+        `<stop offset="${stop.offset / 100}" stop-color="${stop.color}" stop-opacity="${stop.opacity}"/>`,
+    )
+    .join('')
+  return `<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r.toFixed(4)}">${stops}</radialGradient>`
+}

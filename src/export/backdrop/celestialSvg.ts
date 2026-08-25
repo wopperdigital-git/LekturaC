@@ -1,6 +1,6 @@
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { starPositions } from '@/lib/celestial'
-import { glowGradientSvg, parseGlow } from './glow'
+import { bodyGradientSvg, glowGradientSvg, parseBodyGradient, parseGlow } from './glow'
 
 /*
   The deck theme's celestial backdrop, as one self-contained SVG sized for a
@@ -46,8 +46,16 @@ function py(percent: number): number {
 function glowSvg(theme: ThemeTokens): { defs: string; rects: string } {
   const layers = parseGlow(theme.celestial.glow)
   const defs = layers.map((layer, i) => glowGradientSvg(layer, `glow${i}`)).join('')
+  // CSS paints the FIRST `background-image` layer closest to the viewer; SVG
+  // paints the LAST element in the document on top. `layers` is in CSS paint
+  // order (outermost/first-declared first), so the rects have to be emitted
+  // back to front — reversed — for `layers[0]` to end up on top here too,
+  // matching what `SlideBackdrop` shows on screen. Do not "tidy" this back to
+  // array order; that silently changes every overlap's blended colour.
   const rects = layers
-    .map((_, i) => `<rect width="100%" height="100%" fill="url(#glow${i})"/>`)
+    .map((_, i) => i)
+    .reverse()
+    .map((i) => `<rect width="100%" height="100%" fill="url(#glow${i})"/>`)
     .join('')
   return { defs, rects }
 }
@@ -57,10 +65,12 @@ function gridSvg(theme: ThemeTokens): string {
   if (!grid) return ''
   const pitch = grid.sizePx * PX_SCALE
   const lines: string[] = []
-  for (let x = pitch; x < BACKDROP_WIDTH; x += pitch) {
+  // The on-screen CSS grid tiles from `background-position: 0 0`, so it draws
+  // a line at the top and left edge too — start both loops at 0, not `pitch`.
+  for (let x = 0; x < BACKDROP_WIDTH; x += pitch) {
     lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${BACKDROP_HEIGHT}"/>`)
   }
-  for (let y = pitch; y < BACKDROP_HEIGHT; y += pitch) {
+  for (let y = 0; y < BACKDROP_HEIGHT; y += pitch) {
     lines.push(`<line x1="0" y1="${y}" x2="${BACKDROP_WIDTH}" y2="${y}"/>`)
   }
   return (
@@ -87,6 +97,22 @@ function orbitsSvg(theme: ThemeTokens): string {
     .join('')
 }
 
+/**
+ * When a body's `fill` isn't the standard `radial-gradient(circle at X% Y%,
+ * ...)` shape, try to recover a plain colour rather than leave the shape
+ * unpainted. `parseBodyGradient` already reads every built-in theme's body
+ * fill, so this only needs to catch a fill authored as a bare colour — it
+ * does not attempt to dig a first stop out of an otherwise-malformed
+ * gradient string. Decoration must never fail the export: this returns
+ * `null` rather than guessing further, and the caller omits `fill` entirely.
+ */
+function fallbackBodyColor(fill: string): string | null {
+  const trimmed = fill.trim()
+  if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) return trimmed
+  if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(,\s*[\d.]+\s*)?\)$/.test(trimmed)) return trimmed
+  return null
+}
+
 function bodiesSvg(theme: ThemeTokens): { defs: string; shapes: string } {
   const bodies = theme.celestial.bodies
   if (!bodies?.length) return { defs: '', shapes: '' }
@@ -95,6 +121,25 @@ function bodiesSvg(theme: ThemeTokens): { defs: string; shapes: string } {
   const shapes = bodies
     .map((body, i) => {
       const r = px(body.size) / 2
+
+      // SVG's `fill` attribute accepts a colour or a `url(#id)` paint-server
+      // reference, never a CSS gradient function — `body.fill` is a
+      // `radial-gradient(...)` in every built-in theme that declares bodies
+      // (the lit-limb shading is the point: Moonlight's moon, Deep Space's
+      // nebula core, Aurora's planet limb), so it has to become a real
+      // `<radialGradient>` def rather than being written into the attribute
+      // as-is, which would paint as invalid — i.e. black.
+      const gradient = parseBodyGradient(body.fill)
+      let fill: string
+      if (gradient) {
+        const id = `bodyfill${i}`
+        defs.push(bodyGradientSvg(gradient, id))
+        fill = `url(#${id})`
+      } else {
+        fill = fallbackBodyColor(body.fill) ?? ''
+      }
+      const fillAttr = fill ? ` fill="${esc(fill)}"` : ''
+
       let filter = ''
       if (body.blurPx) {
         // `filterUnits="userSpaceOnUse"` with an explicit region: the default
@@ -111,8 +156,8 @@ function bodiesSvg(theme: ThemeTokens): { defs: string; shapes: string } {
         filter = ` filter="url(#${id})"`
       }
       return (
-        `<circle class="body" cx="${px(body.cx)}" cy="${py(body.cy)}" r="${r}" ` +
-        `fill="${esc(body.fill)}" opacity="${body.opacity}"${filter}/>`
+        `<circle class="body" cx="${px(body.cx)}" cy="${py(body.cy)}" r="${r}"` +
+        `${fillAttr} opacity="${body.opacity}"${filter}/>`
       )
     })
     .join('')
