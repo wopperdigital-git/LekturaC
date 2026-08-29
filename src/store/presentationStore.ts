@@ -5,12 +5,34 @@ import { EMPTY_TEXT_STYLE, parseTextStyle, type TextStyle } from '@/engine/textS
 import { applyMark, hasMarkThroughout, shiftMarks, type Mark, type MarkType, type TextRange } from '@/engine/marks'
 import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockText'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
-import { inOrder, withoutCard } from './cardMutations'
+import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
+import { applyEmphasis } from '@/engine/emphasis'
+import {
+  convertBlocks,
+  layoutForKind,
+  starterBlocks,
+  type CreatableKind,
+} from '@/engine/cardTemplates'
+import { inOrder, withCardAfter, withoutCard } from './cardMutations'
 
 export interface DeckSummary {
   id: string
   title: string
   updatedAt: string
+  /**
+   * The deck's own theme, and the card that opens it — enough for the
+   * dashboard to draw the real first slide as the deck's cover.
+   *
+   * The cover is *rendered*, never a stored screenshot, for the same reason
+   * the outline rail's thumbnails are: it can then never disagree with the
+   * card, and a theme change shows up the next time the list is read rather
+   * than needing an image regenerated.
+   */
+  theme: ThemeTokens
+  /** Deck-level text overrides, merged with the cover card's own before rendering. */
+  textStyle: TextStyle
+  /** `null` for a deck with no cards yet — those fall back to a lettered swatch. */
+  cover: Card | null
 }
 
 interface PresentationState {
@@ -48,6 +70,25 @@ interface PresentationState {
    * classifier, leaving the treatment alone.
    */
   setCardVariety: (cardId: string, layout: LayoutType, visualStyle?: VisualStyle) => void
+  /**
+   * Moves, resizes or rotates one element: how far it sits from where the
+   * layout put it, and what size it was given. `blockIndex` addresses
+   * `card.blocks`.
+   *
+   * A nudge that comes back to neutral is deleted rather than stored as zeroes,
+   * so an element dragged and then dragged back is indistinguishable from one
+   * nobody touched — which matters, because the presence of an adjustment is
+   * what routes the card down the export's per-element path.
+   *
+   * `commit` marks the end of a gesture: mid-drag calls are debounced into one
+   * row write, the released one is written straight away.
+   */
+  setBlockAdjust: (
+    cardId: string,
+    blockIndex: number,
+    adjust: BlockAdjust,
+    commit?: boolean,
+  ) => void
 
   /** Level 3: replaces one run of a card's text, keeping its marks on the same characters. */
   setBlockText: (cardId: string, ref: string, nextText: string) => void
@@ -60,6 +101,28 @@ interface PresentationState {
     patch: Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>,
   ) => void
 
+  /**
+   * Adds a slide of the given type after `afterCardId`, or at the end when that
+   * is `null`. Returns the new card's id, which the editor needs in order to
+   * select it and scroll to it.
+   *
+   * The type decides the card's starter blocks and, for a title card, its
+   * layout — see `engine/cardTemplates.ts`. Nothing here calls the AI: a card
+   * arrives with placeholder text the user edits in place, which is the only
+   * way to add a slide that does not reopen the "content is generated once"
+   * question.
+   */
+  addCard: (kind: CreatableKind, afterCardId: string | null) => string
+  /**
+   * Reshapes one card into another type, keeping its words.
+   *
+   * Drops the card's `inline` and `adjusts` outright, and that is deliberate
+   * rather than lazy: both are keyed by block index, and a reshape moves the
+   * text to different indices — so a mark would land on the wrong characters
+   * and a nudge on the wrong element. The alternative, remapping them, has no
+   * correct answer when three paragraphs become one bullet list.
+   */
+  setCardKind: (cardId: string, kind: CreatableKind) => void
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
 
@@ -73,17 +136,31 @@ function newId() {
 
 // Keyed per-field so scheduling one field's save (e.g. theme) doesn't cancel
 // another field's pending save (e.g. title) that hasn't fired yet.
-const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const saveTimers = new Map<string, PendingSave>()
+
+/** A debounced write, kept with its work so it can be run early as well as dropped. */
+interface PendingSave {
+  timer: ReturnType<typeof setTimeout>
+  run: () => Promise<void>
+}
+
 function scheduleSave(key: string, fn: () => Promise<void>, delayMs = 500) {
-  const existing = saveTimers.get(key)
-  if (existing) clearTimeout(existing)
-  saveTimers.set(
-    key,
-    setTimeout(() => {
+  clearScheduledSave(key)
+  saveTimers.set(key, {
+    run: fn,
+    timer: setTimeout(() => {
       saveTimers.delete(key)
       void fn()
     }, delayMs),
-  )
+  })
+}
+
+/** Drops one pending write without running it — for a caller about to write the same field itself. */
+function clearScheduledSave(key: string) {
+  const pending = saveTimers.get(key)
+  if (!pending) return
+  clearTimeout(pending.timer)
+  saveTimers.delete(key)
 }
 
 /*
@@ -97,8 +174,29 @@ function scheduleSave(key: string, fn: () => Promise<void>, delayMs = 500) {
   follows covers every field those timers were going to touch.
 */
 function cancelScheduledSaves() {
-  for (const timer of saveTimers.values()) clearTimeout(timer)
+  for (const { timer } of saveTimers.values()) clearTimeout(timer)
   saveTimers.clear()
+}
+
+/*
+  Runs every pending debounced write *now*, and waits for them.
+
+  The counterpart to `cancelScheduledSaves`: that one exists because undo has to
+  stop an older value landing last, this one because a *newer* value must not be
+  left on a timer while something reads the row it was written from. An edit is
+  in memory the moment it is made but only in the database 500ms later, so
+  anything that re-reads a deck — or lets the tab go — has to close that gap
+  first or it will read the value the user just replaced.
+
+  Each `run` is already wrapped in `runSave`, which reports failure through the
+  store's status rather than throwing, so a rejected write cannot take the
+  others down with it.
+*/
+export async function flushScheduledSaves(): Promise<void> {
+  const pending = [...saveTimers.values()]
+  saveTimers.clear()
+  for (const { timer } of pending) clearTimeout(timer)
+  await Promise.all(pending.map(({ run }) => run()))
 }
 
 const MAX_HISTORY = 50
@@ -106,6 +204,45 @@ const MAX_HISTORY = 50
 type StatusSetter = (partial: Partial<PresentationState>) => void
 
 // Drives the status/errorMessage fields TopBar reads to show "Saving…" / "Save failed".
+/**
+ * A failed write, as a sentence a user can act on.
+ *
+ * `String(err)` was giving `[object Object]` for every database error, which is
+ * the only kind this store actually produces: Supabase rejects a query with a
+ * plain `{ message, details, hint, code }` object, not an `Error`. So the one
+ * message that says *why* the deck did not save — a missing column, a policy
+ * refusal — reached the user as nothing at all.
+ *
+ * `code` is kept because it is the part worth searching for (PGRST204 is a
+ * column the schema cache does not have, i.e. a migration that has not been
+ * run), and `hint` because PostgREST often puts the fix there.
+ */
+export function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message
+
+  if (err && typeof err === 'object') {
+    const e = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const parts = [e.message, e.details, e.hint].filter(
+      (part): part is string => typeof part === 'string' && part.trim().length > 0,
+    )
+    if (parts.length > 0) {
+      const text = parts.join(' — ')
+      return typeof e.code === 'string' && e.code ? `${text} (${e.code})` : text
+    }
+    // An object with nothing readable on it is still better shown than hidden.
+    try {
+      return JSON.stringify(err)
+    } catch {
+      // Circular, so there is nothing to print — `String()` here is what
+      // produced "[object Object]" in the first place. The raw value is on the
+      // console either way (`runSave` logs it before this is ever read).
+      return 'an error with no readable message — see the browser console'
+    }
+  }
+
+  return String(err)
+}
+
 async function runSave(set: StatusSetter, persist: () => Promise<void>) {
   set({ status: 'saving' })
   try {
@@ -113,7 +250,7 @@ async function runSave(set: StatusSetter, persist: () => Promise<void>) {
     set({ status: 'idle', errorMessage: null })
   } catch (err) {
     console.error('[presentationStore] save failed', err)
-    set({ status: 'error', errorMessage: err instanceof Error ? err.message : String(err) })
+    set({ status: 'error', errorMessage: describeError(err) })
   }
 }
 
@@ -141,6 +278,7 @@ function cardRow(presentationId: string, card: Card) {
     visual_style: card.visualStyle,
     text_style: card.textStyle ?? {},
     inline: card.inline ?? {},
+    adjusts: card.adjusts ?? {},
   }
 }
 
@@ -187,6 +325,48 @@ export interface DeckContent {
  * Returns `null` when Supabase is not configured, which is the case `loadDeck`
  * handles by leaving whatever is in memory alone.
  */
+/** One `cards` row as Supabase hands it back, before it is a `Card`. */
+type CardRow = Record<string, unknown>
+
+/**
+ * One stored card row as the app's `Card`.
+ *
+ * Shared by `fetchDeck` and `listDecks` rather than inlined in each: both are
+ * read boundaries, and every older-shaped row is repaired here — the
+ * `visual_style` default, `parseAdjusts` mapping an untouched `{}` back to
+ * `undefined`, and the emphasis pass below.
+ */
+function cardFromRow(row: CardRow): Card {
+  /*
+    Emphasis is converted on the way *in*, not only at generation.
+
+    A deck created before `applyEmphasis` existed has the model's literal
+    `*asterisks*` sitting in its stored text, and content is never regenerated
+    — so the read boundary is the only place they can be turned into real bold
+    without a migration or a rewrite of rows the user has not touched. It is
+    the same boundary `resolveTheme` and the `visual_style` default already use
+    for exactly this kind of older-shaped row.
+
+    The pass is idempotent and skips any run that already carries marks, so a
+    newer deck (converted at creation) and a hand-formatted run both come back
+    through it unchanged.
+  */
+  const converted = applyEmphasis(
+    row.blocks as ContentBlock[],
+    (row.inline as Card['inline']) ?? undefined,
+  )
+  return {
+    id: row.id as string,
+    orderIndex: row.order_index as number,
+    blocks: converted.blocks,
+    layout: row.layout as LayoutType,
+    visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
+    textStyle: parseTextStyle(row.text_style),
+    inline: converted.inline,
+    adjusts: parseAdjusts(row.adjusts),
+  }
+}
+
 export async function fetchDeck(id: string): Promise<DeckContent | null> {
   if (!supabaseConfigured || !supabase) return null
   await ensureSession()
@@ -204,15 +384,7 @@ export async function fetchDeck(id: string): Promise<DeckContent | null> {
     // redesign carries that older shape. See `resolveTheme`.
     theme: resolveTheme(pres.theme),
     textStyle: parseTextStyle(pres.text_style),
-    cards: (cardRows ?? []).map((row) => ({
-      id: row.id,
-      orderIndex: row.order_index,
-      blocks: row.blocks as ContentBlock[],
-      layout: row.layout as LayoutType,
-      visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
-      textStyle: parseTextStyle(row.text_style),
-      inline: (row.inline as Card['inline']) ?? undefined,
-    })),
+    cards: (cardRows ?? []).map(cardFromRow),
   }
 }
 
@@ -292,10 +464,47 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     await ensureSession()
     const { data, error } = await supabase
       .from('presentations')
-      .select('id, title, updated_at')
+      .select('id, title, updated_at, theme, text_style')
       .order('updated_at', { ascending: false })
     if (error) throw error
-    return (data ?? []).map((row) => ({ id: row.id, title: row.title, updatedAt: row.updated_at }))
+    const rows = data ?? []
+    if (rows.length === 0) return []
+
+    /*
+      The covers come back in one more query, not one per deck.
+
+      The dashboard draws every deck's opening slide at once, so a per-deck
+      read would be a round-trip per tile on the page that can least afford
+      them. `order_index = 0` is a dependable "first card": both card mutations
+      re-derive `orderIndex` from array position (`cardMutations.ts`), so the
+      sequence can never have a hole at the front. A deck with no cards
+      contributes no row and gets `cover: null`.
+
+      RLS already scopes `cards` to the caller through its parent, so the
+      `.in()` is about asking only for the decks in hand rather than about
+      access — it keeps this honest if the list ever paginates.
+    */
+    const { data: coverRows, error: coversError } = await supabase
+      .from('cards')
+      .select('*')
+      .in('presentation_id', rows.map((row) => row.id))
+      .eq('order_index', 0)
+    if (coversError) throw coversError
+    const covers = new Map<string, Card>(
+      (coverRows ?? []).map((row) => [row.presentation_id as string, cardFromRow(row)]),
+    )
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      updatedAt: row.updated_at,
+      // Resolved by id for the same reason `fetchDeck` does it: a deck saved
+      // before a theme redesign carries the older shape, and the backdrop
+      // would throw the moment it read a field that shape has no value for.
+      theme: resolveTheme(row.theme),
+      textStyle: parseTextStyle(row.text_style),
+      cover: covers.get(row.id) ?? null,
+    }))
   },
 
   async createDeck(title = 'Untitled presentation') {
@@ -317,13 +526,20 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
   async createDeckFromGeneration(deck) {
     const id = newId()
-    const cards: Card[] = deck.cards.map((c, i) => ({
-      id: newId(),
-      orderIndex: i,
-      blocks: c.blocks,
-      layout: 'auto',
-      visualStyle: c.visualStyle,
-    }))
+    const cards: Card[] = deck.cards.map((c, i) => {
+      // The one moment a deck's text is written, and so the only place the
+      // model's `*asterisks*` can be turned into real bold without the stored
+      // string and the drawn string disagreeing about character offsets.
+      const { blocks, inline } = applyEmphasis(c.blocks)
+      return {
+        id: newId(),
+        orderIndex: i,
+        blocks,
+        layout: 'auto',
+        visualStyle: c.visualStyle,
+        inline,
+      }
+    })
 
     if (supabaseConfigured && supabase) {
       await ensureSession()
@@ -344,6 +560,14 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
           blocks: c.blocks,
           layout: c.layout,
           visual_style: c.visualStyle,
+          // The emphasis converted above lives here. Without it the delimiters
+          // are stripped from `blocks` on the way into the row while the marks
+          // that replaced them are not, so the bold would be lost for good the
+          // next time the deck was read. `adjusts` is deliberately still left
+          // to its column default: a fresh card has none, and naming it here
+          // would make deck creation fail outright on a project that has not
+          // run migration 0006.
+          inline: c.inline ?? {},
         })),
       )
       if (cardsError) throw cardsError
@@ -354,6 +578,29 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   async loadDeck(id: string) {
+    /*
+      Already open: keep what is in memory instead of re-reading the row.
+
+      Both the editor and the presenter call this on mount, and every element
+      edit is debounced 500ms — so pressing Present straight after aligning or
+      dragging something used to fetch the *pre-edit* row and overwrite the
+      cards the user had just changed. The presenter then showed the old value
+      while the write landed a moment later, and the next edit was computed from
+      the stale card, which could drop the first one for real.
+
+      Skipping is safe because this store holds exactly one deck: if its id is
+      already loaded, the in-memory copy is the newest one that exists — the
+      database is the thing catching up, not the other way round.
+    */
+    if (get().presentationId === id) {
+      set({ status: 'idle', errorMessage: null })
+      return
+    }
+
+    // Reading a *different* deck, so anything still on a timer belongs to the
+    // one being left. Let it land before its cards are replaced.
+    await flushScheduledSaves()
+
     set({ status: 'loading', errorMessage: null })
     try {
       const deck = await fetchDeck(id)
@@ -373,7 +620,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         future: [],
       })
     } catch (err) {
-      set({ status: 'error', errorMessage: err instanceof Error ? err.message : String(err) })
+      set({ status: 'error', errorMessage: describeError(err) })
     }
   },
 
@@ -519,8 +766,19 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
     const id = get().presentationId
     if (id) {
+      /*
+        `blocks` rides along, even though this action does not touch them.
+
+        The card in memory is not always the card in the row: `fetchDeck` runs
+        `applyEmphasis` at the read boundary, so a deck written before that
+        existed has its delimiters stripped in memory while the row still holds
+        them. Writing `inline` on its own would land the marks from that
+        conversion beside the un-converted text and split the pair — the state
+        that used to leave asterisks and misplaced bold on screen for good. The
+        two halves are written together or not at all.
+      */
       scheduleSave(`inline:${cardId}`, () =>
-        runSave(set, () => persistCardPatch(cardId, { inline })),
+        runSave(set, () => persistCardPatch(cardId, { inline, blocks: card.blocks })),
       )
     }
   },
@@ -542,8 +800,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
     const id = get().presentationId
     if (id) {
+      // `blocks` alongside `inline` for the same reason as `toggleTextMark`.
       scheduleSave(`inline:${cardId}`, () =>
-        runSave(set, () => persistCardPatch(cardId, { inline })),
+        runSave(set, () => persistCardPatch(cardId, { inline, blocks: card.blocks })),
       )
     }
   },
@@ -565,6 +824,104 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     void runSave(set, () =>
       persistCardPatch(cardId, { layout, visual_style: nextStyle }),
     )
+  },
+
+  setBlockAdjust(cardId, blockIndex, adjust, commit) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+
+    /*
+      Coalesced per element, which is what makes a drag one undo step rather
+      than one per pointer event. `pushHistory` refreshes the window's clock on
+      every coalesced call, so a continuous drag keeps collapsing however long
+      it runs, and only a pause of COALESCE_WINDOW_MS starts a new entry.
+    */
+    pushHistory(set, get, `adjust:${cardId}:${blockIndex}`)
+
+    const adjusts = { ...(card.adjusts ?? {}) }
+    if (isNeutral(adjust)) delete adjusts[String(blockIndex)]
+    else adjusts[String(blockIndex)] = adjust
+
+    const next = Object.keys(adjusts).length > 0 ? adjusts : undefined
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, adjusts: next } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      const key = `adjusts:${cardId}`
+      const write = () => runSave(set, () => persistCardPatch(cardId, { adjusts: next ?? {} }))
+      if (commit) {
+        /*
+          The gesture has been released, so this value is final: there is
+          nothing left to coalesce, and holding it on a timer only widens the
+          window where a reload or a tab close loses it. The pending write is
+          dropped first so the debounced copy cannot land *after* this one.
+        */
+        clearScheduledSave(key)
+        void write()
+      } else {
+        // Mid-drag: an adjustment per pointer event would be a row update per
+        // pointer event. One write lands once the movement settles.
+        scheduleSave(key, write)
+      }
+    }
+  },
+
+  addCard(kind, afterCardId) {
+    const previous = get().cards
+    pushHistory(set, get)
+
+    const card: Card = {
+      id: newId(),
+      // Placeholder: `withCardAfter` re-derives every index from position, so
+      // the value here is overwritten before it is ever read.
+      orderIndex: 0,
+      blocks: starterBlocks(kind),
+      layout: layoutForKind(kind),
+      visualStyle: 'structured',
+    }
+    set({ cards: withCardAfter(previous, afterCardId, card) })
+
+    const id = get().presentationId
+    if (id) {
+      // Structural, like delete and reorder: written immediately rather than
+      // debounced. `persistCardsSync` covers the shifted `order_index` of every
+      // card after the insertion point as well as the new row itself.
+      void runSave(set, () => persistCardsSync(id, previous, get().cards))
+    }
+    return card.id
+  },
+
+  setCardKind(cardId, kind) {
+    const previous = get().cards
+    const card = previous.find((c) => c.id === cardId)
+    if (!card) return
+
+    pushHistory(set, get)
+    const blocks = convertBlocks(card.blocks, kind)
+    const layout = layoutForKind(kind)
+    /*
+      `inline` and `adjusts` go, rather than being carried across.
+
+      Both are keyed by block index. A reshape moves the text to different
+      indices — three paragraphs becoming one bullet list, a stat pair becoming
+      a quote — so a surviving mark would bold the wrong characters and a
+      surviving nudge would displace the wrong element, silently and
+      permanently. Undo puts them back if the conversion was a mistake.
+    */
+    const next: Card = { ...card, blocks, layout, inline: undefined, adjusts: undefined }
+    set({ cards: previous.map((c) => (c.id === cardId ? next : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      // The debounced writes still pending for this card address the blocks it
+      // had a moment ago; letting one land after this would restore the old
+      // text or re-attach the marks just dropped.
+      clearScheduledSave(`inline:${cardId}`)
+      clearScheduledSave(`adjusts:${cardId}`)
+      void runSave(set, () =>
+        persistCardPatch(cardId, { blocks, layout, inline: {}, adjusts: {} }),
+      )
+    }
   },
 
   deleteCard(cardId) {

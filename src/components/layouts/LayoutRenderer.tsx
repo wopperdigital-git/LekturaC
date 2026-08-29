@@ -28,8 +28,19 @@ const LAYOUT_COMPONENTS = {
   gallery: GalleryLayout,
 } as const
 
+/**
+ * Draws one card's arrangement.
+ *
+ * Unchanged by element nudges, and that is the design: a nudge is a delta from
+ * wherever this puts an element, applied afterwards by `Adjustable`, not a
+ * replacement for the layout. So the classifier still runs for every card, an
+ * untouched element is still placed entirely by its layout component, and
+ * switching a card's layout variety re-arranges everything with the nudges
+ * still riding on top.
+ */
 export function LayoutRenderer({ card, context }: { card: Card; context?: LayoutContext }) {
   const resolved = resolveLayout(card.layout, card.blocks, context)
   const Component = LAYOUT_COMPONENTS[resolved]
   return <Component blocks={card.blocks} variant={card.visualStyle} />
 }
+

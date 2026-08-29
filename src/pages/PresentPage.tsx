@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
+import { SlideBody } from '@/components/layouts/SlideBody'
 import { SlideSurface } from '@/components/theme/SlideSurface'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
@@ -95,7 +96,12 @@ export function PresentPage() {
             >
               <TextStyleScope style={mergeTextStyle(store.textStyle, card.textStyle)}>
                 <SlideSurface className="w-full max-w-5xl rounded-slide p-8 shadow-slide-card sm:p-10">
-                  <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
+                  {/* Provides the card width every stored element nudge is a
+                      fraction of, so the presenter shows the same arrangement
+                      the editor does. */}
+                  <SlideBody card={card}>
+                    <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
+                  </SlideBody>
                 </SlideSurface>
               </TextStyleScope>
             </div>

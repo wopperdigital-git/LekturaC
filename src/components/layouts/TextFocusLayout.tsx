@@ -2,6 +2,7 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
+import { Adjustable } from './Adjustable'
 
 /** Flowing multi-paragraph prose for narrative cards with no natural list/number structure. */
 export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -16,8 +17,8 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
       ))}
       <div className="flex max-w-prose flex-col gap-4">
         {paragraphs.map(({ block, index }, i) => (
+          <Adjustable key={index} index={index}>
           <p
-            key={index}
             className={
               expressive && i === 0
                 ? 'text-[length:var(--slide-size-h3)] leading-snug text-slide-foreground'
@@ -27,6 +28,7 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
           >
             <EditableText textRef={textRef(index, 'text')} value={block.text} />
           </p>
+          </Adjustable>
         ))}
       </div>
     </div>

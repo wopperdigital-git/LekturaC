@@ -1,6 +1,9 @@
+import type { ReactNode } from 'react'
 import type { ContentBlock } from '@/engine/contentBlocks'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
+import { Adjustable } from './Adjustable'
+import { blockIndexOf } from './adjustContext'
 
 /**
  * Generic single-block renderer, used by layouts that just need to stack
@@ -12,6 +15,22 @@ import { EditableText } from './EditableText'
  * formatting against the wrong block.
  */
 export function BlockRenderer({ block, index }: { block: ContentBlock; index: number }) {
+  return (
+    <Adjustable index={index}>
+      <BlockBody block={block} index={index} />
+    </Adjustable>
+  )
+}
+
+/*
+  The block itself, wrapped by `BlockRenderer` above.
+
+  Split so the `Adjustable` holder wraps exactly one element per block, whatever
+  the block type: `display: contents` needs a single child to hand its layout
+  duties to, and a switch returning eight different roots inside the holder is
+  the simplest way to guarantee it gets one.
+*/
+function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
   switch (block.type) {
     case 'heading':
       return <Heading text={block.text} textRef={textRef(index, 'text')} />
@@ -92,6 +111,14 @@ export function BlockRenderer({ block, index }: { block: ContentBlock; index: nu
   }
 }
 
+/**
+ * A card heading, adjustable in its own right.
+ *
+ * Several layouts render this directly rather than going through
+ * `BlockRenderer`, so it wraps itself. The block index comes from the `textRef`
+ * it is already given — `blockIndexOf` — rather than being threaded through
+ * twelve layouts as a second prop that says the same thing twice.
+ */
 export function Heading({
   text,
   textRef: ref,
@@ -103,13 +130,29 @@ export function Heading({
 }) {
   const sizeVar = `var(--slide-size-${size})`
   return (
-    <h2
-      className="font-semibold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
-      style={{ fontFamily: 'var(--font-slide-heading)', fontSize: sizeVar, lineHeight: 1.15 }}
-    >
-      <EditableText textRef={ref} value={text} />
-    </h2>
+    <MaybeAdjustable forRef={ref}>
+      <h2
+        className="font-semibold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
+        style={{ fontFamily: 'var(--font-slide-heading)', fontSize: sizeVar, lineHeight: 1.15 }}
+      >
+        <EditableText textRef={ref} value={text} />
+      </h2>
+    </MaybeAdjustable>
   )
+}
+
+/**
+ * Wraps a self-wrapping element in its holder, given the `textRef` it already
+ * has rather than a second prop repeating the same number.
+ *
+ * A ref that does not parse gets no holder at all. Wrapping it under a guessed
+ * index would collide with the block that really has that index — see
+ * `blockIndexOf`.
+ */
+function MaybeAdjustable({ forRef, children }: { forRef: string; children: ReactNode }) {
+  const index = blockIndexOf(forRef)
+  if (index === null) return <>{children}</>
+  return <Adjustable index={index}>{children}</Adjustable>
 }
 
 export function StatBlockView({
@@ -124,16 +167,18 @@ export function StatBlockView({
   labelRef: string
 }) {
   return (
-    <div>
-      <div
-        className="font-bold text-slide-accent"
-        style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1 }}
-      >
-        <EditableText textRef={valueRef} value={value} />
+    <MaybeAdjustable forRef={valueRef}>
+      <div>
+        <div
+          className="font-bold text-slide-accent"
+          style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1 }}
+        >
+          <EditableText textRef={valueRef} value={value} />
+        </div>
+        <div className="mt-2 text-slide-muted">
+          <EditableText textRef={labelRef} value={label} />
+        </div>
       </div>
-      <div className="mt-2 text-slide-muted">
-        <EditableText textRef={labelRef} value={label} />
-      </div>
-    </div>
+    </MaybeAdjustable>
   )
 }

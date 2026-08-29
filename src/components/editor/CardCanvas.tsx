@@ -1,6 +1,9 @@
 import type { RefObject } from 'react'
 import type { Card } from '@/engine/contentBlocks'
+import type { BlockAdjust } from '@/engine/blockAdjust'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
+import { SlideBody } from '@/components/layouts/SlideBody'
+import { BlockAdjustContext } from '@/components/layouts/adjustContext'
 import { SlideSurface } from '@/components/theme/SlideSurface'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
@@ -9,11 +12,16 @@ import { TextEditingContext, type TextEditing } from '@/components/layouts/textE
 /**
  * Renders the deck.
  *
- * Card *content* is still read-only here — the canvas has nothing that edits a
- * block's text. What it does own is selection: clicking a card selects it,
- * which is what puts the toolbar into Level 2 so its tools scope to that card
- * instead of the whole deck. `cardRefs` exists so the outline sidebar can
- * scroll a card into view.
+ * Selection is what it owns, at two levels. Clicking a card selects it, which
+ * puts the toolbar into Level 2 so its tools scope to that card; clicking an
+ * element *inside* the selected card selects that element and gives it a
+ * selection box with resize handles. `cardRefs` exists so the outline sidebar
+ * can scroll a card into view.
+ *
+ * How a card is arranged is never decided here. Every card goes to
+ * `LayoutRenderer` and the classifier picks one of the twelve layouts —
+ * including a card whose elements have been nudged, because a nudge is a delta
+ * from the layout rather than a replacement for it.
  */
 export function CardCanvas({
   cards,
@@ -22,6 +30,9 @@ export function CardCanvas({
   selectedCardId,
   onSelectCard,
   textEditing,
+  selectedBlockIndex,
+  onSelectElement,
+  onChangeAdjust,
 }: {
   cards: Card[]
   cardRefs: RefObject<Map<string, HTMLDivElement>>
@@ -30,6 +41,11 @@ export function CardCanvas({
   onSelectCard: (cardId: string | null) => void
   /** Level 3 plumbing; only the selected card is given a provider. */
   textEditing: Omit<TextEditing, 'inline'>
+  /** Which element of the selected card carries the selection box. */
+  selectedBlockIndex: number | null
+  /** Selects an element — and, with it, the card it belongs to, in one press. */
+  onSelectElement: (cardId: string, index: number) => void
+  onChangeAdjust: (cardId: string, index: number, adjust: BlockAdjust, commit?: boolean) => void
 }) {
   const sorted = [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
@@ -53,6 +69,8 @@ export function CardCanvas({
       <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-10">
         {sorted.map((card, index) => {
           const isSelected = card.id === selectedCardId
+          const body = <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
+
           return (
             <div
               key={card.id}
@@ -77,18 +95,32 @@ export function CardCanvas({
               <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
                 <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
                   {/*
-                    Only the selected card gets an editing provider. Without a
-                    provider `EditableText` renders plain styled text with no
-                    listeners, so unselected cards stay inert and a stray click
-                    can't start editing a card the user hasn't chosen.
+                    Only the selected card gets the *text* editing provider, so a
+                    stray click can't start typing into a card nobody chose.
+                    Element selection is not gated that way: pressing an element
+                    on any card selects that card too, in the same press.
                   */}
-                  {isSelected ? (
-                    <TextEditingContext.Provider value={{ ...textEditing, inline: card.inline }}>
-                      <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
-                    </TextEditingContext.Provider>
-                  ) : (
-                    <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
-                  )}
+                  <BlockAdjustContext.Provider
+                    value={{
+                      // Only the selected card can be showing a selection box.
+                      // Every card still gets the provider, so one press picks
+                      // the element *and* its card — needing to select the card
+                      // first is a step no editor asks for.
+                      selected: isSelected ? selectedBlockIndex : null,
+                      select: (blockIndex) =>
+                        blockIndex === null ? undefined : onSelectElement(card.id, blockIndex),
+                      change: (blockIndex, adjust, commit) =>
+                        onChangeAdjust(card.id, blockIndex, adjust, commit),
+                    }}
+                  >
+                    {isSelected ? (
+                      <TextEditingContext.Provider value={{ ...textEditing, inline: card.inline }}>
+                        <SlideBody card={card}>{body}</SlideBody>
+                      </TextEditingContext.Provider>
+                    ) : (
+                      <SlideBody card={card}>{body}</SlideBody>
+                    )}
+                  </BlockAdjustContext.Provider>
                 </SlideSurface>
               </TextStyleScope>
             </div>

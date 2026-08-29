@@ -2,6 +2,7 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
+import { Adjustable } from './Adjustable'
 
 export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -17,7 +18,8 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
           {groups.map((group, i) => {
             const featured = i === 0
             return (
-              <div key={i} className="flex flex-col gap-3 py-4">
+              <Adjustable key={i} index={group.index}>
+              <div className="flex flex-col gap-3 py-4">
                 <div
                   className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
                 >
@@ -36,6 +38,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                   ))}
                 </ul>
               </div>
+              </Adjustable>
             )
           })}
         </div>
@@ -55,8 +58,8 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
         {groups.map((group, i) => {
           const featured = i === 0
           return (
+            <Adjustable key={i} index={group.index}>
             <div
-              key={i}
               className={`rounded-slide-sm border p-4 ${
                 featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
               }`}
@@ -79,6 +82,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                 ))}
               </ul>
             </div>
+            </Adjustable>
           )
         })}
       </div>

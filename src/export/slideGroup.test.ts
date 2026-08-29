@@ -9,6 +9,39 @@ function card(blocks: ContentBlock[], layout: Card['layout'] = 'auto'): Card {
 const HEADING: ContentBlock = { type: 'heading', text: 'Title' }
 
 describe('slideGroup', () => {
+  /*
+    A nudged element has to survive the export, and none of the five
+    arrangements can carry it — `body` in particular merges every block after
+    the heading into one text box, leaving a per-element offset nowhere to go.
+    So the check has to come before the classifier does anything.
+  */
+  it('routes a card with a nudged element to the adjusted group, whatever its layout', () => {
+    const c = {
+      ...card([HEADING, { type: 'quote', text: 'Words' }], 'quote'),
+      adjusts: { '1': { dx: 0.1, dy: 0, rotation: 0 } },
+    }
+    expect(slideGroup(c, false)).toBe('adjusted')
+  })
+
+  it('routes an adjusted card to the adjusted group even as the first card', () => {
+    const c = { ...card([HEADING]), adjusts: { '0': { dx: 0, dy: 0.05, rotation: 0 } } }
+    expect(slideGroup(c, true)).toBe('adjusted')
+  })
+
+  /*
+    An empty record is the shape a card gets back from Supabase's `default '{}'`
+    column, so "has an adjusts field" is not the same question as "has been
+    adjusted". Treating it as adjusted would route every untouched card in the
+    database down the approximate path.
+  */
+  it('treats an empty adjusts record as untouched', () => {
+    expect(slideGroup({ ...card([HEADING]), adjusts: {} }, true)).not.toBe('adjusted')
+  })
+
+  it('leaves untouched cards on the classifier', () => {
+    expect(slideGroup(card([HEADING]), true)).not.toBe('adjusted')
+  })
+
   it('maps an explicit quote layout to the quote group', () => {
     const c = card([HEADING, { type: 'quote', text: 'Words' }], 'quote')
     expect(slideGroup(c, false)).toBe('quote')

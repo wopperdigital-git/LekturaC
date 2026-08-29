@@ -96,6 +96,52 @@ describe('universal undo/redo', () => {
     })
   })
 
+  it('undoes adding a card, taking the new slide back out', () => {
+    const id = state().addCard('list', 'a')
+    expect(state().cards.map((c) => c.id)).toEqual(['a', id, 'b'])
+
+    state().undo()
+    expect(state().cards.map((c) => c.id)).toEqual(['a', 'b'])
+
+    state().redo()
+    expect(state().cards.map((c) => c.id)).toEqual(['a', id, 'b'])
+  })
+
+  /*
+    A type change rewrites the card's blocks and drops its marks and nudges —
+    the most destructive edit in the app that is not a deletion. Undo has to put
+    all three back, or a mistaken click through the modal is unrecoverable.
+  */
+  it('undoes a card type change, restoring blocks, marks and nudges', () => {
+    seed([
+      {
+        ...card('a', 0),
+        blocks: [
+          { type: 'heading', text: 'Card a' },
+          { type: 'paragraph', text: 'Original prose' },
+        ],
+        inline: { '1:text': { marks: [{ type: 'bold', start: 0, end: 8 }] } },
+        adjusts: { '1': { dx: 0.1, dy: 0, rotation: 0 } },
+      },
+      card('b', 1),
+    ])
+
+    state().setCardKind('a', 'quote')
+    const changed = state().cards.find((c) => c.id === 'a')!
+    expect(changed.blocks.some((b) => b.type === 'quote')).toBe(true)
+    expect(changed.inline).toBeUndefined()
+    expect(changed.adjusts).toBeUndefined()
+
+    state().undo()
+    const restored = state().cards.find((c) => c.id === 'a')!
+    expect(restored.blocks).toEqual([
+      { type: 'heading', text: 'Card a' },
+      { type: 'paragraph', text: 'Original prose' },
+    ])
+    expect(restored.inline).toEqual({ '1:text': { marks: [{ type: 'bold', start: 0, end: 8 }] } })
+    expect(restored.adjusts).toEqual({ '1': { dx: 0.1, dy: 0, rotation: 0 } })
+  })
+
   it('still undoes card deletion and reordering', () => {
     state().deleteCard('a')
     expect(state().cards.map((c) => c.id)).toEqual(['b'])

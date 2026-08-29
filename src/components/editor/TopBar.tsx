@@ -52,9 +52,14 @@ export function TopBar({
       </div>
 
       <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-app-muted">
+        {/* The failed case is red rather than muted grey: it is the one value
+            here that is not a progress note. The reason itself is on the
+            banner below the bar. */}
+        <span
+          className={`text-xs ${saveStatus === 'error' ? 'font-medium text-red-600 dark:text-red-400' : 'text-app-muted'}`}
+        >
           {saveStatus === 'saving' && 'Saving…'}
-          {saveStatus === 'error' && 'Save failed'}
+          {saveStatus === 'error' && 'Not saved'}
         </span>
         <Button
           variant="secondary"

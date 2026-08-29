@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { textStyleSchema } from './textStyle'
 import { markSchema } from './marks'
+import { adjustsSchema } from './blockAdjust'
 
 export const headingBlockSchema = z.object({
   type: z.literal('heading'),
@@ -118,6 +119,17 @@ export const cardSchema = z.object({
       }),
     )
     .optional(),
+  /*
+    Per-element nudges, keyed by block index: how far one block has been dragged
+    from where the layout engine put it, and what size it was given.
+
+    Optional and absent by default, and an entry appears only for a block
+    somebody actually moved or resized — every other block on the card is still
+    arranged entirely by its layout component. There is no card-level "this card
+    is now free-form" switch: the layout is always the starting point, and these
+    are adjustments on top of it. See `engine/blockAdjust.ts`.
+  */
+  adjusts: adjustsSchema.optional(),
 })
 
 export type Card = z.infer<typeof cardSchema>

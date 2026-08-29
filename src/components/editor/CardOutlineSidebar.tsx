@@ -6,6 +6,7 @@ import type { Card } from '@/engine/contentBlocks'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
+import { SlideBody } from '@/components/layouts/SlideBody'
 import { SlideSurface } from '@/components/theme/SlideSurface'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
@@ -105,7 +106,9 @@ function CardThumbnail({
               rail immediately rather than only on the big card. */}
           <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
             <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
-              <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
+              <SlideBody card={card}>
+                <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
+              </SlideBody>
             </SlideSurface>
           </TextStyleScope>
         </SlideStage>
@@ -183,6 +186,7 @@ export function CardOutlineSidebar({
   onSelect,
   onReorder,
   onDelete,
+  onAddCard,
 }: {
   cards: Card[]
   theme: ThemeTokens
@@ -191,6 +195,8 @@ export function CardOutlineSidebar({
   onSelect: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onDelete: (id: string) => void
+  /** Opens the card type picker; the new slide lands after the active one. */
+  onAddCard: () => void
 }) {
   /*
     Press-and-hold to drag, rather than the old dedicated ⠿ handle.
@@ -215,7 +221,24 @@ export function CardOutlineSidebar({
   }
 
   return (
-    <div className="scrollbar-subtle flex h-full flex-col gap-1.5 overflow-y-auto p-2">
+    /*
+      `scrollbar-gutter: stable` is load-bearing, not cosmetic.
+
+      A thumbnail scales itself to the measured width of this container, so on a
+      platform with classic (space-taking) scrollbars the rail had a feedback
+      loop with no fixed point: the list overflows, its scrollbar appears, every
+      thumbnail loses that width and shrinks, the list now fits, the scrollbar
+      goes away, every thumbnail grows, the list overflows again — forever, at
+      screen refresh rate. Whether a deck lands in that window is pure
+      coincidence of card count and window height, which is why it looked
+      random.
+
+      Reserving the gutter whether or not it is used makes the content width
+      constant, so a thumbnail's size no longer depends on whether the list
+      happens to overflow. (No effect where scrollbars are overlays and take no
+      space — those platforms never had the loop.)
+    */
+    <div className="scrollbar-subtle flex h-full flex-col gap-1.5 overflow-y-auto p-2 [scrollbar-gutter:stable]">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <ThemeProvider theme={theme}>
@@ -235,6 +258,35 @@ export function CardOutlineSidebar({
           </ThemeProvider>
         </SortableContext>
       </DndContext>
+
+      {/*
+        Below the list rather than above it, because a new slide is added
+        *after* the active card and the eye reads that as "and then one more".
+
+        It carries a solid surface of its own, unlike everything else in this
+        rail: the rail floats directly on the deck's themed stage, which is
+        near-black under Deep Space and near-white under Moonlight, and app
+        chrome text would have to lose one of those two. The thumbnails get
+        away with it by being opaque slides.
+      */}
+      <button
+        type="button"
+        onClick={onAddCard}
+        className="mt-0.5 flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-app-sm border border-app-border bg-app-background/95 py-2 text-xs font-medium text-app-foreground shadow-sm transition-colors hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+      >
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          aria-hidden="true"
+          className="size-3.5"
+        >
+          <path d="M10 4.5v11M4.5 10h11" />
+        </svg>
+        Add slide
+      </button>
     </div>
   )
 }

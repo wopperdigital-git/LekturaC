@@ -175,6 +175,39 @@ export function cardKind(blocks: ContentBlock[], context: LayoutContext = {}): C
   return 'text'
 }
 
+/*
+  A named layout says what the card *is*, so it outranks the blocks.
+
+  Reading the type off the blocks alone is right for the `'auto'` cards the AI
+  produces, and wrong the moment somebody names a layout: a title slide added at
+  position 9 carries `layout: 'hero'` precisely because the classifier would not
+  award it (see `cardTemplates.ts`), and asking the blocks would report it as a
+  text card — so the toolbar would name a type the slide plainly is not, and
+  offer the wrong layouts to switch between.
+*/
+const KIND_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, CardKind> = {
+  hero: 'title',
+  textFocus: 'text',
+  standard: 'text',
+  standardSplit: 'text',
+  statHero: 'stats',
+  statGrid: 'stats',
+  comparison: 'comparison',
+  timeline: 'timeline',
+  quote: 'quote',
+  iconGrid: 'list',
+  numberedList: 'list',
+  gallery: 'gallery',
+}
+
+/** The card's type: its named layout if it has one, otherwise what its blocks say. */
+export function cardKindOf(
+  card: { layout: LayoutType; blocks: ContentBlock[] },
+  context: LayoutContext = {},
+): CardKind {
+  return card.layout === 'auto' ? cardKind(card.blocks, context) : KIND_BY_LAYOUT[card.layout]
+}
+
 /** One option in the picker: which component renders the card, and in which treatment. */
 export interface LayoutVariety {
   layout: Exclude<LayoutType, 'auto'>

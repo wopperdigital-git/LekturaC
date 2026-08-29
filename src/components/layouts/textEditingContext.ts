@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Mark, TextRange } from '@/engine/marks'
+import type { Mark, MarkType, TextRange } from '@/engine/marks'
 import type { TextStyle } from '@/engine/textStyle'
 
 /**
@@ -23,6 +23,16 @@ export interface TextEditing {
   onChangeText: (ref: string, nextText: string) => void
   /** Reports the caret/selection inside the active run so the toolbar can target it. */
   onSelectionChange: (ref: string, range: TextRange | null) => void
+  /**
+   * Toggles a mark over an explicit range, for ⌘B / ⌘I pressed inside the run.
+   *
+   * The range travels with the call rather than being read from the reported
+   * selection, because the two are a render apart: `onSelectionChange` sets
+   * state, and a keystroke that reported and then toggled would toggle over the
+   * range from *before* it. The run has the live selection in hand at that
+   * moment, so it passes it.
+   */
+  onToggleMark: (ref: string, range: TextRange, type: MarkType) => void
 }
 
 export const TextEditingContext = createContext<TextEditing | null>(null)

@@ -2,6 +2,7 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
+import { Adjustable } from './Adjustable'
 
 export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -14,6 +15,7 @@ export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
           <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
         ))}
         {list && (
+          <Adjustable index={list.index}>
           <div className="flex flex-wrap gap-3">
             {list.block.items.map((item, i) => (
               <div
@@ -29,6 +31,7 @@ export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
               </div>
             ))}
           </div>
+          </Adjustable>
         )}
       </div>
     )
@@ -40,6 +43,7 @@ export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
         <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
       ))}
       {list && (
+        <Adjustable index={list.index}>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {list.block.items.map((item, i) => (
             <div
@@ -55,6 +59,7 @@ export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
             </div>
           ))}
         </div>
+        </Adjustable>
       )}
     </div>
   )

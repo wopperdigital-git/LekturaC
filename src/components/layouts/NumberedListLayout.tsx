@@ -2,6 +2,7 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
+import { Adjustable } from './Adjustable'
 
 /** Full-width numbered rows for a bullet list too long or too detailed for the compact icon grid. */
 export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -15,6 +16,7 @@ export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]
           <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
         ))}
         {list && (
+          <Adjustable index={list.index}>
           <ol className="flex flex-col gap-3">
             {list.block.items.map((item, i) => (
               <li key={i} className="flex items-center gap-4 rounded-slide-sm bg-slide-surface p-4">
@@ -27,6 +29,7 @@ export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]
               </li>
             ))}
           </ol>
+          </Adjustable>
         )}
       </div>
     )
@@ -38,6 +41,7 @@ export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]
         <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
       ))}
       {list && (
+        <Adjustable index={list.index}>
         <ol className="flex flex-col divide-y divide-slide-border">
           {list.block.items.map((item, i) => (
             <li key={i} className="flex items-baseline gap-4 py-3">
@@ -53,6 +57,7 @@ export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]
             </li>
           ))}
         </ol>
+        </Adjustable>
       )}
     </div>
   )

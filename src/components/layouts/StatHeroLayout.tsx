@@ -2,6 +2,7 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { Heading, StatBlockView } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
+import { Adjustable } from './Adjustable'
 
 export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -17,12 +18,11 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
             <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
           ))}
           {paragraphs.map(({ block, index }) => (
-            <p
-              key={index}
-              className="max-w-md text-slide-foreground/80"
-            >
-              <EditableText textRef={textRef(index, 'text')} value={block.text} />
-            </p>
+            <Adjustable key={index} index={index}>
+              <p className="max-w-md text-slide-foreground/80">
+                <EditableText textRef={textRef(index, 'text')} value={block.text} />
+              </p>
+            </Adjustable>
           ))}
         </div>
       </div>
@@ -36,12 +36,11 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
       ))}
       {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
       {paragraphs.map(({ block, index }) => (
-        <p
-              key={index}
-              className="max-w-md text-slide-foreground/80"
-            >
-          <EditableText textRef={textRef(index, 'text')} value={block.text} />
-        </p>
+        <Adjustable key={index} index={index}>
+          <p className="max-w-md text-slide-foreground/80">
+            <EditableText textRef={textRef(index, 'text')} value={block.text} />
+          </p>
+        </Adjustable>
       ))}
     </div>
   )

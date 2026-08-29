@@ -63,9 +63,12 @@ export function EditorToolbar({
   activeVisualStyle,
   onLayoutChange,
   cardKind,
+  resolvedLayout,
+  onChangeCardType,
   markState,
   onToggleMark,
   hasTextSelection,
+  activeAlign,
 }: {
   level?: ToolbarLevel
   canUndo: boolean
@@ -83,12 +86,30 @@ export function EditorToolbar({
   activeVisualStyle?: VisualStyle
   onLayoutChange?: (layout: LayoutType, visualStyle?: VisualStyle) => void
   cardKind?: CardKind
+  /**
+   * What the card is *actually* rendering as, with `'auto'` already resolved by the
+   * classifier. The picker names it beside Automatic, so "Automatic" stops
+   * being the one option that does not say what it does.
+   */
+  resolvedLayout?: Exclude<LayoutType, 'auto'>
+  /** Level 2: opens the card type picker for the selected card. */
+  onChangeCardType?: () => void
   /** Level 3: whether the current character selection is fully bold / italic. */
   markState?: { bold: boolean; italic: boolean }
   /** Level 3: toggles a mark over the current character selection. */
   onToggleMark?: (type: 'bold' | 'italic') => void
   /** Level 3: true while there is a non-empty character selection to format. */
   hasTextSelection?: boolean
+  /**
+   * The alignment the selected element is *rendering* with, whatever set it.
+   *
+   * Supplied only when an element is selected, and it takes precedence over the
+   * stored value so the lit button always matches the slide. An element nobody
+   * has aligned has no stored `align`, which would otherwise leave all three
+   * buttons dark while its text plainly sat centred — the confusion this
+   * exists to remove.
+   */
+  activeAlign?: TextAlign | null
 }) {
   const scale = textStyle.fontScale ?? 1
   const activeFont = textStyle.fontFamily ?? ''
@@ -205,10 +226,18 @@ export function EditorToolbar({
         <ToolButton
           key={align}
           label={`Align ${align}`}
-          pressed={textStyle.align === align}
-          // Re-clicking the active alignment clears it rather than being inert,
-          // so there is a way back to the theme's own alignment.
-          onClick={() => onTextStyleChange({ align: textStyle.align === align ? null : align })}
+          // What is rendering wins over what is stored; the stored value is the
+          // fallback for the card and deck scopes, which have no element to read.
+          pressed={(activeAlign ?? textStyle.align) === align}
+          /*
+            Always sets, never clears. Re-clicking the lit button used to clear
+            the override back to whatever was inherited — invisible once the
+            highlight reflects the rendered alignment, because clearing an
+            explicit centre usually falls back to centre and the button stays
+            lit, so the click reads as broken. Word, PowerPoint and Figma all
+            just set.
+          */
+          onClick={() => onTextStyleChange({ align })}
         >
           <AlignIcon align={align} />
         </ToolButton>
@@ -232,7 +261,18 @@ export function EditorToolbar({
           activeVisualStyle={activeVisualStyle}
           onChange={onLayoutChange}
           kind={cardKind}
+          resolvedLayout={resolvedLayout}
         />
+      )}
+
+      {level === 2 && onChangeCardType && (
+        <ToolButton
+          label="Change slide type"
+          title="Change slide type"
+          onClick={onChangeCardType}
+        >
+          <SwapIcon />
+        </ToolButton>
       )}
     </div>
   )
@@ -273,12 +313,14 @@ function LayoutPicker({
   activeVisualStyle,
   onChange,
   kind,
+  resolvedLayout,
 }: {
   options: LayoutVariety[]
   activeLayout: LayoutType
   activeVisualStyle?: VisualStyle
   onChange: (layout: LayoutType, visualStyle?: VisualStyle) => void
   kind?: CardKind
+  resolvedLayout?: Exclude<LayoutType, 'auto'>
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -303,14 +345,32 @@ function LayoutPicker({
 
   return (
     <div ref={ref} className="relative">
-      <ToolButton
-        label="Layout"
-        pressed={open}
+      {/*
+        The trigger names the selected card's type rather than being one more
+        anonymous glyph. Which kind of slide you are standing on decides what
+        this menu can offer — a bullet list is never going to list quote
+        layouts — so the type is the label, and the icon alone left the user to
+        infer it from the menu contents after opening it.
+      */}
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((v) => !v)}
-        title={kind ? `Layout — ${cardKindLabel(kind)} slide` : 'Layout'}
+        aria-label={kind ? `Layout — ${cardKindLabel(kind)} slide` : 'Layout'}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title={
+          resolvedLayout
+            ? `${kind ? cardKindLabel(kind) + ' slide' : 'Layout'} — ${LAYOUT_LABELS[resolvedLayout]}`
+            : 'Layout'
+        }
+        className={`flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-app-sm px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent ${
+          open ? 'bg-app-accent/20 text-app-accent-text' : 'text-app-foreground/90 hover:bg-app-foreground/10'
+        }`}
       >
         <LayoutIcon />
-      </ToolButton>
+        {kind && <span className="max-w-24 truncate">{cardKindLabel(kind)}</span>}
+      </button>
 
       {open && (
         <div
@@ -322,8 +382,15 @@ function LayoutPicker({
               {cardKindLabel(kind)} layouts
             </p>
           )}
+          {/* Naming the resolved layout is what makes Automatic legible: it is
+              otherwise the only option that does not say what the slide will
+              look like, and it is the state nearly every card is in. */}
           <LayoutOption
-            label="Automatic"
+            label={
+              resolvedLayout && activeLayout === 'auto'
+                ? `Automatic · ${LAYOUT_LABELS[resolvedLayout]}`
+                : 'Automatic'
+            }
             active={activeLayout === 'auto'}
             onClick={() => {
               onChange('auto')
@@ -408,6 +475,18 @@ function ToolButton({
   return (
     <button
       type="button"
+      /*
+        Never take focus, and this is what makes Bold work at all.
+
+        Level 3 formats the *character selection* inside a contentEditable run.
+        Pressing a button moves focus to it, which collapses that selection and
+        fires the run's `onBlur` — so `textRange` was already null by the time
+        the click handler read it, and the toggle silently did nothing (the
+        button had even re-rendered as disabled by then). Preventing the default
+        on mousedown leaves focus, caret and selection exactly where the user
+        put them.
+      */
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
@@ -503,6 +582,16 @@ function ThemeIcon() {
       <circle cx="10" cy="10" r="6.25" />
       <path d="M10 3.75v12.5" />
       <path d="M16.25 10H10" />
+    </svg>
+  )
+}
+
+/* Two arrows trading places — the card keeps its words, its shape is swapped. */
+function SwapIcon() {
+  return (
+    <svg {...strokeProps}>
+      <path d="M4 7.5h9.5M11 5l2.5 2.5L11 10" />
+      <path d="M16 12.5H6.5M9 10l-2.5 2.5L9 15" />
     </svg>
   )
 }
