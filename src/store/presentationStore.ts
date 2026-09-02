@@ -7,7 +7,7 @@ import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockT
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
-import { parseNarration } from '@/engine/narration'
+import { isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
 import {
   convertBlocks,
   layoutForKind,
@@ -126,6 +126,25 @@ interface PresentationState {
   setCardKind: (cardId: string, kind: CreatableKind) => void
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
+
+  /**
+   * Replaces one slide's narration script, keeping the generated copy Reset
+   * restores from.
+   *
+   * Debounced like any other typing: the script is a textarea, and a row write
+   * per keystroke is what `scheduleSave` exists to absorb.
+   */
+  setNarrationText: (cardId: string, text: string) => void
+  /** Puts the AI's version back after a hand edit. No-op if there is nothing to go back to. */
+  resetNarration: (cardId: string) => void
+  /**
+   * Folds a whole generation's scripts into the deck.
+   *
+   * Structural, so it is written immediately rather than debounced, and pushes
+   * exactly one undo entry for the whole batch. Slides the user has edited are
+   * left alone by `mergeNarration` regardless of what the model returned.
+   */
+  applyGeneratedNarration: (scripts: GeneratedScript[]) => void
 
   undo: () => void
   redo: () => void
@@ -955,6 +974,69 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     set({ cards: inOrder(previous, orderedIds) })
     const id = get().presentationId
     if (id) {
+      void runSave(set, () => persistCardsSync(id, previous, get().cards))
+    }
+  },
+
+  setNarrationText(cardId, text) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+
+    // Coalesced per card so a typed paragraph is one undo step, not one per
+    // character — the same window `setTitle` uses.
+    pushHistory(set, get, `narration:${cardId}`)
+    const narration = { text, generated: card.narration?.generated }
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, narration } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      scheduleSave(`narration:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { narration })),
+      )
+    }
+  },
+
+  resetNarration(cardId) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card || !isResettable(card.narration)) return
+
+    pushHistory(set, get)
+    const narration = { text: card.narration!.generated!, generated: card.narration!.generated }
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, narration } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      /*
+        A discrete click, not a keystroke: the value is final the moment it
+        happens, so holding it on a timer only widens the window a reload could
+        lose it in. The pending debounced write is dropped first so the older
+        text cannot land after this one.
+      */
+      clearScheduledSave(`narration:${cardId}`)
+      void runSave(set, () => persistCardPatch(cardId, { narration }))
+    }
+  },
+
+  applyGeneratedNarration(scripts) {
+    const previous = get().cards
+    if (previous.length === 0) return
+
+    /*
+      `mergeNarration` addresses slides by the 1-based number the model was
+      shown, which is position in *sorted* order — the store's array is not
+      guaranteed to be sorted, so it is sorted here and mapped back by id.
+    */
+    const sorted = [...previous].sort((a, b) => a.orderIndex - b.orderIndex)
+    const merged = mergeNarration(sorted, scripts)
+    const byId = new Map(merged.map((c) => [c.id, c]))
+
+    pushHistory(set, get)
+    set({ cards: previous.map((c) => byId.get(c.id) ?? c) })
+
+    const id = get().presentationId
+    if (id) {
+      // Structural, like a card delete: written straight through rather than
+      // debounced, since this lands a whole deck's worth of text at once.
       void runSave(set, () => persistCardsSync(id, previous, get().cards))
     }
   },
