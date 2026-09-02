@@ -157,7 +157,7 @@ export function NarratePage() {
                     the backdrop's orbits and stars are percentages, so letting
                     the stage grow to the content height stretches every circle
                     into an ellipse. The scroll container goes INSIDE it, which
-                    is the same arrangement EditorPage uses. */}
+                    is the same arrangement PresentPage uses. */}
                 <SlideStage className="min-h-0 flex-1">
                   <div className="scrollbar-subtle h-full overflow-y-auto p-6 sm:p-10">
                     <div className="flex min-h-full items-center justify-center">
