@@ -99,54 +99,79 @@ describe('mergeNarration', () => {
     { id: 'c', narration: { text: 'Old AI words.', generated: 'Old AI words.' } },
   ]
 
+  /** Every slide selected — the shape the "generate all, nothing edited" case produces. */
+  const all = new Set([0, 1, 2])
+
   it('writes a script into a slide that had none', () => {
-    const out = mergeNarration(cards(), [{ slide: 1, text: 'Fresh.' }])
+    const out = mergeNarration(cards(), [{ slide: 1, text: 'Fresh.' }], all)
     expect(out[0].narration).toEqual({ text: 'Fresh.', generated: 'Fresh.' })
   })
 
   it('rewrites a slide still holding an untouched generated script', () => {
-    const out = mergeNarration(cards(), [{ slide: 3, text: 'New AI words.' }])
+    const out = mergeNarration(cards(), [{ slide: 3, text: 'New AI words.' }], all)
     expect(out[2].narration).toEqual({ text: 'New AI words.', generated: 'New AI words.' })
   })
 
   /*
-    THE load-bearing rule. The prompt asks the model to leave edited slides
-    alone, but a prompt is a request; this is the invariant. Deleting the
-    guard in mergeNarration must fail this test.
+    THE load-bearing rule, and it is now anchored to the user's selection rather
+    than to an inferred one.
+
+    Before the checklist existed this read "never overwrite an edited script",
+    which `mergeNarration` decided for itself. A checkbox that says otherwise
+    makes that impossible to keep, so the guarantee moved: nothing is written to
+    a slide the user did not select. The prompt asks the model to leave
+    unselected slides alone, but a prompt is a request and this is the
+    invariant — losing hand-written words is unrecoverable, since nothing here
+    can be generated a second time. Deleting the guard must fail this test.
   */
-  it('drops a script aimed at a hand-edited slide', () => {
-    const out = mergeNarration(cards(), [{ slide: 2, text: 'Model tried to overwrite.' }])
+  it('drops a script aimed at a slide the user did not select', () => {
+    const out = mergeNarration(cards(), [{ slide: 2, text: 'Model went off-list.' }], new Set([0, 2]))
     expect(out[1].narration).toEqual({ text: 'My words.', generated: 'Old AI words.' })
   })
 
+  /*
+    The other half of that move, and the reason the rule had to change: ticking
+    an edited slide in the modal is explicit consent, so it MUST be honoured.
+    A checklist whose boxes silently do nothing would be worse than no checklist.
+  */
+  it('rewrites a hand-edited slide when the user selected it', () => {
+    const out = mergeNarration(cards(), [{ slide: 2, text: 'Replaced on request.' }], new Set([1]))
+    expect(out[1].narration).toEqual({ text: 'Replaced on request.', generated: 'Replaced on request.' })
+  })
+
+  it('writes nothing at all when the selection is empty', () => {
+    const input = cards()
+    const out = mergeNarration(input, [{ slide: 1, text: 'Fresh.' }], new Set())
+    expect(out).toEqual(input)
+  })
+
   it('ignores a slide number that matches no card', () => {
-    const out = mergeNarration(cards(), [{ slide: 99, text: 'Nowhere.' }])
+    const out = mergeNarration(cards(), [{ slide: 99, text: 'Nowhere.' }], all)
     expect(out).toEqual(cards())
   })
 
   it('ignores a slide number below the first slide', () => {
-    const out = mergeNarration(cards(), [{ slide: 0, text: 'Nowhere.' }])
+    const out = mergeNarration(cards(), [{ slide: 0, text: 'Nowhere.' }], all)
     expect(out).toEqual(cards())
   })
 
   it('leaves the input array untouched', () => {
     const input = cards()
-    mergeNarration(input, [{ slide: 1, text: 'Fresh.' }])
+    mergeNarration(input, [{ slide: 1, text: 'Fresh.' }], all)
     expect(input[0].narration).toBeUndefined()
   })
 
   /*
-    `applyGeneratedNarration` (presentationStore.ts) detects a no-op response —
-    every returned script landed on an already-edited slide — by comparing
-    elements for reference equality against the sorted input, so it can skip
-    the undo push and the deck-wide write. That shortcut is only valid because
-    every untouched card comes back as the SAME object, not an equal copy —
-    pin that here so a future rewrite of the map to always spread can't
+    `applyGeneratedNarration` (presentationStore.ts) detects a no-op response by
+    comparing elements for reference equality against the sorted input, so it
+    can skip the undo push and the deck-wide write. That shortcut is only valid
+    because every untouched card comes back as the SAME object, not an equal
+    copy — pin that here so a future rewrite of the map to always spread can't
     silently break it.
   */
   it('returns the identical object for a card it did not rewrite, not merely an equal one', () => {
     const input = cards()
-    const out = mergeNarration(input, [{ slide: 2, text: 'Model tried to overwrite.' }])
+    const out = mergeNarration(input, [{ slide: 2, text: 'Off-list.' }], new Set([0, 2]))
     expect(out[0]).toBe(input[0])
     expect(out[1]).toBe(input[1])
     expect(out[2]).toBe(input[2])
@@ -154,7 +179,7 @@ describe('mergeNarration', () => {
 
   it('returns a NEW object for a card whose script was actually written', () => {
     const input = cards()
-    const out = mergeNarration(input, [{ slide: 1, text: 'Fresh.' }])
+    const out = mergeNarration(input, [{ slide: 1, text: 'Fresh.' }], all)
     expect(out[0]).not.toBe(input[0])
   })
 })

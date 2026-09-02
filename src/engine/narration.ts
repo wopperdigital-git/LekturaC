@@ -74,23 +74,38 @@ export interface GeneratedScript {
  *
  * `cards` MUST already be sorted by `orderIndex`: `slide` is the 1-based
  * position the model was shown, and this is the single place that number
- * becomes an array index.
+ * becomes an array index. `allowed` holds 0-based indices — the same array
+ * positions, one conversion apart, which is why `slide` is never called
+ * `index` anywhere near here.
  *
- * The guard is the whole guarantee of the feature: a script is applied **only**
- * to a regenerable slide, whatever the model returned. The prompt asks it to
- * leave edited slides alone, but a prompt is a request and losing the user's
- * writing is unrecoverable — nothing here can be generated a second time.
+ * **The guard is the whole guarantee of the feature, and it is anchored to the
+ * user's selection.** A script is written **only** to a slide in `allowed`,
+ * whatever the model returned.
+ *
+ * That wording is a deliberate move from what this used to say. The rule was
+ * once "never overwrite a hand-edited script", which this function decided for
+ * itself from `isRegenerable`. Once the generate dialog offers a checklist, a
+ * ticked edited slide is explicit consent, and a checkbox whose box silently
+ * does nothing is worse than no checkbox — so the protection moved up to the
+ * selection the user actually made. Nothing is written that they did not pick;
+ * `isRegenerable` now only decides which boxes start ticked (see
+ * `GenerateScriptsModal`), never what may be written.
+ *
+ * The prompt asks the model to leave unselected slides alone, but a prompt is a
+ * request and this is the invariant: losing hand-written words is
+ * unrecoverable, since nothing here can be generated a second time.
  */
 export function mergeNarration<T extends { narration?: Narration }>(
   cards: T[],
   scripts: GeneratedScript[],
+  allowed: ReadonlySet<number>,
 ): T[] {
   const byIndex = new Map<number, string>()
   for (const s of scripts) byIndex.set(s.slide - 1, s.text)
 
   return cards.map((card, i) => {
     const text = byIndex.get(i)
-    if (text === undefined || !isRegenerable(card.narration)) return card
+    if (text === undefined || !allowed.has(i)) return card
     return { ...card, narration: { text, generated: text } }
   })
 }

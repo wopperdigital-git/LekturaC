@@ -20,15 +20,21 @@ export type GeneratedDeck = z.infer<typeof generatedDeckSchema>
 /**
  * One slide as the narration model sees it.
  *
- * `existingScript` present means the user has written this slide themselves and
- * the model must not rewrite it — it is sent anyway so the surrounding scripts
- * can flow into and out of it. A call that saw only the gaps would write
- * transitions into nothing.
+ * Every slide in the deck is sent, whether or not a script is wanted for it: a
+ * call that saw only the gaps would write transitions into nothing.
+ *
+ * `write` is what separates the two. It says the caller selected this slide, so
+ * the model should return a script for it. `existingScript` is independent —
+ * it is whatever the slide says today, supplied as context — and the two must
+ * stay separate, because "not selected" and "already has a script" are
+ * different facts: an empty slide the user left unticked must still not be
+ * written, and deriving one from the other would silently request it.
  */
 export interface NarrationSlide {
   slide: number
   heading: string
   lines: string[]
+  write: boolean
   existingScript?: string
 }
 

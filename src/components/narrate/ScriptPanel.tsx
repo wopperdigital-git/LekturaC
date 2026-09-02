@@ -2,17 +2,12 @@ import { usePresentationStore } from '@/store/presentationStore'
 import { isResettable, narrationStatus, type NarrationStatus } from '@/engine/narration'
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
 import { Button } from '@/components/ui/Button'
-import { headingTextOf, type Card } from '@/engine/contentBlocks'
+import type { Card } from '@/engine/contentBlocks'
 
-/*
-  Glyph plus duration rather than the word "generated": the row is 384px wide
-  and shares it with a heading, and the duration is the number somebody writing
-  a talk actually scans the list for.
-*/
-const STATUS_GLYPH: Record<NarrationStatus, string> = {
-  empty: '—',
-  generated: '✓',
-  edited: '✎',
+const STATUS_LABEL: Record<NarrationStatus, string> = {
+  empty: 'No script yet',
+  generated: 'Generated',
+  edited: 'Edited by you',
 }
 
 const STATUS_CLASS: Record<NarrationStatus, string> = {
@@ -21,19 +16,28 @@ const STATUS_CLASS: Record<NarrationStatus, string> = {
   edited: 'text-app-highlight-text',
 }
 
+/**
+ * One slide's script, and the two ways to generate.
+ *
+ * There is deliberately no slide list here any more. Navigation is the viewer's
+ * job (‹ ›, arrow keys, the counter), and per-slide status now lives in two
+ * better places: the current slide's own status line below, and the generate
+ * dialog, which is the only screen where knowing every slide's state at once
+ * actually changes what you do.
+ */
 export function ScriptPanel({
   cards,
   index,
-  onSelect,
-  onGenerate,
+  onGenerateOne,
+  onOpenGenerateAll,
   generating,
   onCancel,
   error,
 }: {
   cards: Card[]
   index: number
-  onSelect: (i: number) => void
-  onGenerate: () => void
+  onGenerateOne: () => void
+  onOpenGenerateAll: () => void
   generating: boolean
   onCancel: () => void
   error: string | null
@@ -45,57 +49,46 @@ export function ScriptPanel({
   const narration = card?.narration
   const text = narration?.text ?? ''
   const words = wordCount(text)
+  const status = narrationStatus(narration)
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-app-border p-4">
         {generating ? (
-          <div className="flex items-center gap-2">
+          <>
             <Button variant="secondary" onClick={onCancel} className="w-full">
               Cancel
             </Button>
-          </div>
+            <p className="mt-2 text-xs text-app-muted">Writing narration…</p>
+          </>
         ) : (
-          <Button variant="primary" onClick={onGenerate} disabled={cards.length === 0} className="w-full">
-            Generate all scripts
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              onClick={onGenerateOne}
+              disabled={!card}
+              className="w-full"
+              title="Write a script for the slide you are looking at"
+            >
+              Generate script for this slide only
+            </Button>
+            <Button
+              variant="primary"
+              onClick={onOpenGenerateAll}
+              disabled={cards.length === 0}
+              className="w-full"
+              title="Choose which slides to write"
+            >
+              Generate scripts for all slides
+            </Button>
+          </div>
         )}
-        <p className="mt-2 text-xs text-app-muted">
-          {generating
-            ? 'Writing narration for the whole deck…'
-            : 'Scripts you have edited are never overwritten.'}
-        </p>
         {error && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
       </div>
 
-      <ul className="scrollbar-subtle max-h-52 shrink-0 overflow-y-auto border-b border-app-border">
-        {cards.map((c, i) => {
-          const status = narrationStatus(c.narration)
-          const seconds = speakingSeconds(c.narration?.text ?? '')
-          return (
-            <li key={c.id}>
-              <button
-                onClick={() => onSelect(i)}
-                title={status === 'edited' ? 'You edited this script — Generate all will not overwrite it' : undefined}
-                className={`flex w-full items-center gap-2 px-4 py-2 text-left text-xs transition-colors hover:bg-app-border/40 ${
-                  i === index ? 'bg-app-border/60' : ''
-                }`}
-              >
-                <span className="w-4 shrink-0 tabular-nums text-app-muted">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-app-foreground">{headingTextOf(c, i)}</span>
-                <span className={`shrink-0 ${STATUS_CLASS[status]}`}>{STATUS_GLYPH[status]}</span>
-                <span className="w-12 shrink-0 text-right tabular-nums text-app-muted">
-                  {status === 'empty' ? '' : formatDuration(seconds)}
-                </span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-
       {card && (
         <div className="flex min-h-0 flex-1 flex-col p-4">
-          <div className="mb-2 flex items-baseline justify-between">
+          <div className="mb-2 flex items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold text-app-foreground">Slide {index + 1} script</h2>
             {isResettable(narration) && (
               <button
@@ -107,6 +100,10 @@ export function ScriptPanel({
               </button>
             )}
           </div>
+
+          {/* With the list gone this is the only standing answer to "where does
+              this slide stand", so it carries the status the chips used to. */}
+          <p className={`mb-2 text-xs ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</p>
 
           <textarea
             value={text}

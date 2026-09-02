@@ -5,9 +5,13 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { SlideViewer } from '@/components/narrate/SlideViewer'
 import { ScriptPanel } from '@/components/narrate/ScriptPanel'
+import { SlideCanvas } from '@/components/narrate/SlideCanvas'
+import { GenerateScriptsModal } from '@/components/narrate/GenerateScriptsModal'
+import { ConfirmReplaceModal } from '@/components/narrate/ConfirmReplaceModal'
 import { Button } from '@/components/ui/Button'
 import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { narrationSlides } from '@/ai/narrationPrompt'
+import { narrationStatus } from '@/engine/narration'
 
 export function NarratePage() {
   const { id } = useParams<{ id: string }>()
@@ -52,6 +56,8 @@ export function NarratePage() {
 
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [choosing, setChoosing] = useState(false)
+  const [confirmingOne, setConfirmingOne] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   // Cancelling has to stop the request, not just stop listening to it —
@@ -60,19 +66,20 @@ export function NarratePage() {
     return () => abortRef.current?.abort()
   }, [])
 
-  async function handleGenerate() {
+  /**
+   * Runs one generation over an explicit set of 0-based slide positions.
+   *
+   * The set is the whole of the user's intent and travels all the way through:
+   * `narrationSlides` marks everything outside it SKIP so the model still sees
+   * the deck for continuity but is asked for nothing else, and
+   * `applyGeneratedNarration` refuses to write outside it whatever comes back.
+   * One slide or twenty is the same code path — the only difference is the size
+   * of the set.
+   */
+  async function runGeneration(targets: Set<number>) {
+    if (targets.size === 0) return
     if (PROVIDER_CHAIN.length === 0) {
       setError('No AI provider is configured. Add VITE_GROQ_API_KEY or VITE_GEMINI_API_KEY to your .env file.')
-      return
-    }
-
-    const slides = narrationSlides(sorted)
-    if (slides.every((s) => s.existingScript)) {
-      // Every slide is hand-edited, so there is nothing this call could write —
-      // and asking anyway is worse than a no-op: the model's correct answer is an
-      // empty array, which the response schema rejects, so the user would pay two
-      // round-trips to be told the response could not be parsed.
-      setError('Every slide already has a script you wrote. Clear one to have it rewritten.')
       return
     }
 
@@ -83,9 +90,13 @@ export function NarratePage() {
 
     try {
       const provider = new FallbackProvider(PROVIDER_CHAIN)
-      const response = await provider.generateNarration(store.title, slides, controller.signal)
+      const response = await provider.generateNarration(
+        store.title,
+        narrationSlides(sorted, targets),
+        controller.signal,
+      )
       if (controller.signal.aborted) return
-      store.applyGeneratedNarration(response.scripts)
+      store.applyGeneratedNarration(response.scripts, targets)
     } catch (err) {
       // A cancel is a return to the panel, not a failure to report.
       if (controller.signal.aborted) return
@@ -106,10 +117,10 @@ export function NarratePage() {
     function handleKeyDown(e: KeyboardEvent) {
       // The script textarea lives on the same page: without this, typing a
       // space or an arrow inside it would step the slide instead. BUTTON is
-      // included too — "Generate all scripts" and the slide-list rows are
+      // included too — the two Generate buttons and the dialog's controls are
       // buttons, not inputs, and this handler's own preventDefault() on Space
       // would otherwise steal activation from whichever one is focused,
-      // breaking keyboard operation of the page's main control.
+      // breaking keyboard operation of the page's main controls.
       const target = e.target as HTMLElement | null
       if (
         target &&
@@ -172,10 +183,14 @@ export function NarratePage() {
                     into an ellipse. The scroll container goes INSIDE it, which
                     is the same arrangement PresentPage uses. */}
                 <SlideStage className="min-h-0 flex-1">
-                  <div className="scrollbar-subtle h-full overflow-y-auto p-6 sm:p-10">
-                    <div className="flex min-h-full items-center justify-center">
+                  {/* The slide is scaled to fit rather than scrolled: a talk is
+                      read one whole slide at a time, and a script written
+                      against the half of a card you could see would be wrong
+                      about the other half. */}
+                  <div className="h-full p-6 sm:p-10">
+                    <SlideCanvas>
                       <SlideViewer card={card} isFirstCard={index === 0} />
-                    </div>
+                    </SlideCanvas>
                   </div>
                 </SlideStage>
               </ThemeProvider>
@@ -203,8 +218,15 @@ export function NarratePage() {
           <ScriptPanel
             cards={sorted}
             index={index}
-            onSelect={goTo}
-            onGenerate={() => void handleGenerate()}
+            // One slide is just a one-element target set — same path, same
+            // guarantees, no second generation code path to keep in step. The
+            // confirm is the same one the dialog uses: a narrower action must
+            // not be the one that destroys hand-written words silently.
+            onGenerateOne={() => {
+              if (narrationStatus(card?.narration) === 'edited') setConfirmingOne(true)
+              else void runGeneration(new Set([index]))
+            }}
+            onOpenGenerateAll={() => setChoosing(true)}
             generating={generating}
             onCancel={() => abortRef.current?.abort()}
             // Save failure first: it describes work the user has already done
@@ -218,6 +240,29 @@ export function NarratePage() {
           />
         </aside>
       </div>
+
+      {confirmingOne && (
+        <ConfirmReplaceModal
+          slides={[index + 1]}
+          onBack={() => setConfirmingOne(false)}
+          onClose={() => setConfirmingOne(false)}
+          onConfirm={() => {
+            setConfirmingOne(false)
+            void runGeneration(new Set([index]))
+          }}
+        />
+      )}
+
+      {choosing && (
+        <GenerateScriptsModal
+          cards={sorted}
+          onClose={() => setChoosing(false)}
+          onGenerate={(targets) => {
+            setChoosing(false)
+            void runGeneration(targets)
+          }}
+        />
+      )}
     </div>
   )
 }

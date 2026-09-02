@@ -1,6 +1,5 @@
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { contentLines } from '@/engine/cardTemplates'
-import { isRegenerable } from '@/engine/narration'
 import type { NarrationSlide } from './provider'
 
 export const NARRATION_SYSTEM_PROMPT = `You write narration scripts for presentation slides — the words a presenter says out loud while a slide is on screen.
@@ -16,27 +15,33 @@ WRITING RULES
 - Never invent statistics, dates, names or facts that are not on the slide.
 - Plain prose only: no markdown, no asterisks, no bullet characters, no stage directions, no "Slide 3:" prefixes.
 
-FIXED SLIDES
-Some slides arrive with an existing script the user wrote. Those are FIXED. Do not return a script for them. Do read them, and make the slides on either side flow into and out of them.
+SLIDES YOU ARE NOT WRITING
+The request names exactly which slides to write. Every other slide is marked SKIP and is there for context only — do not return a script for it. Where a skipped slide already has a script it is quoted for you, so the slides on either side can flow into and out of it.
 
 OUTPUT
 Return ONLY a JSON object, no other text:
 {"scripts":[{"slide":1,"text":"..."},{"slide":4,"text":"..."}]}
-Include an entry for every slide that is not fixed, and for no slide that is.`
+Include an entry for every requested slide, and for no other slide.`
 
 export function buildNarrationUserPrompt(title: string, slides: NarrationSlide[]): string {
   const body = slides
     .map((s) => {
       const head = `Slide ${s.slide}: ${s.heading}`
       const content = s.lines.length > 0 ? `\n${s.lines.map((l) => `- ${l}`).join('\n')}` : ''
-      const fixed = s.existingScript
-        ? `\n[FIXED — the user wrote this script. Do not return one for this slide.]\n"${s.existingScript}"`
-        : ''
-      return `${head}${content}${fixed}`
+      /*
+        Whether the slide is wanted and whether it already has a script are two
+        independent facts, printed separately on purpose. A slide can be
+        skipped with no script (the user left it unticked) or skipped with one
+        (they are keeping what is there) — collapsing the two into "has text",
+        as this once did, silently requests the first.
+      */
+      const skip = s.write ? '' : `\n[SKIP — do not return a script for this slide.]`
+      const existing = s.existingScript ? `\nIts current script: "${s.existingScript}"` : ''
+      return `${head}${content}${skip}${existing}`
     })
     .join('\n\n')
 
-  const wanted = slides.filter((s) => !s.existingScript).map((s) => s.slide)
+  const wanted = slides.filter((s) => s.write).map((s) => s.slide)
 
   return `Presentation title: ${title}
 
@@ -49,20 +54,33 @@ Write narration for these slides only: ${wanted.join(', ')}.`
  * The deck as slides for the prompt.
  *
  * Every slide is included — the model needs the whole talk to write transitions
- * — but a slide whose script the user has edited carries it as `existingScript`
- * and is marked fixed. `contentLines` is reused rather than reimplemented so
- * the narration sees exactly the words a card conversion would preserve.
+ * — but only those in `targets` are requested. `contentLines` is reused rather
+ * than reimplemented so the narration sees exactly the words a card conversion
+ * would preserve.
+ *
+ * `targets` holds 0-based array positions and comes from what the user actually
+ * picked: the one slide behind "Generate for this slide", or the ticked boxes
+ * in the generate dialog. It is deliberately NOT derived from `isRegenerable`
+ * here — that would put the choice in two places, and the copy in this file
+ * would be the one nobody remembered to update. The same set is handed to
+ * `mergeNarration`, so what the prompt asks for and what may be written cannot
+ * drift apart.
+ *
+ * Any existing script travels as `existingScript` whether or not the slide is a
+ * target, since a neighbour's words are context worth having either way.
  *
  * `cards` MUST be sorted by `orderIndex`; `slide` is 1-based position, which is
  * what `mergeNarration` reads back.
  */
-export function narrationSlides(cards: Card[]): NarrationSlide[] {
+export function narrationSlides(cards: Card[], targets: ReadonlySet<number>): NarrationSlide[] {
   return cards.map((card, i) => {
+    const existing = card.narration?.text
     return {
       slide: i + 1,
       heading: headingTextOf(card, i),
       lines: contentLines(card.blocks),
-      ...(isRegenerable(card.narration) ? {} : { existingScript: card.narration?.text }),
+      write: targets.has(i),
+      ...(existing ? { existingScript: existing } : {}),
     }
   })
 }

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FallbackProvider } from './fallbackProvider'
 import { AIProviderError, type AIProvider, type NarrationResponse, type NarrationSlide } from './provider'
 
-const SLIDES: NarrationSlide[] = [{ slide: 1, heading: 'Intro', lines: ['A point'] }]
+const SLIDES: NarrationSlide[] = [{ slide: 1, heading: 'Intro', lines: ['A point'], write: true }]
 const RESPONSE: NarrationResponse = { scripts: [{ slide: 1, text: 'Spoken words.' }] }
 
 function stub(behavior: () => Promise<NarrationResponse>): AIProvider & { calls: () => number } {

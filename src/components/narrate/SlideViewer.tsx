@@ -24,7 +24,11 @@ export function SlideViewer({ card, isFirstCard }: { card: Card; isFirstCard: bo
 
   return (
     <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
-      <SlideSurface className="w-full max-w-4xl rounded-slide p-8 shadow-slide-card sm:p-10">
+      {/* No `max-w-*` here: `SlideCanvas` owns the width, laying the slide out
+          once at a fixed natural size and scaling the result. A cap would leave
+          dead space inside the measured box and shrink the card further than it
+          needs to be. */}
+      <SlideSurface className="w-full rounded-slide p-10 shadow-slide-card">
         <SlideBody card={card}>
           <LayoutRenderer card={card} context={{ isFirstCard }} />
         </SlideBody>

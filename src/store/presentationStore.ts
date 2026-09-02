@@ -138,13 +138,17 @@ interface PresentationState {
   /** Puts the AI's version back after a hand edit. No-op if there is nothing to go back to. */
   resetNarration: (cardId: string) => void
   /**
-   * Folds a whole generation's scripts into the deck.
+   * Folds a generation's scripts into the deck.
    *
    * Structural, so it is written immediately rather than debounced, and pushes
-   * exactly one undo entry for the whole batch. Slides the user has edited are
-   * left alone by `mergeNarration` regardless of what the model returned.
+   * exactly one undo entry for the whole batch.
+   *
+   * `allowed` holds the 0-based positions the user selected — one slide, or the
+   * ticked boxes in the generate dialog — in `orderIndex` order. `mergeNarration`
+   * writes to nothing outside it whatever the model returned, so this is where
+   * the user's choice becomes binding rather than advisory.
    */
-  applyGeneratedNarration: (scripts: GeneratedScript[]) => void
+  applyGeneratedNarration: (scripts: GeneratedScript[], allowed: ReadonlySet<number>) => void
 
   undo: () => void
   redo: () => void
@@ -1017,9 +1021,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     }
   },
 
-  applyGeneratedNarration(scripts) {
+  applyGeneratedNarration(scripts, allowed) {
     const previous = get().cards
-    if (previous.length === 0) return
+    if (previous.length === 0 || allowed.size === 0) return
 
     /*
       `mergeNarration` addresses slides by the 1-based number the model was
@@ -1027,15 +1031,15 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       guaranteed to be sorted, so it is sorted here and mapped back by id.
     */
     const sorted = [...previous].sort((a, b) => a.orderIndex - b.orderIndex)
-    const merged = mergeNarration(sorted, scripts)
+    const merged = mergeNarration(sorted, scripts, allowed)
 
     /*
       `mergeNarration` returns the SAME object reference for any card it did
       not rewrite (see its guard), so "nothing changed" is exactly "every
       element is identity-equal to the sorted input". This happens whenever
-      every returned script targeted an already-edited slide — a request the
-      caller tries to prevent (see NarratePage's own guard) but that a
-      generation started before the last edit can still race into. Without
+      every returned script landed outside the user's selection — which the
+      caller tries to prevent (see NarratePage's own guard) but which a model
+      answering off-list still produces. Without
       this check, a no-op still pushed an undo step that visibly did nothing
       and rewrote the whole deck's rows for no reason.
     */
