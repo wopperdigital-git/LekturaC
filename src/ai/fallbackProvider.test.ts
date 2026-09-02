@@ -22,6 +22,7 @@ function stub(behaviour: () => Promise<GeneratedDeck>): AIProvider & { calls: nu
       it_.calls++
       return behaviour()
     },
+    generateNarration: vi.fn(),
   }
   return it_
 }
@@ -146,6 +147,7 @@ describe('FallbackProvider', () => {
         seen.push(topic, brief, signal)
         return deck('ok')
       },
+      generateNarration: vi.fn(),
     }
     const controller = new AbortController()
     await new FallbackProvider([{ name: 'Only', provider }]).generateDeck(

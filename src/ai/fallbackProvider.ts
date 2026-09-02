@@ -1,4 +1,11 @@
-import { AIProviderError, type AIProvider, type GeneratedDeck, type GenerationBrief } from './provider'
+import {
+  AIProviderError,
+  type AIProvider,
+  type GeneratedDeck,
+  type GenerationBrief,
+  type NarrationResponse,
+  type NarrationSlide,
+} from './provider'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
 export interface NamedProvider {
@@ -71,5 +78,29 @@ export class FallbackProvider implements AIProvider {
     }
     // Unreachable: the loop either returns or rethrows on the last provider.
     throw new AIProviderError('No AI provider was able to generate a deck.')
+  }
+
+  /**
+   * Same chain, same rules as `generateDeck`: only a capacity failure moves to
+   * the next provider, and cancellation never does.
+   */
+  async generateNarration(
+    title: string,
+    slides: NarrationSlide[],
+    signal?: AbortSignal,
+  ): Promise<NarrationResponse> {
+    for (let i = 0; i < this.chain.length; i++) {
+      const { name, provider } = this.chain[i]
+      const isLast = i === this.chain.length - 1
+      try {
+        return await provider.generateNarration(title, slides, signal)
+      } catch (err) {
+        if (isLast || isAbort(err, signal) || !isFailoverable(err)) throw err
+        console.warn(
+          `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${this.chain[i + 1].name} for narration`,
+        )
+      }
+    }
+    throw new AIProviderError('No AI provider was able to write narration.')
   }
 }

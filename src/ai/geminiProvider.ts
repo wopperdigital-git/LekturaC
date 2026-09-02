@@ -2,11 +2,19 @@ import {
   AIProviderError,
   generatedDeckSchema,
   kindForStatus,
+  narrationResponseSchema,
   type AIProvider,
   type GeneratedDeck,
   type GenerationBrief,
+  type NarrationResponse,
+  type NarrationSlide,
 } from './provider'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
+import {
+  NARRATION_SYSTEM_PROMPT,
+  buildNarrationUserPrompt,
+  narrationMaxTokens,
+} from './narrationPrompt'
 import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
 
 // "-latest" alias instead of a pinned version — new API keys lose access to
@@ -83,6 +91,18 @@ function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } 
   return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
 }
 
+function tryParseNarration(raw: string): { data: NarrationResponse } | { error: string } {
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch (err) {
+    return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  const result = narrationResponseSchema.safeParse(json)
+  if (result.success) return { data: result.data }
+  return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
+}
+
 export class GeminiProvider implements AIProvider {
   private apiKey: string
 
@@ -140,6 +160,53 @@ export class GeminiProvider implements AIProvider {
     if ('deck' in secondResult) return secondResult.deck
 
     throw new AIProviderError('The AI returned content that could not be parsed into a deck. Try again.', {
+      kind: 'response',
+    })
+  }
+
+  async generateNarration(
+    title: string,
+    slides: NarrationSlide[],
+    signal?: AbortSignal,
+  ): Promise<NarrationResponse> {
+    if (!this.apiKey.trim()) {
+      throw new AIProviderError('No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file.', {
+        kind: 'auth',
+      })
+    }
+
+    const contents: GeminiContent[] = [
+      { role: 'user', parts: [{ text: buildNarrationUserPrompt(title, slides) }] },
+    ]
+    const maxOutputTokens = narrationMaxTokens(slides.length)
+
+    const first = await callGemini(this.apiKey, NARRATION_SYSTEM_PROMPT, contents, maxOutputTokens, signal)
+    const firstResult = tryParseNarration(first)
+    if ('data' in firstResult) return firstResult.data
+
+    const retryContents: GeminiContent[] = [
+      ...contents,
+      { role: 'model', parts: [{ text: first }] },
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `That response failed schema validation with these errors: ${firstResult.error}. Reply again with ONLY the corrected JSON object, no other text.`,
+          },
+        ],
+      },
+    ]
+    const second = await callGemini(
+      this.apiKey,
+      NARRATION_SYSTEM_PROMPT,
+      retryContents,
+      maxOutputTokens,
+      signal,
+    )
+    const secondResult = tryParseNarration(second)
+    if ('data' in secondResult) return secondResult.data
+
+    throw new AIProviderError('The AI returned narration that could not be parsed. Try again.', {
       kind: 'response',
     })
   }

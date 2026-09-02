@@ -17,6 +17,34 @@ export const generatedDeckSchema = z.object({
 
 export type GeneratedDeck = z.infer<typeof generatedDeckSchema>
 
+/**
+ * One slide as the narration model sees it.
+ *
+ * `existingScript` present means the user has written this slide themselves and
+ * the model must not rewrite it — it is sent anyway so the surrounding scripts
+ * can flow into and out of it. A call that saw only the gaps would write
+ * transitions into nothing.
+ */
+export interface NarrationSlide {
+  slide: number
+  heading: string
+  lines: string[]
+  existingScript?: string
+}
+
+export const narrationResponseSchema = z.object({
+  scripts: z
+    .array(
+      z.object({
+        slide: z.number().int().positive(),
+        text: z.string().min(1),
+      }),
+    )
+    .min(1),
+})
+
+export type NarrationResponse = z.infer<typeof narrationResponseSchema>
+
 export interface AIProvider {
   /**
    * `signal` is optional so a third provider may ignore it, but both current
@@ -28,6 +56,20 @@ export interface AIProvider {
     brief: GenerationBrief,
     signal?: AbortSignal,
   ): Promise<GeneratedDeck>
+
+  /**
+   * Writes an expanded spoken script for each slide that needs one.
+   *
+   * Deliberately NOT a second content generation: the scripts never touch a
+   * card's `blocks`, are never rendered on a slide and are never exported. The
+   * "generated once" rule is about the deck's content, which this does not
+   * rewrite.
+   */
+  generateNarration(
+    title: string,
+    slides: NarrationSlide[],
+    signal?: AbortSignal,
+  ): Promise<NarrationResponse>
 }
 
 /**
