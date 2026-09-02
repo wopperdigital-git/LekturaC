@@ -134,4 +134,27 @@ describe('mergeNarration', () => {
     mergeNarration(input, [{ slide: 1, text: 'Fresh.' }])
     expect(input[0].narration).toBeUndefined()
   })
+
+  /*
+    `applyGeneratedNarration` (presentationStore.ts) detects a no-op response —
+    every returned script landed on an already-edited slide — by comparing
+    elements for reference equality against the sorted input, so it can skip
+    the undo push and the deck-wide write. That shortcut is only valid because
+    every untouched card comes back as the SAME object, not an equal copy —
+    pin that here so a future rewrite of the map to always spread can't
+    silently break it.
+  */
+  it('returns the identical object for a card it did not rewrite, not merely an equal one', () => {
+    const input = cards()
+    const out = mergeNarration(input, [{ slide: 2, text: 'Model tried to overwrite.' }])
+    expect(out[0]).toBe(input[0])
+    expect(out[1]).toBe(input[1])
+    expect(out[2]).toBe(input[2])
+  })
+
+  it('returns a NEW object for a card whose script was actually written', () => {
+    const input = cards()
+    const out = mergeNarration(input, [{ slide: 1, text: 'Fresh.' }])
+    expect(out[0]).not.toBe(input[0])
+  })
 })

@@ -1028,6 +1028,19 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     */
     const sorted = [...previous].sort((a, b) => a.orderIndex - b.orderIndex)
     const merged = mergeNarration(sorted, scripts)
+
+    /*
+      `mergeNarration` returns the SAME object reference for any card it did
+      not rewrite (see its guard), so "nothing changed" is exactly "every
+      element is identity-equal to the sorted input". This happens whenever
+      every returned script targeted an already-edited slide — a request the
+      caller tries to prevent (see NarratePage's own guard) but that a
+      generation started before the last edit can still race into. Without
+      this check, a no-op still pushed an undo step that visibly did nothing
+      and rewrote the whole deck's rows for no reason.
+    */
+    if (merged.every((c, i) => c === sorted[i])) return
+
     const byId = new Map(merged.map((c) => [c.id, c]))
 
     pushHistory(set, get)

@@ -1,4 +1,4 @@
-import type { Card } from '@/engine/contentBlocks'
+import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { contentLines } from '@/engine/cardTemplates'
 import { isRegenerable } from '@/engine/narration'
 import type { NarrationSlide } from './provider'
@@ -58,10 +58,9 @@ Write narration for these slides only: ${wanted.join(', ')}.`
  */
 export function narrationSlides(cards: Card[]): NarrationSlide[] {
   return cards.map((card, i) => {
-    const heading = card.blocks[0]?.type === 'heading' ? card.blocks[0].text : `Slide ${i + 1}`
     return {
       slide: i + 1,
-      heading,
+      heading: headingTextOf(card, i),
       lines: contentLines(card.blocks),
       ...(isRegenerable(card.narration) ? {} : { existingScript: card.narration?.text }),
     }
@@ -89,12 +88,31 @@ export function narrationSlides(cards: Card[]): NarrationSlide[] {
  * confirmed working end-to-end (all 8 scripts, well-formed JSON) in the same
  * test.
  *
- * Residual, accepted: a large enough deck can still exceed this budget. That
- * failure surfaces as a 400 (`request` kind, from `tryParseNarration`/the
- * empty-completion case), not a 429, so `FallbackProvider` will NOT hand off
- * to Gemini for it — capacity-only failover is correct in general (see
- * `fallbackProvider.ts`) but doesn't reach this particular failure mode. Not
- * fixed here.
+ * Residual, accepted, and NOT merely "very large decks": running the measured
+ * numbers above forward, the 7000 ceiling leaves only 7000 - 3400 = 3600
+ * tokens for the scripts themselves once the model reaches its floor, and the
+ * same measurement put one script at (4532 - 3400) / 8 ≈ 141 tokens — so the
+ * budget is arithmetically full around 3600 / 141 ≈ 25 slides, and reasoning
+ * tokens likely grow with slide count too (more deck to read before answering),
+ * which only pulls that point earlier. That puts the real threshold at roughly
+ * **20-25 slides**, not "very large" — and `CreatePage`'s own `MAX_SLIDES` is
+ * 30, so a deck that can never be narrated is fully creatable today. The
+ * failure is also a dead end rather than a fallback: it surfaces as a 400
+ * (`request` kind, from `tryParseNarration`/the empty-completion case), not a
+ * 429, so `FallbackProvider` will NOT hand off to Gemini for it —
+ * capacity-only failover is correct in general (see `fallbackProvider.ts`) but
+ * doesn't reach this particular failure mode.
+ *
+ * Open question, also not resolved here: if Groq's 8000/min window counts
+ * *prompt* tokens as well as requested output (unconfirmed either way), a
+ * large deck's prompt — the whole deck's headings and bullets, once per call —
+ * would trip that window from the input side too, independent of this output
+ * budget. That failure mode would at least surface as a 429 and DOES fail over
+ * to Gemini, unlike the one above.
+ *
+ * Not fixed here: fixing it for real means batching the call (multiple
+ * narration requests per deck) or raising the ceiling, and that's a design
+ * decision for the user to make, not a wording fix.
  */
 export function narrationMaxTokens(slideCount: number): number {
   return Math.min(7000, Math.max(5200, slideCount * 300 + 2000))

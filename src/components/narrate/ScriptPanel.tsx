@@ -2,7 +2,7 @@ import { usePresentationStore } from '@/store/presentationStore'
 import { isResettable, narrationStatus, type NarrationStatus } from '@/engine/narration'
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
 import { Button } from '@/components/ui/Button'
-import type { Card } from '@/engine/contentBlocks'
+import { headingTextOf, type Card } from '@/engine/contentBlocks'
 
 /*
   Glyph plus duration rather than the word "generated": the row is 384px wide
@@ -19,10 +19,6 @@ const STATUS_CLASS: Record<NarrationStatus, string> = {
   empty: 'text-app-muted',
   generated: 'text-app-accent-text',
   edited: 'text-app-highlight-text',
-}
-
-function headingOf(card: Card, i: number): string {
-  return card.blocks[0]?.type === 'heading' ? card.blocks[0].text : `Slide ${i + 1}`
 }
 
 export function ScriptPanel({
@@ -86,7 +82,7 @@ export function ScriptPanel({
                 }`}
               >
                 <span className="w-4 shrink-0 tabular-nums text-app-muted">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-app-foreground">{headingOf(c, i)}</span>
+                <span className="min-w-0 flex-1 truncate text-app-foreground">{headingTextOf(c, i)}</span>
                 <span className={`shrink-0 ${STATUS_CLASS[status]}`}>{STATUS_GLYPH[status]}</span>
                 <span className="w-12 shrink-0 text-right tabular-nums text-app-muted">
                   {status === 'empty' ? '' : formatDuration(seconds)}

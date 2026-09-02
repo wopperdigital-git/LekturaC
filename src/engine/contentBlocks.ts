@@ -144,6 +144,21 @@ export const cardSchema = z.object({
 
 export type Card = z.infer<typeof cardSchema>
 
+/**
+ * The heading text a card's first block carries, or a `Slide N` fallback when
+ * it doesn't have one (a card is supposed to always start with a heading, but
+ * a converted or hand-added card can momentarily not).
+ *
+ * Shared by `ai/narrationPrompt.ts` (the label the model sees for each slide)
+ * and `components/narrate/ScriptPanel.tsx` (the label the slide list shows) —
+ * both used to reimplement this identically, which meant the two could read
+ * the same card differently after a future edit to one copy and not the other.
+ */
+export function headingTextOf(card: Card, index: number): string {
+  const first = card.blocks[0]
+  return first?.type === 'heading' ? first.text : `Slide ${index + 1}`
+}
+
 export function blocksOfType<T extends ContentBlock['type']>(
   blocks: ContentBlock[],
   type: T,

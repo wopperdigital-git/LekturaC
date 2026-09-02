@@ -6,24 +6,8 @@ import { SlideStage } from '@/components/theme/SlideStage'
 import { SlideViewer } from '@/components/narrate/SlideViewer'
 import { ScriptPanel } from '@/components/narrate/ScriptPanel'
 import { Button } from '@/components/ui/Button'
-import { FallbackProvider, type NamedProvider } from '@/ai/fallbackProvider'
-import { GroqProvider } from '@/ai/groqProvider'
-import { GeminiProvider } from '@/ai/geminiProvider'
+import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { narrationSlides } from '@/ai/narrationPrompt'
-
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY ?? ''
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? ''
-
-/*
-  Same chain and same construction as CreatePage: Groq first, Gemini behind it,
-  each included only if its key is present. A provider with no key is left OUT
-  rather than added and allowed to fail, so dropping VITE_GROQ_API_KEY makes
-  this Gemini-only with no code change.
-*/
-const PROVIDER_CHAIN: NamedProvider[] = [
-  ...(GROQ_API_KEY ? [{ name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) }] : []),
-  ...(GEMINI_API_KEY ? [{ name: 'Gemini', provider: new GeminiProvider(GEMINI_API_KEY) }] : []),
-]
 
 export function NarratePage() {
   const { id } = useParams<{ id: string }>()
@@ -36,11 +20,23 @@ export function NarratePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  // A script is debounced 500ms after the last keystroke; leaving the page
-  // sooner than that would drop the last sentence typed.
+  /*
+    A script is debounced 500ms after the last keystroke, so it is in memory
+    immediately but not in the database until that timer fires. Two exits, both
+    covered the same way EditorPage covers them:
+    - client-side navigation (Back to editor, Escape) unmounts this component,
+      which the cleanup below flushes; and
+    - closing the tab or reloading unmounts nothing, which is what the
+      `beforeunload` listener is for. It is best-effort only — the browser does
+      not wait for it — but a narration script is hand-typed and can never be
+      regenerated, so this page needs the guard more than most.
+  */
   useEffect(() => {
+    const flush = () => void flushScheduledSaves()
+    window.addEventListener('beforeunload', flush)
     return () => {
-      void flushScheduledSaves()
+      window.removeEventListener('beforeunload', flush)
+      flush()
     }
   }, [])
 
@@ -70,6 +66,16 @@ export function NarratePage() {
       return
     }
 
+    const slides = narrationSlides(sorted)
+    if (slides.every((s) => s.existingScript)) {
+      // Every slide is hand-edited, so there is nothing this call could write —
+      // and asking anyway is worse than a no-op: the model's correct answer is an
+      // empty array, which the response schema rejects, so the user would pay two
+      // round-trips to be told the response could not be parsed.
+      setError('Every slide already has a script you wrote. Clear one to have it rewritten.')
+      return
+    }
+
     const controller = new AbortController()
     abortRef.current = controller
     setGenerating(true)
@@ -77,11 +83,7 @@ export function NarratePage() {
 
     try {
       const provider = new FallbackProvider(PROVIDER_CHAIN)
-      const response = await provider.generateNarration(
-        store.title,
-        narrationSlides(sorted),
-        controller.signal,
-      )
+      const response = await provider.generateNarration(store.title, slides, controller.signal)
       if (controller.signal.aborted) return
       store.applyGeneratedNarration(response.scripts)
     } catch (err) {
@@ -103,9 +105,20 @@ export function NarratePage() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // The script textarea lives on the same page: without this, typing a
-      // space or an arrow inside it would step the slide instead.
+      // space or an arrow inside it would step the slide instead. BUTTON is
+      // included too — "Generate all scripts" and the slide-list rows are
+      // buttons, not inputs, and this handler's own preventDefault() on Space
+      // would otherwise steal activation from whichever one is focused,
+      // breaking keyboard operation of the page's main control.
       const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'BUTTON' ||
+          target.isContentEditable)
+      )
+        return
 
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault()
@@ -194,7 +207,14 @@ export function NarratePage() {
             onGenerate={() => void handleGenerate()}
             generating={generating}
             onCancel={() => abortRef.current?.abort()}
-            error={error ?? saveError}
+            // Save failure first: it describes work the user has already done
+            // and cannot recover, so it must outrank a stale generation error
+            // from a request the user has already moved on from — `error` is
+            // only cleared when the NEXT generation starts, so without this a
+            // failed generation followed by hand-typing and a failed save would
+            // still show the old generation message while every keystroke since
+            // silently failed to persist.
+            error={saveError ?? error}
           />
         </aside>
       </div>
