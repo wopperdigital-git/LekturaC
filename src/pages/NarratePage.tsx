@@ -1,11 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
+import { describeError, flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { SlideViewer } from '@/components/narrate/SlideViewer'
 import { ScriptPanel } from '@/components/narrate/ScriptPanel'
 import { Button } from '@/components/ui/Button'
+import { FallbackProvider, type NamedProvider } from '@/ai/fallbackProvider'
+import { GroqProvider } from '@/ai/groqProvider'
+import { GeminiProvider } from '@/ai/geminiProvider'
+import { narrationSlides } from '@/ai/narrationPrompt'
+
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY ?? ''
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? ''
+
+/*
+  Same chain and same construction as CreatePage: Groq first, Gemini behind it,
+  each included only if its key is present. A provider with no key is left OUT
+  rather than added and allowed to fail, so dropping VITE_GROQ_API_KEY makes
+  this Gemini-only with no code change.
+*/
+const PROVIDER_CHAIN: NamedProvider[] = [
+  ...(GROQ_API_KEY ? [{ name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) }] : []),
+  ...(GEMINI_API_KEY ? [{ name: 'Gemini', provider: new GeminiProvider(GEMINI_API_KEY) }] : []),
+]
 
 export function NarratePage() {
   const { id } = useParams<{ id: string }>()
@@ -35,6 +53,52 @@ export function NarratePage() {
     },
     [count],
   )
+
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Cancelling has to stop the request, not just stop listening to it —
+  // otherwise scripts the user walked away from land and overwrite the deck.
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
+
+  async function handleGenerate() {
+    if (PROVIDER_CHAIN.length === 0) {
+      setError('No AI provider is configured. Add VITE_GROQ_API_KEY or VITE_GEMINI_API_KEY to your .env file.')
+      return
+    }
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    setGenerating(true)
+    setError(null)
+
+    try {
+      const provider = new FallbackProvider(PROVIDER_CHAIN)
+      const response = await provider.generateNarration(
+        store.title,
+        narrationSlides(sorted),
+        controller.signal,
+      )
+      if (controller.signal.aborted) return
+      store.applyGeneratedNarration(response.scripts)
+    } catch (err) {
+      // A cancel is a return to the panel, not a failure to report.
+      if (controller.signal.aborted) return
+      setError(describeError(err))
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
+      setGenerating(false)
+    }
+  }
+
+  // A narration script is typed by hand and can never be regenerated the way
+  // a deck can, so a save that fails silently is the worst outcome on this
+  // page: the text looks saved, and it is gone on reload with nothing said.
+  // Reuse the same error channel generation failures already surface.
+  const saveError = store.status === 'error' ? (store.errorMessage ?? 'Your changes could not be saved.') : null
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -127,10 +191,10 @@ export function NarratePage() {
             cards={sorted}
             index={index}
             onSelect={goTo}
-            onGenerate={() => {}}
-            generating={false}
-            onCancel={() => {}}
-            error={null}
+            onGenerate={() => void handleGenerate()}
+            generating={generating}
+            onCancel={() => abortRef.current?.abort()}
+            error={error ?? saveError}
           />
         </aside>
       </div>
