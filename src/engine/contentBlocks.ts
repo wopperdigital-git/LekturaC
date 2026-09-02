@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { textStyleSchema } from './textStyle'
 import { markSchema } from './marks'
 import { adjustsSchema } from './blockAdjust'
+import { narrationSchema } from './narration'
 
 export const headingBlockSchema = z.object({
   type: z.literal('heading'),
@@ -130,6 +131,15 @@ export const cardSchema = z.object({
     are adjustments on top of it. See `engine/blockAdjust.ts`.
   */
   adjusts: adjustsSchema.optional(),
+  /*
+    The slide's narration script — see `engine/narration.ts`.
+
+    Optional and absent by default, like every field above it: a freshly
+    generated deck has none, and a card gains one only when somebody generates
+    or writes a script for it. Never rendered on the slide and never exported to
+    .pptx; it exists to be read aloud.
+  */
+  narration: narrationSchema.optional(),
 })
 
 export type Card = z.infer<typeof cardSchema>

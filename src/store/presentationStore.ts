@@ -7,6 +7,7 @@ import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockT
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
+import { parseNarration } from '@/engine/narration'
 import {
   convertBlocks,
   layoutForKind,
@@ -279,6 +280,7 @@ function cardRow(presentationId: string, card: Card) {
     text_style: card.textStyle ?? {},
     inline: card.inline ?? {},
     adjusts: card.adjusts ?? {},
+    narration: card.narration ?? {},
   }
 }
 
@@ -364,8 +366,20 @@ function cardFromRow(row: CardRow): Card {
     textStyle: parseTextStyle(row.text_style),
     inline: converted.inline,
     adjusts: parseAdjusts(row.adjusts),
+    narration: parseNarration(row.narration),
   }
 }
+
+/*
+  Exported for `narrationRow.test.ts` only.
+
+  The round-trip these two form is the part worth pinning: `cardRow` names every
+  column on every upsert, and `cardFromRow` repairs every older-shaped row, so a
+  field added to one and forgotten in the other fails silently rather than
+  loudly.
+*/
+export const cardRowForTest = cardRow
+export const cardFromRowForTest = cardFromRow
 
 export async function fetchDeck(id: string): Promise<DeckContent | null> {
   if (!supabaseConfigured || !supabase) return null
