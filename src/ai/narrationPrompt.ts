@@ -71,10 +71,31 @@ export function narrationSlides(cards: Card[]): NarrationSlide[] {
 /**
  * Output budget for one narration call.
  *
- * An expanded script runs 90–140 words, about 180 tokens, plus JSON overhead.
- * Clamped at 8192 like the deck path: past that the provider truncates the JSON
- * rather than granting a bigger budget, so asking for more buys nothing.
+ * The floor is NOT about script length — it's about `gpt-oss-120b` being a
+ * reasoning model that spends tokens thinking before it emits any JSON, and
+ * `max_tokens` is billed against reasoning first. A direct curl against Groq
+ * measured 3400 reasoning tokens on an 8-slide deck (completion_tokens: 4532
+ * total). The old floor of 2048, and the old formula's 2680 at 8 slides, sat
+ * *below* that: the model spent the whole budget reasoning, emitted nothing,
+ * and Groq returned a 400 `json_validate_failed` with an empty
+ * `failed_generation` — not a short script, no output at all. 5200 clears the
+ * measured overhead with room for the scripts themselves.
+ *
+ * The ceiling is 7000, not 8192 like the deck path. Groq's free tier reports
+ * `x-ratelimit-limit-tokens: 8000` per minute and counts *requested* output
+ * against that window before the model runs — ask for 8192 and the request is
+ * refused outright with `rate_limit_exceeded`, independent of the reasoning
+ * problem above. 7000 leaves headroom inside the 8000 window; 6000 was
+ * confirmed working end-to-end (all 8 scripts, well-formed JSON) in the same
+ * test.
+ *
+ * Residual, accepted: a large enough deck can still exceed this budget. That
+ * failure surfaces as a 400 (`request` kind, from `tryParseNarration`/the
+ * empty-completion case), not a 429, so `FallbackProvider` will NOT hand off
+ * to Gemini for it — capacity-only failover is correct in general (see
+ * `fallbackProvider.ts`) but doesn't reach this particular failure mode. Not
+ * fixed here.
  */
 export function narrationMaxTokens(slideCount: number): number {
-  return Math.min(8192, Math.max(2048, slideCount * 260 + 600))
+  return Math.min(7000, Math.max(5200, slideCount * 300 + 2000))
 }
