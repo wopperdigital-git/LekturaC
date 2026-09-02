@@ -4,6 +4,7 @@ import { flushScheduledSaves, usePresentationStore } from '@/store/presentationS
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { SlideViewer } from '@/components/narrate/SlideViewer'
+import { ScriptPanel } from '@/components/narrate/ScriptPanel'
 import { Button } from '@/components/ui/Button'
 
 export function NarratePage() {
@@ -121,8 +122,16 @@ export function NarratePage() {
           )}
         </div>
 
-        <aside className="w-96 shrink-0 border-l border-app-border bg-app-surface p-4">
-          <p className="text-sm text-app-muted">Script panel goes here.</p>
+        <aside className="w-96 shrink-0 border-l border-app-border bg-app-surface">
+          <ScriptPanel
+            cards={sorted}
+            index={index}
+            onSelect={goTo}
+            onGenerate={() => {}}
+            generating={false}
+            onCancel={() => {}}
+            error={null}
+          />
         </aside>
       </div>
     </div>
