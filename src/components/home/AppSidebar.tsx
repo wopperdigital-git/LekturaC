@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LogoSlot } from '@/components/ui/LogoSlot'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useDrafts } from '@/lib/briefDrafts'
+import { useAuthStore } from '@/store/authStore'
+import { useMyClasses } from '@/classroom/useMyClasses'
+import { ROLE_LABEL } from '@/classroom/roles'
+import { AccountTypeModal } from '@/components/auth/AccountTypeModal'
 
 /**
  * The dashboard's dark rail.
@@ -58,6 +62,45 @@ function DraftsIcon() {
     </svg>
   )
 }
+
+function ClassesIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 4.5A1.5 1.5 0 013.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0114 6v5.5a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 012 11.5z" />
+    </svg>
+  )
+}
+
+function StudentsIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <circle cx="6" cy="5.5" r="2.5" />
+      <path d="M1.8 13.5c.6-2.3 2.2-3.5 4.2-3.5s3.6 1.2 4.2 3.5" />
+      <path d="M10.5 3.2a2.4 2.4 0 010 4.6M12 10.2c1.1.5 1.8 1.6 2.2 3.3" />
+    </svg>
+  )
+}
+
+function QuizzesIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="2" width="10" height="12" rx="1.5" />
+      <path d="M5.5 6l1 1 2-2M5.5 10.5l1 1 2-2M10 6.2h.5M10 10.7h.5" />
+    </svg>
+  )
+}
+
+function JoinIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="6" />
+      <path d="M8 5.2v5.6M5.2 8h5.6" />
+    </svg>
+  )
+}
+
+/** How many classes the student rail lists by name before "All classes". */
+const RAIL_CLASS_LIMIT = 5
 
 /**
  * Section heading for a group of nav links. Exported ready-to-use so the nav
@@ -132,6 +175,18 @@ export function AppSidebar({
   // Read here rather than passed in, so the badge stays right on every page
   // that renders the rail without each one having to thread the count through.
   const draftCount = useDrafts().length
+
+  const profile = useAuthStore((s) => s.profile)
+  const userId = useAuthStore((s) => s.user?.id ?? null)
+  const role = profile?.role ?? 'general'
+  const myClasses = useMyClasses(userId, role !== 'general')
+  const [accountTypeOpen, setAccountTypeOpen] = useState(false)
+  const name = profile?.displayName.trim() || email
+
+  function go(path: string) {
+    void navigate(path)
+    onClose()
+  }
 
   // the ⌘F / Ctrl+F chip in the field has to actually do something, so take over
   // the browser's find shortcut while the dashboard is open
@@ -226,31 +281,67 @@ export function AppSidebar({
               label="Overview"
               icon={<OverviewIcon />}
               active={pathname === '/'}
-              onClick={() => {
-                void navigate('/')
-                onClose()
-              }}
+              onClick={() => go('/')}
             />
             <SidebarLink
               label="Drafts"
               icon={<DraftsIcon />}
               active={pathname === '/drafts'}
               badge={draftCount > 0 ? draftCount : undefined}
-              onClick={() => {
-                void navigate('/drafts')
-                onClose()
-              }}
+              onClick={() => go('/drafts')}
             />
           </SidebarSection>
 
-          {/*
-            More groups go here. `SidebarSection` and `SidebarLink` are exported
-            from this file and already carry the rail's styling, so a group is:
+          {role === 'teacher' && (
+            <SidebarSection label="Classroom">
+              <SidebarLink
+                label="Classes"
+                icon={<ClassesIcon />}
+                active={pathname.startsWith('/classroom/classes')}
+                badge={myClasses && myClasses.length > 0 ? myClasses.length : undefined}
+                onClick={() => go('/classroom/classes')}
+              />
+              <SidebarLink
+                label="Students"
+                icon={<StudentsIcon />}
+                active={pathname === '/classroom/students'}
+                onClick={() => go('/classroom/students')}
+              />
+              <SidebarLink
+                label="Quizzes"
+                icon={<QuizzesIcon />}
+                active={pathname === '/classroom/quizzes'}
+                onClick={() => go('/classroom/quizzes')}
+              />
+            </SidebarSection>
+          )}
 
-              <SidebarSection label="Team">
-                <SidebarLink label="Members" icon={<YourIcon />} badge={8} />
-              </SidebarSection>
-          */}
+          {role === 'student' && (
+            <SidebarSection label="My classes">
+              {(myClasses ?? []).slice(0, RAIL_CLASS_LIMIT).map((c) => (
+                <SidebarLink
+                  key={c.id}
+                  label={c.name}
+                  icon={<ClassesIcon />}
+                  active={pathname === `/classes/${c.id}`}
+                  onClick={() => go(`/classes/${c.id}`)}
+                />
+              ))}
+              {myClasses && myClasses.length > RAIL_CLASS_LIMIT && (
+                <SidebarLink
+                  label="All classes"
+                  active={pathname === '/classes'}
+                  onClick={() => go('/classes')}
+                />
+              )}
+              <SidebarLink
+                label="Join a class"
+                icon={<JoinIcon />}
+                active={pathname === '/classes' && !(myClasses && myClasses.length > RAIL_CLASS_LIMIT)}
+                onClick={() => go('/classes')}
+              />
+            </SidebarSection>
+          )}
         </nav>
 
         <div className="mt-auto border-t border-white/8 p-4">
@@ -259,22 +350,34 @@ export function AppSidebar({
               aria-hidden="true"
               className="grid size-8 shrink-0 place-items-center rounded-full bg-app-highlight text-sm font-semibold text-app-highlight-foreground"
             >
-              {email?.charAt(0).toUpperCase() ?? '?'}
+              {name?.charAt(0).toUpperCase() ?? '?'}
             </span>
             <div className="flex min-w-0 flex-1 flex-col text-xs">
-              {email && <span className="truncate text-white/80">{email}</span>}
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="cursor-pointer self-start rounded text-white/45 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
-              >
-                Log out
-              </button>
+              {name && <span className="truncate text-white/80">{name}</span>}
+              <span className="text-white/45">{ROLE_LABEL[role]}</span>
+              <div className="mt-0.5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAccountTypeOpen(true)}
+                  className="cursor-pointer rounded text-white/45 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+                >
+                  Account type
+                </button>
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="cursor-pointer rounded text-white/45 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+                >
+                  Log out
+                </button>
+              </div>
             </div>
             <ThemeToggle onDark className="size-8 shrink-0" />
           </div>
         </div>
       </aside>
+
+      {accountTypeOpen && <AccountTypeModal onClose={() => setAccountTypeOpen(false)} />}
     </>
   )
 }

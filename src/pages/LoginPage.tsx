@@ -6,6 +6,8 @@ import { AuthLayout } from '@/components/auth/AuthLayout'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Field, Input, PasswordInput } from '@/components/ui/Input'
+import { RoleChoice } from '@/components/auth/RoleChoice'
+import type { Role } from '@/classroom/roles'
 
 type Mode = 'login' | 'signup' | 'forgot'
 
@@ -32,6 +34,10 @@ function validatePassword(value: string, mode: Mode): string | null {
   return null
 }
 
+function validateName(value: string): string | null {
+  return value.trim() ? null : 'Enter your name.'
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
   const status = useAuthStore((s) => s.status)
@@ -42,6 +48,9 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [role, setRole] = useState<Role>('general')
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -57,6 +66,7 @@ export function LoginPage() {
     setMode(next)
     setEmailError(null)
     setPasswordError(null)
+    setNameError(null)
     setFormError(null)
     setSignupSuccess(false)
     setForgotSubmitted(false)
@@ -80,17 +90,16 @@ export function LoginPage() {
 
     const nextPasswordError = validatePassword(password, mode)
     setPasswordError(nextPasswordError)
-    if (nextEmailError || nextPasswordError) return
+    const nextNameError = mode === 'signup' ? validateName(displayName) : null
+    setNameError(nextNameError)
+    if (nextEmailError || nextPasswordError || nextNameError) return
 
     setSubmitting(true)
     if (mode === 'login') {
       const { error } = await signIn(email, password)
       if (error) setFormError(error)
     } else {
-      const { error, needsVerification } = await signUp(email, password, {
-        role: 'general',
-        displayName: '',
-      })
+      const { error, needsVerification } = await signUp(email, password, { role, displayName })
       if (error) setFormError(error)
       else if (needsVerification) setSignupSuccess(true)
     }
@@ -163,6 +172,26 @@ export function LoginPage() {
       }
     >
       <form key={mode} onSubmit={handleSubmit} noValidate className="auth-fade-in flex flex-col gap-4">
+        {mode === 'signup' && (
+          <Field
+            label="Name"
+            error={nameError}
+            render={(fieldProps) => (
+              <Input
+                {...fieldProps}
+                type="text"
+                autoComplete="name"
+                autoFocus
+                placeholder="Your name"
+                value={displayName}
+                onChange={(e) => {
+                  setDisplayName(e.target.value)
+                  if (nameError) setNameError(null)
+                }}
+              />
+            )}
+          />
+        )}
         <Field
           label="Email"
           error={emailError}
@@ -171,7 +200,7 @@ export function LoginPage() {
               {...fieldProps}
               type="email"
               autoComplete="email"
-              autoFocus
+              autoFocus={mode !== 'signup'}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => {
@@ -203,6 +232,8 @@ export function LoginPage() {
             )}
           />
         )}
+
+        {mode === 'signup' && <RoleChoice name="signup-role" value={role} onChange={setRole} />}
 
         {mode === 'login' && (
           <button
