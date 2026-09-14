@@ -13,6 +13,14 @@ interface AuthState {
   user: User | null
   /** The account's type and name. `null` until it has resolved, and while signed out. */
   profile: AccountProfile | null
+  /**
+   * `true` when `profile` is the General fallback because the real profile
+   * couldn't be read (see `resolveProfile`), rather than because the account
+   * genuinely is General. Distinguishing the two matters: a teacher hitting a
+   * transient read failure must not silently lose the Classroom rail or have
+   * AccountTypeModal offer to "save" General over their real role.
+   */
+  profileDegraded: boolean
   status: 'loading' | 'authenticated' | 'unauthenticated'
   signUp: (
     email: string,
@@ -29,6 +37,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
+  profileDegraded: false,
   status: supabaseConfigured ? 'loading' : 'unauthenticated',
 
   async signUp(email, password, details) {
@@ -51,6 +60,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async signOut() {
     if (!supabase) return
+    set({ profileDegraded: false })
     await supabase.auth.signOut()
   },
 
@@ -85,7 +95,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           "Your account profile isn't set up yet — the classroom database migration (0009) may not have been applied.",
       }
     }
-    set({ profile: resolveProfile(data, null).profile })
+    set({ profile: resolveProfile(data, null).profile, profileDegraded: false })
     return { error: null }
   },
 }))
@@ -98,6 +108,16 @@ function realUser(session: Session | null): User | null {
 
 let profileRequest = 0
 
+async function readProfile(userId: string) {
+  // supabase is narrowed by both call sites before this runs.
+  const { data, error } = await supabase!
+    .from('profiles')
+    .select('role, display_name')
+    .eq('id', userId)
+    .maybeSingle()
+  return resolveProfile(data, error)
+}
+
 /*
   Resolves a session into `user` + `profile` + `status`.
 
@@ -105,40 +125,54 @@ let profileRequest = 0
   renders a page before the account type is known. The one exception is
   load-bearing: Supabase re-emits the session on every token refresh, and
   flipping a signed-in user back to 'loading' then would unmount whatever page
-  they are on — the editor included. A refresh for the same user with a profile
-  already in hand only swaps the `user` object.
+  they are on — the editor included. A refresh for the same user with a
+  profile already in hand only swaps the `user` object — *unless* that profile
+  is the General fallback from a failed read (`profileDegraded`), in which
+  case a transient error at load would otherwise stick as General for the rest
+  of the session (a teacher losing the Classroom rail, or AccountTypeModal
+  pre-selecting General and a save silently overwriting the real role). That
+  case still swaps `user` immediately — a token refresh is not itself a reason
+  to block the page — but also kicks off a background re-read that does NOT
+  touch `status`, so it can't unmount the page it's trying to fix. If that
+  re-read comes back clean it replaces the fallback profile and clears
+  `profileDegraded`; if it's still unreadable, state is left alone and nothing
+  is logged again, since this retry runs on every token refresh and would
+  otherwise spam the console for the lifetime of the session.
 
   `profileRequest` discards a read that a newer session has overtaken, so a
-  fast sign-out/sign-in cannot apply the previous account's type.
+  fast sign-out/sign-in — or an in-flight background retry outlived by a real
+  reload — cannot apply a stale profile.
 */
 async function applySession(session: Session | null) {
   const user = realUser(session)
   if (!user || !supabase) {
     profileRequest++
-    useAuthStore.setState({ user: null, profile: null, status: 'unauthenticated' })
+    useAuthStore.setState({ user: null, profile: null, profileDegraded: false, status: 'unauthenticated' })
     return
   }
 
   const current = useAuthStore.getState()
   if (current.user?.id === user.id && current.profile) {
     useAuthStore.setState({ user })
+    if (current.profileDegraded) {
+      const request = ++profileRequest
+      const { profile, degraded } = await readProfile(user.id)
+      if (request !== profileRequest) return
+      if (!degraded) useAuthStore.setState({ profile, profileDegraded: false })
+      // Still degraded: leave status/profile as they are and stay quiet.
+    }
     return
   }
 
   const request = ++profileRequest
   useAuthStore.setState({ user, profile: null, status: 'loading' })
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('role, display_name')
-    .eq('id', user.id)
-    .maybeSingle()
+  const { profile, degraded } = await readProfile(user.id)
   if (request !== profileRequest) return
 
-  const { profile, degraded } = resolveProfile(data, error)
   if (degraded) {
-    console.warn('[auth] No usable profile for this account; treating it as General.', error ?? data)
+    console.warn('[auth] No usable profile for this account; treating it as General.')
   }
-  useAuthStore.setState({ profile, status: 'authenticated' })
+  useAuthStore.setState({ profile, profileDegraded: degraded, status: 'authenticated' })
 }
 
 // Runs once at module load (this store is an app-wide singleton, same as

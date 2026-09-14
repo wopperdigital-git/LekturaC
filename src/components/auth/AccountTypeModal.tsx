@@ -14,6 +14,7 @@ import { RoleChoice } from './RoleChoice'
  */
 export function AccountTypeModal({ onClose }: { onClose: () => void }) {
   const current = useAuthStore((s) => s.profile?.role ?? 'general')
+  const degraded = useAuthStore((s) => s.profileDegraded)
   const updateRole = useAuthStore((s) => s.updateRole)
   const [role, setRole] = useState<Role>(current)
   const [saving, setSaving] = useState(false)
@@ -39,6 +40,14 @@ export function AccountTypeModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Account type" onClose={saving ? () => {} : onClose}>
       <RoleChoice name="account-type" value={role} onChange={setRole} />
+      {degraded && (
+        <div className="mt-4">
+          <Alert tone="error">
+            We couldn't load your current account type, so it can't be changed right now. Reload the page and try
+            again.
+          </Alert>
+        </div>
+      )}
       {error && (
         <div className="mt-4">
           <Alert tone="error">{error}</Alert>
@@ -48,7 +57,7 @@ export function AccountTypeModal({ onClose }: { onClose: () => void }) {
         <Button variant="ghost" onClick={onClose} disabled={saving}>
           Cancel
         </Button>
-        <Button variant="primary" onClick={() => void save()} loading={saving}>
+        <Button variant="primary" onClick={() => void save()} loading={saving} disabled={saving || degraded}>
           {saving ? 'Saving…' : 'Save'}
         </Button>
       </div>
