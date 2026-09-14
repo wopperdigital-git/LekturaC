@@ -4,6 +4,7 @@ import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { blockIndexOf } from './adjustContext'
+import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
 /**
  * Generic single-block renderer, used by layouts that just need to stack
@@ -38,14 +39,14 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       return (
         <p
           className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"
-          style={{ fontFamily: 'var(--font-slide-body)' }}
+          style={{ fontFamily: SLIDE_BODY_FONT }}
         >
           <EditableText textRef={textRef(index, 'text')} value={block.text} />
         </p>
       )
     case 'bulletList':
       return (
-        <ul className="flex max-w-prose flex-col gap-2">
+        <ul className="flex max-w-prose flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT }}>
           {block.items.map((item, i) => (
             <li key={i} className="flex items-start gap-2 text-[length:var(--slide-size-body)]">
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slide-accent" />
@@ -73,7 +74,10 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       )
     case 'quote':
       return (
-        <blockquote className="max-w-prose border-l-4 border-slide-accent pl-4 italic text-slide-foreground/90">
+        <blockquote
+          className="max-w-prose border-l-4 border-slide-accent pl-4 italic text-slide-foreground/90"
+          style={{ fontFamily: SLIDE_BODY_FONT }}
+        >
           "<EditableText textRef={textRef(index, 'text')} value={block.text} />"
           {block.attribution && (
             <footer className="mt-2 text-sm not-italic text-slide-muted">
@@ -84,7 +88,7 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       )
     case 'timelineStep':
       return (
-        <div>
+        <div style={{ fontFamily: SLIDE_BODY_FONT }}>
           <div className="font-semibold text-slide-accent">
             <EditableText textRef={textRef(index, 'label')} value={block.label} />
           </div>
@@ -95,7 +99,7 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       )
     case 'comparisonGroup':
       return (
-        <div>
+        <div style={{ fontFamily: SLIDE_BODY_FONT }}>
           <div className="mb-2 font-semibold text-slide-foreground">
             <EditableText textRef={textRef(index, 'heading')} value={block.heading} />
           </div>
@@ -133,7 +137,7 @@ export function Heading({
     <MaybeAdjustable forRef={ref}>
       <h2
         className="font-semibold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
-        style={{ fontFamily: 'var(--font-slide-heading)', fontSize: sizeVar, lineHeight: 1.15 }}
+        style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: sizeVar, lineHeight: 1.15 }}
       >
         <EditableText textRef={ref} value={text} />
       </h2>
@@ -168,10 +172,12 @@ export function StatBlockView({
 }) {
   return (
     <MaybeAdjustable forRef={valueRef}>
-      <div>
+      {/* The label inherits this; the value below overrides it with the heading
+          font, the way the two read on screen. */}
+      <div style={{ fontFamily: SLIDE_BODY_FONT }}>
         <div
           className="font-bold text-slide-accent"
-          style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1 }}
+          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1 }}
         >
           <EditableText textRef={valueRef} value={value} />
         </div>

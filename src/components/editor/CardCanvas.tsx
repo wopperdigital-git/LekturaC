@@ -43,7 +43,7 @@ export function CardCanvas({
   textEditing: Omit<TextEditing, 'inline'>
   /** Which element of the selected card carries the selection box. */
   selectedBlockIndex: number | null
-  /** Selects an element — and, with it, the card it belongs to, in one press. */
+  /** Reports a press on one of a card's elements; the page decides whether that selects the element or its card. */
   onSelectElement: (cardId: string, index: number) => void
   onChangeAdjust: (cardId: string, index: number, adjust: BlockAdjust, commit?: boolean) => void
 }) {
@@ -96,16 +96,17 @@ export function CardCanvas({
                 <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
                   {/*
                     Only the selected card gets the *text* editing provider, so a
-                    stray click can't start typing into a card nobody chose.
-                    Element selection is not gated that way: pressing an element
-                    on any card selects that card too, in the same press.
+                    stray click can't start typing into a card nobody chose. That
+                    lines up with element selection, which also needs the card
+                    selected first — see `selectElement` in EditorPage.
                   */}
                   <BlockAdjustContext.Provider
                     value={{
                       // Only the selected card can be showing a selection box.
-                      // Every card still gets the provider, so one press picks
-                      // the element *and* its card — needing to select the card
-                      // first is a step no editor asks for.
+                      // Every card still gets the provider so a press on an
+                      // unselected one is still *reported*; what it selects is
+                      // `selectElement`'s call, and on a card that is not yet
+                      // selected that is the card rather than the element.
                       selected: isSelected ? selectedBlockIndex : null,
                       select: (blockIndex) =>
                         blockIndex === null ? undefined : onSelectElement(card.id, blockIndex),

@@ -3,6 +3,7 @@ import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 
 /** Flowing multi-paragraph prose for narrative cards with no natural list/number structure. */
 export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -24,7 +25,7 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
                 ? 'text-[length:var(--slide-size-h3)] leading-snug text-slide-foreground'
                 : 'text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90'
             }
-            style={{ fontFamily: 'var(--font-slide-body)' }}
+            style={{ fontFamily: SLIDE_BODY_FONT }}
           >
             <EditableText textRef={textRef(index, 'text')} value={block.text} />
           </p>

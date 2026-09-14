@@ -139,6 +139,29 @@ export function darken(hex: string, amount: number): string {
  * custom properties over whatever this wrote — keeping this function a pure
  * function of the theme, and keeping deck/card precedence in one place.
  */
+/**
+ * The custom properties carrying a slide's two fonts.
+ *
+ * Named once here because three different scopes write them — `applyTheme`
+ * below, `TextStyleScope` per card, `Adjustable` per element — and every layout
+ * reads them. Deriving the `var(...)` readers from the same constants is what
+ * keeps a writer and a reader from drifting onto different property names, which
+ * is exactly how the fonts came to be unchangeable: the layouts were reading a
+ * Tailwind `@theme inline` alias instead. An alias is declared on `:root`, and a
+ * custom property's `var()` is substituted where it is *declared*, so it froze
+ * on the `:root` font and never saw a single scoped override. Read these, not
+ * `var(--font-slide-*)`.
+ */
+export const SLIDE_FONT_VARS = {
+  heading: '--slide-font-heading',
+  body: '--slide-font-body',
+} as const
+
+/** The heading font, for a `fontFamily` on any element inside a slide. */
+export const SLIDE_HEADING_FONT = `var(${SLIDE_FONT_VARS.heading})`
+/** The body font. Every element of a card that carries words should set one of the two. */
+export const SLIDE_BODY_FONT = `var(${SLIDE_FONT_VARS.body})`
+
 export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
   const { typography, colors, spacing, shape } = theme
   const [h1, h2, h3, body] = typography.scale
@@ -156,8 +179,8 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
     '--slide-border': colors.border,
     '--slide-surface': colors.surface,
 
-    '--slide-font-heading': headingFont,
-    '--slide-font-body': bodyFont,
+    [SLIDE_FONT_VARS.heading]: headingFont,
+    [SLIDE_FONT_VARS.body]: bodyFont,
 
     '--slide-size-h1': `${h1}rem`,
     '--slide-size-h2': `${h2}rem`,

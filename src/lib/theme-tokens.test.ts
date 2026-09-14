@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { applyTheme, BUILTIN_THEMES, darken, DEFAULT_THEME, resolveTheme } from './theme-tokens'
+import {
+  applyTheme,
+  BUILTIN_THEMES,
+  darken,
+  DEFAULT_THEME,
+  resolveTheme,
+  SLIDE_BODY_FONT,
+  SLIDE_FONT_VARS,
+  SLIDE_HEADING_FONT,
+} from './theme-tokens'
 
 describe('darken', () => {
   it('reduces lightness while preserving hue and saturation', () => {
@@ -111,3 +120,55 @@ describe('built-in themes', () => {
     expect(new Set(glows).size).toBe(BUILTIN_THEMES.length)
   })
 })
+
+/*
+  The slide font tokens, and the one mistake that silently disables all of them.
+
+  `--font-slide-heading` / `--font-slide-body` are Tailwind `@theme inline`
+  aliases, and an alias is declared once on `:root` as `var(--slide-font-*)`. A
+  custom property's `var()` is substituted at the element that *declares* it, so
+  the alias computes to the `:root` font and inherits everywhere as that literal
+  string. Every scoped override — `applyTheme` on the ThemeProvider element,
+  `TextStyleScope` per card, `Adjustable` per element — writes `--slide-font-*`,
+  which the alias never reads again.
+
+  Colours escape this because `bg-slide-*` is a Tailwind *utility*, and `inline`
+  makes a utility reference `var(--slide-background)` directly. Fonts are set in
+  hand-written inline styles instead, so they hit the aliased declaration and
+  froze on the `:root` value: no theme font, and no font the toolbar picked, ever
+  reached a slide.
+*/
+describe('slide font tokens', () => {
+  it('applies the theme fonts under the names the slide components read', () => {
+    const { element, props } = fakeElement()
+    applyTheme(DEFAULT_THEME, element)
+
+    expect(props.get(SLIDE_FONT_VARS.heading)).toBe(DEFAULT_THEME.typography.headingFont)
+    expect(props.get(SLIDE_FONT_VARS.body)).toBe(DEFAULT_THEME.typography.bodyFont)
+    expect(SLIDE_HEADING_FONT).toBe(`var(${SLIDE_FONT_VARS.heading})`)
+    expect(SLIDE_BODY_FONT).toBe(`var(${SLIDE_FONT_VARS.body})`)
+  })
+
+  it('is never read through the Tailwind alias, which cannot see a scoped override', () => {
+    const offenders = readSlideSources().filter(({ source }) =>
+      /var\(\s*--font-slide-(heading|body)\s*\)/.test(source),
+    )
+    expect(offenders.map(({ file }) => file)).toEqual([])
+  })
+})
+
+/**
+ * Every component that draws a slide, as source text.
+ *
+ * Read through Vite's own glob rather than `node:fs` — this project's tsconfig
+ * types are `vite/client` only, and a test is not a reason to pull in the whole
+ * node type surface.
+ */
+function readSlideSources(): { file: string; source: string }[] {
+  const sources = import.meta.glob('../components/**/*.{ts,tsx}', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>
+  return Object.entries(sources).map(([file, source]) => ({ file, source }))
+}

@@ -13,6 +13,12 @@ import { CardTypeModal } from '@/components/editor/CardTypeModal'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, type TextRange } from '@/engine/marks'
+import {
+  selectionAfterCardPress,
+  selectionAfterElementPress,
+  typographyScope,
+  type Selection,
+} from '@/engine/textScope'
 import { SLIDE_BODY_ATTR, blockStyleKey } from '@/components/layouts/adjustContext'
 import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
@@ -102,11 +108,9 @@ export function EditorPage() {
     Leaving a card ends any edit inside it — otherwise the toolbar would stay at
     Level 3 pointing at a run that is no longer on screen.
 
-    The element selection is deliberately *not* cleared here. Pressing an element
-    selects its card and the element in one go, so an effect keyed on the card
-    would fire immediately afterwards and wipe the element that press just chose.
-    Clearing it is instead the job of whatever actually deselects — pressing the
-    card around its elements, or the canvas.
+    Only the edit. The element selection is not this effect's business: every
+    press now resolves card and element together through `engine/textScope.ts`,
+    so whatever changed the card has already said what happens to the element.
   */
   useEffect(() => {
     setActiveTextRef(null)
@@ -115,13 +119,23 @@ export function EditorPage() {
 
   /** Presses on a card's own surface, rather than on one of its elements. */
   function selectCard(cardId: string | null) {
-    setSelectedCardId(cardId)
-    setSelectedBlockIndex(null)
+    apply(selectionAfterCardPress(cardId))
   }
 
+  /*
+    A press on an element takes the card first and the element only once that
+    card is already selected — the drill-in the whole scope model rests on, and
+    the reason "format this whole slide" is a state the canvas can reach at all.
+    The rule itself lives in `engine/textScope.ts`; this only applies it.
+  */
   function selectElement(cardId: string, index: number) {
-    setSelectedCardId(cardId)
-    setSelectedBlockIndex(index)
+    const current: Selection = { cardId: selectedCardId, blockIndex: selectedBlockIndex }
+    apply(selectionAfterElementPress(current, { cardId, blockIndex: index }))
+  }
+
+  function apply(next: Selection) {
+    setSelectedCardId(next.cardId)
+    setSelectedBlockIndex(next.blockIndex)
   }
 
   function scrollToCard(cardId: string) {
@@ -174,14 +188,24 @@ export function EditorPage() {
   /*
     The style the toolbar reads and writes, and the scope it belongs to.
 
-    Four scopes, narrowest first: a run of characters being edited, then the
-    selected element, then the card, then the deck. The element scope is the one
-    the toolbar was missing — without it, aligning while an element was selected
-    fell through to the card and re-aligned every line on the slide instead of
-    the one thing the user had picked.
+    Read straight off the selection — element, else card, else deck — so what
+    the canvas shows as picked is what the toolbar formats. Selecting an element
+    is now a deliberate second press (see `selectElement`), which is what makes
+    the card scope reachable and lets this be a plain three-way rule rather than
+    a guess about what the user meant.
+
+    A run of characters is deliberately not a fourth scope. Font, size and
+    alignment are whole-element properties — per-character alignment is not a
+    thing, and neither is half a word in Georgia — so editing a run does not
+    narrow them to that run. Bold and italic are the ones that do narrow, and
+    they take a different route entirely (`onToggleMark`), so nothing here
+    decides their scope. Writing all three to the run's own `textRef` is what
+    the toolbar used to do, and no surface renders that: every ordinary attempt
+    to change a slide's font stored the choice and moved nothing on screen.
   */
-  const elementStyleRef = selectedBlockIndex === null ? null : blockStyleKey(selectedBlockIndex)
-  const elementStyle = elementStyleRef ? selectedCard?.inline?.[elementStyleRef]?.style : undefined
+  const scope = typographyScope({ cardId: selectedCardId, blockIndex: selectedBlockIndex })
+  const typographyRef = scope.kind === 'element' ? blockStyleKey(scope.blockIndex) : null
+  const elementStyle = typographyRef ? selectedCard?.inline?.[typographyRef]?.style : undefined
 
   // What the selected element is actually aligned as on screen, so the toolbar
   // can light that button rather than only one somebody explicitly set.
@@ -338,26 +362,24 @@ export function EditorPage() {
                   canRedo={store.future.length > 0}
                   onUndo={undo}
                   onRedo={redo}
+                  // Read from the same scope it writes to, or the bar reports a
+                  // state it is not editing.
                   textStyle={
-                    level === 3
-                      ? (activeInline?.style ?? {})
-                      : elementStyleRef
-                        ? (elementStyle ?? {})
-                        : selectedCard
-                          ? (selectedCard.textStyle ?? {})
-                          : store.textStyle
+                    scope.kind === 'element'
+                      ? (elementStyle ?? {})
+                      : scope.kind === 'card'
+                        ? (selectedCard?.textStyle ?? {})
+                        : store.textStyle
                   }
                   onTextStyleChange={(patch) => {
-                    if (level === 3 && selectedCard && activeTextRef) {
-                      store.setInlineStyle(selectedCard.id, activeTextRef, patch)
-                    } else if (selectedCard && elementStyleRef) {
+                    if (scope.kind === 'element' && typographyRef) {
                       // The selected element, not the whole card. `inline` keyed
                       // by a bare block index addresses the element; the same
                       // store action serves both because a run's key only
                       // differs by carrying a field. See `blockStyleKey`.
-                      store.setInlineStyle(selectedCard.id, elementStyleRef, patch)
-                    } else if (selectedCard) {
-                      store.setCardTextStyle(selectedCard.id, patch)
+                      store.setInlineStyle(scope.cardId, typographyRef, patch)
+                    } else if (scope.kind === 'card') {
+                      store.setCardTextStyle(scope.cardId, patch)
                     } else {
                       store.setTextStyle(patch)
                     }
@@ -365,8 +387,9 @@ export function EditorPage() {
                   markState={markState}
                   hasTextSelection={hasTextSelection}
                   // Only at element scope: the card and deck scopes have no one
-                  // element to read, and fall back to their stored value.
-                  activeAlign={level === 3 ? undefined : renderedAlign}
+                  // element to read, and fall back to their stored value. Null
+                  // whenever no element is selected, which is what says so.
+                  activeAlign={renderedAlign}
                   onToggleMark={(type) => {
                     if (selectedCard && activeTextRef && textRange) {
                       store.toggleTextMark(selectedCard.id, activeTextRef, textRange, type)

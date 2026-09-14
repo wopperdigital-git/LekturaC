@@ -2,6 +2,7 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
 /** Cinematic opening title card: big heading, optional short subtitle, no clutter. */
 export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -17,7 +18,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
             <Adjustable index={heading.index}>
             <h1
               className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
-              style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
+              style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
             >
               <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
             </h1>
@@ -27,7 +28,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
             <Adjustable index={paragraph.index}>
             <p
               className="max-w-lg text-[length:var(--slide-size-h3)] text-slide-muted"
-              style={{ fontFamily: 'var(--font-slide-body)' }}
+              style={{ fontFamily: SLIDE_BODY_FONT }}
             >
               <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
             </p>
@@ -45,7 +46,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         <Adjustable index={heading.index}>
         <h1
           className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
-          style={{ fontFamily: 'var(--font-slide-heading)', fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
+          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
         >
           <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
         </h1>
@@ -55,7 +56,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         <Adjustable index={paragraph.index}>
         <p
           className="max-w-lg text-[length:var(--slide-size-h3)] text-slide-muted"
-          style={{ fontFamily: 'var(--font-slide-body)' }}
+          style={{ fontFamily: SLIDE_BODY_FONT }}
         >
           <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
         </p>

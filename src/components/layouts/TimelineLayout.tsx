@@ -3,6 +3,7 @@ import { Heading } from './BlockRenderer'
 import { Adjustable } from './Adjustable'
 import { EditableText } from './EditableText'
 import { textRef } from '@/engine/marks'
+import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 
 export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -17,7 +18,7 @@ export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; va
         <ol className="flex flex-col gap-4">
           {steps.map((step, i) => (
             <Adjustable key={step.index} index={step.index}>
-              <li className="flex gap-4 rounded-slide-sm bg-slide-surface p-4">
+              <li className="flex gap-4 rounded-slide-sm bg-slide-surface p-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
                   {i + 1}
                 </span>
@@ -52,7 +53,7 @@ export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; va
         />
         {steps.map((step) => (
           <Adjustable key={step.index} index={step.index}>
-            <li className="relative pl-6">
+            <li className="relative pl-6" style={{ fontFamily: SLIDE_BODY_FONT }}>
               <span className="absolute left-[calc(var(--spacing)*1.5)] top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-slide-accent" />
               <div className="font-semibold text-slide-accent">
                 <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
