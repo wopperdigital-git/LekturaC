@@ -162,8 +162,9 @@ teacher.
 | `class_id` | `uuid` | references `classes(id) on delete cascade` |
 | `posted_at` | `timestamptz not null default now()` | |
 
-Primary key `(quiz_id, class_id)`. A trigger requires the quiz's `teacher_id`
-and the class's `teacher_id` to match.
+Primary key `(quiz_id, class_id)`. The insert policy's `with check` requires
+the caller to own both the quiz and the class, so a quiz can only be posted to
+its own teacher's classes.
 
 **`quiz_attempts`**
 
@@ -208,9 +209,15 @@ class that teacher owns).
 | `class_members` | read, delete where `is_class_teacher(class_id)` | read own rows; delete own rows (leave) | — |
 | `announcements` | all verbs where `is_class_teacher(class_id)` | read where `is_class_member(class_id)` | — |
 | `quizzes` | all verbs where `teacher_id = auth.uid()` | read when posted to a class they are in | — |
-| `quiz_questions` | all verbs via own quiz | read via a quiz they can read | — |
+| `quiz_questions` | all verbs via own quiz | **none in this phase** | — |
 | `quiz_classes` | all verbs where `is_class_teacher(class_id)` | read where `is_class_member(class_id)` | — |
 | `quiz_attempts` | read where `is_class_teacher(class_id)` | read own | — |
+
+**Students cannot read `quiz_questions` at all in this phase**, because each
+row carries its `answer`. A select policy would hand every student the answer
+key the moment a quiz is posted. Quiz taking will add a `security definer` RPC
+that returns a posted quiz's questions without their answers, and scores a
+submission server-side.
 
 Students have **no insert policy on `class_members`**. Joining goes only through
 `join_class`. Nothing in this phase inserts attempts; that policy arrives with
@@ -321,7 +328,8 @@ over one bordered panel with a toolbar strip, matching the deck dashboard.
 
 ### Class folder — `/classroom/classes/:classId`
 
-- Header: name and description editable in place, join code with Copy and
+- Header: name and description (changed through an **Edit details** modal that
+  reuses the New class form), join code with Copy and
   Regenerate (confirms first — the old code stops working immediately), student
   count.
 - Tabs, reflected in the URL as `?tab=students|announcements|quizzes` so a
