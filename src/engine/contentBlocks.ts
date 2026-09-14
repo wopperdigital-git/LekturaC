@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { textStyleSchema } from './textStyle'
 import { markSchema } from './marks'
 import { adjustsSchema } from './blockAdjust'
+import { narrationSchema } from './narration'
 
 export const headingBlockSchema = z.object({
   type: z.literal('heading'),
@@ -130,9 +131,33 @@ export const cardSchema = z.object({
     are adjustments on top of it. See `engine/blockAdjust.ts`.
   */
   adjusts: adjustsSchema.optional(),
+  /*
+    The slide's narration script — see `engine/narration.ts`.
+
+    Optional and absent by default, like every field above it: a freshly
+    generated deck has none, and a card gains one only when somebody generates
+    or writes a script for it. Never rendered on the slide and never exported to
+    .pptx; it exists to be read aloud.
+  */
+  narration: narrationSchema.optional(),
 })
 
 export type Card = z.infer<typeof cardSchema>
+
+/**
+ * The heading text a card's first block carries, or a `Slide N` fallback when
+ * it doesn't have one (a card is supposed to always start with a heading, but
+ * a converted or hand-added card can momentarily not).
+ *
+ * Shared by `ai/narrationPrompt.ts` (the label the model sees for each slide)
+ * and `components/narrate/ScriptPanel.tsx` (the label the slide list shows) —
+ * both used to reimplement this identically, which meant the two could read
+ * the same card differently after a future edit to one copy and not the other.
+ */
+export function headingTextOf(card: Card, index: number): string {
+  const first = card.blocks[0]
+  return first?.type === 'heading' ? first.text : `Slide ${index + 1}`
+}
 
 export function blocksOfType<T extends ContentBlock['type']>(
   blocks: ContentBlock[],

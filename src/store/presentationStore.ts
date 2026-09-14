@@ -7,6 +7,7 @@ import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockT
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
+import { isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
 import {
   convertBlocks,
   layoutForKind,
@@ -125,6 +126,29 @@ interface PresentationState {
   setCardKind: (cardId: string, kind: CreatableKind) => void
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
+
+  /**
+   * Replaces one slide's narration script, keeping the generated copy Reset
+   * restores from.
+   *
+   * Debounced like any other typing: the script is a textarea, and a row write
+   * per keystroke is what `scheduleSave` exists to absorb.
+   */
+  setNarrationText: (cardId: string, text: string) => void
+  /** Puts the AI's version back after a hand edit. No-op if there is nothing to go back to. */
+  resetNarration: (cardId: string) => void
+  /**
+   * Folds a generation's scripts into the deck.
+   *
+   * Structural, so it is written immediately rather than debounced, and pushes
+   * exactly one undo entry for the whole batch.
+   *
+   * `allowed` holds the 0-based positions the user selected — one slide, or the
+   * ticked boxes in the generate dialog — in `orderIndex` order. `mergeNarration`
+   * writes to nothing outside it whatever the model returned, so this is where
+   * the user's choice becomes binding rather than advisory.
+   */
+  applyGeneratedNarration: (scripts: GeneratedScript[], allowed: ReadonlySet<number>) => void
 
   undo: () => void
   redo: () => void
@@ -279,6 +303,7 @@ function cardRow(presentationId: string, card: Card) {
     text_style: card.textStyle ?? {},
     inline: card.inline ?? {},
     adjusts: card.adjusts ?? {},
+    narration: card.narration ?? {},
   }
 }
 
@@ -364,8 +389,20 @@ function cardFromRow(row: CardRow): Card {
     textStyle: parseTextStyle(row.text_style),
     inline: converted.inline,
     adjusts: parseAdjusts(row.adjusts),
+    narration: parseNarration(row.narration),
   }
 }
+
+/*
+  Exported for `narrationRow.test.ts` only.
+
+  The round-trip these two form is the part worth pinning: `cardRow` names every
+  column on every upsert, and `cardFromRow` repairs every older-shaped row, so a
+  field added to one and forgotten in the other fails silently rather than
+  loudly.
+*/
+export const cardRowForTest = cardRow
+export const cardFromRowForTest = cardFromRow
 
 export async function fetchDeck(id: string): Promise<DeckContent | null> {
   if (!supabaseConfigured || !supabase) return null
@@ -941,6 +978,82 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     set({ cards: inOrder(previous, orderedIds) })
     const id = get().presentationId
     if (id) {
+      void runSave(set, () => persistCardsSync(id, previous, get().cards))
+    }
+  },
+
+  setNarrationText(cardId, text) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+
+    // Coalesced per card so a typed paragraph is one undo step, not one per
+    // character — the same window `setTitle` uses.
+    pushHistory(set, get, `narration:${cardId}`)
+    const narration = { text, generated: card.narration?.generated }
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, narration } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      scheduleSave(`narration:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { narration })),
+      )
+    }
+  },
+
+  resetNarration(cardId) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card || !isResettable(card.narration)) return
+
+    pushHistory(set, get)
+    const narration = { text: card.narration!.generated!, generated: card.narration!.generated }
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, narration } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      /*
+        A discrete click, not a keystroke: the value is final the moment it
+        happens, so holding it on a timer only widens the window a reload could
+        lose it in. The pending debounced write is dropped first so the older
+        text cannot land after this one.
+      */
+      clearScheduledSave(`narration:${cardId}`)
+      void runSave(set, () => persistCardPatch(cardId, { narration }))
+    }
+  },
+
+  applyGeneratedNarration(scripts, allowed) {
+    const previous = get().cards
+    if (previous.length === 0 || allowed.size === 0) return
+
+    /*
+      `mergeNarration` addresses slides by the 1-based number the model was
+      shown, which is position in *sorted* order — the store's array is not
+      guaranteed to be sorted, so it is sorted here and mapped back by id.
+    */
+    const sorted = [...previous].sort((a, b) => a.orderIndex - b.orderIndex)
+    const merged = mergeNarration(sorted, scripts, allowed)
+
+    /*
+      `mergeNarration` returns the SAME object reference for any card it did
+      not rewrite (see its guard), so "nothing changed" is exactly "every
+      element is identity-equal to the sorted input". This happens whenever
+      every returned script landed outside the user's selection — which the
+      caller tries to prevent (see NarratePage's own guard) but which a model
+      answering off-list still produces. Without
+      this check, a no-op still pushed an undo step that visibly did nothing
+      and rewrote the whole deck's rows for no reason.
+    */
+    if (merged.every((c, i) => c === sorted[i])) return
+
+    const byId = new Map(merged.map((c) => [c.id, c]))
+
+    pushHistory(set, get)
+    set({ cards: previous.map((c) => byId.get(c.id) ?? c) })
+
+    const id = get().presentationId
+    if (id) {
+      // Structural, like a card delete: written straight through rather than
+      // debounced, since this lands a whole deck's worth of text at once.
       void runSave(set, () => persistCardsSync(id, previous, get().cards))
     }
   },

@@ -18,6 +18,17 @@
   --spacing (Tailwind's own built-in spacing multiplier) is likewise overridden
   only on that same scoped wrapper, so a theme's spacing density never leaks
   into app chrome either.
+
+  There are deliberately no --font-slide-* aliases here, and adding them back
+  would silently break every deck's typography. An alias in this block is one
+  declaration on :root, and a custom property's var() is substituted where it is
+  *declared* — so `--font-slide-body: var(--slide-font-body)` computes to the
+  :root font once and inherits everywhere as that literal, blind to the scoped
+  overrides ThemeProvider, TextStyleScope and Adjustable all write. The colour
+  aliases survive because `inline` makes a Tailwind *utility* (bg-slide-*) emit
+  var(--slide-background) directly; fonts are set in hand-written inline styles,
+  which never go through a utility. Slide components import SLIDE_HEADING_FONT /
+  SLIDE_BODY_FONT from lib/theme-tokens and read --slide-font-* themselves.
 */
 @theme inline {
   --color-app-background: var(--app-background);
@@ -47,8 +58,6 @@
   --color-slide-muted: var(--slide-muted);
   --color-slide-border: var(--slide-border);
   --color-slide-surface: var(--slide-surface);
-  --font-slide-heading: var(--slide-font-heading);
-  --font-slide-body: var(--slide-font-body);
   --radius-slide: var(--slide-radius);
   --radius-slide-sm: var(--slide-radius-sm);
   --shadow-slide: var(--slide-shadow);

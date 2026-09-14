@@ -3,6 +3,7 @@ import { Heading, StatBlockView } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 
 export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -19,7 +20,7 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
           ))}
           {paragraphs.map(({ block, index }) => (
             <Adjustable key={index} index={index}>
-              <p className="max-w-md text-slide-foreground/80">
+              <p className="max-w-md text-slide-foreground/80" style={{ fontFamily: SLIDE_BODY_FONT }}>
                 <EditableText textRef={textRef(index, 'text')} value={block.text} />
               </p>
             </Adjustable>
@@ -37,7 +38,7 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
       {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
       {paragraphs.map(({ block, index }) => (
         <Adjustable key={index} index={index}>
-          <p className="max-w-md text-slide-foreground/80">
+          <p className="max-w-md text-slide-foreground/80" style={{ fontFamily: SLIDE_BODY_FONT }}>
             <EditableText textRef={textRef(index, 'text')} value={block.text} />
           </p>
         </Adjustable>

@@ -25,13 +25,15 @@ import type { VisualStyle } from '@/engine/contentBlocks'
   The formatting controls are identical across all three levels by design —
   what changes is the *scope* they write to, not the buttons — so they live in
   one row every level renders. Level 1 writes to the deck, Level 2 to the
-  selected card, Level 3 to the clicked run of text.
+  selected card, or to the selected element once there is one.
 
   Bold and italic are the exception at Level 3: they apply to the *selected
   characters* rather than the whole run, so the parent hands down their pressed
   state (`markState`) instead of it being read off a TextStyle. Font, size and
   alignment stay whole-element there, which is how every editor treats them —
-  per-character alignment is not a thing.
+  per-character alignment is not a thing, and neither is half a word in Georgia.
+  So Level 3 leaves those three on the element scope rather than narrowing them
+  to the run: see `typographyRef` in EditorPage.
 
   Deliberately app-chrome, not deck-theme: it follows the light/dark toggle and
   uses `app-*` tokens, because it is a tool sitting above the deck rather than

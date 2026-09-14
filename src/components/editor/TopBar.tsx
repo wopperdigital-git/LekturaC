@@ -71,13 +71,9 @@ export function TopBar({
           Export
         </Button>
         <ThemeToggle />
-        {/* TODO: no behaviour yet — the narration feature this fronts hasn't
-            been built. Kept non-interactive rather than wired to a silent no-op
-            so it can't read as broken: a button that visibly does nothing on
-            click is worse than one that says it isn't ready. */}
-        <Button variant="primary" disabled title="Narration isn't available yet">
-          Narrate PPT
-        </Button>
+        <Link to={`/deck/${presentationId}/narrate`}>
+          <Button variant="primary">Narrate PPT</Button>
+        </Link>
       </div>
     </div>
   )

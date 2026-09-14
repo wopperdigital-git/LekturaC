@@ -1,9 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
-import { GroqProvider } from '@/ai/groqProvider'
-import { GeminiProvider } from '@/ai/geminiProvider'
-import { FallbackProvider, type NamedProvider } from '@/ai/fallbackProvider'
+import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { AIProviderError, type AIProvider } from '@/ai/provider'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
@@ -26,29 +24,6 @@ import {
   type StepKey,
   type Tone,
 } from '@/lib/briefDrafts'
-
-const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
-const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
-
-/**
- * Groq first, Gemini behind it — built once at module load.
- *
- * Both paths are operationally equivalent (each retries transient 503/429s via
- * `ai/retry.ts` and honours the AbortSignal); what differs is the ceiling.
- * Groq's free tier has a tight per-minute token cap that a large deck can
- * exhaust faster than the retries clear it, and that's exactly when
- * `FallbackProvider` reaches for Gemini. Only an out-of-capacity failure falls
- * through — see `fallbackProvider.ts` for why an auth failure must not.
- *
- * A provider with no key is left out of the chain entirely rather than added
- * and allowed to fail: dropping `VITE_GROQ_API_KEY` from `.env` makes this a
- * Gemini-only app with no code change, which is what the old "swap the import"
- * comment used to ask for by hand.
- */
-const PROVIDER_CHAIN: NamedProvider[] = [
-  ...(GROQ_API_KEY ? [{ name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) }] : []),
-  ...(GEMINI_API_KEY ? [{ name: 'Gemini', provider: new GeminiProvider(GEMINI_API_KEY) }] : []),
-]
 
 /**
  * Upper bound on the slide count.

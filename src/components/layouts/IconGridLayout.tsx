@@ -3,6 +3,7 @@ import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 
 export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -16,7 +17,7 @@ export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
         ))}
         {list && (
           <Adjustable index={list.index}>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
             {list.block.items.map((item, i) => (
               <div
                 key={i}
@@ -44,7 +45,7 @@ export function IconGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
       ))}
       {list && (
         <Adjustable index={list.index}>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
           {list.block.items.map((item, i) => (
             <div
               key={i}

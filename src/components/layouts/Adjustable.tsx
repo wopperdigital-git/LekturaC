@@ -1,7 +1,7 @@
 import { useContext, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { adjustStyle } from '@/engine/blockAdjust'
 import type { TextStyle } from '@/engine/textStyle'
-import type { ThemeTokens } from '@/lib/theme-tokens'
+import { SLIDE_FONT_VARS, type ThemeTokens } from '@/lib/theme-tokens'
 import { useSlideTheme } from '@/components/theme/slideThemeContext'
 import {
   AdjustedIndexContext,
@@ -142,11 +142,11 @@ function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: 
   node.style.fontStyle = style?.italic ? 'italic' : ''
 
   if (style?.fontFamily) {
-    node.style.setProperty('--slide-font-heading', style.fontFamily)
-    node.style.setProperty('--slide-font-body', style.fontFamily)
+    node.style.setProperty(SLIDE_FONT_VARS.heading, style.fontFamily)
+    node.style.setProperty(SLIDE_FONT_VARS.body, style.fontFamily)
   } else {
-    node.style.removeProperty('--slide-font-heading')
-    node.style.removeProperty('--slide-font-body')
+    node.style.removeProperty(SLIDE_FONT_VARS.heading)
+    node.style.removeProperty(SLIDE_FONT_VARS.body)
   }
 
   const scale = style?.fontScale

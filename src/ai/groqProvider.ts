@@ -2,11 +2,19 @@ import {
   AIProviderError,
   generatedDeckSchema,
   kindForStatus,
+  narrationResponseSchema,
   type AIProvider,
   type GeneratedDeck,
   type GenerationBrief,
+  type NarrationResponse,
+  type NarrationSlide,
 } from './provider'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
+import {
+  NARRATION_SYSTEM_PROMPT,
+  buildNarrationUserPrompt,
+  narrationMaxTokens,
+} from './narrationPrompt'
 import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
 
 // Was `llama-3.3-70b-versatile` until Groq decommissioned it (the endpoint
@@ -93,6 +101,18 @@ function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } 
   return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
 }
 
+function tryParseNarration(raw: string): { data: NarrationResponse } | { error: string } {
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch (err) {
+    return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  const result = narrationResponseSchema.safeParse(json)
+  if (result.success) return { data: result.data }
+  return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
+}
+
 export class GroqProvider implements AIProvider {
   private apiKey: string
 
@@ -141,6 +161,45 @@ export class GroqProvider implements AIProvider {
     if ('deck' in secondResult) return secondResult.deck
 
     throw new AIProviderError('The AI returned content that could not be parsed into a deck. Try again.', {
+      kind: 'response',
+    })
+  }
+
+  async generateNarration(
+    title: string,
+    slides: NarrationSlide[],
+    signal?: AbortSignal,
+  ): Promise<NarrationResponse> {
+    if (!this.apiKey.trim()) {
+      throw new AIProviderError('No Groq API key configured. Add VITE_GROQ_API_KEY to your .env file.', {
+        kind: 'auth',
+      })
+    }
+
+    const messages: GroqMessage[] = [
+      { role: 'system', content: NARRATION_SYSTEM_PROMPT },
+      { role: 'user', content: buildNarrationUserPrompt(title, slides) },
+    ]
+    const maxTokens = narrationMaxTokens(slides.length)
+
+    const first = await callGroq(this.apiKey, messages, maxTokens, signal)
+    const firstResult = tryParseNarration(first)
+    if ('data' in firstResult) return firstResult.data
+
+    // One retry with the exact validation errors, as the deck path does.
+    const retryMessages: GroqMessage[] = [
+      ...messages,
+      { role: 'assistant', content: first },
+      {
+        role: 'user',
+        content: `That response failed schema validation with these errors: ${firstResult.error}. Reply again with ONLY the corrected JSON object, no other text.`,
+      },
+    ]
+    const second = await callGroq(this.apiKey, retryMessages, maxTokens, signal)
+    const secondResult = tryParseNarration(second)
+    if ('data' in secondResult) return secondResult.data
+
+    throw new AIProviderError('The AI returned narration that could not be parsed. Try again.', {
       kind: 'response',
     })
   }

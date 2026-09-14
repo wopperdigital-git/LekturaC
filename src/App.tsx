@@ -5,6 +5,7 @@ import { CreatePage } from '@/pages/CreatePage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { EditorPage } from '@/pages/EditorPage'
 import { PresentPage } from '@/pages/PresentPage'
+import { NarratePage } from '@/pages/NarratePage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
@@ -75,6 +76,14 @@ function App() {
           element={
             <RequireAuth>
               <PresentPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/deck/:id/narrate"
+          element={
+            <RequireAuth>
+              <NarratePage />
             </RequireAuth>
           }
         />

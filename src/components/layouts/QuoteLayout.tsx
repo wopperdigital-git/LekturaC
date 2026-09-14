@@ -3,6 +3,7 @@ import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
 /** Cinematic pull-quote treatment for a card built around one verbatim line. */
 export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -18,10 +19,10 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
         ))}
         {quote && (
           <Adjustable index={quote.index}>
-            <div className="flex max-w-2xl flex-col gap-4 border-l-4 border-slide-accent pl-6">
+            <div className="flex max-w-2xl flex-col gap-4 border-l-4 border-slide-accent pl-6" style={{ fontFamily: SLIDE_BODY_FONT }}>
               <p
                 className="text-[length:var(--slide-size-h3)] italic leading-snug text-slide-foreground"
-                style={{ fontFamily: 'var(--font-slide-heading)' }}
+                style={{ fontFamily: SLIDE_HEADING_FONT }}
               >
                 <EditableText textRef={textRef(quote.index, 'text')} value={quote.block.text} />
               </p>
@@ -41,7 +42,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
           <Adjustable index={paragraph.index}>
             <p
               className="max-w-md text-slide-foreground/80"
-              style={{ fontFamily: 'var(--font-slide-body)' }}
+              style={{ fontFamily: SLIDE_BODY_FONT }}
             >
               <EditableText
                 textRef={textRef(paragraph.index, 'text')}
@@ -61,12 +62,12 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
       ))}
       {quote && (
         <Adjustable index={quote.index}>
-          <div className="flex max-w-2xl flex-col items-center gap-4">
+          <div className="flex max-w-2xl flex-col items-center gap-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
             <span
               aria-hidden="true"
               className="text-slide-accent"
               style={{
-                fontFamily: 'var(--font-slide-heading)',
+                fontFamily: SLIDE_HEADING_FONT,
                 fontSize: 'var(--slide-size-h1)',
                 lineHeight: 0.6,
               }}
@@ -75,7 +76,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
             </span>
             <p
               className="text-[length:var(--slide-size-h3)] italic leading-snug text-slide-foreground"
-              style={{ fontFamily: 'var(--font-slide-heading)' }}
+              style={{ fontFamily: SLIDE_HEADING_FONT }}
             >
               <EditableText textRef={textRef(quote.index, 'text')} value={quote.block.text} />
             </p>
@@ -95,7 +96,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
         <Adjustable index={paragraph.index}>
           <p
             className="max-w-md text-slide-foreground/80"
-            style={{ fontFamily: 'var(--font-slide-body)' }}
+            style={{ fontFamily: SLIDE_BODY_FONT }}
           >
             <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
           </p>

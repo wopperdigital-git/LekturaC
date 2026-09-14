@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { TextStyle } from '@/engine/textStyle'
+import { SLIDE_FONT_VARS } from '@/lib/theme-tokens'
 import { useSlideTheme } from './slideThemeContext'
 
 /**
@@ -27,8 +28,8 @@ export function TextStyleScope({ style, children }: { style: TextStyle; children
   const vars: CSSProperties = {}
   if (style.fontFamily) {
     Object.assign(vars, {
-      '--slide-font-heading': style.fontFamily,
-      '--slide-font-body': style.fontFamily,
+      [SLIDE_FONT_VARS.heading]: style.fontFamily,
+      [SLIDE_FONT_VARS.body]: style.fontFamily,
     })
   }
   if (style.fontScale && style.fontScale !== 1) {

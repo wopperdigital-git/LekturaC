@@ -3,6 +3,7 @@ import { Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 
 export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -19,7 +20,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
             const featured = i === 0
             return (
               <Adjustable key={i} index={group.index}>
-              <div className="flex flex-col gap-3 py-4">
+              <div className="flex flex-col gap-3 py-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
                 <div
                   className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}
                 >
@@ -63,6 +64,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
               className={`rounded-slide-sm border p-4 ${
                 featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
               }`}
+              style={{ fontFamily: SLIDE_BODY_FONT }}
             >
               <div
                 className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}

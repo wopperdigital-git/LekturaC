@@ -1,10 +1,39 @@
-import { AIProviderError, type AIProvider, type GeneratedDeck, type GenerationBrief } from './provider'
+import {
+  AIProviderError,
+  type AIProvider,
+  type GeneratedDeck,
+  type GenerationBrief,
+  type NarrationResponse,
+  type NarrationSlide,
+} from './provider'
+import { GroqProvider } from './groqProvider'
+import { GeminiProvider } from './geminiProvider'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
 export interface NamedProvider {
   name: string
   provider: AIProvider
 }
+
+const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
+const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
+
+/**
+ * The app's provider chain, built once: Groq first, Gemini behind it.
+ *
+ * A provider whose key is missing is left OUT rather than added and allowed to
+ * fail, so dropping VITE_GROQ_API_KEY makes this a Gemini-only app with no code
+ * change. `.trim()` matters: a key blanked rather than deleted is not a key, and
+ * an empty-but-present one would otherwise stay in the chain and throw `auth`,
+ * which by design does not fail over.
+ *
+ * Shared by the create flow and the narration page — two copies of this drifted
+ * once already.
+ */
+export const PROVIDER_CHAIN: NamedProvider[] = [
+  ...(GROQ_API_KEY ? [{ name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) }] : []),
+  ...(GEMINI_API_KEY ? [{ name: 'Gemini', provider: new GeminiProvider(GEMINI_API_KEY) }] : []),
+]
 
 /**
  * Was this failure the provider saying "not right now", as opposed to
@@ -71,5 +100,29 @@ export class FallbackProvider implements AIProvider {
     }
     // Unreachable: the loop either returns or rethrows on the last provider.
     throw new AIProviderError('No AI provider was able to generate a deck.')
+  }
+
+  /**
+   * Same chain, same rules as `generateDeck`: only a capacity failure moves to
+   * the next provider, and cancellation never does.
+   */
+  async generateNarration(
+    title: string,
+    slides: NarrationSlide[],
+    signal?: AbortSignal,
+  ): Promise<NarrationResponse> {
+    for (let i = 0; i < this.chain.length; i++) {
+      const { name, provider } = this.chain[i]
+      const isLast = i === this.chain.length - 1
+      try {
+        return await provider.generateNarration(title, slides, signal)
+      } catch (err) {
+        if (isLast || isAbort(err, signal) || !isFailoverable(err)) throw err
+        console.warn(
+          `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${this.chain[i + 1].name} for narration`,
+        )
+      }
+    }
+    throw new AIProviderError('No AI provider was able to write narration.')
   }
 }
