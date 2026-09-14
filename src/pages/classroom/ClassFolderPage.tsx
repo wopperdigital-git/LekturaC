@@ -86,7 +86,9 @@ export function ClassFolderPage() {
   return (
     <DashboardShell
       title={classRoom.name}
-      subtitle={classRoom.description || `${plural(fullRoster.length, 'student')} · Share the code below to add students`}
+      subtitle={`${classRoom.description ? `${classRoom.description} · ` : ''}${plural(fullRoster.length, 'student')}${
+        fullRoster.length === 0 ? ' · Share the code below to add students' : ''
+      }`}
       query={query}
       onQueryChange={setQuery}
     >

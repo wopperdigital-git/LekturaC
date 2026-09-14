@@ -93,7 +93,7 @@ export function StudentRow({
           </svg>
         </button>
         {onRemove && (
-          <Button variant="ghost" onClick={onRemove} className="px-2 py-1 text-xs">
+          <Button variant="ghost" onClick={onRemove} className="px-2 py-1 text-xs" aria-label={`Remove ${name}`}>
             Remove
           </Button>
         )}

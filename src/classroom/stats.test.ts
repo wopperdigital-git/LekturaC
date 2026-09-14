@@ -101,6 +101,10 @@ describe('trendOf', () => {
     expect(trendOf([0.7, 0.7, 0.7, 0.75, 0.75, 0.75])).toMatchObject({ direction: 'steady', delta: 0.05 })
   })
 
+  it('treats an exact -5-point delta as steady too', () => {
+    expect(trendOf([0.75, 0.75, 0.75, 0.7, 0.7, 0.7])).toMatchObject({ direction: 'steady', delta: -0.05 })
+  })
+
   it('calls more than five points improving or slipping', () => {
     expect(trendOf([0.7, 0.7, 0.7, 0.76, 0.76, 0.76])).toMatchObject({ direction: 'improving' })
     expect(trendOf([0.7, 0.7, 0.7, 0.64, 0.64, 0.64])).toMatchObject({ direction: 'slipping' })

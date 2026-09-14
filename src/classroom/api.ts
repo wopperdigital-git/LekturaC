@@ -73,6 +73,26 @@ function rpcValue<T>(result: Result): T {
   return result.data as T
 }
 
+/**
+ * A trigger's `raise exception` (e.g. `classes_require_teacher`'s "Only
+ * teacher accounts can create classes.") surfaces as a plain object with
+ * `code: 'P0001'` — Postgres's default SQLSTATE for an unqualified `raise`.
+ * Left alone, `describeError` appends " (P0001)" to it the way it does for
+ * any Postgres error, which turns a sentence written for the user into one
+ * with a stray code on the end. Rethrowing as a bare `Error` (like `rpcValue`
+ * already does for RPC refusals) makes `describeError` return the message
+ * untouched, since `err instanceof Error` short-circuits before the
+ * code-appending branch. Anything else — RLS's 0-rows-affected, a genuine
+ * network/validation error — passes through unchanged.
+ */
+function rethrowTriggerRefusal(err: unknown): never {
+  if (err && typeof err === 'object' && (err as { code?: unknown }).code === 'P0001') {
+    const message = (err as { message?: unknown }).message
+    throw new Error(typeof message === 'string' && message ? message : 'Something went wrong.')
+  }
+  throw err
+}
+
 /** RLS scopes this: a teacher gets the classes they own, a student the ones they are in. */
 export async function listMyClasses(): Promise<ClassRoom[]> {
   const client = await db()
@@ -145,14 +165,28 @@ export async function loadStudentClassroom(): Promise<StudentClassroom> {
   }
 }
 
+/**
+ * The only classroom write that can hit a trigger's `raise exception`:
+ * `classes_require_teacher` fires `before insert ... on classes` and refuses
+ * a non-teacher account. `updateClass` only ever touches `name`/`description`
+ * (that trigger only re-fires `... or update of teacher_id`) and
+ * `removeMembership` is a delete with no delete trigger on `class_members`,
+ * so neither can raise — a denied write there surfaces as RLS's 0-rows
+ * instead, which `changed()` already turns into its own message.
+ */
 export async function createClass(details: ClassDetails): Promise<ClassRoom> {
   const client = await db()
-  const [row] = many<ClassRow>(
-    await client
-      .from('classes')
-      .insert({ name: details.name.trim(), description: details.description.trim() })
-      .select(CLASS_COLUMNS),
-  )
+  let row: ClassRow | undefined
+  try {
+    [row] = many<ClassRow>(
+      await client
+        .from('classes')
+        .insert({ name: details.name.trim(), description: details.description.trim() })
+        .select(CLASS_COLUMNS),
+    )
+  } catch (err) {
+    rethrowTriggerRefusal(err)
+  }
   if (!row) throw new Error('The class was not created.')
   return classFromRow(row)
 }

@@ -48,7 +48,11 @@ function fetchFor(userId: string) {
       if (mine !== generation) return
       pendingFor = null
       console.warn('[classroom] Could not load classes for the sidebar.', err)
-      snapshot = { userId, classes: [] }
+      // Deliberately leave `snapshot` as it was rather than caching an empty
+      // list under this user: that would make the failure sticky for the rest
+      // of the session (the rail would show zero classes forever). Leaving it
+      // untouched means `fresh` stays null, so the next render/mount that asks
+      // for this userId retries instead of trusting a failed read.
       emit()
     },
   )
