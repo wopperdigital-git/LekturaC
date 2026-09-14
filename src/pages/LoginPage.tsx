@@ -87,7 +87,10 @@ export function LoginPage() {
       const { error } = await signIn(email, password)
       if (error) setFormError(error)
     } else {
-      const { error, needsVerification } = await signUp(email, password)
+      const { error, needsVerification } = await signUp(email, password, {
+        role: 'general',
+        displayName: '',
+      })
       if (error) setFormError(error)
       else if (needsVerification) setSignupSuccess(true)
     }
