@@ -13,6 +13,8 @@ import { ClassesPage } from '@/pages/classroom/ClassesPage'
 import { ClassFolderPage } from '@/pages/classroom/ClassFolderPage'
 import { StudentsPage } from '@/pages/classroom/StudentsPage'
 import { QuizzesPage } from '@/pages/classroom/QuizzesPage'
+import { MyClassesPage } from '@/pages/classroom/MyClassesPage'
+import { StudentClassPage } from '@/pages/classroom/StudentClassPage'
 
 function teacherOnly(element: ReactNode) {
   return (
@@ -22,8 +24,13 @@ function teacherOnly(element: ReactNode) {
   )
 }
 
-// `studentOnly` is added in Task 11, when it has a caller — `tsconfig.app.json`'s
-// unused-locals check would fail the build on an unused helper.
+function studentOnly(element: ReactNode) {
+  return (
+    <RequireAuth>
+      <RequireRole role="student">{element}</RequireRole>
+    </RequireAuth>
+  )
+}
 
 function App() {
   return (
@@ -76,6 +83,8 @@ function App() {
         <Route path="/classroom/classes/:classId" element={teacherOnly(<ClassFolderPage />)} />
         <Route path="/classroom/students" element={teacherOnly(<StudentsPage />)} />
         <Route path="/classroom/quizzes" element={teacherOnly(<QuizzesPage />)} />
+        <Route path="/classes" element={studentOnly(<MyClassesPage />)} />
+        <Route path="/classes/:classId" element={studentOnly(<StudentClassPage />)} />
       </Routes>
     </BrowserRouter>
   )
