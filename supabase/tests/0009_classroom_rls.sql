@@ -115,14 +115,6 @@ do $$ declare failed boolean; begin
 
   failed := false;
   begin
-    insert into class_members (class_id, student_id)
-    values ('00000000-0000-4000-b000-000000000001', '00000000-0000-4000-a000-000000000002');
-  exception when others then failed := true;
-  end;
-  if not failed then raise exception 'student: inserted a membership directly'; end if;
-
-  failed := false;
-  begin
     update profiles set role = 'general' where id = '00000000-0000-4000-a000-000000000002';
   exception when others then failed := true;
   end;
@@ -151,6 +143,14 @@ do $$ declare failed boolean := false; joined uuid; begin
   if (select count(*) from quizzes) <> 0 then raise exception 'outsider: must not see quizzes'; end if;
   if (select count(*) from profiles where id = '00000000-0000-4000-a000-000000000001') <> 0 then
     raise exception 'outsider: must not read a teacher they do not have'; end if;
+
+  failed := false;
+  begin
+    insert into class_members (class_id, student_id)
+    values ('00000000-0000-4000-b000-000000000001', '00000000-0000-4000-a000-000000000003');
+  exception when insufficient_privilege then failed := true;
+  end;
+  if not failed then raise exception 'outsider: inserted a membership directly'; end if;
 
   begin
     perform join_class('ZZZZZ2');
@@ -196,6 +196,16 @@ do $$ declare fresh text; begin
   if fresh ~ '[01OIL]' then raise exception 'teacher: generated code contains a lookalike character'; end if;
 end $$;
 
-select 'classroom RLS checks passed' as result;
+-- ── student 2 after outsider joins: classmate privacy ──────────────────────
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000002","role":"authenticated"}', true);
+
+do $$ begin
+  if (select count(*) from class_members) <> 1 then
+    raise exception 'student: must see only their own membership, not a classmate''s'; end if;
+  if (select count(*) from profiles where id = '00000000-0000-4000-a000-000000000003') <> 0 then
+    raise exception 'student: must not read a classmate''s profile'; end if;
+end $$;
 
 rollback;
+
+select 'classroom RLS checks passed' as result;

@@ -179,9 +179,13 @@ begin
 end;
 $$;
 
+revoke execute on function assert_role(uuid, text, text) from public, anon, authenticated;
+
 create or replace function classes_require_teacher()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   perform assert_role(new.teacher_id, 'teacher', 'Only teacher accounts can create classes.');
@@ -197,6 +201,8 @@ create trigger classes_require_teacher
 create or replace function class_members_require_student()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   perform assert_role(new.student_id, 'student', 'Only student accounts can join classes.');
