@@ -11,6 +11,7 @@ import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireRole } from '@/components/auth/RequireRole'
 import { ClassesPage } from '@/pages/classroom/ClassesPage'
 import { StudentsPage } from '@/pages/classroom/StudentsPage'
+import { QuizzesPage } from '@/pages/classroom/QuizzesPage'
 
 function teacherOnly(element: ReactNode) {
   return (
@@ -72,6 +73,7 @@ function App() {
         <Route path="/classroom" element={teacherOnly(<Navigate to="/classroom/classes" replace />)} />
         <Route path="/classroom/classes" element={teacherOnly(<ClassesPage />)} />
         <Route path="/classroom/students" element={teacherOnly(<StudentsPage />)} />
+        <Route path="/classroom/quizzes" element={teacherOnly(<QuizzesPage />)} />
       </Routes>
     </BrowserRouter>
   )
