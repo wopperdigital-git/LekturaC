@@ -12,6 +12,14 @@
 -- which read the tables without re-entering RLS.
 
 -- ─── profiles ───────────────────────────────────────────────────────────────
+--
+-- `create table if not exists profiles` and the `on_auth_user_created`
+-- trigger below assume this project has no pre-existing Supabase-starter
+-- `profiles` table or trigger of the same name (a common scaffold in other
+-- Supabase quickstarts). If one already exists, reconcile its shape and any
+-- existing trigger with what follows before applying this migration —
+-- `if not exists` silently keeps the old table as-is, which may be missing
+-- the `role`/`display_name`/`email` columns everything below depends on.
 
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -48,9 +56,21 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
 
--- Every account that predates this migration becomes General.
-insert into profiles (id, email)
-select id, coalesce(email, '') from auth.users
+-- Backfill for accounts that predate this migration — mirrors handle_new_user
+-- above (same role whitelist, same display_name trim) rather than flattening
+-- every existing account to General, so anyone who already had role/
+-- display_name metadata on their auth.users row (e.g. seeded before this
+-- migration ran) keeps it.
+insert into profiles (id, role, display_name, email)
+select
+  id,
+  case
+    when raw_user_meta_data ->> 'role' in ('general', 'teacher', 'student') then raw_user_meta_data ->> 'role'
+    else 'general'
+  end,
+  coalesce(trim(raw_user_meta_data ->> 'display_name'), ''),
+  coalesce(email, '')
+from auth.users
 on conflict (id) do nothing;
 
 -- ─── classes ────────────────────────────────────────────────────────────────

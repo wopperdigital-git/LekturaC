@@ -91,6 +91,16 @@ do $$ declare failed boolean := false; begin
   if not failed then raise exception 'teacher2: posted into another teacher''s class'; end if;
 end $$;
 
+do $$ declare touched integer; begin
+  update classes set name = 'x' where id = '00000000-0000-4000-b000-000000000001';
+  get diagnostics touched = row_count;
+  if touched <> 0 then raise exception 'teacher2: updated another teacher''s class'; end if;
+
+  delete from classes where id = '00000000-0000-4000-b000-000000000001';
+  get diagnostics touched = row_count;
+  if touched <> 0 then raise exception 'teacher2: deleted another teacher''s class'; end if;
+end $$;
+
 -- ── student in the class ────────────────────────────────────────────────────
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000002","role":"authenticated"}', true);
 
@@ -152,6 +162,7 @@ do $$ declare failed boolean := false; joined uuid; begin
   end;
   if not failed then raise exception 'outsider: inserted a membership directly'; end if;
 
+  failed := false;
   begin
     perform join_class('ZZZZZ2');
   exception when others then
@@ -204,6 +215,36 @@ do $$ begin
     raise exception 'student: must see only their own membership, not a classmate''s'; end if;
   if (select count(*) from profiles where id = '00000000-0000-4000-a000-000000000003') <> 0 then
     raise exception 'student: must not read a classmate''s profile'; end if;
+end $$;
+
+do $$ declare touched integer; begin
+  delete from class_members
+  where class_id = '00000000-0000-4000-b000-000000000001'
+    and student_id = '00000000-0000-4000-a000-000000000003';
+  get diagnostics touched = row_count;
+  if touched <> 0 then raise exception 'student: deleted a classmate''s membership'; end if;
+end $$;
+
+-- ── teacher removes a member; a student leaves ──────────────────────────────
+-- Kept last: both mutate class_members, which earlier counts above depend on.
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000001","role":"authenticated"}', true);
+
+do $$ declare touched integer; begin
+  delete from class_members
+  where class_id = '00000000-0000-4000-b000-000000000001'
+    and student_id = '00000000-0000-4000-a000-000000000003';
+  get diagnostics touched = row_count;
+  if touched <> 1 then raise exception 'teacher: removing a member should affect exactly one row'; end if;
+end $$;
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000000002","role":"authenticated"}', true);
+
+do $$ declare touched integer; begin
+  delete from class_members
+  where class_id = '00000000-0000-4000-b000-000000000001'
+    and student_id = '00000000-0000-4000-a000-000000000002';
+  get diagnostics touched = row_count;
+  if touched <> 1 then raise exception 'student: leaving their own class should affect exactly one row'; end if;
 end $$;
 
 rollback;
