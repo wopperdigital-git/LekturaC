@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { HomePage } from '@/pages/HomePage'
 import { CreatePage } from '@/pages/CreatePage'
 import { DraftsPage } from '@/pages/DraftsPage'
@@ -7,6 +8,19 @@ import { PresentPage } from '@/pages/PresentPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { RequireRole } from '@/components/auth/RequireRole'
+import { ClassesPage } from '@/pages/classroom/ClassesPage'
+
+function teacherOnly(element: ReactNode) {
+  return (
+    <RequireAuth>
+      <RequireRole role="teacher">{element}</RequireRole>
+    </RequireAuth>
+  )
+}
+
+// `studentOnly` is added in Task 11, when it has a caller — `tsconfig.app.json`'s
+// unused-locals check would fail the build on an unused helper.
 
 function App() {
   return (
@@ -54,6 +68,8 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/classroom" element={teacherOnly(<Navigate to="/classroom/classes" replace />)} />
+        <Route path="/classroom/classes" element={teacherOnly(<ClassesPage />)} />
       </Routes>
     </BrowserRouter>
   )

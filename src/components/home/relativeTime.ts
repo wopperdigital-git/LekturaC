@@ -30,3 +30,9 @@ export function relativeSavedAt(timestamp: number): string {
   const ago = relativeAgo(timestamp)
   return ago ? `Saved ${ago}` : 'Saved just now'
 }
+
+/** "Posted 3 days ago" — announcements. */
+export function relativePostedAt(iso: string): string {
+  const ago = relativeAgo(new Date(iso).getTime())
+  return ago ? `Posted ${ago}` : 'Posted just now'
+}
