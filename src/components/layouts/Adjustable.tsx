@@ -17,14 +17,14 @@ import {
   Wraps one element of a card so it can be nudged, resized, styled and selected.
 
   The wrapper is `display: contents`, which is the whole reason this can be
-  dropped into twelve hand-designed layouts without touching how any of them
+  dropped into every hand-designed layout and arrangement without touching how any of them
   look. A `display: contents` box is not laid out at all — its child is treated
   as a direct child of the grandparent — so an element nobody has touched
   renders byte-identically to how it did before this component existed. A real
   wrapper `<div>` would not: it becomes the flex child in `HeroLayout` and
   stretches where the `h1` used to centre, becomes the grid cell in
-  `StatGridLayout`, and sits illegally between `<ol>` and `<li>` in
-  `TimelineLayout`.
+  `GroupRenderer`'s `boxes`, and sits illegally between `<ol>` and `<li>` in
+  its `timeline`.
 
   The consequence is that there is no box of our own to style, so everything is
   applied imperatively to the child node itself. React never sets these

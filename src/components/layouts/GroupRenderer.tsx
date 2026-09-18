@@ -1,9 +1,9 @@
 import type { VisualStyle } from '@/engine/contentBlocks'
-import { flattenNodes, type GroupNode } from '@/engine/groups'
+import type { GroupNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 import { Adjustable } from './Adjustable'
-import { BlockRenderer, StatBlockView } from './BlockRenderer'
+import { StatBlockView } from './BlockRenderer'
 import { EditableText } from './EditableText'
 
 /**
@@ -305,16 +305,12 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       )
     }
 
-    default:
-      // An arrangement not ported yet draws its items as plain blocks — exactly
-      // how Stage 0's leftovers drew them — so a card holding one looks no worse
-      // than it did before. The final task of this work removes this fallback.
-      return (
-        <>
-          {flattenNodes([node]).map(({ block, index }) => (
-            <BlockRenderer key={index} block={block} index={index} />
-          ))}
-        </>
-      )
+    default: {
+      // Every arrangement is drawn above, so this is unreachable. The
+      // assignment makes adding an arrangement to `GroupNode` without a case
+      // here a compile error, rather than a card silently drawn another way.
+      const unreachable: never = node
+      return unreachable
+    }
   }
 }
