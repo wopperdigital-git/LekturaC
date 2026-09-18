@@ -83,7 +83,6 @@ function draftWith(id: string, topic: string) {
       slideCount: null,
       audience: null,
       detailLevel: null,
-      tone: null,
       guidance: null,
     },
     pendingText: '',

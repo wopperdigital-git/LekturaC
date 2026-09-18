@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { AIProviderError, type AIProvider } from '@/ai/provider'
+import { DEFAULT_TONE } from '@/ai/prompts'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
@@ -22,28 +23,41 @@ import {
   type BriefDraft,
   type DetailLevel,
   type StepKey,
-  type Tone,
 } from '@/lib/briefDrafts'
+import { DEFAULT_SLIDE_COUNT, MAX_SLIDES, parseSlideCount, slideCountProblem } from '@/lib/slideCount'
 
 /**
- * Upper bound on the slide count.
+ * Preset audiences, with an escape hatch to anything else.
  *
- * `geminiProvider` clamps `maxOutputTokens` at 8192, which is roughly what a
- * ~28-card deck needs — asking for more buys no extra budget and just truncates
- * the JSON mid-deck, so the request is rejected here instead of failing slowly.
+ * `audience` stays a free-text string in `Answers` and in `GenerationBrief` —
+ * these buttons only write a fixed sentence into it, so the prompt, the drafts
+ * and the store are untouched by their existence. `custom` carries no text of
+ * its own; picking it reveals the field this step used to be.
  */
-const MAX_SLIDES = 30
+const AUDIENCE_PRESETS = [
+  { value: 'general', label: 'General', description: 'A broad, non-specialist audience' },
+  { value: 'student', label: 'Students', description: 'Learners in a class or course' },
+  { value: 'custom', label: 'Someone else', description: 'Describe the audience yourself' },
+] as const
+
+type AudienceChoice = (typeof AUDIENCE_PRESETS)[number]['value']
+
+const AUDIENCE_TEXT: Record<Exclude<AudienceChoice, 'custom'>, string> = {
+  general: 'a general audience',
+  student: 'students',
+}
+
+/** Which card to light up for an audience already answered. */
+function audienceChoiceFor(audience: string | null): AudienceChoice | null {
+  if (audience === null) return null
+  const preset = Object.entries(AUDIENCE_TEXT).find(([, text]) => text === audience)
+  return preset ? (preset[0] as AudienceChoice) : 'custom'
+}
 
 const DETAIL_OPTIONS: { value: DetailLevel; label: string; description: string }[] = [
   { value: 'simplified', label: 'Simplified', description: 'Quick & easy to skim' },
   { value: 'balanced', label: 'Balanced', description: 'Clear with real substance' },
   { value: 'detailed', label: 'Detailed', description: 'Deep and thorough' },
-]
-
-const TONE_OPTIONS: { value: Tone; label: string; description: string }[] = [
-  { value: 'professional', label: 'Professional', description: 'Polished & business-appropriate' },
-  { value: 'casual', label: 'Casual', description: 'Warm & conversational' },
-  { value: 'bold', label: 'Bold', description: 'Punchy & high-energy' },
 ]
 
 /** `answering` covers both the initial brief and any post-error edit. */
@@ -77,8 +91,10 @@ export function CreatePage() {
   const restore = (step: StepKey) => (resumedStep === step ? resumed.pendingText : '')
 
   const [topicDraft, setTopicDraft] = useState(() => restore('topic'))
-  const [slideCountDraft, setSlideCountDraft] = useState('8')
+  const [slideCountDraft, setSlideCountDraft] = useState(String(DEFAULT_SLIDE_COUNT))
   const [audienceDraft, setAudienceDraft] = useState(() => restore('audience'))
+  // Which audience card is lit, once the user has picked one this session.
+  const [audienceChoice, setAudienceChoice] = useState<AudienceChoice | null>(null)
   const [guidanceDraft, setGuidanceDraft] = useState(() => restore('guidance'))
 
   const [phase, setPhase] = useState<Phase>('answering')
@@ -90,11 +106,18 @@ export function CreatePage() {
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const { topic, slideCount, audience, detailLevel, tone, guidance } = answers
+  const { topic, slideCount, audience, detailLevel, guidance } = answers
   const isGenerating = phase === 'generating'
 
+  // Falls back to the answer itself, and then to "there is unsubmitted text in
+  // the custom field" — which is how a draft saved mid-sentence reopens on the
+  // field it was typed into rather than on three untouched cards. Derived
+  // rather than stored so those two sources can't disagree with the state.
+  const shownAudienceChoice: AudienceChoice | null =
+    audienceChoice ?? audienceChoiceFor(audience) ?? (audienceDraft ? 'custom' : null)
+
   // Checked up front rather than inside startGeneration: without this the user
-  // answered all six questions before being told the app has no key. One key is
+  // answered every question before being told the app has no key. One key is
   // enough — the chain simply has one link.
   const missingKey = PROVIDER_CHAIN.length === 0
 
@@ -133,10 +156,10 @@ export function CreatePage() {
   }
 
   async function startGeneration(brief: Answers) {
-    const { topic: t, slideCount: count, audience: aud, detailLevel: level, tone: tn } = brief
-    // Narrows the six nullable fields in one place. Previously a failed check
+    const { topic: t, slideCount: count, audience: aud, detailLevel: level } = brief
+    // Narrows the nullable fields in one place. Previously a failed check
     // silently fell through and left "All set…" on screen forever.
-    if (t === null || count === null || aud === null || level === null || tn === null) {
+    if (t === null || count === null || aud === null || level === null) {
       setPhase('failed')
       setError('Some answers are still missing. Fill in the questions above and try again.')
       return
@@ -155,7 +178,9 @@ export function CreatePage() {
           slideCount: count,
           audience: aud,
           detailLevel: level,
-          tone: tn,
+          // The brief no longer asks for a tone; every deck is generated with
+          // the default the question used to preselect.
+          tone: DEFAULT_TONE,
           guidance: brief.guidance ?? '',
         },
         controller.signal,
@@ -192,21 +217,20 @@ export function CreatePage() {
 
   function beginEdit(step: StepKey) {
     if (topic !== null) setTopicDraft(topic)
-    setSlideCountDraft(slideCount === 'auto' || slideCount === null ? '8' : String(slideCount))
-    if (audience !== null) setAudienceDraft(audience)
+    setSlideCountDraft(
+      slideCount === 'auto' || slideCount === null ? String(DEFAULT_SLIDE_COUNT) : String(slideCount),
+    )
+    // A preset answer must not land in the custom field: reopening the step
+    // would then show "a general audience" as text the user apparently typed.
+    const choice = audienceChoiceFor(audience)
+    setAudienceChoice(choice)
+    setAudienceDraft(choice === 'custom' && audience !== null ? audience : '')
     setGuidanceDraft(guidance ?? '')
     setEditing(step)
   }
 
-  const parsedSlideCount = parseInt(slideCountDraft, 10)
-  const slideCountError =
-    slideCountDraft.trim() === '' || !Number.isInteger(parsedSlideCount)
-      ? 'Enter a number.'
-      : parsedSlideCount < 1
-        ? 'At least 1 slide.'
-        : parsedSlideCount > MAX_SLIDES
-          ? `${MAX_SLIDES} slides max — longer decks get truncated mid-generation.`
-          : null
+  const parsedSlideCount = parseSlideCount(slideCountDraft)
+  const slideCountError = slideCountProblem(slideCountDraft)
 
   function handleTopicKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -234,7 +258,6 @@ export function CreatePage() {
     slideCount !== null &&
     audience !== null &&
     detailLevel !== null &&
-    tone !== null &&
     guidance !== null
 
   const completedCount = answeredCount(answers)
@@ -391,14 +414,14 @@ export function CreatePage() {
                   <StepBlock
                     active={activeStep === 'slideCount'}
                     question="How many slides?"
-                    hint={`Up to ${MAX_SLIDES}. Not sure? Let the agent pick a length that fits.`}
+                    hint={`Up to ${MAX_SLIDES}, and ${DEFAULT_SLIDE_COUNT} unless you say otherwise. Not sure? Let the agent pick a length that fits.`}
                     questionId={qid('slideCount')}
                   >
                     {activeStep === 'slideCount' ? (
                       <form
                         onSubmit={(e: FormEvent) => {
                           e.preventDefault()
-                          if (!slideCountError) answer({ slideCount: parsedSlideCount })
+                          if (parsedSlideCount !== null) answer({ slideCount: parsedSlideCount })
                         }}
                         className="flex w-full max-w-[300px] flex-col gap-2"
                       >
@@ -465,25 +488,38 @@ export function CreatePage() {
                     questionId={qid('audience')}
                   >
                     {activeStep === 'audience' ? (
-                      <form
-                        onSubmit={(e: FormEvent) => {
-                          e.preventDefault()
-                          if (audienceDraft.trim()) answer({ audience: audienceDraft.trim() })
-                        }}
-                        className="flex w-full flex-col gap-2"
-                      >
-                        <div className="flex gap-2">
-                          <Input
-                            autoFocus
-                            aria-labelledby={qid('audience')}
-                            placeholder="e.g. investors, customers, my team, students..."
-                            value={audienceDraft}
-                            onChange={(e) => setAudienceDraft(e.target.value)}
-                          />
-                          <Button type="submit" variant="primary" disabled={!audienceDraft.trim()}>
-                            {editing === 'audience' ? 'Save' : 'Next'}
-                          </Button>
-                        </div>
+                      <div className="flex w-full flex-col gap-3">
+                        <OptionCards
+                          options={AUDIENCE_PRESETS.map((o) => ({ ...o }))}
+                          selected={shownAudienceChoice}
+                          onSelect={(value) => {
+                            setAudienceChoice(value)
+                            // The two presets are a complete answer, so they
+                            // advance on the click; 'custom' only opens the
+                            // field, which still needs submitting.
+                            if (value !== 'custom') answer({ audience: AUDIENCE_TEXT[value] })
+                          }}
+                        />
+                        {shownAudienceChoice === 'custom' && (
+                          <form
+                            onSubmit={(e: FormEvent) => {
+                              e.preventDefault()
+                              if (audienceDraft.trim()) answer({ audience: audienceDraft.trim() })
+                            }}
+                            className="flex gap-2"
+                          >
+                            <Input
+                              autoFocus
+                              aria-labelledby={qid('audience')}
+                              placeholder="e.g. investors, customers, my team, new hires..."
+                              value={audienceDraft}
+                              onChange={(e) => setAudienceDraft(e.target.value)}
+                            />
+                            <Button type="submit" variant="primary" disabled={!audienceDraft.trim()}>
+                              {editing === 'audience' ? 'Save' : 'Next'}
+                            </Button>
+                          </form>
+                        )}
                         {editing === 'audience' && (
                           <button
                             type="button"
@@ -493,7 +529,7 @@ export function CreatePage() {
                             Cancel
                           </button>
                         )}
-                      </form>
+                      </div>
                     ) : (
                       <AnswerPill onEdit={editHandler('audience')} editLabel="Edit the audience">
                         {audience}
@@ -538,38 +574,6 @@ export function CreatePage() {
                 )}
 
                 {detailLevel !== null && (
-                  <StepBlock
-                    active={activeStep === 'tone'}
-                    question="What tone fits best?"
-                    hint="Choose the voice your presentation should speak in."
-                    questionId={qid('tone')}
-                  >
-                    {activeStep === 'tone' ? (
-                      <div className="flex flex-col gap-3">
-                        <OptionCards
-                          options={TONE_OPTIONS}
-                          selected={tone}
-                          onSelect={(value) => answer({ tone: value })}
-                        />
-                        {editing === 'tone' && (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            className={`self-start ${subtleButton}`}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <AnswerPill onEdit={editHandler('tone')} editLabel="Edit the tone">
-                        {TONE_OPTIONS.find((o) => o.value === tone)?.label}
-                      </AnswerPill>
-                    )}
-                  </StepBlock>
-                )}
-
-                {tone !== null && (
                   <StepBlock
                     active={activeStep === 'guidance'}
                     question="Anything to focus on — or steer clear of?"

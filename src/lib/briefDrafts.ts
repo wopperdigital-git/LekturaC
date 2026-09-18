@@ -21,26 +21,31 @@ import { useAuthStore } from '@/store/authStore'
  */
 
 export type DetailLevel = GenerationBrief['detailLevel']
-export type Tone = GenerationBrief['tone']
 
-export type StepKey = 'topic' | 'slideCount' | 'audience' | 'detailLevel' | 'tone' | 'guidance'
+export type StepKey = 'topic' | 'slideCount' | 'audience' | 'detailLevel' | 'guidance'
 
-/** Drives the progress counter and which step gets the active-card treatment. */
-export const STEP_ORDER: StepKey[] = [
-  'topic',
-  'slideCount',
-  'audience',
-  'detailLevel',
-  'tone',
-  'guidance',
-]
+/**
+ * Drives the progress counter and which step gets the active-card treatment.
+ *
+ * `tone` was a sixth step and is **temporarily removed** from the brief, not
+ * from generation: `DEFAULT_TONE` is still sent to the model (see
+ * `ai/prompts.ts`), so decks read exactly as a Professional answer used to
+ * produce. Restoring the question means adding the step back here, a
+ * `tone: GenerationBrief['tone'] | null` field to `Answers`, and the card in
+ * `CreatePage`; nothing in `ai/` has to move, since the field and its three
+ * tone instructions are still live. It has to leave this list rather than
+ * merely be hidden — the flow
+ * treats the first unanswered step as the active question, so a step nobody
+ * can answer would stall every brief at the tone card forever, and no draft
+ * would ever reach "complete".
+ */
+export const STEP_ORDER: StepKey[] = ['topic', 'slideCount', 'audience', 'detailLevel', 'guidance']
 
 export interface Answers {
   topic: string | null
   slideCount: number | 'auto' | null
   audience: string | null
   detailLevel: DetailLevel | null
-  tone: Tone | null
   /** `''` is a real answer here (the user skipped it); `null` means unanswered. */
   guidance: string | null
 }
@@ -50,7 +55,6 @@ export const NO_ANSWERS: Answers = {
   slideCount: null,
   audience: null,
   detailLevel: null,
-  tone: null,
   guidance: null,
 }
 
@@ -107,7 +111,7 @@ export function emptyDraft(): BriefDraft {
   return { id: createDraftId(), answers: { ...NO_ANSWERS }, pendingText: '', savedAt: Date.now() }
 }
 
-/** How many of the six questions are answered. */
+/** How many of the questions are answered. */
 export function answeredCount(answers: Answers): number {
   return STEP_ORDER.filter((step) => answers[step] !== null).length
 }

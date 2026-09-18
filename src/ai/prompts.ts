@@ -23,6 +23,15 @@ const TONE_INSTRUCTIONS: Record<GenerationBrief['tone'], string> = {
   bold: 'Punchy, high-energy, provocative language that grabs attention and takes a clear stance.',
 }
 
+/**
+ * The tone every deck is generated with while the brief doesn't ask for one.
+ *
+ * `tone` stays a required field of `GenerationBrief` and the three
+ * instructions above stay live: the question was removed from the intake, not
+ * the concept, so restoring it is a UI change and nothing here has to move.
+ */
+export const DEFAULT_TONE: GenerationBrief['tone'] = 'professional'
+
 export const DECK_SYSTEM_PROMPT = `You are a presentation content generator with deep domain knowledge. Given a topic from the user, produce a complete, professionally structured presentation as JSON.
 
 Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this shape:
@@ -76,7 +85,7 @@ export function buildDeckUserPrompt(topic: string, brief: GenerationBrief): stri
 
 Slide count: ${
     brief.slideCount === 'auto'
-      ? "use your judgment — choose the number of cards (typically 6-14) that best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close."
+      ? "use your judgment — choose between 5 and 10 cards (never more than 10), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close."
       : `exactly ${brief.slideCount} cards. Not approximately — exactly this many.`
   }
 Audience: ${audience}
