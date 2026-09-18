@@ -185,7 +185,7 @@ export function CreatePage() {
         },
         controller.signal,
       )
-      const id = await createDeckFromGeneration(deck)
+      const id = await createDeckFromGeneration(deck, count)
       deleteDraft(draftId)
       setPhase('done')
       void navigate(`/deck/${id}`)

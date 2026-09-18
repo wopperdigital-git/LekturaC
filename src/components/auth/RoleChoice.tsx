@@ -1,6 +1,6 @@
 import { ROLE_HINT, ROLE_LABEL, ROLES, type Role } from '@/classroom/roles'
 
-/** The three account types as a radio group — shared by sign-up and the Account type modal. */
+/** The three account types as a radio group, used at sign-up. */
 export function RoleChoice({
   value,
   onChange,
@@ -37,6 +37,16 @@ export function RoleChoice({
           </label>
         )
       })}
+      {/*
+        Account type is pinned in the database (migration 0010) the moment
+        this form submits — there's no Account type modal to fix a wrong pick
+        afterwards anymore, only deleting the account, which takes every deck
+        with it. Say so before the commitment, not after.
+      */}
+      <p className="text-xs text-app-muted">
+        Your account type is fixed once you sign up. A General account becomes a Student when it
+        joins a class.
+      </p>
     </div>
   )
 }

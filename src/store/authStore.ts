@@ -104,7 +104,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           "Your account profile isn't set up yet — the classroom database migration (0009) may not have been applied.",
       }
     }
-    set({ profile: resolveProfile(data, null).profile, profileDegraded: false })
+    // Honour `degraded` rather than assuming false: `data` came back non-null
+    // here only because the `.update()` succeeded, but `resolveProfile` still
+    // has the last word on whether its `role` is one this build recognises.
+    // Harmless today — the 0009 check constraint means an unrecognised role
+    // can't reach the database — but the rest of this file treats that
+    // distinction as load-bearing everywhere else, and assuming it away here
+    // would be the one place that silently stops being true first.
+    const { profile, degraded } = resolveProfile(data, null)
+    set({ profile, profileDegraded: degraded })
     return { error: null }
   },
 
@@ -125,6 +133,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // delete the caller's own account.
     const { error } = await supabase.rpc('delete_own_account')
     if (error) return { error: error.message }
+    // The RPC only ever touched the server; an unfinished brief's topic text
+    // lives in this browser's localStorage (see briefDrafts.ts) and survives
+    // the RPC untouched. "Delete my account" has to mean that too, so clear
+    // it here, before the sign-out below removes the session `briefDrafts`
+    // needs to find this account's bucket. Imported dynamically rather than
+    // statically: briefDrafts.ts already imports this store to read who's
+    // signed in, and a static import here would close that into a cycle
+    // whose safety depends on which of the two modules happens to load first.
+    const { clearDraftsForCurrentUser } = await import('@/lib/briefDrafts')
+    clearDraftsForCurrentUser()
     // The user row is gone, but this tab still holds its tokens; without an
     // explicit sign-out the app stays on a dead session until a request fails.
     await supabase.auth.signOut()

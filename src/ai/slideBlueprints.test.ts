@@ -295,8 +295,10 @@ describe('sequenceMismatch', () => {
   it('reports a wrong count', () => {
     const expected = sequenceFor('persuade', 6)
     const message = sequenceMismatch(expected, ['hook', 'problem-why-now'])
-    expect(message).toContain('6')
-    expect(message).toContain('2')
+    // Asserted as one phrase, not two separate `toContain`s — checking '6' and
+    // '2' independently would still pass an implementation that swapped the
+    // expected/actual counts in the message.
+    expect(message).toBe('expected 6 slides, got 2')
   })
 
   it('reports the first role that diverges, with its position', () => {

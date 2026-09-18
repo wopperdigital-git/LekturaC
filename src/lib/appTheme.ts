@@ -73,10 +73,15 @@ export const useAppTheme = create<AppThemeState>((set, get) => ({
   },
   /**
    * Flips the *rendered* side and commits to it. Called from `ThemeToggle`,
-   * which is a two-state control and still used on /login, where there is no
-   * account and so no settings modal. Committing matters: from `system` a
-   * toggle that only re-resolved would appear to do nothing whenever the OS
-   * already sat on the side being switched away from.
+   * a two-state control still used in two places that have no settings modal
+   * to host the three-way `AppearanceSection` instead: /login (no account
+   * yet) and the editor's `TopBar` (no settings surface at all). Committing
+   * matters: from `system` a toggle that only re-resolved would appear to do
+   * nothing whenever the OS already sat on the side being switched away from.
+   * Consequence worth knowing about the editor placement specifically:
+   * touching that toggle silently turns a `system` preference into an
+   * explicit light/dark choice, the same as it does on /login — there is no
+   * separate "reset to System" control anywhere `ThemeToggle` is used.
    */
   toggleTheme: () => {
     get().setMode(get().theme === 'dark' ? 'light' : 'dark')

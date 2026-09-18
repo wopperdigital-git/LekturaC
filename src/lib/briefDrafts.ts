@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { GenerationBrief } from '@/ai/provider'
 import { useAuthStore } from '@/store/authStore'
+import { MAX_SLIDES } from '@/lib/slideCount'
 
 /**
  * Unfinished creation briefs.
@@ -138,14 +139,40 @@ function isAnswers(value: unknown): value is Partial<Answers> {
   return typeof value === 'object' && value !== null
 }
 
+/**
+ * Re-validates a stored `slideCount` against today's `MAX_SLIDES`, not
+ * whatever cap was live when the draft was saved.
+ *
+ * `MAX_SLIDES` has already moved once (30 -> 10, see `slideCount.ts`), and a
+ * draft saved under the old ceiling can hold a value the current one refuses.
+ * Once `slideCount` is non-null, `CreatePage` renders it as an already-answered
+ * `AnswerPill` instead of the validated input field, so nothing downstream
+ * re-checks it — an out-of-range count would ride straight into the prompt
+ * ("exactly 25 cards") while the blueprint section sent alongside it insists
+ * "Do not add, drop, reorder or merge rows" over a sequence sized for at most
+ * `MAX_SLIDES`, a direct contradiction handed to the model.
+ *
+ * Treated as unanswered (`null`) rather than clamped to `MAX_SLIDES`: a silent
+ * clamp would submit a count the user never chose, while reopening the step
+ * shows them the field, pre-filled with nothing, so they pick a real number
+ * under today's cap. `'auto'` carries no count to be out of range and always
+ * survives.
+ */
+function sanitizeSlideCount(value: Answers['slideCount']): Answers['slideCount'] {
+  if (value === null || value === 'auto') return value
+  if (!Number.isInteger(value) || value < 1 || value > MAX_SLIDES) return null
+  return value
+}
+
 /** Tolerates any older/partial payload rather than throwing the whole list away. */
 function reviveDraft(raw: unknown): BriefDraft | null {
   if (typeof raw !== 'object' || raw === null) return null
   const candidate = raw as Partial<BriefDraft>
   if (typeof candidate.id !== 'string' || !isAnswers(candidate.answers)) return null
+  const answers = { ...NO_ANSWERS, ...candidate.answers }
   return {
     id: candidate.id,
-    answers: { ...NO_ANSWERS, ...candidate.answers },
+    answers: { ...answers, slideCount: sanitizeSlideCount(answers.slideCount) },
     pendingText: typeof candidate.pendingText === 'string' ? candidate.pendingText : '',
     savedAt: typeof candidate.savedAt === 'number' ? candidate.savedAt : Date.now(),
   }
@@ -297,6 +324,30 @@ export function deleteDraft(id: string): void {
   const key = storageKey()
   if (key === null) return
   writeRaw(key, listDrafts().filter((d) => d.id !== id))
+  invalidate()
+}
+
+/**
+ * Deletes the signed-in user's entire draft bucket outright, not merely hides
+ * it — for `authStore.deleteAccount()` to call before it signs the tab out.
+ *
+ * The account-deletion RPC removes everything server-side, but a brief's
+ * topic text (verbatim) never reached the server to begin with — this module
+ * exists precisely because drafts are browser-local. `purgeForeignDrafts`
+ * leaves the previous account's bytes on disk because *some* account might
+ * still need them; that reasoning doesn't apply to an account that no longer
+ * exists, and "delete my account" promising to remove everything is a lie
+ * while this bucket survives it. Must run before the sign-out, while
+ * `storageKey()` can still resolve to the account being deleted.
+ */
+export function clearDraftsForCurrentUser(): void {
+  const key = storageKey()
+  if (key === null) return
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // private mode / storage disabled — nothing was persisted in the first place
+  }
   invalidate()
 }
 

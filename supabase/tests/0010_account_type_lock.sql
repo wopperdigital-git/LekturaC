@@ -127,7 +127,22 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a100-0000000
 
 do $$ begin
   perform delete_own_account();
+end $$;
 
+-- Back to postgres (as the fixtures at the top of this file already run)
+-- before checking what the call actually did. Left as `authenticated`, the
+-- assertions below abort outright: that role has no grant on `auth.users` at
+-- all, so line 131's `select` (now below) raises "permission denied for
+-- table users" naming none of the checks that follow it, not a pass/fail on
+-- any of them. And even where the query is legal, it runs under RLS keyed to
+-- the very account that was just deleted, forged by the `set_config` above —
+-- a select on presentations/cards scoped to `owner_id = auth.uid()` reports
+-- "not found" for that owner whether the row is truly gone or merely
+-- invisible to it, so the check could not fail even if `delete_own_account`
+-- left the rows behind.
+reset role;
+
+do $$ begin
   if exists (select 1 from auth.users where id = '00000000-0000-4000-a100-000000000004') then
     raise exception 'delete_own_account: the auth user survived';
   end if;

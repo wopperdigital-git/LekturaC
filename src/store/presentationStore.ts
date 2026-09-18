@@ -52,12 +52,22 @@ interface PresentationState {
 
   listDecks: () => Promise<DeckSummary[]>
   createDeck: (title?: string) => Promise<string>
-  createDeckFromGeneration: (deck: {
-    title: string
-    /** Which structure the model chose; used to check the sequence, then dropped. */
-    blueprint?: BlueprintId
-    cards: { blocks: ContentBlock[]; visualStyle: VisualStyle; role?: string }[]
-  }) => Promise<string>
+  createDeckFromGeneration: (
+    deck: {
+      title: string
+      /** Which structure the model chose; used to check the sequence, then dropped. */
+      blueprint?: BlueprintId
+      cards: { blocks: ContentBlock[]; visualStyle: VisualStyle; role?: string }[]
+    },
+    /**
+     * The brief's own slide count (`'auto'` when the model chose), so the
+     * sequence check can compare against what was actually asked for rather
+     * than rubber-stamping whatever length came back. Optional so a caller
+     * without a brief in hand (there isn't one today) still compiles; it then
+     * falls back to `deck.cards.length`, which checks shape only.
+     */
+    requestedCount?: number | 'auto',
+  ) => Promise<string>
   loadDeck: (id: string) => Promise<void>
   deleteDeck: (id: string) => Promise<void>
 
@@ -566,7 +576,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     return id
   },
 
-  async createDeckFromGeneration(deck) {
+  async createDeckFromGeneration(deck, requestedCount) {
     const id = newId()
 
     /*
@@ -575,13 +585,18 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       can regenerate, so a mismatch is logged and the deck lands. Only the
       response *shape* is allowed to fail a generation (zod, in provider.ts).
 
-      Checked against the sequence for the count the model actually returned:
-      the requested count is not passed down here, and a wrong count already
-      shows up in the message as a length difference.
+      Checked against the sequence for the count that was actually asked for,
+      not the count the model returned: `sequenceFor` produces exactly as many
+      specs as it's given, so comparing against `deck.cards.length` can never
+      see a wrong count — an 8-slide deck returned for a 6-slide request would
+      compare against the 8-slide sequence and pass. 'auto' has no requested
+      number to check against, so it still falls back to what came back.
     */
     if (deck.blueprint) {
+      const expectedCount =
+        typeof requestedCount === 'number' ? requestedCount : deck.cards.length
       const problem = sequenceMismatch(
-        sequenceFor(deck.blueprint, deck.cards.length),
+        sequenceFor(deck.blueprint, expectedCount),
         deck.cards.map((c) => c.role ?? ''),
       )
       if (problem) {

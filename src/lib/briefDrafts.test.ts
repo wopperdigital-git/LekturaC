@@ -191,3 +191,38 @@ describe('legacy migration', () => {
     expect(store.has(KEY('user-a'))).toBe(true)
   })
 })
+
+function draftWithSlideCount(id: string, topic: string, slideCount: number | 'auto') {
+  return { ...draftWith(id, topic), answers: { ...draftWith(id, topic).answers, slideCount } }
+}
+
+describe('slideCount revival', () => {
+  it('reopens the step when a stored count exceeds today\'s MAX_SLIDES', async () => {
+    // e.g. saved back when the cap was 30, read back under the current cap of 10.
+    store.set(KEY('user-a'), JSON.stringify([draftWithSlideCount('d1', 'Old cap brief', 25)]))
+
+    const { drafts } = await load('user-a')
+    expect(drafts.listDrafts()[0].answers.slideCount).toBeNull()
+  })
+
+  it('reopens the step for a non-positive stored count', async () => {
+    store.set(KEY('user-a'), JSON.stringify([draftWithSlideCount('d1', 'Zero', 0)]))
+
+    const { drafts } = await load('user-a')
+    expect(drafts.listDrafts()[0].answers.slideCount).toBeNull()
+  })
+
+  it('keeps a stored count that is within range', async () => {
+    store.set(KEY('user-a'), JSON.stringify([draftWithSlideCount('d1', 'In range', 6)]))
+
+    const { drafts } = await load('user-a')
+    expect(drafts.listDrafts()[0].answers.slideCount).toBe(6)
+  })
+
+  it('leaves \'auto\' untouched, since it has no count to be out of range', async () => {
+    store.set(KEY('user-a'), JSON.stringify([draftWithSlideCount('d1', 'Auto', 'auto')]))
+
+    const { drafts } = await load('user-a')
+    expect(drafts.listDrafts()[0].answers.slideCount).toBe('auto')
+  })
+})

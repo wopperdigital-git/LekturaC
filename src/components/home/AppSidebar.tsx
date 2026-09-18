@@ -186,6 +186,7 @@ export function AppSidebar({
 
   const profile = useAuthStore((s) => s.profile)
   const userId = useAuthStore((s) => s.user?.id ?? null)
+  const profileDegraded = useAuthStore((s) => s.profileDegraded)
   const role = profile?.role ?? 'general'
   const myClasses = useMyClasses(userId, role !== 'general')
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -377,7 +378,14 @@ export function AppSidebar({
             </span>
             <div className="flex min-w-0 flex-1 flex-col text-xs">
               {name && <span className="truncate text-white/80">{name}</span>}
-              <span className="text-white/45">{ROLE_LABEL[role]}</span>
+              {/*
+                A transient profile read failure must not read as "General" in
+                the one place that's always on screen — `ProfileSection`
+                already shows `—` for the same signal (`profileDegraded`);
+                the rail defaulting `role` to General for rendering safety
+                shouldn't also mean *labeling* a teacher General.
+              */}
+              <span className="text-white/45">{profileDegraded ? '—' : ROLE_LABEL[role]}</span>
             </div>
             {/*
               One control instead of three (Account type, Log out, light/dark).

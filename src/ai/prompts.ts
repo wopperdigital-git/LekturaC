@@ -82,7 +82,7 @@ CONTENT QUALITY RULES — this is the most important part:
 - Tailor every card to the stated audience, detail level, and the user's explicit guidance below — the same topic should read differently for investors than for a general public audience. If the guidance says to avoid statistics, stick to given facts, or focus/skip specific angles, treat that as a hard constraint that overrides the general rules above wherever they'd conflict — including skipping "stat" blocks and invented figures entirely if asked.
 - Every card's heading is a FULL-SENTENCE ASSERTION, not a topic phrase: "Retention drops sharply after 15 minutes", not "Retention". The heading states the point; the rest of the card supports that one point.
 - ONE idea per card. Support it with an example, a mechanism, or a short explanation — a figure ONLY when the material genuinely supports one. Do not invent numbers to look like evidence.
-- At most 7 items on any card (5 is better). Past that, comprehension drops and the card should be split or trimmed.
+- 5-7 items is the comfortable range for one card; past 7, comprehension drops. But this is a ceiling on how much lands on ONE card, never a reason to drop or blur a real item — a genuinely 8-point process stays 8 real steps, split across two cards, not compressed into 6 vague ones (see the bulletList rule above). Only trim items that were padding to begin with.
 - Set "blueprint" to the id of the structure you chose, and every card's "role" to the bracketed role id of the row it fills.`
 
 const AUTO_COUNTS = [5, 6, 7, 8, 9, 10] as const

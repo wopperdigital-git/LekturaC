@@ -66,8 +66,12 @@ describe('system prompt content rules', () => {
     expect(DECK_SYSTEM_PROMPT).toMatch(/example, mechanism|not invent|only when/i)
   })
 
-  it('caps items per slide', () => {
-    expect(DECK_SYSTEM_PROMPT).toMatch(/7|seven/)
+  it('caps items per slide without licensing dropped or blurred content', () => {
+    // A bare /7|seven/ match would pass against any of the ~4KB prompt's
+    // stray digits — pin the actual ceiling rule and its guard against using
+    // it to justify losing real items.
+    expect(DECK_SYSTEM_PROMPT).toMatch(/5-7 items is the comfortable range/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/never a reason to drop or blur a real item/)
   })
 
   it('tells the model to echo the role on every card', () => {

@@ -11,9 +11,13 @@ const OPTIONS: { mode: AppThemeMode; label: string; hint: string }[] = [
  *
  * A radio group rather than a switch because there are three states and one of
  * them ("System") is not a side — a two-position control cannot express it,
- * which is why this exists alongside the two-state `ThemeToggle` still used on
- * /login. Deck themes are untouched by design: a light deck previews light
- * inside a dark editor.
+ * which is why this exists alongside the two-state `ThemeToggle` still used in
+ * the two places with no settings modal to host this instead: /login (no
+ * account yet) and the editor's `TopBar`. Flipping that two-state toggle from
+ * either place silently commits a `system` preference to whichever side is
+ * currently rendered — there's no way back to "System" except from here.
+ * Deck themes are untouched by design: a light deck previews light inside a
+ * dark editor.
  */
 export function AppearanceSection() {
   const mode = useAppTheme((s) => s.mode)
