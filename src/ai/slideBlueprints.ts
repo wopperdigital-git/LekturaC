@@ -63,6 +63,64 @@ export type SlideRole =
   | 'closing'
   | 'closing-line'
 
+/** Role ids used only by the Informing blueprint. */
+type InformRole = Extract<
+  SlideRole,
+  | 'title-roadmap'
+  | 'title-why-matters'
+  | 'why-matters'
+  | 'gap'
+  | 'objectives'
+  | 'gap-objectives'
+  | 'core-idea-1'
+  | 'core-idea-2'
+  | 'core-idea-3'
+  | 'core-content'
+  | 'application'
+  | 'recap'
+  | 'next-steps'
+  | 'recap-next-steps'
+>
+
+/** Role ids used only by the Persuading blueprint. */
+type PersuadeRole = Extract<
+  SlideRole,
+  | 'hook'
+  | 'problem'
+  | 'why-now'
+  | 'problem-why-now'
+  | 'solution'
+  | 'how-it-works'
+  | 'solution-how-it-works'
+  | 'proof'
+  | 'why-us'
+  | 'proof-why-us'
+  | 'offer'
+  | 'handling'
+  | 'offer-handling'
+  | 'offer-handling-cta'
+  | 'cta'
+>
+
+/** Role ids used only by the Storytelling blueprint. */
+type StoryRole = Extract<
+  SlideRole,
+  | 'hook'
+  | 'what-is'
+  | 'complication'
+  | 'what-is-complication'
+  | 'journey'
+  | 'insight'
+  | 'journey-insight'
+  | 'what-could-be'
+  | 'meaning'
+  | 'what-could-be-meaning'
+  | 'proof'
+  | 'cta'
+  | 'closing'
+  | 'closing-line'
+>
+
 export interface SlideSpec {
   role: SlideRole
   /** What the doc calls this row, e.g. 'Gap + objectives'. Shown to the model. */
@@ -85,7 +143,7 @@ export interface Blueprint {
 }
 
 /** Every spec the inform blueprint can use, by role, so columns stay DRY. */
-const INFORM: Partial<Record<SlideRole, SlideSpec>> = {
+const INFORM: Record<InformRole, SlideSpec> = {
   'title-roadmap': {
     role: 'title-roadmap',
     label: 'Title + roadmap',
@@ -158,8 +216,8 @@ const INFORM: Partial<Record<SlideRole, SlideSpec>> = {
   },
 }
 
-function informColumn(...roles: SlideRole[]): SlideSpec[] {
-  return roles.map((role) => INFORM[role]!)
+function informColumn(...roles: InformRole[]): SlideSpec[] {
+  return roles.map((role) => INFORM[role])
 }
 
 const INFORM_BLUEPRINT: Blueprint = {
@@ -191,7 +249,7 @@ const INFORM_BLUEPRINT: Blueprint = {
   },
 }
 
-const PERSUADE: Partial<Record<SlideRole, SlideSpec>> = {
+const PERSUADE: Record<PersuadeRole, SlideSpec> = {
   hook: {
     role: 'hook',
     label: 'Hook',
@@ -269,8 +327,8 @@ const PERSUADE: Partial<Record<SlideRole, SlideSpec>> = {
   },
 }
 
-function persuadeColumn(...roles: SlideRole[]): SlideSpec[] {
-  return roles.map((role) => PERSUADE[role]!)
+function persuadeColumn(...roles: PersuadeRole[]): SlideSpec[] {
+  return roles.map((role) => PERSUADE[role])
 }
 
 const PERSUADE_BLUEPRINT: Blueprint = {
@@ -301,7 +359,7 @@ const PERSUADE_BLUEPRINT: Blueprint = {
   },
 }
 
-const STORY: Partial<Record<SlideRole, SlideSpec>> = {
+const STORY: Record<StoryRole, SlideSpec> = {
   hook: {
     role: 'hook',
     label: 'Hook',
@@ -375,8 +433,8 @@ const STORY: Partial<Record<SlideRole, SlideSpec>> = {
   },
 }
 
-function storyColumn(...roles: SlideRole[]): SlideSpec[] {
-  return roles.map((role) => STORY[role]!)
+function storyColumn(...roles: StoryRole[]): SlideSpec[] {
+  return roles.map((role) => STORY[role])
 }
 
 const STORY_BLUEPRINT: Blueprint = {
