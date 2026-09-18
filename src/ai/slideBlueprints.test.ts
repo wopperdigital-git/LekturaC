@@ -16,9 +16,26 @@ const INFORM_COLUMNS: Record<number, string[]> = {
   10: ['Title + roadmap', 'Why it matters', 'Gap', 'Objectives', 'Core idea 1', 'Core idea 2', 'Core idea 3', 'Application', 'Recap', 'Next steps'],
 }
 
+const INFORM_MASTER_LABELS = [
+  'Title + roadmap',
+  'Why it matters',
+  'Gap',
+  'Objectives',
+  'Core idea 1',
+  'Core idea 2',
+  'Core idea 3',
+  'Application',
+  'Recap',
+  'Next steps',
+]
+
 describe('inform blueprint', () => {
   it('has a ten-slide master sequence', () => {
     expect(BLUEPRINTS.inform.master).toHaveLength(10)
+  })
+
+  it('master sequence labels match the doc', () => {
+    expect(BLUEPRINTS.inform.master.map((s) => s.label)).toEqual(INFORM_MASTER_LABELS)
   })
 
   it('matches the doc table for every count from 5 to 10', () => {
@@ -74,12 +91,52 @@ describe('role vocabulary', () => {
     }
   })
 
-  it('only uses roles from the master sequence or a documented merge', () => {
+  it('role ids follow the format convention', () => {
     for (const blueprint of Object.values(BLUEPRINTS)) {
       for (const column of Object.values(blueprint.columns)) {
         for (const spec of column) {
           expect(spec.role).toMatch(/^[a-z0-9-]+$/)
+        }
+      }
+    }
+  })
+
+  it('every role has a non-empty instruction', () => {
+    for (const blueprint of Object.values(BLUEPRINTS)) {
+      for (const column of Object.values(blueprint.columns)) {
+        for (const spec of column) {
           expect(spec.instruction.length).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it('only uses roles from the master sequence or a documented merge', () => {
+    // For inform blueprint: master roles + merged-row roles
+    const informLegalRoles = new Set([
+      // Master roles
+      'title-roadmap',
+      'why-matters',
+      'gap',
+      'objectives',
+      'core-idea-1',
+      'core-idea-2',
+      'core-idea-3',
+      'application',
+      'recap',
+      'next-steps',
+      // Merged-row roles that only appear in columns
+      'title-why-matters',
+      'gap-objectives',
+      'core-content',
+      'recap-next-steps',
+    ])
+
+    for (const blueprint of Object.values(BLUEPRINTS)) {
+      const legalRoles = blueprint.id === 'inform' ? informLegalRoles : new Set<string>()
+      for (const column of Object.values(blueprint.columns)) {
+        for (const spec of column) {
+          expect(legalRoles.has(spec.role)).toBe(true)
         }
       }
     }
