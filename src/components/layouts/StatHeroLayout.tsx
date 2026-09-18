@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading, StatBlockView } from './BlockRenderer'
+import { Heading, Leftovers, StatBlockView } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -9,6 +9,9 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const stat = blocksOfTypeIndexed(blocks, 'stat')[0]
   const paragraphs = blocksOfTypeIndexed(blocks, 'paragraph')
+  // Only the FIRST stat is drawn here, so a second one is a leftover rather
+  // than content that vanishes.
+  const consumed = [...headings, ...paragraphs, ...(stat ? [stat] : [])].map((e) => e.index)
 
   if (variant === 'expressive') {
     return (
@@ -25,6 +28,7 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
               </p>
             </Adjustable>
           ))}
+          <Leftovers blocks={blocks} consumed={consumed} />
         </div>
       </div>
     )
@@ -43,6 +47,7 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
           </p>
         </Adjustable>
       ))}
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

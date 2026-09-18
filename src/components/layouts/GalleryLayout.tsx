@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading } from './BlockRenderer'
+import { Heading, Leftovers } from './BlockRenderer'
 import { Adjustable } from './Adjustable'
 import { textRef } from '@/engine/marks'
 
@@ -9,6 +9,10 @@ export function GalleryLayout({ blocks, variant }: { blocks: ContentBlock[]; var
 
   if (variant === 'expressive' && images.length >= 2) {
     const [featured, ...rest] = images
+    // This branch shows the featured image and at most two others, so a fourth
+    // image is a leftover here even though the structured branch draws them all.
+    const shown = [featured, ...rest.slice(0, 2)]
+    const consumed = [...headings, ...shown].map((entry) => entry.index)
     return (
       <div className="flex flex-col gap-6">
         {headings.map(({ block, index }) => (
@@ -38,6 +42,7 @@ export function GalleryLayout({ blocks, variant }: { blocks: ContentBlock[]; var
             ))}
           </div>
         </div>
+        <Leftovers blocks={blocks} consumed={consumed} />
       </div>
     )
   }
@@ -60,6 +65,7 @@ export function GalleryLayout({ blocks, variant }: { blocks: ContentBlock[]; var
           </Adjustable>
         ))}
       </div>
+      <Leftovers blocks={blocks} consumed={[...headings, ...images].map((e) => e.index)} />
     </div>
   )
 }

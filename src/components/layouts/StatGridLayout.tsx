@@ -1,11 +1,13 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading, StatBlockView } from './BlockRenderer'
+import { Heading, Leftovers, StatBlockView } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 
 export function StatGridLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const stats = blocksOfTypeIndexed(blocks, 'stat')
   const expressive = variant === 'expressive'
+  // Anything this layout does not draw itself still belongs on the slide.
+  const consumed = [...headings, ...stats].map((entry) => entry.index)
 
   return (
     <div className="flex flex-col gap-8">
@@ -26,6 +28,7 @@ export function StatGridLayout({ blocks, variant }: { blocks: ContentBlock[]; va
           </div>
         ))}
       </div>
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

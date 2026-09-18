@@ -1,4 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -8,6 +9,12 @@ import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const heading = blocksOfTypeIndexed(blocks, 'heading')[0]
   const paragraph = blocksOfTypeIndexed(blocks, 'paragraph')[0]
+  // `chooseLayout` only awards hero to a spare card, but `layoutForKind` and
+  // `roleLayoutHint` name it outright — so a hero can arrive carrying more than
+  // a heading and one line, and the rest must not vanish.
+  const consumed = [...(heading ? [heading] : []), ...(paragraph ? [paragraph] : [])].map(
+    (entry) => entry.index,
+  )
 
   if (variant === 'expressive') {
     return (
@@ -34,6 +41,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
             </p>
             </Adjustable>
           )}
+          <Leftovers blocks={blocks} consumed={consumed} />
         </div>
       </div>
     )
@@ -62,6 +70,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         </p>
         </Adjustable>
       )}
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

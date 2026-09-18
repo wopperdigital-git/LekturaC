@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading } from './BlockRenderer'
+import { Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -10,6 +10,11 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const quote = blocksOfTypeIndexed(blocks, 'quote')[0]
   const paragraph = blocksOfTypeIndexed(blocks, 'paragraph')[0]
+  // Only the first quote and first paragraph are drawn here, so a second of
+  // either is a leftover rather than content that disappears.
+  const consumed = [...headings, ...(quote ? [quote] : []), ...(paragraph ? [paragraph] : [])].map(
+    (entry) => entry.index,
+  )
 
   if (variant === 'expressive') {
     return (
@@ -51,6 +56,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
             </p>
           </Adjustable>
         )}
+        <Leftovers blocks={blocks} consumed={consumed} />
       </div>
     )
   }
@@ -102,6 +108,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
           </p>
         </Adjustable>
       )}
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

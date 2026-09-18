@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { BlockRenderer, Heading } from './BlockRenderer'
+import { BlockRenderer, Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 
 export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -27,19 +27,26 @@ export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[
   )
   const image = <div>{images[0] && <BlockRenderer block={images[0].block} index={images[0].index} />}</div>
 
+  // This layout draws every non-image block already; the one thing it leaves
+  // out is a SECOND image, since the split has exactly one image slot.
+  const consumed = [...headings, ...rest, ...(images[0] ? [images[0]] : [])].map((e) => e.index)
+
   return (
-    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:items-center">
-      {variant === 'expressive' ? (
-        <>
-          {image}
-          {text}
-        </>
-      ) : (
-        <>
-          {text}
-          {image}
-        </>
-      )}
+    <div className="flex flex-col gap-8">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:items-center">
+        {variant === 'expressive' ? (
+          <>
+            {image}
+            {text}
+          </>
+        ) : (
+          <>
+            {text}
+            {image}
+          </>
+        )}
+      </div>
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

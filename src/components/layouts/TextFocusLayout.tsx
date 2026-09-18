@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading } from './BlockRenderer'
+import { Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -10,6 +10,8 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const paragraphs = blocksOfTypeIndexed(blocks, 'paragraph')
   const expressive = variant === 'expressive'
+  // Anything this layout does not draw itself still belongs on the slide.
+  const consumed = [...headings, ...paragraphs].map((entry) => entry.index)
 
   return (
     <div className="flex flex-col gap-5">
@@ -32,6 +34,7 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
           </Adjustable>
         ))}
       </div>
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

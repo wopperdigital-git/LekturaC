@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ContentBlock } from '@/engine/contentBlocks'
+import { leftoverBlocks } from '@/engine/blockPartition'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -20,6 +21,37 @@ export function BlockRenderer({ block, index }: { block: ContentBlock; index: nu
     <Adjustable index={index}>
       <BlockBody block={block} index={index} />
     </Adjustable>
+  )
+}
+
+/**
+ * Whatever a layout did not draw itself, stacked below what it did.
+ *
+ * Every layout but `StandardLayout` picks out the block types it understands
+ * and renders only those, so anything else on the card used to be drawn
+ * nowhere — while the .pptx export and the narration script both carried it
+ * (see `engine/blockPartition.ts`). A layout now names the indices it drew and
+ * ends with this, so a card cannot hold text that never reaches the screen.
+ *
+ * It renders nothing at all in the normal case, where the layout's own content
+ * *is* the whole card — so a well-matched card looks exactly as it did before
+ * this existed, with no stray empty box in its markup.
+ */
+export function Leftovers({
+  blocks,
+  consumed,
+}: {
+  blocks: ContentBlock[]
+  consumed: number[]
+}) {
+  const rest = leftoverBlocks(blocks, consumed)
+  if (rest.length === 0) return null
+  return (
+    <div className="flex flex-col gap-4">
+      {rest.map(({ block, index }) => (
+        <BlockRenderer key={index} block={block} index={index} />
+      ))}
+    </div>
   )
 }
 

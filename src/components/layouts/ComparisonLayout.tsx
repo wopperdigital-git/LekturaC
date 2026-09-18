@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading } from './BlockRenderer'
+import { Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -8,6 +8,8 @@ import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const groups = blocksOfTypeIndexed(blocks, 'comparisonGroup')
+  // Anything this layout does not draw itself still belongs on the slide.
+  const consumed = [...headings, ...groups].map((entry) => entry.index)
 
   if (variant === 'expressive') {
     return (
@@ -43,6 +45,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
             )
           })}
         </div>
+        <Leftovers blocks={blocks} consumed={consumed} />
       </div>
     )
   }
@@ -88,6 +91,7 @@ export function ComparisonLayout({ blocks, variant }: { blocks: ContentBlock[]; 
           )
         })}
       </div>
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

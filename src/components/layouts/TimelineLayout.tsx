@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading } from './BlockRenderer'
+import { Heading, Leftovers } from './BlockRenderer'
 import { Adjustable } from './Adjustable'
 import { EditableText } from './EditableText'
 import { textRef } from '@/engine/marks'
@@ -8,6 +8,8 @@ import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
 export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const steps = blocksOfTypeIndexed(blocks, 'timelineStep')
+  // Anything this layout does not draw itself still belongs on the slide.
+  const consumed = [...headings, ...steps].map((entry) => entry.index)
 
   if (variant === 'expressive') {
     return (
@@ -37,6 +39,7 @@ export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; va
             </Adjustable>
           ))}
         </ol>
+        <Leftovers blocks={blocks} consumed={consumed} />
       </div>
     )
   }
@@ -65,6 +68,7 @@ export function TimelineLayout({ blocks, variant }: { blocks: ContentBlock[]; va
           </Adjustable>
         ))}
       </ol>
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }

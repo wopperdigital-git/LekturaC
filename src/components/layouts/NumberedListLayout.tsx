@@ -1,5 +1,5 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
-import { Heading } from './BlockRenderer'
+import { Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
@@ -9,6 +9,9 @@ import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const list = blocksOfTypeIndexed(blocks, 'bulletList')[0]
+  // Only the first bullet list is numbered, so a second list -- and any
+  // paragraph or stat on the card -- is a leftover rather than lost content.
+  const consumed = [...headings, ...(list ? [list] : [])].map((entry) => entry.index)
 
   if (variant === 'expressive') {
     return (
@@ -32,6 +35,7 @@ export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]
           </ol>
           </Adjustable>
         )}
+        <Leftovers blocks={blocks} consumed={consumed} />
       </div>
     )
   }
@@ -60,6 +64,7 @@ export function NumberedListLayout({ blocks, variant }: { blocks: ContentBlock[]
         </ol>
         </Adjustable>
       )}
+      <Leftovers blocks={blocks} consumed={consumed} />
     </div>
   )
 }
