@@ -249,6 +249,62 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       )
     }
 
+    case 'gallery': {
+      // From GalleryLayout. The expressive mosaic shows a featured image beside
+      // two more, and the old layout silently dropped a fourth — so any image
+      // beyond the mosaic now continues in a row beneath it.
+      if (expressive) {
+        const [featured, ...rest] = node.items
+        const overflow = rest.slice(2)
+        return (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Adjustable index={featured.index}>
+                <figure className="row-span-2 overflow-hidden rounded-slide-sm border border-slide-border">
+                  <img
+                    src={featured.block.url}
+                    alt={featured.block.alt ?? ''}
+                    className="h-full w-full object-cover"
+                  />
+                </figure>
+              </Adjustable>
+              <div className="grid grid-rows-2 gap-3">
+                {rest.slice(0, 2).map((img) => (
+                  <Adjustable key={img.index} index={img.index}>
+                    <figure className="overflow-hidden rounded-slide-sm border border-slide-border">
+                      <img src={img.block.url} alt={img.block.alt ?? ''} className="aspect-square w-full object-cover" />
+                    </figure>
+                  </Adjustable>
+                ))}
+              </div>
+            </div>
+            {overflow.length > 0 && (
+              <div className="grid grid-cols-3 gap-3">
+                {overflow.map((img) => (
+                  <Adjustable key={img.index} index={img.index}>
+                    <figure className="overflow-hidden rounded-slide-sm border border-slide-border">
+                      <img src={img.block.url} alt={img.block.alt ?? ''} className="aspect-square w-full object-cover" />
+                    </figure>
+                  </Adjustable>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      }
+      return (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {node.items.map((img) => (
+            <Adjustable key={img.index} index={img.index}>
+              <figure className="overflow-hidden rounded-slide-sm border border-slide-border">
+                <img src={img.block.url} alt={img.block.alt ?? ''} className="aspect-square w-full object-cover" />
+              </figure>
+            </Adjustable>
+          ))}
+        </div>
+      )
+    }
+
     default:
       // An arrangement not ported yet draws its items as plain blocks — exactly
       // how Stage 0's leftovers drew them — so a card holding one looks no worse

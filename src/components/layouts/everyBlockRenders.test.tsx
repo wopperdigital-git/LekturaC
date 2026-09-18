@@ -259,4 +259,26 @@ describe("a family card keeps the author's order", () => {
       expectInOrder(html, ['ORDNLH', 'ORDNLP', 'ORDNLI1', 'ORDNLI7'])
     }
   })
+
+  it('gallery: a quote between images stays between them', () => {
+    // Forced, not automatic: the classifier only awards `gallery` to a card
+    // with no paragraph, but the Level 2 picker can put any card in it.
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'ORDGLH' },
+      { type: 'image', url: 'https://example.test/ORDGL1.png' },
+      { type: 'quote', text: 'ORDGLQ' },
+      { type: 'image', url: 'https://example.test/ORDGL2.png' },
+      { type: 'image', url: 'https://example.test/ORDGL3.png' },
+    ]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'gallery', variant)} />)
+      expectInOrder(html, [
+        'ORDGLH',
+        'src="https://example.test/ORDGL1.png"',
+        'ORDGLQ',
+        'src="https://example.test/ORDGL2.png"',
+        'src="https://example.test/ORDGL3.png"',
+      ])
+    }
+  })
 })

@@ -8,7 +8,6 @@ import { HeroLayout } from './HeroLayout'
 import { StatHeroLayout } from './StatHeroLayout'
 import { QuoteLayout } from './QuoteLayout'
 import { TextFocusLayout } from './TextFocusLayout'
-import { GalleryLayout } from './GalleryLayout'
 
 /*
   The layouts now drawn by `FlowLayout` rather than a component of their own.
@@ -22,7 +21,7 @@ import { GalleryLayout } from './GalleryLayout'
   `LAYOUT_COMPONENTS` below is typed to exclude exactly these names, so moving a
   layout into this list is a type error until its entry there is removed too.
 */
-const FLOW_LAYOUTS = ['statGrid', 'timeline', 'comparison', 'iconGrid', 'numberedList'] as const
+const FLOW_LAYOUTS = ['statGrid', 'timeline', 'comparison', 'iconGrid', 'numberedList', 'gallery'] as const
 
 type FlowLayoutName = (typeof FLOW_LAYOUTS)[number]
 
@@ -40,7 +39,6 @@ const LAYOUT_COMPONENTS: Record<
   statHero: StatHeroLayout,
   quote: QuoteLayout,
   textFocus: TextFocusLayout,
-  gallery: GalleryLayout,
 }
 
 /**
