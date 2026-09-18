@@ -173,3 +173,35 @@ describe('every block on a card reaches the screen', () => {
     }
   }
 })
+
+/** Asserts the markers appear in the markup in exactly this order. */
+function expectInOrder(html: string, markers: string[]) {
+  const positions = markers.map((marker) => html.indexOf(marker))
+  markers.forEach((marker, i) => {
+    expect(positions[i], `"${marker}" is missing from the rendered card`).toBeGreaterThanOrEqual(0)
+  })
+  expect(positions, `drawn out of order: expected ${markers.join(' → ')}`).toEqual(
+    [...positions].sort((a, b) => a - b),
+  )
+}
+
+describe("a family card keeps the author's order", () => {
+  // The old family layouts gathered every block of their type together and
+  // pushed anything else to the end. A family card now draws its blocks where
+  // they sit, and each test below FAILS against the old component for its
+  // family — which is how a port proves it actually took effect.
+
+  it('stat grid: a paragraph between stats stays between them', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'ORDSTATH' },
+      { type: 'stat', value: 'ORDSTATV1', label: 'ORDSTATL1' },
+      { type: 'paragraph', text: 'ORDSTATP' },
+      { type: 'stat', value: 'ORDSTATV2', label: 'ORDSTATL2' },
+      { type: 'stat', value: 'ORDSTATV3', label: 'ORDSTATL3' },
+    ]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant)} />)
+      expectInOrder(html, ['ORDSTATH', 'ORDSTATV1', 'ORDSTATP', 'ORDSTATV2', 'ORDSTATV3'])
+    }
+  })
+})
