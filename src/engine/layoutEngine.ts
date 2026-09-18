@@ -1,6 +1,9 @@
 import { blocksOfType, type ContentBlock, type LayoutType, type VisualStyle } from './contentBlocks'
 
-const SHORT_ITEM_MAX_CHARS = 40
+export const SHORT_ITEM_MAX_CHARS = 40
+
+/** The most items a bullet list can hold and still be drawn as chips. */
+export const MAX_CHIP_ITEMS = 6
 
 /**
  * Rule-based classifier: inspects what a card's content actually is and
@@ -65,7 +68,7 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
 
   if (
     bulletLists.length === 1 &&
-    bulletLists[0].items.length <= 6 &&
+    bulletLists[0].items.length <= MAX_CHIP_ITEMS &&
     bulletLists[0].items.every((item) => item.length <= SHORT_ITEM_MAX_CHARS) &&
     images.length === 0
   ) {
