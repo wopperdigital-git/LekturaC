@@ -1,3 +1,5 @@
+import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor, type BlueprintId } from './slideBlueprints'
+
 export interface GenerationBrief {
   audience: string
   detailLevel: 'simplified' | 'balanced' | 'detailed'
@@ -38,8 +40,9 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
 
 {
   "title": string,
+  "blueprint": string,
   "cards": [
-    { "blocks": ContentBlock[], "visualStyle": "structured" | "expressive" }
+    { "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "role": string }
   ]
 }
 
@@ -76,7 +79,60 @@ CONTENT QUALITY RULES — this is the most important part:
 - Numbers are a tool, not a default. State a number — invented or otherwise — only when it's the most natural way to make the point AND the deck's purpose calls for it (persuading investors, reporting performance, comparing options, a "detailed" data-driven brief). Do not manufacture a statistic just to look precise, and do not force a number onto a card that doesn't need one. A conceptual, explainer, or narrative deck can be entirely free of invented figures and still be sharply specific — specificity comes from naming the real mechanism, step, or example, not from bolting a percentage onto it.
 - If a number does serve the point and the topic is hypothetical, keep it plausible and internally consistent across the deck (a figure on one card shouldn't contradict another) — but reach for one only where the content genuinely calls for it, not on every other card by habit.
 - Titles and headings should be specific to this deck's content, not generic section labels — prefer "Routes re-score every 90 seconds" over "Our Technology".
-- Tailor every card to the stated audience, detail level, and the user's explicit guidance below — the same topic should read differently for investors than for a general public audience. If the guidance says to avoid statistics, stick to given facts, or focus/skip specific angles, treat that as a hard constraint that overrides the general rules above wherever they'd conflict — including skipping "stat" blocks and invented figures entirely if asked.`
+- Tailor every card to the stated audience, detail level, and the user's explicit guidance below — the same topic should read differently for investors than for a general public audience. If the guidance says to avoid statistics, stick to given facts, or focus/skip specific angles, treat that as a hard constraint that overrides the general rules above wherever they'd conflict — including skipping "stat" blocks and invented figures entirely if asked.
+- Every card's heading is a FULL-SENTENCE ASSERTION, not a topic phrase: "Retention drops sharply after 15 minutes", not "Retention". The heading states the point; the rest of the card supports that one point.
+- ONE idea per card. Support it with an example, a mechanism, or a short explanation — a figure ONLY when the material genuinely supports one. Do not invent numbers to look like evidence.
+- At most 7 items on any card (5 is better). Past that, comprehension drops and the card should be split or trimmed.
+- Set "blueprint" to the id of the structure you chose, and every card's "role" to the bracketed role id of the row it fills.`
+
+const AUTO_COUNTS = [5, 6, 7, 8, 9, 10] as const
+
+function renderSequence(id: BlueprintId, count: number): string {
+  return sequenceFor(id, count)
+    .map((spec, i) => `  ${i + 1}. [${spec.role}] ${spec.label} — ${spec.instruction}`)
+    .join('\n')
+}
+
+/**
+ * The blueprint half of the user prompt.
+ *
+ * The model chooses the blueprint, so it cannot be handed one sequence — it is
+ * handed all three and told to pick. With an exact count that is one column
+ * each (~600 tokens). With 'auto' the count is unknown too, so every column
+ * goes (~1200 tokens): the merges in those columns are the doc's own content,
+ * and a model inventing its own would make the exactness pointless.
+ */
+export function buildBlueprintSection(slideCount: number | 'auto'): string {
+  const playbook = FIELD_PLAYBOOK.map(
+    (e) => `  - ${e.field} · ${e.type} → ${BLUEPRINTS[e.blueprint].name}. ${e.note}`,
+  ).join('\n')
+
+  const blueprints = (Object.keys(BLUEPRINTS) as BlueprintId[])
+    .map((id) => {
+      const b = BLUEPRINTS[id]
+      const sequences =
+        slideCount === 'auto'
+          ? AUTO_COUNTS.map((count) => `  At ${count} slides:\n${renderSequence(id, count)}`).join('\n')
+          : renderSequence(id, slideCount)
+      return `${b.name} (id: ${b.id})\n  Use for: ${b.useFor}\n  Why this order: ${b.logic}\n${sequences}`
+    })
+    .join('\n\n')
+
+  const instruction =
+    slideCount === 'auto'
+      ? 'Pick the ONE blueprint that fits this deck\'s goal, then choose a slide count between 5 and 10 that suits the topic\'s depth, and follow that blueprint\'s sequence for that count exactly.'
+      : 'Pick the ONE blueprint that fits this deck\'s goal, then follow its sequence below exactly.'
+
+  return `STRUCTURE — choose a blueprint and follow it
+
+${instruction}
+Produce exactly one card per row, in the order given, and set each card's "role" to that row's bracketed id. Do not add, drop, reorder or merge rows.
+
+Field playbook (match the deck to a row, then use that row's blueprint):
+${playbook}
+
+${blueprints}`
+}
 
 export function buildDeckUserPrompt(topic: string, brief: GenerationBrief): string {
   const audience = brief.audience.trim() || 'a general audience'
@@ -85,12 +141,14 @@ export function buildDeckUserPrompt(topic: string, brief: GenerationBrief): stri
 
 Slide count: ${
     brief.slideCount === 'auto'
-      ? "use your judgment — choose between 5 and 10 cards (never more than 10), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close."
+      ? "choose between 5 and 10 cards (never more than 10), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close."
       : `exactly ${brief.slideCount} cards. Not approximately — exactly this many.`
   }
 Audience: ${audience}
 Detail level: ${brief.detailLevel} — ${DETAIL_LEVEL_INSTRUCTIONS[brief.detailLevel]}
 Tone: ${brief.tone} — ${TONE_INSTRUCTIONS[brief.tone]}
+
+${buildBlueprintSection(brief.slideCount)}
 ${guidance ? `\nUSER'S EXPLICIT INTENT (hard constraint — follow this over the general content rules wherever they conflict): ${guidance}\n` : ''}
 Write every card specifically for this audience at this detail level and tone.`
 }

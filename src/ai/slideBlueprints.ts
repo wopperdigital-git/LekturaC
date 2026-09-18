@@ -514,3 +514,33 @@ export function sequenceMismatch(expected: SlideSpec[], roles: string[]): string
   }
   return null
 }
+
+export interface PlaybookEntry {
+  field: string
+  type: string
+  blueprint: BlueprintId
+  note: string
+}
+
+/**
+ * The doc's field playbook, condensed for the prompt. It exists so the model's
+ * choice is guided by something better than the topic's vibe: "thesis defense"
+ * and "investor pitch" are both persuasive-sounding and land in different
+ * blueprints.
+ */
+export const FIELD_PLAYBOOK: PlaybookEntry[] = [
+  { field: 'Education', type: 'Lecture or lesson', blueprint: 'inform', note: 'Objectives are stated learning outcomes; each core idea is one chunk.' },
+  { field: 'Education', type: 'Thesis or capstone defense', blueprint: 'inform', note: 'The gap is the research gap; the core ideas are methodology, results, discussion.' },
+  { field: 'Education', type: 'Student pitch or competition entry', blueprint: 'persuade', note: 'Judges evaluate like investors — lead with the problem, not the product.' },
+  { field: 'Education', type: 'Storytelling assignment or show-and-tell', blueprint: 'story', note: 'Skip data-heavy proof; spend the room on the journey and the insight.' },
+  { field: 'Business', type: 'Client proposal or sales pitch', blueprint: 'persuade', note: 'The offer states scope explicitly — ambiguity stalls decisions.' },
+  { field: 'Business', type: 'Investor or fundraising pitch', blueprint: 'persuade', note: 'Keep how-it-works and proof concrete, light on emotional framing.' },
+  { field: 'Business', type: 'Status update or project report', blueprint: 'inform', note: 'Open situation-complication-question; lead with the recommendation, not the process.' },
+  { field: 'Business', type: 'Onboarding or internal training', blueprint: 'inform', note: 'Keep all three core ideas; make the application a task or exercise.' },
+  { field: 'Business', type: 'Brand story, about-us or keynote', blueprint: 'story', note: 'Company history is the "what is"; the turning point is a founding moment or pivot.' },
+  { field: 'Other fields', type: 'Conference talk or keynote', blueprint: 'story', note: 'Hook in the first 60 seconds; one idea stated in one sentence.' },
+  { field: 'Other fields', type: 'Portfolio or creative work', blueprint: 'story', note: 'Each project is a "what is to what could be" arc, closing on results.' },
+  { field: 'Other fields', type: 'Nonprofit or fundraising ask', blueprint: 'persuade', note: 'Open on a beneficiary story, then proof, offer and call to action.' },
+  { field: 'Other fields', type: 'Scientific or technical conference talk', blueprint: 'inform', note: 'Assertion-evidence was built for this: sentence headings, data as the evidence.' },
+  { field: 'Other fields', type: 'Community or policy briefing', blueprint: 'inform', note: 'Structure through the recap, then close on a concrete action.' },
+]

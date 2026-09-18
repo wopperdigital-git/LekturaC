@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BLUEPRINTS, sequenceFor, sequenceMismatch } from './slideBlueprints'
+import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor, sequenceMismatch } from './slideBlueprints'
 
 /**
  * The scaling tables are the product here — a wrong cell silently produces a
@@ -314,5 +314,25 @@ describe('sequenceMismatch', () => {
     const roles: string[] = expected.map((s) => s.role)
     roles[0] = 'introduction'
     expect(sequenceMismatch(expected, roles)).toContain('introduction')
+  })
+})
+
+describe('FIELD_PLAYBOOK', () => {
+  it('only points at blueprints that exist', () => {
+    for (const entry of FIELD_PLAYBOOK) {
+      expect(BLUEPRINTS[entry.blueprint]).toBeDefined()
+    }
+  })
+
+  it('covers all three fields from the doc', () => {
+    const fields = new Set(FIELD_PLAYBOOK.map((e) => e.field))
+    expect(fields).toContain('Education')
+    expect(fields).toContain('Business')
+    expect(fields).toContain('Other fields')
+  })
+
+  it('recommends each blueprint at least once', () => {
+    const recommended = new Set(FIELD_PLAYBOOK.map((e) => e.blueprint))
+    expect(recommended).toEqual(new Set(['inform', 'persuade', 'story']))
   })
 })
