@@ -27,11 +27,15 @@ export function BlockRenderer({ block, index }: { block: ContentBlock; index: nu
 /**
  * Whatever a layout did not draw itself, stacked below what it did.
  *
- * Every layout but `StandardLayout` picks out the block types it understands
- * and renders only those, so anything else on the card used to be drawn
- * nowhere — while the .pptx export and the narration script both carried it
- * (see `engine/blockPartition.ts`). A layout now names the indices it drew and
- * ends with this, so a card cannot hold text that never reaches the screen.
+ * Five frame layouts (`HeroLayout`, `StatHeroLayout`, `QuoteLayout`,
+ * `TextFocusLayout`, `StandardSplitLayout`) pick out the block types they
+ * understand and render only those, so anything else on the card used to be
+ * drawn nowhere — while the .pptx export and the narration script both carried
+ * it (see `engine/blockPartition.ts`). `StandardLayout` maps every block itself.
+ * `FlowLayout` and `GroupRenderer` draw every block by construction and must
+ * never use this component — doing so would draw blocks twice. Each of the frame
+ * layouts now names the indices it drew and ends with this, so a card cannot
+ * hold text that never reaches the screen.
  *
  * It renders nothing at all in the normal case, where the layout's own content
  * *is* the whole card — so a well-matched card looks exactly as it did before

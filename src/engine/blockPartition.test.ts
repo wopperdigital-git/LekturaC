@@ -5,15 +5,18 @@ import { leftoverBlocks } from './blockPartition'
 /**
  * The guard on the defect this module exists for.
  *
- * Eleven of the twelve layout components render only the block types they
- * expect, so a paragraph on a timeline card was drawn nowhere — while the PPTX
- * export (`card.blocks.forEach`) and the narration script (`contentLines`) both
- * carried it. One card, three different contents, and the AI decides which
- * blocks a card holds, so it could generate text the user never saw.
+ * Eleven of the twelve layout components once rendered only the block types
+ * they expected, so a paragraph on a timeline card was drawn nowhere — while
+ * the PPTX export (`card.blocks.forEach`) and the narration script
+ * (`contentLines`) both carried it. One card, three different contents, and the
+ * AI decides which blocks a card holds, so it could generate text the user
+ * never saw.
  *
- * Every layout now declares the indices it drew and renders whatever is left,
- * which makes "did this layout account for every block?" a question about a
- * pure function rather than about eleven hand-written JSX trees.
+ * Five frame layouts now declare the indices they drew and render whatever is
+ * left, which makes "did this layout account for every block?" a question about
+ * a pure function rather than about five hand-written JSX trees. Family layouts
+ * (stat grid, timeline, comparison, icon grid, numbered list, gallery) were
+ * deleted; those cards now render through `FlowLayout`/`GroupRenderer` instead.
  */
 const heading: ContentBlock = { type: 'heading', text: 'A heading' }
 const para: ContentBlock = { type: 'paragraph', text: 'A paragraph.' }

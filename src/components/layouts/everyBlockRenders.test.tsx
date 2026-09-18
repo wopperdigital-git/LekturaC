@@ -261,8 +261,7 @@ describe("a family card keeps the author's order", () => {
   })
 
   it('gallery: a quote between images stays between them', () => {
-    // Forced, not automatic: the classifier only awards `gallery` to a card
-    // with no paragraph, but the Level 2 picker can put any card in it.
+    // Forced, to exercise the Level 2 picker path; the classifier would also choose gallery for this card.
     const blocks: ContentBlock[] = [
       { type: 'heading', text: 'ORDGLH' },
       { type: 'image', url: 'https://example.test/ORDGL1.png' },
