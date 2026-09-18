@@ -494,3 +494,23 @@ export function sequenceFor(id: BlueprintId, count: number): SlideSpec[] {
   const middle = five.slice(1, five.length - 1)
   return [five[0], ...middle.slice(0, count - 2), five[five.length - 1]]
 }
+
+/**
+ * Compares what the model returned against the sequence it was given.
+ *
+ * Returns a sentence for a log, never an exception, and callers must treat it
+ * as a warning: nothing in this app can regenerate a deck, so a near-miss on
+ * the sequence must not cost the user the content. Only the response *shape*
+ * is allowed to fail a generation (zod, in `provider.ts`).
+ */
+export function sequenceMismatch(expected: SlideSpec[], roles: string[]): string | null {
+  if (roles.length !== expected.length) {
+    return `expected ${expected.length} slides, got ${roles.length}`
+  }
+  for (let i = 0; i < expected.length; i++) {
+    if (roles[i] !== expected[i].role) {
+      return `slide ${i + 1} should be "${expected[i].role}" but was "${roles[i]}"`
+    }
+  }
+  return null
+}

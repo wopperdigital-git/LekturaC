@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BLUEPRINTS, sequenceFor } from './slideBlueprints'
+import { BLUEPRINTS, sequenceFor, sequenceMismatch } from './slideBlueprints'
 
 /**
  * The scaling tables are the product here — a wrong cell silently produces a
@@ -282,5 +282,37 @@ describe('role vocabulary', () => {
         }
       }
     }
+  })
+})
+
+describe('sequenceMismatch', () => {
+  it('returns null when the roles match the sequence', () => {
+    const expected = sequenceFor('persuade', 6)
+    const roles = expected.map((s) => s.role)
+    expect(sequenceMismatch(expected, roles)).toBeNull()
+  })
+
+  it('reports a wrong count', () => {
+    const expected = sequenceFor('persuade', 6)
+    const message = sequenceMismatch(expected, ['hook', 'problem-why-now'])
+    expect(message).toContain('6')
+    expect(message).toContain('2')
+  })
+
+  it('reports the first role that diverges, with its position', () => {
+    const expected = sequenceFor('persuade', 5)
+    const roles = expected.map((s) => s.role)
+    roles[2] = 'proof'
+    const message = sequenceMismatch(expected, roles)
+    expect(message).toContain('slide 3')
+    expect(message).toContain('proof')
+    expect(message).toContain('solution-how-it-works')
+  })
+
+  it('reports an unknown role rather than throwing', () => {
+    const expected = sequenceFor('inform', 5)
+    const roles: string[] = expected.map((s) => s.role)
+    roles[0] = 'introduction'
+    expect(sequenceMismatch(expected, roles)).toContain('introduction')
   })
 })
