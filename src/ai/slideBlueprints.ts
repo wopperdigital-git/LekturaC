@@ -85,7 +85,7 @@ export interface Blueprint {
 }
 
 /** Every spec the inform blueprint can use, by role, so columns stay DRY. */
-const INFORM: Record<string, SlideSpec> = {
+const INFORM: Partial<Record<SlideRole, SlideSpec>> = {
   'title-roadmap': {
     role: 'title-roadmap',
     label: 'Title + roadmap',
@@ -158,8 +158,8 @@ const INFORM: Record<string, SlideSpec> = {
   },
 }
 
-function informColumn(...roles: string[]): SlideSpec[] {
-  return roles.map((role) => INFORM[role])
+function informColumn(...roles: SlideRole[]): SlideSpec[] {
+  return roles.map((role) => INFORM[role]!)
 }
 
 const INFORM_BLUEPRINT: Blueprint = {
@@ -191,10 +191,228 @@ const INFORM_BLUEPRINT: Blueprint = {
   },
 }
 
+const PERSUADE: Partial<Record<SlideRole, SlideSpec>> = {
+  hook: {
+    role: 'hook',
+    label: 'Hook',
+    instruction: 'The offer name and a one-line value proposition. Earn attention.',
+  },
+  problem: {
+    role: 'problem',
+    label: 'Problem',
+    instruction: 'The pain or opportunity this audience actually faces.',
+  },
+  'why-now': {
+    role: 'why-now',
+    label: 'Why now',
+    instruction: 'The cost of doing nothing; why this cannot wait.',
+  },
+  'problem-why-now': {
+    role: 'problem-why-now',
+    label: 'Problem + why now',
+    instruction: 'The pain this audience faces, and the cost of leaving it alone.',
+  },
+  solution: {
+    role: 'solution',
+    label: 'Solution',
+    instruction: 'The product, service or idea, presented as the answer to that problem.',
+  },
+  'how-it-works': {
+    role: 'how-it-works',
+    label: 'How it works',
+    instruction: 'The mechanics, the key capabilities, or the unfair advantage.',
+  },
+  'solution-how-it-works': {
+    role: 'solution-how-it-works',
+    label: 'Solution + how it works',
+    instruction: 'The answer, and the mechanics that make it work.',
+  },
+  proof: {
+    role: 'proof',
+    label: 'Proof',
+    instruction: 'Results, testimonials, case studies or credibility markers.',
+  },
+  'why-us': {
+    role: 'why-us',
+    label: 'Why us',
+    instruction: 'Differentiation from the alternatives the audience is weighing.',
+  },
+  'proof-why-us': {
+    role: 'proof-why-us',
+    label: 'Proof + why us',
+    instruction: 'The evidence it works, and why from us rather than an alternative.',
+  },
+  offer: {
+    role: 'offer',
+    label: 'Offer',
+    instruction: 'What they get, stated explicitly — scope, packages, terms.',
+  },
+  handling: {
+    role: 'handling',
+    label: 'Handling',
+    instruction: 'Guarantees, FAQs, and the objection you know is coming.',
+  },
+  'offer-handling': {
+    role: 'offer-handling',
+    label: 'Offer + handling',
+    instruction: 'What they get, and the answer to the obvious hesitation.',
+  },
+  'offer-handling-cta': {
+    role: 'offer-handling-cta',
+    label: 'Offer + handling + CTA',
+    instruction: 'What they get, the objection answered, and the specific ask — one closing slide.',
+  },
+  cta: {
+    role: 'cta',
+    label: 'Call to action',
+    instruction: 'One specific ask and the next step. Not a summary.',
+  },
+}
+
+function persuadeColumn(...roles: SlideRole[]): SlideSpec[] {
+  return roles.map((role) => PERSUADE[role]!)
+}
+
+const PERSUADE_BLUEPRINT: Blueprint = {
+  id: 'persuade',
+  name: 'Persuading & Selling',
+  useFor: 'sales pitches, investor and fundraising decks, client proposals, marketing pitches',
+  logic:
+    'AIDA (Attention, Interest, Desire, Action) fused with the problem/solution pitch structure Kawasaki popularised for investors: earn attention, agitate a real problem, present the offer as relief, back it with proof, then ask for one specific action. Weight the deck toward proof and how the offer works — that is what moves a decision — and spend the least room on the hook and the close.',
+  master: persuadeColumn(
+    'hook',
+    'problem',
+    'why-now',
+    'solution',
+    'how-it-works',
+    'proof',
+    'why-us',
+    'offer',
+    'handling',
+    'cta',
+  ),
+  columns: {
+    5: persuadeColumn('hook', 'problem-why-now', 'solution-how-it-works', 'proof-why-us', 'offer-handling-cta'),
+    6: persuadeColumn('hook', 'problem-why-now', 'solution-how-it-works', 'proof-why-us', 'offer-handling', 'cta'),
+    7: persuadeColumn('hook', 'problem-why-now', 'solution-how-it-works', 'proof-why-us', 'offer', 'handling', 'cta'),
+    8: persuadeColumn('hook', 'problem-why-now', 'solution', 'how-it-works', 'proof-why-us', 'offer', 'handling', 'cta'),
+    9: persuadeColumn('hook', 'problem-why-now', 'solution', 'how-it-works', 'proof', 'why-us', 'offer', 'handling', 'cta'),
+    10: persuadeColumn('hook', 'problem', 'why-now', 'solution', 'how-it-works', 'proof', 'why-us', 'offer', 'handling', 'cta'),
+  },
+}
+
+const STORY: Partial<Record<SlideRole, SlideSpec>> = {
+  hook: {
+    role: 'hook',
+    label: 'Hook',
+    instruction:
+      'A surprising fact, provocative question or story opener. The first 60 seconds must create curiosity or emotion.',
+  },
+  'what-is': {
+    role: 'what-is',
+    label: 'What is',
+    instruction: 'The world as it currently stands; a relatable situation or character.',
+  },
+  complication: {
+    role: 'complication',
+    label: 'Complication',
+    instruction: 'What disrupts that world; the tension that makes the status quo unstable.',
+  },
+  'what-is-complication': {
+    role: 'what-is-complication',
+    label: 'What is + complication',
+    instruction: 'The world as it stands, and the tension that unsettles it.',
+  },
+  journey: {
+    role: 'journey',
+    label: 'Journey',
+    instruction: 'The struggle: what was tried, what did not work, how the stakes rose.',
+  },
+  insight: {
+    role: 'insight',
+    label: 'Insight',
+    instruction: 'The turn, stated as one clear sentence — the idea worth spreading.',
+  },
+  'journey-insight': {
+    role: 'journey-insight',
+    label: 'Journey + insight',
+    instruction: 'What was tried and failed, and the realisation it led to.',
+  },
+  'what-could-be': {
+    role: 'what-could-be',
+    label: 'What could be',
+    instruction: 'The contrast slide: the better future the insight makes possible.',
+  },
+  meaning: {
+    role: 'meaning',
+    label: 'Meaning',
+    instruction: 'Why this matters to this specific audience; the universal takeaway.',
+  },
+  'what-could-be-meaning': {
+    role: 'what-could-be-meaning',
+    label: 'What could be + meaning',
+    instruction: 'The better future, and why it matters to the people in the room.',
+  },
+  proof: {
+    role: 'proof',
+    label: 'Proof',
+    instruction: 'A second story or example reinforcing the insight.',
+  },
+  cta: {
+    role: 'cta',
+    label: 'Call to action',
+    instruction: 'The concrete thing you want them to do.',
+  },
+  closing: {
+    role: 'closing',
+    label: 'Closing',
+    instruction: 'A short, quotable line that echoes the hook and lands the emotional note.',
+  },
+  'closing-line': {
+    role: 'closing-line',
+    label: 'Closing line',
+    instruction: 'A short, quotable line that echoes the hook and lands the emotional note.',
+  },
+}
+
+function storyColumn(...roles: SlideRole[]): SlideSpec[] {
+  return roles.map((role) => STORY[role]!)
+}
+
+const STORY_BLUEPRINT: Blueprint = {
+  id: 'story',
+  name: 'Storytelling & Engaging',
+  useFor:
+    'conference talks and keynotes, brand and company-story decks, portfolio presentations, motivational talks, case-study narratives',
+  logic:
+    'Duarte\'s analysis of great speeches found they repeatedly contrast "what is" against "what could be" rather than moving in a straight line, over a three-act shape: setup, confrontation, resolution. Oscillate between present and future several times instead of building in one sweep.',
+  master: storyColumn(
+    'hook',
+    'what-is',
+    'complication',
+    'journey',
+    'insight',
+    'what-could-be',
+    'meaning',
+    'proof',
+    'cta',
+    'closing-line',
+  ),
+  columns: {
+    5: storyColumn('hook', 'what-is', 'journey-insight', 'what-could-be-meaning', 'closing'),
+    6: storyColumn('hook', 'what-is-complication', 'journey', 'insight', 'what-could-be-meaning', 'closing'),
+    7: storyColumn('hook', 'what-is', 'complication', 'journey', 'insight', 'what-could-be-meaning', 'closing'),
+    8: storyColumn('hook', 'what-is', 'complication', 'journey', 'insight', 'what-could-be-meaning', 'proof', 'closing'),
+    9: storyColumn('hook', 'what-is', 'complication', 'journey', 'insight', 'what-could-be', 'meaning', 'proof', 'closing'),
+    10: storyColumn('hook', 'what-is', 'complication', 'journey', 'insight', 'what-could-be', 'meaning', 'proof', 'cta', 'closing-line'),
+  },
+}
+
 export const BLUEPRINTS: Record<BlueprintId, Blueprint> = {
   inform: INFORM_BLUEPRINT,
-  // persuade and story arrive in Task 2
-} as Record<BlueprintId, Blueprint>
+  persuade: PERSUADE_BLUEPRINT,
+  story: STORY_BLUEPRINT,
+}
 
 /**
  * The sequence for a blueprint at a given slide count.

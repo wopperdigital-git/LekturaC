@@ -83,6 +83,103 @@ describe('sequenceFor', () => {
   })
 })
 
+const PERSUADE_COLUMNS: Record<number, string[]> = {
+  5: ['Hook', 'Problem + why now', 'Solution + how it works', 'Proof + why us', 'Offer + handling + CTA'],
+  6: ['Hook', 'Problem + why now', 'Solution + how it works', 'Proof + why us', 'Offer + handling', 'Call to action'],
+  7: ['Hook', 'Problem + why now', 'Solution + how it works', 'Proof + why us', 'Offer', 'Handling', 'Call to action'],
+  8: ['Hook', 'Problem + why now', 'Solution', 'How it works', 'Proof + why us', 'Offer', 'Handling', 'Call to action'],
+  9: ['Hook', 'Problem + why now', 'Solution', 'How it works', 'Proof', 'Why us', 'Offer', 'Handling', 'Call to action'],
+  10: ['Hook', 'Problem', 'Why now', 'Solution', 'How it works', 'Proof', 'Why us', 'Offer', 'Handling', 'Call to action'],
+}
+
+const STORY_COLUMNS: Record<number, string[]> = {
+  5: ['Hook', 'What is', 'Journey + insight', 'What could be + meaning', 'Closing'],
+  6: ['Hook', 'What is + complication', 'Journey', 'Insight', 'What could be + meaning', 'Closing'],
+  7: ['Hook', 'What is', 'Complication', 'Journey', 'Insight', 'What could be + meaning', 'Closing'],
+  8: ['Hook', 'What is', 'Complication', 'Journey', 'Insight', 'What could be + meaning', 'Proof', 'Closing'],
+  9: ['Hook', 'What is', 'Complication', 'Journey', 'Insight', 'What could be', 'Meaning', 'Proof', 'Closing'],
+  10: ['Hook', 'What is', 'Complication', 'Journey', 'Insight', 'What could be', 'Meaning', 'Proof', 'Call to action', 'Closing line'],
+}
+
+const PERSUADE_MASTER_LABELS = [
+  'Hook',
+  'Problem',
+  'Why now',
+  'Solution',
+  'How it works',
+  'Proof',
+  'Why us',
+  'Offer',
+  'Handling',
+  'Call to action',
+]
+
+const STORY_MASTER_LABELS = [
+  'Hook',
+  'What is',
+  'Complication',
+  'Journey',
+  'Insight',
+  'What could be',
+  'Meaning',
+  'Proof',
+  'Call to action',
+  'Closing line',
+]
+
+describe('persuade blueprint', () => {
+  it('has a ten-slide master sequence', () => {
+    expect(BLUEPRINTS.persuade.master).toHaveLength(10)
+  })
+
+  it('master sequence labels match the doc', () => {
+    expect(BLUEPRINTS.persuade.master.map((s) => s.label)).toEqual(PERSUADE_MASTER_LABELS)
+  })
+
+  it('matches the doc table for every count from 5 to 10', () => {
+    for (const [count, labels] of Object.entries(PERSUADE_COLUMNS)) {
+      expect(sequenceFor('persuade', Number(count)).map((s) => s.label)).toEqual(labels)
+    }
+  })
+})
+
+describe('story blueprint', () => {
+  it('has a ten-slide master sequence', () => {
+    expect(BLUEPRINTS.story.master).toHaveLength(10)
+  })
+
+  it('master sequence labels match the doc', () => {
+    expect(BLUEPRINTS.story.master.map((s) => s.label)).toEqual(STORY_MASTER_LABELS)
+  })
+
+  it('matches the doc table for every count from 5 to 10', () => {
+    for (const [count, labels] of Object.entries(STORY_COLUMNS)) {
+      expect(sequenceFor('story', Number(count)).map((s) => s.label)).toEqual(labels)
+    }
+  })
+})
+
+describe('every blueprint', () => {
+  it('returns exactly the requested number of slides for every count 1-10', () => {
+    for (const id of ['inform', 'persuade', 'story'] as const) {
+      for (let count = 1; count <= 10; count++) {
+        expect(sequenceFor(id, count)).toHaveLength(count)
+      }
+    }
+  })
+
+  it('opens every sequence with the blueprint opening and ends on its close', () => {
+    for (const id of ['inform', 'persuade', 'story'] as const) {
+      const five = sequenceFor(id, 5)
+      for (let count = 2; count <= 4; count++) {
+        const seq = sequenceFor(id, count)
+        expect(seq[0]).toEqual(five[0])
+        expect(seq[seq.length - 1]).toEqual(five[five.length - 1])
+      }
+    }
+  })
+})
+
 describe('role vocabulary', () => {
   it('uses unique role ids within a blueprint', () => {
     for (const blueprint of Object.values(BLUEPRINTS)) {
@@ -132,8 +229,53 @@ describe('role vocabulary', () => {
       'recap-next-steps',
     ])
 
+    // For persuade blueprint: master roles + merged-row roles
+    const persuadeLegalRoles = new Set([
+      // Master roles
+      'hook',
+      'problem',
+      'why-now',
+      'solution',
+      'how-it-works',
+      'proof',
+      'why-us',
+      'offer',
+      'handling',
+      'cta',
+      // Merged-row roles that only appear in columns
+      'problem-why-now',
+      'solution-how-it-works',
+      'proof-why-us',
+      'offer-handling',
+      'offer-handling-cta',
+    ])
+
+    // For story blueprint: master roles + merged-row roles
+    const storyLegalRoles = new Set([
+      // Master roles
+      'hook',
+      'what-is',
+      'complication',
+      'journey',
+      'insight',
+      'what-could-be',
+      'meaning',
+      'proof',
+      'cta',
+      'closing-line',
+      // Merged-row roles that only appear in columns
+      'what-is-complication',
+      'journey-insight',
+      'what-could-be-meaning',
+      'closing',
+    ])
+
     for (const blueprint of Object.values(BLUEPRINTS)) {
-      const legalRoles = blueprint.id === 'inform' ? informLegalRoles : new Set<string>()
+      let legalRoles = new Set<string>()
+      if (blueprint.id === 'inform') legalRoles = informLegalRoles
+      else if (blueprint.id === 'persuade') legalRoles = persuadeLegalRoles
+      else if (blueprint.id === 'story') legalRoles = storyLegalRoles
+
       for (const column of Object.values(blueprint.columns)) {
         for (const spec of column) {
           expect(legalRoles.has(spec.role)).toBe(true)
