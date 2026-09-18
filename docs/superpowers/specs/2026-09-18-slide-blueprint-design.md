@@ -109,8 +109,16 @@ portfolio, motivational talks, case-study narratives. Duarte's
 "what is" / "what could be" oscillation over a three-act shape.
 
 1. Hook · 2. What is · 3. Complication · 4. The journey · 5. The insight ·
-6. What could be · 7. Proof · 8. Meaning · 9. Call to action ·
+6. What could be · 7. Meaning · 8. Proof · 9. Call to action ·
 10. Closing line
+
+> **The source doc contradicts itself here, and the table wins.** Its prose
+> master list has Proof at 7 and Meaning at 8; its scaling table — the one
+> headed "verbatim" — has Meaning at 7 and Proof at 8. The implementation
+> follows the table, so `master` equals the 10-slide column for all three
+> blueprints, which is an invariant worth having. Nothing generated differs
+> either way: `sequenceFor(id, 10)` returns the *column*, and `master` is used
+> only for the role vocabulary.
 
 #### The scaling tables (verbatim)
 
