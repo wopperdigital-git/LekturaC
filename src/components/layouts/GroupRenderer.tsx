@@ -1,7 +1,10 @@
 import type { VisualStyle } from '@/engine/contentBlocks'
 import { flattenNodes, type GroupNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
+import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
+import { Adjustable } from './Adjustable'
 import { BlockRenderer, StatBlockView } from './BlockRenderer'
+import { EditableText } from './EditableText'
 
 /**
  * Draws one group of blocks in its arrangement.
@@ -40,6 +43,57 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
             </div>
           ))}
         </div>
+      )
+
+    case 'timeline':
+      // From TimelineLayout: a numbered card per step when expressive, a
+      // vertical accent line with a dot per step when structured.
+      if (expressive) {
+        return (
+          <ol className="flex flex-col gap-4">
+            {node.items.map((step, i) => (
+              <Adjustable key={step.index} index={step.index}>
+                <li
+                  className="flex gap-4 rounded-slide-sm bg-slide-surface p-4"
+                  style={{ fontFamily: SLIDE_BODY_FONT }}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <div className="font-semibold text-slide-accent">
+                      <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
+                    </div>
+                    <div className="text-slide-foreground/90">
+                      <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
+                    </div>
+                  </div>
+                </li>
+              </Adjustable>
+            ))}
+          </ol>
+        )
+      }
+      return (
+        <ol className="relative flex flex-col gap-6">
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-0 left-[calc(var(--spacing)*1.5)] w-0.5 -translate-x-1/2 bg-gradient-to-b from-slide-accent/45 via-slide-accent-soft/45 to-transparent"
+          />
+          {node.items.map((step) => (
+            <Adjustable key={step.index} index={step.index}>
+              <li className="relative pl-6" style={{ fontFamily: SLIDE_BODY_FONT }}>
+                <span className="absolute left-[calc(var(--spacing)*1.5)] top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-slide-accent" />
+                <div className="font-semibold text-slide-accent">
+                  <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
+                </div>
+                <div className="text-slide-foreground/90">
+                  <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
+                </div>
+              </li>
+            </Adjustable>
+          ))}
+        </ol>
       )
 
     default:

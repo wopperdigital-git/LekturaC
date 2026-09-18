@@ -204,4 +204,18 @@ describe("a family card keeps the author's order", () => {
       expectInOrder(html, ['ORDSTATH', 'ORDSTATV1', 'ORDSTATP', 'ORDSTATV2', 'ORDSTATV3'])
     }
   })
+
+  it('timeline: a paragraph between steps stays between them', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'ORDTLH' },
+      { type: 'timelineStep', label: 'ORDTLS1', text: 'ORDTLT1' },
+      { type: 'paragraph', text: 'ORDTLP' },
+      { type: 'timelineStep', label: 'ORDTLS2', text: 'ORDTLT2' },
+      { type: 'timelineStep', label: 'ORDTLS3', text: 'ORDTLT3' },
+    ]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant)} />)
+      expectInOrder(html, ['ORDTLH', 'ORDTLS1', 'ORDTLP', 'ORDTLS2', 'ORDTLS3'])
+    }
+  })
 })
