@@ -11,7 +11,11 @@ const BRIEF: GenerationBrief = {
 }
 
 function deck(title: string): GeneratedDeck {
-  return { title, cards: [{ blocks: [{ type: 'heading', text: title }], visualStyle: 'structured' }] }
+  return {
+    title,
+    blueprint: 'inform',
+    cards: [{ blocks: [{ type: 'heading', text: title }], visualStyle: 'structured', role: 'title-roadmap' }],
+  }
 }
 
 /** Records how many times it was asked, so we can assert a provider was skipped. */

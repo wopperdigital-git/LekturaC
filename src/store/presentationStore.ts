@@ -7,6 +7,8 @@ import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockT
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
+import { roleLayoutHint } from '@/engine/roleLayout'
+import { sequenceFor, sequenceMismatch, type BlueprintId } from '@/ai/slideBlueprints'
 import { isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
 import {
   convertBlocks,
@@ -50,9 +52,12 @@ interface PresentationState {
 
   listDecks: () => Promise<DeckSummary[]>
   createDeck: (title?: string) => Promise<string>
-  createDeckFromGeneration: (
-    deck: { title: string; cards: { blocks: ContentBlock[]; visualStyle: VisualStyle }[] },
-  ) => Promise<string>
+  createDeckFromGeneration: (deck: {
+    title: string
+    /** Which structure the model chose; used to check the sequence, then dropped. */
+    blueprint?: BlueprintId
+    cards: { blocks: ContentBlock[]; visualStyle: VisualStyle; role?: string }[]
+  }) => Promise<string>
   loadDeck: (id: string) => Promise<void>
   deleteDeck: (id: string) => Promise<void>
 
@@ -563,6 +568,27 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
   async createDeckFromGeneration(deck) {
     const id = newId()
+
+    /*
+      The sequence is checked but never enforced. A deck whose roles drifted
+      from the blueprint is still the only copy of content nothing in this app
+      can regenerate, so a mismatch is logged and the deck lands. Only the
+      response *shape* is allowed to fail a generation (zod, in provider.ts).
+
+      Checked against the sequence for the count the model actually returned:
+      the requested count is not passed down here, and a wrong count already
+      shows up in the message as a length difference.
+    */
+    if (deck.blueprint) {
+      const problem = sequenceMismatch(
+        sequenceFor(deck.blueprint, deck.cards.length),
+        deck.cards.map((c) => c.role ?? ''),
+      )
+      if (problem) {
+        console.warn(`[generation] deck does not follow the ${deck.blueprint} blueprint: ${problem}`)
+      }
+    }
+
     const cards: Card[] = deck.cards.map((c, i) => {
       // The one moment a deck's text is written, and so the only place the
       // model's `*asterisks*` can be turned into real bold without the stored
@@ -572,7 +598,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         id: newId(),
         orderIndex: i,
         blocks,
-        layout: 'auto',
+        // The role's last act before it is discarded: a layout the classifier
+        // could not have reached, and only where the blocks support it.
+        layout: roleLayoutHint(c.role, blocks) ?? 'auto',
         visualStyle: c.visualStyle,
         inline,
       }
