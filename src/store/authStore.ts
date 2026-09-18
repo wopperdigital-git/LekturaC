@@ -17,8 +17,8 @@ interface AuthState {
    * `true` when `profile` is the General fallback because the real profile
    * couldn't be read (see `resolveProfile`), rather than because the account
    * genuinely is General. Distinguishing the two matters: a teacher hitting a
-   * transient read failure must not silently lose the Classroom rail or have
-   * AccountTypeModal offer to "save" General over their real role.
+   * transient read failure must not silently lose the Classroom rail, or be
+   * shown "General" as the permanent account type in the settings modal.
    */
   profileDegraded: boolean
   status: 'loading' | 'authenticated' | 'unauthenticated'
@@ -31,7 +31,16 @@ interface AuthState {
   signOut: () => Promise<void>
   resetPasswordForEmail: (email: string) => Promise<void>
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>
-  updateRole: (role: Role) => Promise<{ error: string | null }>
+  updateDisplayName: (displayName: string) => Promise<{ error: string | null }>
+  /**
+   * Re-reads the profile without touching `status`, so the caller's page is not
+   * unmounted. Needed because the database can change the account type behind
+   * the client's back: `join_class` promotes a General account to Student, and
+   * until this runs the rail still offers the General one.
+   */
+  refreshProfile: () => Promise<void>
+  /** Irreversible. Deletes the account, its decks and (for a teacher) its classes. */
+  deleteAccount: () => Promise<{ error: string | null }>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -77,17 +86,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return { error: error ? error.message : null }
   },
 
-  async updateRole(role) {
+  async updateDisplayName(displayName) {
     const user = get().user
-    if (!supabase || !user) return { error: 'Log in to change your account type.' }
+    if (!supabase || !user) return { error: 'Log in to change your name.' }
+    // `role` is pinned by the guard trigger (migration 0010) and `email` by
+    // 0009, so this is the only column of a profile the account can move.
     const { data, error } = await supabase
       .from('profiles')
-      .update({ role })
+      .update({ display_name: displayName.trim() })
       .eq('id', user.id)
       .select('role, display_name')
       .maybeSingle()
-    // The guard trigger's refusal ("Delete or hand off your classes…") is
-    // already a sentence the user can act on, so it is shown as-is.
     if (error) return { error: error.message }
     if (!data) {
       return {
@@ -96,6 +105,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
     set({ profile: resolveProfile(data, null).profile, profileDegraded: false })
+    return { error: null }
+  },
+
+  async refreshProfile() {
+    const user = get().user
+    if (!supabase || !user) return
+    const { profile, degraded } = await readProfile(user.id)
+    // A failed re-read must not downgrade a known-good profile to the General
+    // fallback: nothing here is a reason to take the Classroom rail away.
+    if (degraded) return
+    set({ profile, profileDegraded: false })
+  },
+
+  async deleteAccount() {
+    if (!supabase) return { error: 'Supabase is not configured.' }
+    // Server-side by necessity: the anon key cannot delete an auth.users row.
+    // The RPC takes no argument and reads auth.uid(), so it can only ever
+    // delete the caller's own account.
+    const { error } = await supabase.rpc('delete_own_account')
+    if (error) return { error: error.message }
+    // The user row is gone, but this tab still holds its tokens; without an
+    // explicit sign-out the app stays on a dead session until a request fails.
+    await supabase.auth.signOut()
     return { error: null }
   },
 }))
@@ -129,8 +161,8 @@ async function readProfile(userId: string) {
   profile already in hand only swaps the `user` object — *unless* that profile
   is the General fallback from a failed read (`profileDegraded`), in which
   case a transient error at load would otherwise stick as General for the rest
-  of the session (a teacher losing the Classroom rail, or AccountTypeModal
-  pre-selecting General and a save silently overwriting the real role). That
+  of the session (a teacher losing the Classroom rail, or the settings modal
+  reporting General as their permanent account type). That
   case still swaps `user` immediately — a token refresh is not itself a reason
   to block the page — but also kicks off a background re-read that does NOT
   touch `status`, so it can't unmount the page it's trying to fix. If that

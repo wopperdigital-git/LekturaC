@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LogoSlot } from '@/components/ui/LogoSlot'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useDrafts } from '@/lib/briefDrafts'
 import { useAuthStore } from '@/store/authStore'
 import { useMyClasses } from '@/classroom/useMyClasses'
 import { ROLE_LABEL } from '@/classroom/roles'
-import { AccountTypeModal } from '@/components/auth/AccountTypeModal'
+import { SettingsModal } from '@/components/settings/SettingsModal'
 
 /**
  * The dashboard's dark rail.
@@ -99,6 +98,15 @@ function JoinIcon() {
   )
 }
 
+function SettingsIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 1.6v1.7M8 12.7v1.7M2.6 8H1M15 8h-1.6M4.2 4.2L3 3M13 13l-1.2-1.2M11.8 4.2L13 3M3 13l1.2-1.2" />
+    </svg>
+  )
+}
+
 /** How many classes the student rail lists by name before "All classes". */
 const RAIL_CLASS_LIMIT = 5
 
@@ -180,7 +188,7 @@ export function AppSidebar({
   const userId = useAuthStore((s) => s.user?.id ?? null)
   const role = profile?.role ?? 'general'
   const myClasses = useMyClasses(userId, role !== 'general')
-  const [accountTypeOpen, setAccountTypeOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const name = profile?.displayName.trim() || email
 
   function go(path: string) {
@@ -290,6 +298,21 @@ export function AppSidebar({
               badge={draftCount > 0 ? draftCount : undefined}
               onClick={() => go('/drafts')}
             />
+            {/*
+              A General account can join a class — doing so promotes it to
+              Student (`join_class`, migration 0010) — so it needs a way in.
+              It sits under Workspace rather than in a Classroom section of its
+              own, because until the account joins something there is no
+              classroom to head a section with.
+            */}
+            {role === 'general' && (
+              <SidebarLink
+                label="Join a class"
+                icon={<JoinIcon />}
+                active={pathname === '/classes'}
+                onClick={() => go('/classes')}
+              />
+            )}
           </SidebarSection>
 
           {role === 'teacher' && (
@@ -355,29 +378,29 @@ export function AppSidebar({
             <div className="flex min-w-0 flex-1 flex-col text-xs">
               {name && <span className="truncate text-white/80">{name}</span>}
               <span className="text-white/45">{ROLE_LABEL[role]}</span>
-              <div className="mt-0.5 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setAccountTypeOpen(true)}
-                  className="cursor-pointer rounded text-white/45 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
-                >
-                  Account type
-                </button>
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="cursor-pointer rounded text-white/45 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
-                >
-                  Log out
-                </button>
-              </div>
             </div>
-            <ThemeToggle onDark className="size-8 shrink-0" />
+            {/*
+              One control instead of three (Account type, Log out, light/dark).
+              Appearance, profile and logout all live behind it now, which is
+              also what makes room for the three-way System/Light/Dark setting
+              a 9×9 icon button could never express.
+            */}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              title="Settings"
+              className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border border-white/12 bg-white/5 text-white/70 transition-colors hover:bg-white/12 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+            >
+              <SettingsIcon />
+            </button>
           </div>
         </div>
       </aside>
 
-      {accountTypeOpen && <AccountTypeModal onClose={() => setAccountTypeOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal onClose={() => setSettingsOpen(false)} onSignOut={onSignOut} />
+      )}
     </>
   )
 }

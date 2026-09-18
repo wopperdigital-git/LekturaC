@@ -16,6 +16,8 @@ import { Field, Input } from '@/components/ui/Input'
 export function MyClassesPage() {
   const navigate = useNavigate()
   const userId = useAuthStore((s) => s.user?.id ?? '')
+  const role = useAuthStore((s) => s.profile?.role ?? 'general')
+  const refreshProfile = useAuthStore((s) => s.refreshProfile)
   const { state, reload } = useAsync(loadStudentClassroom, userId)
   const [query, setQuery] = useState('')
   const [code, setCode] = useState('')
@@ -33,6 +35,11 @@ export function MyClassesPage() {
     setCodeError(null)
     try {
       const classId = await joinClass(code)
+      // A General account is promoted to Student by the join itself (migration
+      // 0010), and the client has to catch up before navigating: the class page
+      // is student-only, so a profile still reading General would be bounced
+      // straight back to the dashboard by RequireRole.
+      await refreshProfile()
       invalidateMyClasses()
       void navigate(`/classes/${classId}`)
     } catch (err) {
@@ -46,7 +53,10 @@ export function MyClassesPage() {
 
   return (
     <DashboardShell
-      title="My classes"
+      // A General account reaches this page to join its first class and has no
+      // classes of its own yet, so "My classes" would be a heading over an
+      // empty list it cannot fill by any other means.
+      title={role === 'general' ? 'Join a class' : 'My classes'}
       subtitle={data ? (data.classes.length > 0 ? plural(data.classes.length, 'class', 'classes') : 'Join a class with the code your teacher shares') : 'Loading your classes…'}
       query={query}
       onQueryChange={setQuery}

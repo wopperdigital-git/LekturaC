@@ -33,6 +33,19 @@ function studentOnly(element: ReactNode) {
   )
 }
 
+/**
+ * The join page. A General account belongs here too — entering a code is what
+ * promotes it to Student — while a class's own page stays student-only, since
+ * a General account has no memberships to read.
+ */
+function joinerOnly(element: ReactNode) {
+  return (
+    <RequireAuth>
+      <RequireRole role={['general', 'student']}>{element}</RequireRole>
+    </RequireAuth>
+  )
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -92,7 +105,7 @@ function App() {
         <Route path="/classroom/classes/:classId" element={teacherOnly(<ClassFolderPage />)} />
         <Route path="/classroom/students" element={teacherOnly(<StudentsPage />)} />
         <Route path="/classroom/quizzes" element={teacherOnly(<QuizzesPage />)} />
-        <Route path="/classes" element={studentOnly(<MyClassesPage />)} />
+        <Route path="/classes" element={joinerOnly(<MyClassesPage />)} />
         <Route path="/classes/:classId" element={studentOnly(<StudentClassPage />)} />
       </Routes>
     </BrowserRouter>

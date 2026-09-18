@@ -10,7 +10,13 @@ import { canAccess, type Role } from '@/classroom/roles'
  * The wrong type is sent home rather than shown an error — nothing is broken,
  * the page just isn't theirs.
  */
-export function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
+export function RequireRole({
+  role,
+  children,
+}: {
+  role: Role | readonly Role[]
+  children: ReactNode
+}) {
   const current = useAuthStore((s) => s.profile?.role ?? 'general')
   if (!canAccess(current, role)) return <Navigate to="/" replace />
   return <>{children}</>

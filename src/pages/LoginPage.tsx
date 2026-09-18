@@ -38,6 +38,13 @@ function validateName(value: string): string | null {
   return value.trim() ? null : 'Enter your name.'
 }
 
+// Signup only: a typo in a password nobody can see costs a reset email to fix,
+// so it's confirmed here. Same wording as ResetPasswordPage's own check.
+function validateConfirm(password: string, confirm: string): string | null {
+  if (!confirm) return 'Confirm your password.'
+  return password === confirm ? null : 'Passwords do not match.'
+}
+
 export function LoginPage() {
   const navigate = useNavigate()
   const status = useAuthStore((s) => s.status)
@@ -48,6 +55,8 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [confirmError, setConfirmError] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
   const [role, setRole] = useState<Role>('general')
@@ -66,6 +75,7 @@ export function LoginPage() {
     setMode(next)
     setEmailError(null)
     setPasswordError(null)
+    setConfirmError(null)
     setNameError(null)
     setFormError(null)
     setSignupSuccess(false)
@@ -92,7 +102,9 @@ export function LoginPage() {
     setPasswordError(nextPasswordError)
     const nextNameError = mode === 'signup' ? validateName(displayName) : null
     setNameError(nextNameError)
-    if (nextEmailError || nextPasswordError || nextNameError) return
+    const nextConfirmError = mode === 'signup' ? validateConfirm(password, confirm) : null
+    setConfirmError(nextConfirmError)
+    if (nextEmailError || nextPasswordError || nextNameError || nextConfirmError) return
 
     setSubmitting(true)
     if (mode === 'login') {
@@ -226,8 +238,30 @@ export function LoginPage() {
                 onChange={(e) => {
                   setPassword(e.target.value)
                   if (passwordError) setPasswordError(null)
+                  // editing this field can resolve a mismatch reported below it
+                  if (confirmError) setConfirmError(null)
                 }}
                 onBlur={() => password && setPasswordError(validatePassword(password, mode))}
+              />
+            )}
+          />
+        )}
+
+        {mode === 'signup' && (
+          <Field
+            label="Confirm password"
+            error={confirmError}
+            render={(fieldProps) => (
+              <PasswordInput
+                {...fieldProps}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                value={confirm}
+                onChange={(e) => {
+                  setConfirm(e.target.value)
+                  if (confirmError) setConfirmError(null)
+                }}
+                onBlur={() => confirm && setConfirmError(validateConfirm(password, confirm))}
               />
             )}
           />
