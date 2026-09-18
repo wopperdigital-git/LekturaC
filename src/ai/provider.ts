@@ -4,14 +4,28 @@ import type { GenerationBrief } from './prompts'
 
 export type { GenerationBrief }
 
+const blueprintIdSchema = z.enum(['inform', 'persuade', 'story'])
+
 const generatedCardSchema = z
-  .object({ blocks: z.array(contentBlockSchema).min(1), visualStyle: visualStyleSchema })
+  .object({
+    blocks: z.array(contentBlockSchema).min(1),
+    visualStyle: visualStyleSchema,
+    /**
+     * The blueprint row this card fills. Free-form on purpose: the shape is
+     * required but the *value* is not checked against the chosen blueprint,
+     * because a sequence mismatch must warn rather than discard a deck nothing
+     * can regenerate (see `sequenceMismatch`).
+     */
+    role: z.string().min(1),
+  })
   .refine((card) => card.blocks[0]?.type === 'heading', {
     message: 'blocks[0] must be a heading block (every card must start with its title)',
   })
 
 export const generatedDeckSchema = z.object({
   title: z.string().min(1),
+  /** Which of the three structures the model chose. */
+  blueprint: blueprintIdSchema,
   cards: z.array(generatedCardSchema).min(1),
 })
 
