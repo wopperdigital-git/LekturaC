@@ -6,8 +6,6 @@ import { StandardLayout } from './StandardLayout'
 import { StandardSplitLayout } from './StandardSplitLayout'
 import { HeroLayout } from './HeroLayout'
 import { StatHeroLayout } from './StatHeroLayout'
-import { IconGridLayout } from './IconGridLayout'
-import { NumberedListLayout } from './NumberedListLayout'
 import { QuoteLayout } from './QuoteLayout'
 import { TextFocusLayout } from './TextFocusLayout'
 import { GalleryLayout } from './GalleryLayout'
@@ -24,7 +22,7 @@ import { GalleryLayout } from './GalleryLayout'
   `LAYOUT_COMPONENTS` below is typed to exclude exactly these names, so moving a
   layout into this list is a type error until its entry there is removed too.
 */
-const FLOW_LAYOUTS = ['statGrid', 'timeline', 'comparison'] as const
+const FLOW_LAYOUTS = ['statGrid', 'timeline', 'comparison', 'iconGrid', 'numberedList'] as const
 
 type FlowLayoutName = (typeof FLOW_LAYOUTS)[number]
 
@@ -40,8 +38,6 @@ const LAYOUT_COMPONENTS: Record<
   standardSplit: StandardSplitLayout,
   hero: HeroLayout,
   statHero: StatHeroLayout,
-  iconGrid: IconGridLayout,
-  numberedList: NumberedListLayout,
   quote: QuoteLayout,
   textFocus: TextFocusLayout,
   gallery: GalleryLayout,

@@ -1,7 +1,7 @@
 import type { VisualStyle } from '@/engine/contentBlocks'
 import { flattenNodes, type GroupNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
-import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
+import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 import { Adjustable } from './Adjustable'
 import { BlockRenderer, StatBlockView } from './BlockRenderer'
 import { EditableText } from './EditableText'
@@ -165,6 +165,89 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
           })}
         </div>
       )
+
+    case 'chips': {
+      // From IconGridLayout: pill chips when expressive, numbered tiles when
+      // structured. A list group always holds exactly one list.
+      const [list] = node.items
+      if (expressive) {
+        return (
+          <Adjustable index={list.index}>
+            <div className="flex flex-wrap gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+              {list.block.items.map((item, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-full bg-slide-accent/10 py-2 pl-2 pr-4">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-xs font-semibold text-slide-accent-foreground">
+                    {i + 1}
+                  </span>
+                  <span className="text-sm text-slide-foreground/90">
+                    <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Adjustable>
+        )
+      }
+      return (
+        <Adjustable index={list.index}>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            {list.block.items.map((item, i) => (
+              <div
+                key={i}
+                className="flex flex-col items-start gap-2 rounded-slide-sm border border-slide-border bg-slide-surface p-4"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
+                  {i + 1}
+                </span>
+                <span className="text-sm text-slide-foreground/90">
+                  <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
+                </span>
+              </div>
+            ))}
+          </div>
+        </Adjustable>
+      )
+    }
+
+    case 'numbered': {
+      // From NumberedListLayout: numbered cards when expressive, divided rows
+      // with zero-padded numbers when structured.
+      const [list] = node.items
+      if (expressive) {
+        return (
+          <Adjustable index={list.index}>
+            <ol className="flex flex-col gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+              {list.block.items.map((item, i) => (
+                <li key={i} className="flex items-center gap-4 rounded-slide-sm bg-slide-surface p-4">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-sm font-semibold text-slide-accent-foreground">
+                    {i + 1}
+                  </span>
+                  <span className="text-slide-foreground/90">
+                    <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Adjustable>
+        )
+      }
+      return (
+        <Adjustable index={list.index}>
+          <ol className="flex flex-col divide-y divide-slide-border" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            {list.block.items.map((item, i) => (
+              <li key={i} className="flex items-baseline gap-4 py-3">
+                <span className="shrink-0 text-slide-accent" style={{ fontFamily: SLIDE_HEADING_FONT, fontWeight: 600 }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="text-slide-foreground/90">
+                  <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
+                </span>
+              </li>
+            ))}
+          </ol>
+        </Adjustable>
+      )
+    }
 
     default:
       // An arrangement not ported yet draws its items as plain blocks — exactly

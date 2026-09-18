@@ -232,4 +232,31 @@ describe("a family card keeps the author's order", () => {
       expectInOrder(html, ['ORDCMH', 'ORDCMA', 'ORDCMP', 'ORDCMB', 'ORDCMC'])
     }
   })
+
+  it('icon grid: a paragraph before a short list stays before it', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'ORDIGH' },
+      { type: 'paragraph', text: 'ORDIGP' },
+      { type: 'bulletList', items: ['ORDIGI1', 'ORDIGI2'] },
+    ]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant)} />)
+      expectInOrder(html, ['ORDIGH', 'ORDIGP', 'ORDIGI1', 'ORDIGI2'])
+    }
+  })
+
+  it('numbered list: a paragraph before a long list stays before it', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'ORDNLH' },
+      { type: 'paragraph', text: 'ORDNLP' },
+      {
+        type: 'bulletList',
+        items: ['ORDNLI1', 'ORDNLI2', 'ORDNLI3', 'ORDNLI4', 'ORDNLI5', 'ORDNLI6', 'ORDNLI7'],
+      },
+    ]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant)} />)
+      expectInOrder(html, ['ORDNLH', 'ORDNLP', 'ORDNLI1', 'ORDNLI7'])
+    }
+  })
 })
