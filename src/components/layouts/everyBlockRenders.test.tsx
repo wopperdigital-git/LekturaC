@@ -218,4 +218,18 @@ describe("a family card keeps the author's order", () => {
       expectInOrder(html, ['ORDTLH', 'ORDTLS1', 'ORDTLP', 'ORDTLS2', 'ORDTLS3'])
     }
   })
+
+  it('comparison: a paragraph between columns stays between them', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'ORDCMH' },
+      { type: 'comparisonGroup', heading: 'ORDCMA', items: ['ORDCMAI'] },
+      { type: 'paragraph', text: 'ORDCMP' },
+      { type: 'comparisonGroup', heading: 'ORDCMB', items: ['ORDCMBI'] },
+      { type: 'comparisonGroup', heading: 'ORDCMC', items: ['ORDCMCI'] },
+    ]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant)} />)
+      expectInOrder(html, ['ORDCMH', 'ORDCMA', 'ORDCMP', 'ORDCMB', 'ORDCMC'])
+    }
+  })
 })

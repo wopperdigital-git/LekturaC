@@ -96,6 +96,76 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
         </ol>
       )
 
+    case 'columns':
+      // From ComparisonLayout: stacked rows when expressive, side-by-side cards
+      // when structured. The first column is featured in both.
+      if (expressive) {
+        return (
+          <div className="flex flex-col divide-y divide-slide-border">
+            {node.items.map((group, i) => {
+              const featured = i === 0
+              return (
+                <Adjustable key={group.index} index={group.index}>
+                  <div className="flex flex-col gap-3 py-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
+                    <div className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
+                      <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
+                    </div>
+                    <ul className="flex flex-col gap-2">
+                      {group.block.items.map((item, j) => (
+                        <li key={j} className="flex items-start gap-2 text-sm text-slide-foreground/90">
+                          <span
+                            className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                              featured ? 'bg-slide-accent' : 'bg-slide-muted'
+                            }`}
+                          />
+                          <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </Adjustable>
+              )
+            })}
+          </div>
+        )
+      }
+      return (
+        <div
+          className="grid gap-4"
+          style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
+        >
+          {node.items.map((group, i) => {
+            const featured = i === 0
+            return (
+              <Adjustable key={group.index} index={group.index}>
+                <div
+                  className={`rounded-slide-sm border p-4 ${
+                    featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
+                  }`}
+                  style={{ fontFamily: SLIDE_BODY_FONT }}
+                >
+                  <div className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
+                    <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {group.block.items.map((item, j) => (
+                      <li key={j} className="flex items-start gap-2 text-sm text-slide-foreground/90">
+                        <span
+                          className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                            featured ? 'bg-slide-accent' : 'bg-slide-muted'
+                          }`}
+                        />
+                        <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Adjustable>
+            )
+          })}
+        </div>
+      )
+
     default:
       // An arrangement not ported yet draws its items as plain blocks — exactly
       // how Stage 0's leftovers drew them — so a card holding one looks no worse
