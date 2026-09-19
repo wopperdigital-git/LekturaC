@@ -34,6 +34,14 @@ describe('buildBlueprintSection at an exact count', () => {
   it('includes the field playbook so the choice is guided', () => {
     expect(section).toContain(FIELD_PLAYBOOK[0].type)
   })
+
+  it('says to skip objectives/agenda/roadmap rows unless the deck is a formal lesson or the user asked', () => {
+    expect(section).toMatch(/skip objectives\/agenda\/roadmap-style rows unless/i)
+  })
+
+  it('still says the slide count is exact', () => {
+    expect(section).toMatch(/slide count.*exact/i)
+  })
 })
 
 describe('buildBlueprintSection at auto', () => {
@@ -55,10 +63,6 @@ describe('buildBlueprintSection at auto', () => {
 })
 
 describe('system prompt content rules', () => {
-  it('asks for full-sentence assertion headings', () => {
-    expect(DECK_SYSTEM_PROMPT).toMatch(/assertion|full sentence/i)
-  })
-
   it('keeps numbers opt-in rather than demanding a data point per slide', () => {
     // The blueprint doc's assertion-evidence rule says "one visual or short
     // data point"; taken literally that reintroduces invented statistics,

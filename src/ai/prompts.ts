@@ -1,4 +1,12 @@
 import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor, type BlueprintId } from './slideBlueprints'
+import {
+  CLAIM_TYPES,
+  LAYOUT_FAMILIES,
+  PRESENTATION_TYPES,
+  SLIDE_PURPOSES,
+  VISUAL_TYPES,
+  type EvidencePack,
+} from '@/generation/schemas'
 
 export interface GenerationBrief {
   audience: string
@@ -8,6 +16,18 @@ export interface GenerationBrief {
   slideCount: number | 'auto'
   /** Free-text user intent: what the deck should focus on or steer clear of. Empty string if skipped. */
   guidance: string
+}
+
+/**
+ * What the deck prompt needs from the pipeline that isn't part of the brief:
+ * the evidence pack (`null` when research was skipped, failed, or the user
+ * asked for their own material only) and today's date, so "current" means
+ * something (design spec §10).
+ */
+export interface DeckContext {
+  evidence: EvidencePack | null
+  /** YYYY-MM-DD */
+  today: string
 }
 
 const DETAIL_LEVEL_INSTRUCTIONS: Record<GenerationBrief['detailLevel'], string> = {
@@ -34,17 +54,53 @@ const TONE_INSTRUCTIONS: Record<GenerationBrief['tone'], string> = {
  */
 export const DEFAULT_TONE: GenerationBrief['tone'] = 'professional'
 
-export const DECK_SYSTEM_PROMPT = `You are a presentation content generator with deep domain knowledge. Given a topic from the user, produce a complete, professionally structured presentation as JSON.
+// Enum value lists for the prompt, built FROM the schema's own arrays so the
+// prompt can never drift from what `generatedDeckSchema` will actually accept.
+const PRESENTATION_TYPE_LIST = PRESENTATION_TYPES.map((v) => `"${v}"`).join(' | ')
+const SLIDE_PURPOSE_LIST = SLIDE_PURPOSES.map((v) => `"${v}"`).join(' | ')
+const VISUAL_TYPE_LIST = VISUAL_TYPES.map((v) => `"${v}"`).join(' | ')
+const LAYOUT_FAMILY_LIST = LAYOUT_FAMILIES.map((v) => `"${v}"`).join(' | ')
+const CLAIM_TYPE_LIST = CLAIM_TYPES.map((v) => `"${v}"`).join(' | ')
+
+export const DECK_SYSTEM_PROMPT = `You are planning and writing a presentation, not an article. Your job is to help an audience understand a topic through a sequence of slides, each one scanned in seconds — not a document broken into pages.
+
+Before writing any slide's visible text, plan the whole deck: identify the presentation's objective, decide what the audience must understand, build a logical narrative arc, give every slide one purpose and one key message, decide which claims need evidence, and choose the most effective visual form for each slide. Do not default to bullet lists or cards out of habit.
+
+That plan is what you write first. Every card's "plan" object comes before its "blocks" in your output, and everything in "blocks" exists to deliver plan.keyMessage — the one thing that slide has to say.
 
 Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this shape:
 
 {
   "title": string,
-  "blueprint": string,
+  "blueprint": "inform" | "persuade" | "story",
+  "brief": {
+    "objective": string,
+    "audienceKnowledgeLevel": "beginner" | "intermediate" | "advanced",
+    "presentationType": ${PRESENTATION_TYPE_LIST},
+    "freshnessRequired": boolean,
+    "keyQuestions": string[]
+  },
   "cards": [
-    { "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "role": string }
+    {
+      "plan": {
+        "purpose": ${SLIDE_PURPOSE_LIST},
+        "audienceQuestion": string,
+        "keyMessage": string,
+        "visualType": ${VISUAL_TYPE_LIST},
+        "layoutFamily": ${LAYOUT_FAMILY_LIST},
+        "transition": string,
+        "importance": "essential" | "supporting" | "optional"
+      },
+      "role": string,
+      "blocks": ContentBlock[],
+      "visualStyle": "structured" | "expressive",
+      "speakerNotes": string,
+      "claims": [{ "statement": string, "type": ${CLAIM_TYPE_LIST}, "sourceIds": string[], "timeSensitive": boolean, "year": number }]
+    }
   ]
 }
+
+"role" is optional — set it only when this card fills a row from the STRUCTURE section below, and omit it otherwise. "claims" lists every factual claim the card makes (see EVIDENCE below); an empty array is correct for a card with no factual claims. "transition" is one short phrase from the previous slide into this one ('' on the first card).
 
 Each ContentBlock is one of these EXACT shapes (field names matter, do not rename or omit fields):
 - { "type": "heading", "text": string }
@@ -55,35 +111,58 @@ Each ContentBlock is one of these EXACT shapes (field names matter, do not renam
 - { "type": "timelineStep", "label": string, "text": string }
 - { "type": "comparisonGroup", "heading": string, "items": string[] }
 
-Do not use any block type other than the ones listed above (in particular, do not include "image" blocks — we don't have a reliable image source right now, so text/data layouts only).
+Do not use any block type other than the ones listed above (in particular, do not include "image" blocks — we don't have a reliable image source right now, so text/data layouts only). Every card's "blocks" array MUST start with exactly one "heading" block — this is the card's title and is required, not optional.
 
-STRUCTURE RULES:
-- Follow the "Slide count" line below. If it gives an exact number, produce EXACTLY that many cards — no fixed range, no default cap. If it instead asks you to choose, pick the count that best fits how much this topic actually has to say at the requested detail level — don't default to a round number out of habit. Either way, use the cards to tell a coherent story: an opening title card, body cards covering the material at the requested depth, and a closing card. If the count is large (or you chose a large count), do not pad with filler or repeat the same point — cover more distinct sub-topics/angles instead. If the count is small, prioritize the most important points rather than compressing everything in.
-- Every card's "blocks" array MUST start with exactly one "heading" block — this is the card's title and is required, not optional.
-- Every card also needs a "visualStyle": "structured" or "expressive" — this picks between two visual treatments of whatever layout the card ends up with, independent of block content. Use "expressive" for cards that should feel bold or visually striking (a pivotal stat, a big turning point, a rallying quote); use "structured" for calmer, more informational cards. Vary it across the deck rather than defaulting to one value throughout — but don't force a mechanical alternation either; let it follow the actual rhythm of the content.
-- The opening card should be a clean title moment: just a "heading" (the deck's core message, not just its topic) plus at most one short "paragraph" as a subtitle. Do not front-load detail onto the opening card.
-- Each card should have ONE clear idea. Do not cram multiple unrelated topics into one card.
-- Vary the block types across cards on purpose so the deck doesn't look repetitive — do not let more than two consecutive cards use the same block-type pattern:
+HEADINGS
+- 3-10 words, never more than 14.
+- A topic label, a clear claim, or a question — never a generic AI-report sentence.
+- Never open with "This presentation", "This deck", "This slide", "You will learn", or "In this slide".
+- Example: "EV adoption is accelerating", not "Global EV sales have surged to a significant share of new car registrations".
+
+ONE MAIN IDEA PER SLIDE
+- Exactly one idea per card. Everything on it supports plan.keyMessage; do not cram in a second, unrelated point.
+- Visible text — everything except the heading — is 20-50 words, 70 at most. Timelines and quotes are exempt from this ceiling.
+- Bullet lists run 3-5 items, each 12 words or fewer.
+
+NO FILLER SLIDES
+- Do not add an agenda, "objectives", "what you will learn", introduction, or "thank you" slide by default. Only include one when presentationType is "educational" or "tutorial" and this is a formal lesson, or the user explicitly asked for it.
+- The final slide must resolve the deck's objective: a summary, conclusion, recommendation, or call to action — never a bare sign-off.
+
+SPEAKER NOTES
+- 40-90 words per slide, in "speakerNotes".
+- Add what is not on the slide: context, definitions, how a number was measured, the transition into and out of the slide, caveats. Never copy or lightly reword the visible text.
+
+EVIDENCE
+- Every number, date, named statistic, or quotation must come from the EVIDENCE PACK when the user prompt includes one, and must be listed in that card's "claims" with the pack's own source ids in "sourceIds". Never invent a source id, a source, a citation, or a quotation.
+- State what a metric measures, where, when, and its unit — e.g. "battery-electric share of new U.S. light-duty vehicle sales, 2024", not "EV share: 5.8%".
+- Use approximate wording ("about", "roughly", "more than") where the evidence itself is approximate. Never add decimal precision the evidence doesn't have.
+- Keep tailpipe emissions and lifecycle emissions distinct — never collapse "zero tailpipe emissions" into "zero emissions".
+- Use calibrated language. Do not write "proves", "always", "guarantees", or "clearly superior" unless the evidence pack genuinely supports it; prefer "suggests", "is associated with", "tends to", "can".
+- Without an evidence pack: do not invent specific statistics. Long-established, widely known facts are fine, stated approximately — still list them in "claims", with "sourceIds": [].
+
+FRESHNESS
+- Today's date is given in the user prompt. When the topic asks about what's current, latest, or trending, prefer the newest evidence available and never present data more than two years old as current.
+
+VISUAL CHOICE
+- Chronology → a run of "timelineStep" blocks. Alternatives being weighed → a pair of "comparisonGroup" blocks. Several related numbers → 2-4 "stat" blocks together. One striking number → a single "stat" block. Categories → a short "bulletList".
+- Set plan.visualType to what the slide actually needs, even when the block vocabulary above renders it as stats or a list (e.g. plan.visualType: "bar_chart" backed by "stat" blocks) — visualType is a planning signal, not a rendering instruction.
+- Vary the block types across cards on purpose so the deck doesn't look repetitive — avoid three consecutive cards using the same block-type pattern:
   - Use a single "stat" block for a card that leads with one striking number (market size, growth rate, performance metric, savings, etc).
   - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta) — this reads far better as one card than as several single-stat cards in a row.
   - Use 2-4 "comparisonGroup" blocks together when contrasting options/approaches/before-vs-after.
   - Use 2-5 "timelineStep" blocks together for anything sequential (process, history, roadmap, funding stages).
   - Use a single "quote" block for a card built around one compelling verbatim line — a testimonial, an expert soundbite, a mission statement, a pointed rallying line. Set "attribution" whenever the line isn't the deck's own voice; omit it for a stated mission/thesis line. Reach for this often when the tone is casual or bold, or the audience responds to a human voice — not just for literal customer-quote topics.
-  - Use "bulletList" for scannable lists at whatever length actually fits the content — a short list (up to 6 items, each under ~6 words) reads as a compact grid; a longer or more detailed list reads as a clean numbered list. Pick real length over an artificial short-item target; don't compress a genuinely 8-point process into 6 vague ones.
+  - Use "bulletList" for scannable lists at whatever length actually fits the content — a short list (up to 6 items, each under ~6 words) reads as a compact grid; a longer or more detailed list reads as a clean numbered list. 5-7 items is the comfortable range for one card; past 7, comprehension drops. But this is a ceiling on how much lands on ONE card, never a reason to drop or blur a real item — a genuinely 8-point process stays 8 real steps, split across two cards, not compressed into 6 vague ones. Only trim items that were padding to begin with.
   - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven — a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" under ~40 words, and only when no more specific block type fits.
 
-CONTENT QUALITY RULES — this is the most important part:
+CONTENT QUALITY
 - Be concrete and specific, never generic. Ground claims in named entities, real-world comparables, timeframes, or examples — not vague qualities.
 - NEVER use vague marketing filler. Do not write sentences that could apply to literally any company in any industry. Banned words/phrases: "revolutionize", "revolutionary", "cutting-edge", "empower", "unlock", "seamless", "game-changing", "state-of-the-art", "innovative solution", "unique technology", "leverage", "synergy", "best-in-class", "next-generation".
 - Bad (too generic): "Our platform provides efficient and affordable solutions for customers." Good (specific): "Our routing algorithm skips congested highways by re-scoring routes every 90 seconds, instead of once at dispatch like competitors."
-- Numbers are a tool, not a default. State a number — invented or otherwise — only when it's the most natural way to make the point AND the deck's purpose calls for it (persuading investors, reporting performance, comparing options, a "detailed" data-driven brief). Do not manufacture a statistic just to look precise, and do not force a number onto a card that doesn't need one. A conceptual, explainer, or narrative deck can be entirely free of invented figures and still be sharply specific — specificity comes from naming the real mechanism, step, or example, not from bolting a percentage onto it.
-- If a number does serve the point and the topic is hypothetical, keep it plausible and internally consistent across the deck (a figure on one card shouldn't contradict another) — but reach for one only where the content genuinely calls for it, not on every other card by habit.
-- Titles and headings should be specific to this deck's content, not generic section labels — prefer "Routes re-score every 90 seconds" over "Our Technology".
-- Tailor every card to the stated audience, detail level, and the user's explicit guidance below — the same topic should read differently for investors than for a general public audience. If the guidance says to avoid statistics, stick to given facts, or focus/skip specific angles, treat that as a hard constraint that overrides the general rules above wherever they'd conflict — including skipping "stat" blocks and invented figures entirely if asked.
-- Every card's heading is a FULL-SENTENCE ASSERTION, not a topic phrase: "Retention drops sharply after 15 minutes", not "Retention". The heading states the point; the rest of the card supports that one point.
-- ONE idea per card. Support it with an example, a mechanism, or a short explanation — a figure ONLY when the material genuinely supports one. Do not invent numbers to look like evidence.
-- 5-7 items is the comfortable range for one card; past 7, comprehension drops. But this is a ceiling on how much lands on ONE card, never a reason to drop or blur a real item — a genuinely 8-point process stays 8 real steps, split across two cards, not compressed into 6 vague ones (see the bulletList rule above). Only trim items that were padding to begin with.
-- Set "blueprint" to the id of the structure you chose, and every card's "role" to the bracketed role id of the row it fills.`
+
+Every card also needs a "visualStyle": "structured" or "expressive" — this picks between two visual treatments of whatever layout the card ends up with, independent of block content. Use "expressive" for cards that should feel bold or visually striking (a pivotal stat, a big turning point, a rallying quote); use "structured" for calmer, more informational cards. Vary it across the deck rather than defaulting to one value throughout — but don't force a mechanical alternation either; let it follow the actual rhythm of the content.
+
+Set "blueprint" to the id of the structure you chose in the STRUCTURE section below.`
 
 const AUTO_COUNTS = [5, 6, 7, 8, 9, 10] as const
 
@@ -101,6 +180,11 @@ function renderSequence(id: BlueprintId, count: number): string {
  * each (~600 tokens). With 'auto' the count is unknown too, so every column
  * goes (~1200 tokens): the merges in those columns are the doc's own content,
  * and a model inventing its own would make the exactness pointless.
+ *
+ * The sequence is a narrative arc to adapt, not rows to copy — the model may
+ * merge or replace rows, and should skip objectives/agenda/roadmap-style rows
+ * unless the deck is a formal lesson or the user asked for them. The slide
+ * count itself stays exact either way.
  */
 export function buildBlueprintSection(slideCount: number | 'auto'): string {
   const playbook = FIELD_PLAYBOOK.map(
@@ -120,13 +204,13 @@ export function buildBlueprintSection(slideCount: number | 'auto'): string {
 
   const instruction =
     slideCount === 'auto'
-      ? 'Pick the ONE blueprint that fits this deck\'s goal, then choose a slide count between 5 and 10 that suits the topic\'s depth, and follow that blueprint\'s sequence for that count exactly.'
-      : 'Pick the ONE blueprint that fits this deck\'s goal, then follow its sequence below exactly.'
+      ? "Pick the ONE blueprint whose arc fits this deck's goal, then choose a slide count between 5 and 10 that suits the topic's depth. Once chosen, the slide count is exact."
+      : "Pick the ONE blueprint whose arc fits this deck's goal. The slide count above is exact."
 
-  return `STRUCTURE — choose a blueprint and follow it
+  return `STRUCTURE — choose a blueprint and use its sequence as the narrative arc
 
 ${instruction}
-Produce exactly one card per row, in the order given, and set each card's "role" to that row's bracketed id. Do not add, drop, reorder or merge rows.
+Use the sequence below as the arc, not a template to copy row for row: you may merge or replace rows to serve this deck's objective, and skip objectives/agenda/roadmap-style rows unless the deck is a formal lesson or the user explicitly asked for them. When a card fills one of these rows, set that card's "role" to the row's bracketed id; when it doesn't, omit "role".
 
 Field playbook (match the deck to a row, then use that row's blueprint):
 ${playbook}
@@ -134,11 +218,57 @@ ${playbook}
 ${blueprints}`
 }
 
-export function buildDeckUserPrompt(topic: string, brief: GenerationBrief): string {
+/**
+ * Output budget for one deck generation call.
+ *
+ * `clamp(count * 480 + 2600, 5200, 7000)`. Plans, notes and claims roughly
+ * double the output per slide versus the old blocks-only shape, so the floor
+ * and ceiling both moved up from the block-only budget. The floor clears the
+ * writer's measured ~3,400 reasoning tokens (see `narrationMaxTokens`, which
+ * measured the same overhead on the same model); the ceiling stays inside
+ * Groq's free-tier 8,000-token/minute window. See the design spec's "Token
+ * budget".
+ */
+export function deckMaxTokens(slideCount: number | 'auto'): number {
+  if (slideCount === 'auto') return 7000
+  return Math.min(7000, Math.max(5200, slideCount * 480 + 2600))
+}
+
+/**
+ * Compact, prompt-ready rendering of an evidence pack: one line per source,
+ * then one line per finding, so the model can cite `[s1]`-style ids without
+ * re-reading a nested JSON structure.
+ */
+export function renderEvidencePack(pack: EvidencePack): string {
+  const sourceLines = pack.sources.map((s) => {
+    const publisher = s.publisher ? `${s.publisher} — ` : ''
+    const year = s.publicationDate ? ` (${s.publicationDate})` : ''
+    const url = s.url ? ` ${s.url}` : ''
+    return `[${s.id}] ${publisher}${s.title}${year}${url}`
+  })
+  const findingLines = pack.findings.map((f) => {
+    const valueUnit = [f.value, f.unit].filter(Boolean).join(' ')
+    const year = f.year ?? ''
+    const definition = f.definition ?? ''
+    const geography = f.geography ?? ''
+    return `- ${f.statement} | ${valueUnit} | ${geography} | ${year} | ${definition} | sources: ${f.sourceIds.join(', ')}`
+  })
+  return [...sourceLines, ...findingLines].join('\n')
+}
+
+export function buildDeckUserPrompt(topic: string, brief: GenerationBrief, context?: DeckContext): string {
   const audience = brief.audience.trim() || 'a general audience'
   const guidance = brief.guidance.trim()
-  return `Create a presentation about: ${topic.trim()}
 
+  const todaySection = context ? `\nToday's date: ${context.today}\n` : ''
+  const evidenceSection = !context
+    ? ''
+    : context.evidence && context.evidence.sources.length > 0
+      ? `\nEVIDENCE PACK (cite these source ids; do not use any other source):\n${renderEvidencePack(context.evidence)}\n`
+      : '\nNo verified evidence is available for this deck — the no-evidence rules apply: no specific statistics except long-established, widely known facts, phrased approximately, still listed in "claims" with "sourceIds": [].\n'
+
+  return `Create a presentation about: ${topic.trim()}
+${todaySection}
 Slide count: ${
     brief.slideCount === 'auto'
       ? "choose between 5 and 10 cards (never more than 10), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close."
@@ -147,7 +277,7 @@ Slide count: ${
 Audience: ${audience}
 Detail level: ${brief.detailLevel} — ${DETAIL_LEVEL_INSTRUCTIONS[brief.detailLevel]}
 Tone: ${brief.tone} — ${TONE_INSTRUCTIONS[brief.tone]}
-
+${evidenceSection}
 ${buildBlueprintSection(brief.slideCount)}
 ${guidance ? `\nUSER'S EXPLICIT INTENT (hard constraint — follow this over the general content rules wherever they conflict): ${guidance}\n` : ''}
 Write every card specifically for this audience at this detail level and tone.`
