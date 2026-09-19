@@ -10,6 +10,8 @@ function stub(behavior: () => Promise<NarrationResponse>): AIProvider & { calls:
   return {
     calls: () => calls,
     generateDeck: vi.fn(),
+    research: vi.fn(),
+    repairSlides: vi.fn(),
     generateNarration: async () => {
       calls++
       return behavior()

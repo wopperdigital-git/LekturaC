@@ -1,8 +1,8 @@
 import { z } from 'zod'
-import type { GenerationBrief } from './prompts'
-import type { GeneratedDeck } from '@/generation/schemas'
+import type { DeckContext, GenerationBrief } from './prompts'
+import type { EvidencePack, GeneratedDeck, QualityFlag, RepairResponse } from '@/generation/schemas'
 
-export type { GenerationBrief }
+export type { GenerationBrief, DeckContext }
 
 /*
   The generated-deck schema (and the v2 research/plan types around it) now
@@ -11,7 +11,14 @@ export type { GenerationBrief }
   Re-exported here so every existing `from '@/ai/provider'` import keeps
   working unchanged.
 */
-export { generatedDeckSchema, type GeneratedDeck, type GeneratedCard } from '@/generation/schemas'
+export {
+  generatedDeckSchema,
+  type GeneratedCard,
+  type GeneratedDeck,
+  type EvidencePack,
+  type QualityFlag,
+  type RepairResponse,
+} from '@/generation/schemas'
 
 /**
  * One slide as the narration model sees it.
@@ -52,12 +59,45 @@ export interface AIProvider {
    * `signal` is optional so a third provider may ignore it, but both current
    * implementations thread it into the fetch and the retry backoff alike, so
    * Cancel takes effect immediately rather than waiting a timer out.
+   *
+   * `context` is optional so `CreatePage`'s existing three-argument call
+   * keeps compiling: it carries the evidence pack from `research()` (or
+   * `null` when research was skipped/failed) plus today's date, both used by
+   * `buildDeckUserPrompt`.
    */
   generateDeck(
     topic: string,
     brief: GenerationBrief,
     signal?: AbortSignal,
+    context?: DeckContext,
   ): Promise<GeneratedDeck>
+
+  /**
+   * One best-effort research call before the deck is written (design spec
+   * "[1] Research"). `today` is a plain argument rather than folded into
+   * `DeckContext` because research is what *produces* the evidence that
+   * `DeckContext.evidence` later carries — the two are not interchangeable.
+   */
+  research(
+    topic: string,
+    brief: GenerationBrief,
+    today: string,
+    signal?: AbortSignal,
+  ): Promise<EvidencePack>
+
+  /**
+   * Fixes specific flagged slides after validation (design spec "[4] Targeted
+   * repair"). `targets` are 0-based card indices — the same indexing
+   * `QualityFlag.slideIndex` uses — and only those slides may come back
+   * changed; nothing here rewrites the deck wholesale.
+   */
+  repairSlides(
+    deck: GeneratedDeck,
+    targets: number[],
+    flags: QualityFlag[],
+    context: DeckContext,
+    signal?: AbortSignal,
+  ): Promise<RepairResponse>
 
   /**
    * Writes an expanded spoken script for each slide that needs one.

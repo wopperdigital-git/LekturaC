@@ -4,17 +4,23 @@ import {
   kindForStatus,
   narrationResponseSchema,
   type AIProvider,
+  type DeckContext,
+  type EvidencePack,
   type GeneratedDeck,
   type GenerationBrief,
   type NarrationResponse,
   type NarrationSlide,
+  type QualityFlag,
+  type RepairResponse,
 } from './provider'
-import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
+import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt, deckMaxTokens } from './prompts'
 import {
   NARRATION_SYSTEM_PROMPT,
   buildNarrationUserPrompt,
   narrationMaxTokens,
 } from './narrationPrompt'
+import { RESEARCH_SYSTEM_PROMPT, buildResearchUserPrompt, parseEvidencePack } from './researchPrompt'
+import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
 import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
 
 // "-latest" alias instead of a pinned version — new API keys lose access to
@@ -28,11 +34,24 @@ interface GeminiContent {
   parts: [{ text: string }]
 }
 
+/**
+ * `jsonMode` and `tools` are mutually exclusive on Gemini's API too —
+ * `responseMimeType: application/json` is disallowed alongside `tools`
+ * (design spec "Measured constraints") — so, as with Groq, these are separate
+ * flags rather than one combined shape.
+ */
+interface CallGeminiOptions {
+  maxOutputTokens: number
+  jsonMode: boolean
+  tools?: { google_search: Record<string, never> }[]
+  temperature: number
+}
+
 async function callGemini(
   apiKey: string,
   systemInstruction: string,
   contents: GeminiContent[],
-  maxOutputTokens: number,
+  options: CallGeminiOptions,
   signal?: AbortSignal,
 ): Promise<string> {
   for (let attempt = 0; ; attempt++) {
@@ -47,16 +66,24 @@ async function callGemini(
         system_instruction: { parts: [{ text: systemInstruction }] },
         contents,
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens,
-          responseMimeType: 'application/json',
+          temperature: options.temperature,
+          maxOutputTokens: options.maxOutputTokens,
+          ...(options.jsonMode ? { responseMimeType: 'application/json' } : {}),
         },
+        ...(options.tools ? { tools: options.tools } : {}),
       }),
     })
 
     if (res.ok) {
       const data = await res.json()
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      // With google_search grounding the reply can arrive split across
+      // several parts rather than one — join them all rather than reading
+      // only parts[0], or a research call would silently see a truncated
+      // fragment of its own JSON.
+      const parts = data?.candidates?.[0]?.content?.parts
+      const text = Array.isArray(parts)
+        ? parts.map((p: { text?: unknown }) => (typeof p?.text === 'string' ? p.text : '')).join('')
+        : undefined
       if (typeof text !== 'string') {
         const finishReason = data?.candidates?.[0]?.finishReason
         throw new AIProviderError(
@@ -103,6 +130,12 @@ function tryParseNarration(raw: string): { data: NarrationResponse } | { error: 
   return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
 }
 
+function noKeyError(): AIProviderError {
+  return new AIProviderError('No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file.', {
+    kind: 'auth',
+  })
+}
+
 export class GeminiProvider implements AIProvider {
   private apiKey: string
 
@@ -114,24 +147,20 @@ export class GeminiProvider implements AIProvider {
     topic: string,
     brief: GenerationBrief,
     signal?: AbortSignal,
+    context?: DeckContext,
   ): Promise<GeneratedDeck> {
-    if (!this.apiKey.trim()) {
-      throw new AIProviderError('No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file.', {
-        kind: 'auth',
-      })
-    }
+    if (!this.apiKey.trim()) throw noKeyError()
 
-    const userPrompt = buildDeckUserPrompt(topic, brief)
+    const userPrompt = buildDeckUserPrompt(topic, brief, context)
     const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: userPrompt }] }]
 
-    // Scales with the requested slide count so large decks don't get cut off
-    // mid-JSON — no fixed cap on how many cards a request can ask for. When the
-    // model is choosing the count itself ('auto'), budget for the top of the
-    // range it's told to consider (see buildDeckUserPrompt).
-    const maxOutputTokens =
-      brief.slideCount === 'auto' ? 8192 : Math.min(8192, Math.max(4096, brief.slideCount * 260 + 800))
+    const options: CallGeminiOptions = {
+      maxOutputTokens: deckMaxTokens(brief.slideCount),
+      jsonMode: true,
+      temperature: 0.7,
+    }
 
-    const first = await callGemini(this.apiKey, DECK_SYSTEM_PROMPT, contents, maxOutputTokens, signal)
+    const first = await callGemini(this.apiKey, DECK_SYSTEM_PROMPT, contents, options, signal)
     const firstResult = tryParseDeck(first)
     if ('deck' in firstResult) return firstResult.deck
 
@@ -149,17 +178,82 @@ export class GeminiProvider implements AIProvider {
         ],
       },
     ]
-    const second = await callGemini(
-      this.apiKey,
-      DECK_SYSTEM_PROMPT,
-      retryContents,
-      maxOutputTokens,
-      signal,
-    )
+    const second = await callGemini(this.apiKey, DECK_SYSTEM_PROMPT, retryContents, options, signal)
     const secondResult = tryParseDeck(second)
     if ('deck' in secondResult) return secondResult.deck
 
     throw new AIProviderError('The AI returned content that could not be parsed into a deck. Try again.', {
+      kind: 'response',
+    })
+  }
+
+  async research(
+    topic: string,
+    brief: GenerationBrief,
+    today: string,
+    signal?: AbortSignal,
+  ): Promise<EvidencePack> {
+    if (!this.apiKey.trim()) throw noKeyError()
+
+    const contents: GeminiContent[] = [
+      { role: 'user', parts: [{ text: buildResearchUserPrompt(topic, brief, today) }] },
+    ]
+
+    const raw = await callGemini(
+      this.apiKey,
+      RESEARCH_SYSTEM_PROMPT,
+      contents,
+      { maxOutputTokens: 2000, jsonMode: false, tools: [{ google_search: {} }], temperature: 0.3 },
+      signal,
+    )
+
+    const pack = parseEvidencePack(raw)
+    if (!pack) {
+      throw new AIProviderError('Research returned no usable evidence', { kind: 'response' })
+    }
+    return pack
+  }
+
+  async repairSlides(
+    deck: GeneratedDeck,
+    targets: number[],
+    flags: QualityFlag[],
+    context: DeckContext,
+    signal?: AbortSignal,
+  ): Promise<RepairResponse> {
+    if (!this.apiKey.trim()) throw noKeyError()
+
+    const contents: GeminiContent[] = [
+      { role: 'user', parts: [{ text: buildRepairUserPrompt(deck, targets, flags, context) }] },
+    ]
+    const options: CallGeminiOptions = {
+      maxOutputTokens: REPAIR_MAX_TOKENS,
+      jsonMode: true,
+      temperature: 0.7,
+    }
+
+    const first = await callGemini(this.apiKey, REPAIR_SYSTEM_PROMPT, contents, options, signal)
+    const firstResult = parseRepairResponse(first)
+    if (firstResult) return firstResult
+
+    // One self-correcting retry, as the deck and narration paths do.
+    const retryContents: GeminiContent[] = [
+      ...contents,
+      { role: 'model', parts: [{ text: first }] },
+      {
+        role: 'user',
+        parts: [
+          {
+            text: 'That response failed schema validation. Reply again with ONLY the corrected JSON object, no other text.',
+          },
+        ],
+      },
+    ]
+    const second = await callGemini(this.apiKey, REPAIR_SYSTEM_PROMPT, retryContents, options, signal)
+    const secondResult = parseRepairResponse(second)
+    if (secondResult) return secondResult
+
+    throw new AIProviderError('The AI returned repairs that could not be parsed. Try again.', {
       kind: 'response',
     })
   }
@@ -169,18 +263,18 @@ export class GeminiProvider implements AIProvider {
     slides: NarrationSlide[],
     signal?: AbortSignal,
   ): Promise<NarrationResponse> {
-    if (!this.apiKey.trim()) {
-      throw new AIProviderError('No Gemini API key configured. Add VITE_GEMINI_API_KEY to your .env file.', {
-        kind: 'auth',
-      })
-    }
+    if (!this.apiKey.trim()) throw noKeyError()
 
     const contents: GeminiContent[] = [
       { role: 'user', parts: [{ text: buildNarrationUserPrompt(title, slides) }] },
     ]
-    const maxOutputTokens = narrationMaxTokens(slides.length)
+    const options: CallGeminiOptions = {
+      maxOutputTokens: narrationMaxTokens(slides.length),
+      jsonMode: true,
+      temperature: 0.7,
+    }
 
-    const first = await callGemini(this.apiKey, NARRATION_SYSTEM_PROMPT, contents, maxOutputTokens, signal)
+    const first = await callGemini(this.apiKey, NARRATION_SYSTEM_PROMPT, contents, options, signal)
     const firstResult = tryParseNarration(first)
     if ('data' in firstResult) return firstResult.data
 
@@ -196,13 +290,7 @@ export class GeminiProvider implements AIProvider {
         ],
       },
     ]
-    const second = await callGemini(
-      this.apiKey,
-      NARRATION_SYSTEM_PROMPT,
-      retryContents,
-      maxOutputTokens,
-      signal,
-    )
+    const second = await callGemini(this.apiKey, NARRATION_SYSTEM_PROMPT, retryContents, options, signal)
     const secondResult = tryParseNarration(second)
     if ('data' in secondResult) return secondResult.data
 

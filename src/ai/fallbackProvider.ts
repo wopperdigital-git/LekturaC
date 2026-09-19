@@ -1,10 +1,14 @@
 import {
   AIProviderError,
   type AIProvider,
+  type DeckContext,
+  type EvidencePack,
   type GeneratedDeck,
   type GenerationBrief,
   type NarrationResponse,
   type NarrationSlide,
+  type QualityFlag,
+  type RepairResponse,
 } from './provider'
 import { GroqProvider } from './groqProvider'
 import { GeminiProvider } from './geminiProvider'
@@ -78,28 +82,69 @@ export class FallbackProvider implements AIProvider {
     this.chain = chain
   }
 
-  async generateDeck(
-    topic: string,
-    brief: GenerationBrief,
+  /**
+   * The one failover loop, shared by every `AIProvider` method. `label` is
+   * used only for the console breadcrumb and the (unreachable — the
+   * constructor guarantees at least one link) exhausted-chain error; `'deck'`
+   * is omitted from the breadcrumb to keep its existing wording, since it was
+   * the only method before this generic helper existed.
+   */
+  private async run<T>(
+    label: string,
+    call: (provider: AIProvider) => Promise<T>,
     signal?: AbortSignal,
-  ): Promise<GeneratedDeck> {
+  ): Promise<T> {
     for (let i = 0; i < this.chain.length; i++) {
       const { name, provider } = this.chain[i]
       const isLast = i === this.chain.length - 1
       try {
-        return await provider.generateDeck(topic, brief, signal)
+        return await call(provider)
       } catch (err) {
         if (isLast || isAbort(err, signal) || !isFailoverable(err)) throw err
         // Worth a breadcrumb: the user sees a normal (if slower) generation, so
-        // without this there's nothing to explain where the deck came from or
+        // without this there's nothing to explain where the result came from or
         // why the primary is being leaned on less than expected.
         console.warn(
-          `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${this.chain[i + 1].name}`,
+          `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${this.chain[i + 1].name}${label === 'deck' ? '' : ` for ${label}`}`,
         )
       }
     }
     // Unreachable: the loop either returns or rethrows on the last provider.
-    throw new AIProviderError('No AI provider was able to generate a deck.')
+    throw new AIProviderError(`No AI provider was able to complete ${label}.`)
+  }
+
+  async generateDeck(
+    topic: string,
+    brief: GenerationBrief,
+    signal?: AbortSignal,
+    context?: DeckContext,
+  ): Promise<GeneratedDeck> {
+    return this.run('deck', (provider) => provider.generateDeck(topic, brief, signal, context), signal)
+  }
+
+  /** Same chain, same rules as `generateDeck`. */
+  async research(
+    topic: string,
+    brief: GenerationBrief,
+    today: string,
+    signal?: AbortSignal,
+  ): Promise<EvidencePack> {
+    return this.run('research', (provider) => provider.research(topic, brief, today, signal), signal)
+  }
+
+  /** Same chain, same rules as `generateDeck`. */
+  async repairSlides(
+    deck: GeneratedDeck,
+    targets: number[],
+    flags: QualityFlag[],
+    context: DeckContext,
+    signal?: AbortSignal,
+  ): Promise<RepairResponse> {
+    return this.run(
+      'repair',
+      (provider) => provider.repairSlides(deck, targets, flags, context, signal),
+      signal,
+    )
   }
 
   /**
@@ -111,18 +156,6 @@ export class FallbackProvider implements AIProvider {
     slides: NarrationSlide[],
     signal?: AbortSignal,
   ): Promise<NarrationResponse> {
-    for (let i = 0; i < this.chain.length; i++) {
-      const { name, provider } = this.chain[i]
-      const isLast = i === this.chain.length - 1
-      try {
-        return await provider.generateNarration(title, slides, signal)
-      } catch (err) {
-        if (isLast || isAbort(err, signal) || !isFailoverable(err)) throw err
-        console.warn(
-          `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${this.chain[i + 1].name} for narration`,
-        )
-      }
-    }
-    throw new AIProviderError('No AI provider was able to write narration.')
+    return this.run('narration', (provider) => provider.generateNarration(title, slides, signal), signal)
   }
 }

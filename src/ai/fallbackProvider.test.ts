@@ -50,6 +50,8 @@ function stub(behaviour: () => Promise<GeneratedDeck>): AIProvider & { calls: nu
       it_.calls++
       return behaviour()
     },
+    research: vi.fn(),
+    repairSlides: vi.fn(),
     generateNarration: vi.fn(),
   }
   return it_
@@ -175,6 +177,8 @@ describe('FallbackProvider', () => {
         seen.push(topic, brief, signal)
         return deck('ok')
       },
+      research: vi.fn(),
+      repairSlides: vi.fn(),
       generateNarration: vi.fn(),
     }
     const controller = new AbortController()
