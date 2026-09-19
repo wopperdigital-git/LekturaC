@@ -300,6 +300,150 @@ describe('fitting the title, heading and body arrangements', () => {
   })
 })
 
+describe('fitting the stat, two-column and quote arrangements', () => {
+  const LONG_HEADING = words(20, 'heading')
+
+  it('fits a single stat with a long label and a long paragraph', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: 'Stat heading' },
+        { type: 'stat', value: '42%', label: words(12, 'label') },
+        { type: 'paragraph', text: words(40, 'p') },
+      ],
+      'statHero',
+    )
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('fits a 6-stat grid', () => {
+    const stats: ContentBlock[] = Array.from({ length: 6 }, (_, i) => ({
+      type: 'stat',
+      value: `${i + 1}00%`,
+      label: words(2, `label${i + 1}-`),
+    }))
+    const card = cardOf([{ type: 'heading', text: 'Six stats' }, ...stats], 'statGrid')
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('fits a two-column card with 3 groups of 6 long items', () => {
+    const groups: ContentBlock[] = Array.from({ length: 3 }, (_, i) => ({
+      type: 'comparisonGroup',
+      heading: words(4, `group${i + 1}-`),
+      items: Array.from({ length: 6 }, (_, j) => words(4, `g${i + 1}i${j + 1}-`)),
+    }))
+    const card = cardOf([{ type: 'heading', text: 'Comparison heading' }, ...groups], 'comparison')
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('fits a quote of 60 words with an attribution', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: 'Quote heading' },
+        { type: 'quote', text: words(60, 'q'), attribution: 'Someone Notable' },
+      ],
+      'quote',
+    )
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('gives every stat value box in a grid the same fontSize', () => {
+    const stats: ContentBlock[] = Array.from({ length: 6 }, (_, i) => ({
+      type: 'stat',
+      value: `${i + 1}00%`,
+      label: words(2, `l${i + 1}-`),
+    }))
+    const card = cardOf([{ type: 'heading', text: 'Six stats' }, ...stats], 'statGrid')
+    const slide = render(card)
+    const valueBoxes = slide.texts.filter((t) => (t.options as { valign?: string }).valign === 'bottom')
+    expect(valueBoxes.length).toBe(6)
+    const sizes = new Set(valueBoxes.map((t) => (t.options as { fontSize: number }).fontSize))
+    expect(sizes.size).toBe(1)
+  })
+
+  it('gives every two-column bullet box the same fontSize', () => {
+    const groups: ContentBlock[] = [
+      {
+        type: 'comparisonGroup',
+        heading: 'Short',
+        items: [words(3, 'a'), words(3, 'b')],
+      },
+      {
+        type: 'comparisonGroup',
+        heading: 'Long',
+        items: Array.from({ length: 5 }, (_, j) => words(12, `long${j + 1}-`)),
+      },
+      {
+        type: 'comparisonGroup',
+        heading: 'Medium',
+        items: [words(6, 'm1'), words(6, 'm2'), words(6, 'm3')],
+      },
+    ]
+    const card = cardOf([{ type: 'heading', text: 'Comparison heading' }, ...groups], 'comparison')
+    const slide = render(card)
+    const bulletBoxes = slide.texts.filter((t) => t.runs.some((run) => (run.options as { bullet?: boolean }).bullet))
+    expect(bulletBoxes.length).toBe(3)
+    const sizes = new Set(bulletBoxes.map((t) => (t.options as { fontSize: number }).fontSize))
+    expect(sizes.size).toBe(1)
+  })
+
+  it('keeps stat content clear of a long heading', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: LONG_HEADING },
+        { type: 'stat', value: '42%', label: 'Conversion rate' },
+      ],
+      'statHero',
+    )
+    const slide = render(card)
+    const headingBox = slide.texts[0]
+    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    for (const box of slide.texts.slice(1)) {
+      const { y } = box.options as { y: number }
+      expect(y).toBeGreaterThanOrEqual(headingY + headingH - 1e-9)
+    }
+  })
+
+  it('keeps two-column content clear of a long heading', () => {
+    const groups: ContentBlock[] = [
+      { type: 'comparisonGroup', heading: 'Group one', items: ['Item a', 'Item b'] },
+      { type: 'comparisonGroup', heading: 'Group two', items: ['Item c', 'Item d'] },
+    ]
+    const card = cardOf([{ type: 'heading', text: LONG_HEADING }, ...groups], 'comparison')
+    const slide = render(card)
+    const headingBox = slide.texts[0]
+    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    for (const box of slide.texts.slice(1)) {
+      const { y } = box.options as { y: number }
+      expect(y).toBeGreaterThanOrEqual(headingY + headingH - 1e-9)
+    }
+  })
+
+  it('keeps quote content clear of a long heading', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: LONG_HEADING },
+        { type: 'quote', text: 'A short quote.', attribution: 'Someone' },
+      ],
+      'quote',
+    )
+    const slide = render(card)
+    const headingBox = slide.texts[0]
+    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    for (const box of slide.texts.slice(1)) {
+      const { y } = box.options as { y: number }
+      expect(y).toBeGreaterThanOrEqual(headingY + headingH - 1e-9)
+    }
+  })
+})
+
 describe('starter cards as stored data', () => {
   /*
     The zod schema is the contract generation is validated against, and a

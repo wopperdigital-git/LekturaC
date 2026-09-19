@@ -4,9 +4,9 @@ import type { TextStyle } from '@/engine/textStyle'
 import { textRef } from '@/engine/marks'
 import { cardBoxes, type Box } from './blockBoxes'
 import type { PptxTextRun } from './textRun'
-import { faceName, hex, markedRuns, pointSize, resolveRunStyle } from './textRun'
+import { faceName, hex, markedRuns, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
-import type { FitParagraph, FitSizing, TextMeasurer } from './textFit'
+import type { FitParagraph, FitSizing, SizeRole, TextMeasurer } from './textFit'
 import { SIZE_LADDER, TEXT_MARGIN_PT, fitText, preferredSize } from './textFit'
 
 /*
@@ -434,7 +434,7 @@ const MAX_STAT_COLUMNS = 4
  * most four, wrapping beyond that rather than shrinking indefinitely.
  */
 const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
-  addHeading(slide, card, theme, style, measure)
+  const contentTop = addHeading(slide, card, theme, style, measure)
 
   const stats: { value: string; label: string; index: number }[] = []
   card.blocks.forEach((block, i) => {
@@ -450,21 +450,76 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
   const columns = Math.min(stats.length, MAX_STAT_COLUMNS)
   const rows = Math.ceil(stats.length / columns)
   const cellW = CONTENT_W / columns
-  const areaY = MARGIN + 1.35
-  const totalH = SLIDE_H - areaY - MARGIN
-  // Paragraphs, when present, take a fixed slice off the bottom of the stat
-  // area rather than shrinking indefinitely as more stat rows are added.
-  const PARAGRAPH_H = 0.9
+  const area = BOTTOM - contentTop
+
+  // Paragraphs, when present, are fitted first and take a bottom slice off the
+  // stat area — sized to what they actually need (up to `PARAGRAPH_MAX_H`)
+  // rather than a fixed guess — and the grid gets the rest.
+  const PARAGRAPH_MAX_H = 1.2
   const PARAGRAPH_GAP = 0.15
-  const areaH = paragraphs.length > 0 ? totalH - PARAGRAPH_H - PARAGRAPH_GAP : totalH
+
+  let paragraphH = 0
+  let paragraphSize = 0
+  let paragraphStyle: TextStyle = style
+  if (paragraphs.length > 0) {
+    // Box-level options follow the first paragraph's resolved style, same
+    // pattern as `renderTitle`'s multi-paragraph subtitle box.
+    paragraphStyle = styleFor(card, textRef(paragraphs[0].index, 'text'), style)
+    const subParagraphs: FitParagraph[] = paragraphs.map(({ block }) => ({ text: block.text }))
+    const sizing: FitSizing = {
+      preferredPt: preferredSize('body', theme.typography.scale[BODY], paragraphStyle.fontScale),
+      minPt: SIZE_LADDER.body.min,
+      face: bodyFace(theme, paragraphStyle),
+      italic: paragraphStyle.italic,
+    }
+    const fitted = fitText(
+      subParagraphs,
+      { widthIn: CONTENT_W, maxHeightIn: PARAGRAPH_MAX_H },
+      sizing,
+      measure,
+    )
+    paragraphH = fitted.heightIn
+    paragraphSize = fitted.sizePt
+  }
+
+  const areaH = paragraphs.length > 0 ? area - paragraphH - PARAGRAPH_GAP : area
   const cellH = areaH / rows
   const single = stats.length === 1
+  const valueRole: SizeRole = single ? 'statSingle' : 'statGrid'
+  const valueRem = theme.typography.scale[single ? H1 : H2]
+
+  // Fitted independently per stat so a long value or label in one cell never
+  // sets the size for cells that had room to spare; the smallest of each wins
+  // so every value (and every label) still reads as one grid.
+  const valueFits = stats.map((stat) => {
+    const valueStyle = styleFor(card, textRef(stat.index, 'value'), style)
+    const sizing: FitSizing = {
+      preferredPt: preferredSize(valueRole, valueRem, valueStyle.fontScale),
+      minPt: SIZE_LADDER[valueRole].min,
+      face: headingFace(theme, valueStyle),
+      bold: valueStyle.bold ?? true,
+      italic: valueStyle.italic,
+    }
+    return fitText([{ text: stat.value }], { widthIn: cellW, maxHeightIn: cellH * 0.62 }, sizing, measure)
+  })
+  const labelFits = stats.map((stat) => {
+    const labelStyle = styleFor(card, textRef(stat.index, 'label'), style)
+    const sizing: FitSizing = {
+      preferredPt: preferredSize('body', theme.typography.scale[BODY], labelStyle.fontScale),
+      minPt: SIZE_LADDER.body.min,
+      face: bodyFace(theme, labelStyle),
+      italic: labelStyle.italic,
+    }
+    return fitText([{ text: stat.label }], { widthIn: cellW, maxHeightIn: cellH * 0.34 }, sizing, measure)
+  })
+  const valueSize = Math.min(...valueFits.map((f) => f.sizePt))
+  const labelSize = Math.min(...labelFits.map((f) => f.sizePt))
 
   stats.forEach((stat, i) => {
     const col = i % columns
     const row = Math.floor(i / columns)
     const x = MARGIN + col * cellW
-    const y = areaY + row * cellH
+    const y = contentTop + row * cellH
 
     const valueRef = textRef(stat.index, 'value')
     const valueStyle = styleFor(card, valueRef, style)
@@ -474,11 +529,14 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       w: cellW,
       h: cellH * 0.62,
       fontFace: headingFace(theme, valueStyle),
-      fontSize: pointSize(theme.typography.scale[single ? H1 : H2], valueStyle.fontScale),
+      fontSize: valueSize,
       color: hex(theme.colors.accent),
       bold: valueStyle.bold ?? true,
+      italic: valueStyle.italic,
       align: 'center',
       valign: 'bottom',
+      margin: TEXT_MARGIN_PT,
+      fit: 'shrink',
     })
 
     const labelRef = textRef(stat.index, 'label')
@@ -487,19 +545,19 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       x,
       y: y + cellH * 0.64,
       w: cellW,
-      h: cellH * 0.3,
+      h: cellH * 0.34,
       fontFace: bodyFace(theme, labelStyle),
-      fontSize: pointSize(theme.typography.scale[BODY], labelStyle.fontScale),
+      fontSize: labelSize,
       color: hex(theme.colors.muted),
+      italic: labelStyle.italic,
       align: 'center',
       valign: 'top',
+      margin: TEXT_MARGIN_PT,
+      fit: 'shrink',
     })
   })
 
   if (paragraphs.length > 0) {
-    // Box-level options follow the first paragraph's resolved style, same
-    // pattern as `renderTitle`'s multi-paragraph subtitle box.
-    const boxStyle = styleFor(card, textRef(paragraphs[0].index, 'text'), style)
     const runs = paragraphs.flatMap(({ block, index }, i) => {
       const ref = textRef(index, 'text')
       const marked = markedRuns(block.text, marksFor(card, ref))
@@ -512,15 +570,16 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
 
     slide.addText(runs, {
       x: MARGIN,
-      y: areaY + areaH + PARAGRAPH_GAP,
+      y: BOTTOM - paragraphH,
       w: CONTENT_W,
-      h: PARAGRAPH_H,
-      fontFace: bodyFace(theme, boxStyle),
-      fontSize: pointSize(theme.typography.scale[BODY], boxStyle.fontScale),
+      h: paragraphH,
+      fontFace: bodyFace(theme, paragraphStyle),
+      fontSize: paragraphSize,
       color: hex(theme.colors.muted),
-      italic: boxStyle.italic,
-      align: boxStyle.align ?? 'center',
+      italic: paragraphStyle.italic,
+      align: paragraphStyle.align ?? 'center',
       valign: 'top',
+      margin: TEXT_MARGIN_PT,
       fit: 'shrink',
     })
   }
@@ -559,7 +618,7 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
     return
   }
 
-  addHeading(slide, card, theme, style, measure)
+  const contentTop = addHeading(slide, card, theme, style, measure)
 
   const shown = groups.slice(0, 4)
   const columns = shown.length
@@ -567,7 +626,45 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
   // to share the row, so a column never has to give up more than it needs to.
   const gap = columns >= 3 ? 0.3 : 0.4
   const colW = (CONTENT_W - gap * (columns - 1)) / columns
-  const top = MARGIN + 1.35
+
+  const HEADING_CAP_H = 0.8
+  const HEADING_BODY_GAP = 0.1
+
+  // Fitted independently per column so one long column heading doesn't set
+  // the size for a short one; the smallest size wins and the tallest fitted
+  // height becomes every column's heading box, so the bullets start at one y.
+  const headingFits = shown.map((group) => {
+    const headingStyle = styleFor(card, textRef(group.index, 'heading'), style)
+    const sizing: FitSizing = {
+      preferredPt: preferredSize('subheading', theme.typography.scale[H3], headingStyle.fontScale),
+      minPt: SIZE_LADDER.subheading.min,
+      face: headingFace(theme, headingStyle),
+      bold: headingStyle.bold ?? true,
+      italic: headingStyle.italic,
+    }
+    return fitText([{ text: group.heading }], { widthIn: colW, maxHeightIn: HEADING_CAP_H }, sizing, measure)
+  })
+  const headingSize = Math.min(...headingFits.map((f) => f.sizePt))
+  const headingH = Math.max(...headingFits.map((f) => f.heightIn))
+
+  const bulletsTop = contentTop + headingH + HEADING_BODY_GAP
+  const bulletsAreaH = BOTTOM - bulletsTop
+
+  // Fitted independently per column too, then unified the same way — the
+  // smallest size wins so every column's bullets read at one size.
+  const bulletFits = shown.map((group) => {
+    const paragraphs: FitParagraph[] = group.items.map((item) => ({ text: item, indentIn: 0.3 }))
+    const sizing: FitSizing = {
+      preferredPt: preferredSize('body', theme.typography.scale[BODY], style.fontScale),
+      minPt: SIZE_LADDER.body.min,
+      face: bodyFace(theme, style),
+      bold: style.bold,
+      italic: style.italic,
+      lineSpacing: theme.typography.lineHeight,
+    }
+    return fitText(paragraphs, { widthIn: colW, maxHeightIn: bulletsAreaH }, sizing, measure)
+  })
+  const bulletSize = Math.min(...bulletFits.map((f) => f.sizePt))
 
   shown.forEach((group, i) => {
     const x = MARGIN + i * (colW + gap)
@@ -576,15 +673,18 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
     const headingStyle = styleFor(card, headingRef, style)
     slide.addText(markedRuns(group.heading, marksFor(card, headingRef)), {
       x,
-      y: top,
+      y: contentTop,
       w: colW,
-      h: 0.55,
+      h: headingH,
       fontFace: headingFace(theme, headingStyle),
-      fontSize: pointSize(theme.typography.scale[H3], headingStyle.fontScale),
+      fontSize: headingSize,
       color: hex(theme.colors.accent),
       bold: headingStyle.bold ?? true,
+      italic: headingStyle.italic,
       align: 'left',
       valign: 'middle',
+      margin: TEXT_MARGIN_PT,
+      fit: 'shrink',
     })
 
     const runs = group.items.flatMap((item, j) => {
@@ -600,15 +700,16 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
 
     slide.addText(runs, {
       x,
-      y: top + 0.6,
+      y: bulletsTop,
       w: colW,
-      h: SLIDE_H - top - 0.6 - MARGIN,
+      h: bulletsAreaH,
       fontFace: bodyFace(theme, style),
-      fontSize: pointSize(theme.typography.scale[BODY], style.fontScale),
+      fontSize: bulletSize,
       color: hex(theme.colors.foreground),
       align: 'left',
       valign: 'top',
       lineSpacingMultiple: theme.typography.lineHeight,
+      margin: TEXT_MARGIN_PT,
       fit: 'shrink',
     })
   })
@@ -627,39 +728,82 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
   // `renderBody` above already draws its own heading for the no-quote
   // fallback; drawing it again here too would duplicate it, so this call
   // sits only on the path where a quote block actually exists.
-  addHeading(slide, card, theme, style, measure)
+  const contentTop = addHeading(slide, card, theme, style, measure)
 
-  // Shifted down from the top of the slide to clear `addHeading`'s box (to
-  // y≈1.5) and its accent rule (to y≈1.6), with a small gap.
+  // The quote and its attribution are fitted independently, then centred as
+  // one pair inside the area below the heading — clearing `addHeading`'s real
+  // bottom rather than a fixed guess at where its box ends.
+  const area = BOTTOM - contentTop
+  const quoteW = CONTENT_W - 1.0
+  const attribution = quote.block.attribution
+  const ATTRIBUTION_MAX_H = 0.6
+
   const textRefKey = textRef(quote.index, 'text')
   const quoteStyle = styleFor(card, textRefKey, style)
+  const quoteSizing: FitSizing = {
+    preferredPt: preferredSize('subheading', theme.typography.scale[H3], quoteStyle.fontScale),
+    minPt: SIZE_LADDER.subheading.min,
+    face: headingFace(theme, quoteStyle),
+    italic: quoteStyle.italic ?? true,
+  }
+  const quoteFit = fitText(
+    [{ text: `“${quote.block.text}”` }],
+    { widthIn: quoteW, maxHeightIn: area - (attribution ? ATTRIBUTION_MAX_H : 0) },
+    quoteSizing,
+    measure,
+  )
+
+  let attrFit: { sizePt: number; heightIn: number } | null = null
+  let attrStyle: TextStyle | undefined
+  if (attribution) {
+    const attrRef = textRef(quote.index, 'attribution')
+    attrStyle = styleFor(card, attrRef, style)
+    const attrSizing: FitSizing = {
+      preferredPt: preferredSize('body', theme.typography.scale[BODY], attrStyle.fontScale),
+      minPt: SIZE_LADDER.body.min,
+      face: bodyFace(theme, attrStyle),
+      italic: attrStyle.italic,
+    }
+    attrFit = fitText(
+      [{ text: `— ${attribution}` }],
+      { widthIn: quoteW, maxHeightIn: ATTRIBUTION_MAX_H },
+      attrSizing,
+      measure,
+    )
+  }
+
+  const pairH = quoteFit.heightIn + (attrFit ? attrFit.heightIn : 0)
+  const groupY = contentTop + (area - pairH) / 2
+
   slide.addText(markedRuns(`“${quote.block.text}”`, marksFor(card, textRefKey)), {
     x: MARGIN + 0.5,
-    y: 1.75,
-    w: CONTENT_W - 1.0,
-    h: 2.2,
+    y: groupY,
+    w: quoteW,
+    h: quoteFit.heightIn,
     fontFace: headingFace(theme, quoteStyle),
-    fontSize: pointSize(theme.typography.scale[H3], quoteStyle.fontScale),
+    fontSize: quoteFit.sizePt,
     color: hex(theme.colors.foreground),
     italic: quoteStyle.italic ?? true,
     align: quoteStyle.align ?? 'center',
     valign: 'middle',
+    margin: TEXT_MARGIN_PT,
     fit: 'shrink',
   })
 
-  if (quote.block.attribution) {
+  if (attribution && attrFit && attrStyle) {
     const attrRef = textRef(quote.index, 'attribution')
-    const attrStyle = styleFor(card, attrRef, style)
-    slide.addText(markedRuns(`— ${quote.block.attribution}`, marksFor(card, attrRef)), {
+    slide.addText(markedRuns(`— ${attribution}`, marksFor(card, attrRef)), {
       x: MARGIN + 0.5,
-      y: 4.05,
-      w: CONTENT_W - 1.0,
-      h: 0.6,
+      y: groupY + quoteFit.heightIn,
+      w: quoteW,
+      h: attrFit.heightIn,
       fontFace: bodyFace(theme, attrStyle),
-      fontSize: pointSize(theme.typography.scale[BODY], attrStyle.fontScale),
+      fontSize: attrFit.sizePt,
       color: hex(theme.colors.muted),
       align: attrStyle.align ?? 'center',
       valign: 'top',
+      margin: TEXT_MARGIN_PT,
+      fit: 'shrink',
     })
   }
 }
