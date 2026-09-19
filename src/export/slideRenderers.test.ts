@@ -300,6 +300,13 @@ describe('fitting the title, heading and body arrangements', () => {
   })
 })
 
+/** The y+h of the accent rule `addHeading` draws — the real bottom every arrangement's content must clear. */
+function ruleBottomOf(slide: PptxSlide & { shapes: { shape: string; options: Record<string, unknown> }[] }): number {
+  const rule = slide.shapes[0]
+  const { y, h } = rule.options as { y: number; h: number }
+  return y + h
+}
+
 describe('fitting the stat, two-column and quote arrangements', () => {
   const LONG_HEADING = words(20, 'heading')
 
@@ -355,35 +362,51 @@ describe('fitting the stat, two-column and quote arrangements', () => {
   })
 
   it('gives every stat value box in a grid the same fontSize', () => {
-    const stats: ContentBlock[] = Array.from({ length: 6 }, (_, i) => ({
-      type: 'stat',
-      value: `${i + 1}00%`,
-      label: words(2, `l${i + 1}-`),
-    }))
+    // One markedly long value and one markedly long label so an unfitted
+    // grid would show different sizes; unification must still collapse them
+    // to one.
+    const stats: ContentBlock[] = [
+      { type: 'stat', value: '1,234,567,890%', label: 'Brief' },
+      { type: 'stat', value: '2%', label: words(16, 'verywordylabel') },
+      { type: 'stat', value: '3%', label: 'Ok' },
+      { type: 'stat', value: '4%', label: 'Fine' },
+      { type: 'stat', value: '5%', label: 'Good' },
+      { type: 'stat', value: '6%', label: 'Nice' },
+    ]
     const card = cardOf([{ type: 'heading', text: 'Six stats' }, ...stats], 'statGrid')
     const slide = render(card)
     const valueBoxes = slide.texts.filter((t) => (t.options as { valign?: string }).valign === 'bottom')
     expect(valueBoxes.length).toBe(6)
-    const sizes = new Set(valueBoxes.map((t) => (t.options as { fontSize: number }).fontSize))
-    expect(sizes.size).toBe(1)
+    const valueSizes = new Set(valueBoxes.map((t) => (t.options as { fontSize: number }).fontSize))
+    expect(valueSizes.size).toBe(1)
+
+    const labelBoxes = slide.texts.filter(
+      (t) => (t.options as { valign?: string; color?: string }).valign === 'top' && t.options.color === '6f6a78',
+    )
+    expect(labelBoxes.length).toBe(6)
+    const labelSizes = new Set(labelBoxes.map((t) => (t.options as { fontSize: number }).fontSize))
+    expect(labelSizes.size).toBe(1)
   })
 
   it('gives every two-column bullet box the same fontSize', () => {
+    // One column's items are markedly longer than the others', so an
+    // unfitted column would need a markedly smaller size than its neighbours;
+    // unification must still collapse every column to one shared size.
     const groups: ContentBlock[] = [
       {
         type: 'comparisonGroup',
         heading: 'Short',
-        items: [words(3, 'a'), words(3, 'b')],
+        items: ['a b', 'c d'],
       },
       {
         type: 'comparisonGroup',
         heading: 'Long',
-        items: Array.from({ length: 5 }, (_, j) => words(12, `long${j + 1}-`)),
+        items: Array.from({ length: 6 }, (_, j) => words(14, `verylongitem${j + 1}-`)),
       },
       {
         type: 'comparisonGroup',
         heading: 'Medium',
-        items: [words(6, 'm1'), words(6, 'm2'), words(6, 'm3')],
+        items: ['m1 word', 'm2 word', 'm3 word'],
       },
     ]
     const card = cardOf([{ type: 'heading', text: 'Comparison heading' }, ...groups], 'comparison')
@@ -403,11 +426,10 @@ describe('fitting the stat, two-column and quote arrangements', () => {
       'statHero',
     )
     const slide = render(card)
-    const headingBox = slide.texts[0]
-    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    const ruleBottom = ruleBottomOf(slide)
     for (const box of slide.texts.slice(1)) {
       const { y } = box.options as { y: number }
-      expect(y).toBeGreaterThanOrEqual(headingY + headingH - 1e-9)
+      expect(y).toBeGreaterThanOrEqual(ruleBottom - 1e-9)
     }
   })
 
@@ -418,11 +440,10 @@ describe('fitting the stat, two-column and quote arrangements', () => {
     ]
     const card = cardOf([{ type: 'heading', text: LONG_HEADING }, ...groups], 'comparison')
     const slide = render(card)
-    const headingBox = slide.texts[0]
-    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    const ruleBottom = ruleBottomOf(slide)
     for (const box of slide.texts.slice(1)) {
       const { y } = box.options as { y: number }
-      expect(y).toBeGreaterThanOrEqual(headingY + headingH - 1e-9)
+      expect(y).toBeGreaterThanOrEqual(ruleBottom - 1e-9)
     }
   })
 
@@ -435,11 +456,10 @@ describe('fitting the stat, two-column and quote arrangements', () => {
       'quote',
     )
     const slide = render(card)
-    const headingBox = slide.texts[0]
-    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    const ruleBottom = ruleBottomOf(slide)
     for (const box of slide.texts.slice(1)) {
       const { y } = box.options as { y: number }
-      expect(y).toBeGreaterThanOrEqual(headingY + headingH - 1e-9)
+      expect(y).toBeGreaterThanOrEqual(ruleBottom - 1e-9)
     }
   })
 })
