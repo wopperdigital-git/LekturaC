@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BULLET_INDENT_IN,
   DEFAULT_LINE_SPACING,
   FLOOR_PT,
   INSET_X_IN,
   INSET_Y_IN,
   SIZE_LADDER,
+  TEXT_MARGIN_PT,
   WIDTH_HEADROOM,
   estimateMeasurer,
   fitText,
   preferredSize,
+  spacingPt,
   textHeight,
   wrapLines,
   type FitSizing,
@@ -74,7 +77,7 @@ describe('textHeight', () => {
     const height = textHeight([{ text: 'hi' }], 5, sizing, 18, fakeMeasure)
     const expected = ((18 * DEFAULT_LINE_SPACING) / 72) * 1.1 + INSET_Y_IN
     expect(height).toBeCloseTo(expected, 6)
-    expect(height).toBeCloseTo(0.43, 4)
+    expect(height).toBeCloseTo(0.48, 4)
   })
 
   it('returns INSET_Y_IN for an empty paragraph list', () => {
@@ -84,10 +87,10 @@ describe('textHeight', () => {
 
   it('narrows the usable width with an indent, which can add lines and height', () => {
     const sizing: FitSizing = { preferredPt: 10, minPt: 10, face: 'Test' }
-    // boxWidthIn(1.5) - INSET_X_IN(0.2) = 1.3in usable, comfortably fitting
+    // boxWidthIn(1.5) - INSET_X_IN(0.15) = 1.35in usable, comfortably fitting
     // "aaaaa bbbbb" (1.1in raw x 1.1 headroom = 1.21in) on one line.
     const flush = textHeight([{ text: 'aaaaa bbbbb' }], 1.5, sizing, 10, fakeMeasure)
-    // The same box with a 0.4in indent narrows usable width to 0.9in, which
+    // The same box with a 0.4in indent narrows usable width to 0.95in, which
     // only fits one word per line, so the paragraph wraps to two lines.
     const indented = textHeight(
       [{ text: 'aaaaa bbbbb', indentIn: 0.4 }],
@@ -97,8 +100,8 @@ describe('textHeight', () => {
       fakeMeasure,
     )
     expect(indented).toBeGreaterThan(flush)
-    expect(indented).toBeCloseTo(0.46667, 4)
-    expect(flush).toBeCloseTo(0.28333, 4)
+    expect(indented).toBeCloseTo(0.51667, 4)
+    expect(flush).toBeCloseTo(0.33333, 4)
   })
 
   it("lets a paragraph's own bold override the sizing default for its measurement", () => {
@@ -124,16 +127,16 @@ describe('fitText', () => {
   it('steps down to the first size that fits', () => {
     const sizing: FitSizing = { preferredPt: 30, minPt: 20, face: 'Test' }
     const result = fitText([{ text: 'hi' }], { widthIn: 100, maxHeightIn: 0.6 }, sizing, fakeMeasure)
-    expect(result.sizePt).toBe(27)
-    expect(result.heightIn).toBeCloseTo(0.595, 4)
+    expect(result.sizePt).toBe(24)
+    expect(result.heightIn).toBeCloseTo(0.59, 4)
   })
 
   it('goes below minPt when nothing fits at minPt', () => {
     const sizing: FitSizing = { preferredPt: 30, minPt: 25, face: 'Test' }
     const result = fitText([{ text: 'hi' }], { widthIn: 100, maxHeightIn: 0.48 }, sizing, fakeMeasure)
-    expect(result.sizePt).toBe(20)
+    expect(result.sizePt).toBe(17)
     expect(result.sizePt).toBeLessThan(sizing.minPt)
-    expect(result.heightIn).toBeCloseTo(0.46667, 4)
+    expect(result.heightIn).toBeCloseTo(0.46167, 4)
   })
 
   it('never goes below FLOOR_PT, returning it with its real over-budget height', () => {
@@ -141,7 +144,26 @@ describe('fitText', () => {
     const result = fitText([{ text: 'hi' }], { widthIn: 100, maxHeightIn: 0.1 }, sizing, fakeMeasure)
     expect(result.sizePt).toBe(FLOOR_PT)
     expect(result.heightIn).toBeGreaterThan(0.1)
-    expect(result.heightIn).toBeCloseTo(0.28333, 4)
+    expect(result.heightIn).toBeCloseTo(0.33333, 4)
+  })
+
+  /*
+    Review I2: the floor is `Math.min(FLOOR_PT, preferredPt)`, not `FLOOR_PT`
+    alone — a caller asking for something smaller than `FLOOR_PT` (an
+    adjusted-card box-proportional size, say 7pt) must never come back larger
+    than what it asked for, whether or not the text fits.
+  */
+  it('never enlarges: a preferredPt below FLOOR_PT in a roomy box returns itself', () => {
+    const sizing: FitSizing = { preferredPt: 7, minPt: 12, face: 'Test' }
+    const result = fitText([{ text: 'hi' }], wideBox, sizing, fakeMeasure)
+    expect(result.sizePt).toBe(7)
+  })
+
+  it('never enlarges: a preferredPt below FLOOR_PT in a too-small box still returns itself, with its real over-budget height', () => {
+    const sizing: FitSizing = { preferredPt: 7, minPt: 12, face: 'Test' }
+    const result = fitText([{ text: 'hi' }], { widthIn: 100, maxHeightIn: 0.01 }, sizing, fakeMeasure)
+    expect(result.sizePt).toBe(7)
+    expect(result.heightIn).toBeGreaterThan(0.01)
   })
 })
 
@@ -201,9 +223,13 @@ describe('estimateMeasurer', () => {
 })
 
 describe('insets', () => {
-  it('derives INSET_X_IN and INSET_Y_IN from TEXT_MARGIN_PT', () => {
-    expect(INSET_X_IN).toBeCloseTo(0.2, 6)
-    expect(INSET_Y_IN).toBeCloseTo(0.1, 6)
+  it('is a scalar 5.4pt margin applied to all four sides', () => {
+    expect(TEXT_MARGIN_PT).toBe(5.4)
+  })
+
+  it('derives INSET_X_IN and INSET_Y_IN from TEXT_MARGIN_PT (0.15in each, both axes equal for a scalar margin)', () => {
+    expect(INSET_X_IN).toBeCloseTo(0.15, 6)
+    expect(INSET_Y_IN).toBeCloseTo(0.15, 6)
   })
 })
 
@@ -212,5 +238,19 @@ describe('constants', () => {
     expect(WIDTH_HEADROOM).toBe(1.1)
     expect(FLOOR_PT).toBe(10)
     expect(DEFAULT_LINE_SPACING).toBe(1.2)
+  })
+})
+
+describe('spacingPt', () => {
+  it('is sizePt times the spacing multiple, in points', () => {
+    expect(spacingPt(20, 1.2)).toBe(24)
+    expect(spacingPt(18, 1.55)).toBeCloseTo(27.9, 6)
+  })
+})
+
+describe('BULLET_INDENT_IN', () => {
+  it('matches pptxgenjs\'s DEF_BULLET_MARGIN of 27pt', () => {
+    expect(BULLET_INDENT_IN).toBeCloseTo(27 / 72, 10)
+    expect(BULLET_INDENT_IN).toBeCloseTo(0.375, 6)
   })
 })

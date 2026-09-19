@@ -12,10 +12,21 @@ import { estimateMeasurer } from './textFit'
   the fallback branch below is what `measureText.test.ts` actually exercises.
 */
 
+/**
+ * Escapes a font family name for use inside the double-quoted family in a CSS
+ * font string. A face name carrying a `"` or `\` (both are legal in a stored
+ * theme's font stack, even if unlikely) would otherwise break out of the
+ * quoted family or be read as an escape itself, corrupting the whole
+ * `ctx.font` string rather than just mis-measuring one face.
+ */
+export function escapeFaceName(face: string): string {
+  return face.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
 /** The canvas font string for a given spec — see the design doc's "4. Plumbing". */
 function cssFont(font: FontSpec): string {
   const weight = font.bold ? 700 : 400
-  return `${font.italic ? 'italic ' : ''}${weight} ${font.sizePt}pt "${font.face}", Arial, sans-serif`
+  return `${font.italic ? 'italic ' : ''}${weight} ${font.sizePt}pt "${escapeFaceName(font.face)}", Arial, sans-serif`
 }
 
 /**
@@ -41,6 +52,12 @@ export async function createCanvasMeasurer(): Promise<TextMeasurer> {
 
   const cache = new Map<string, number>()
 
+  // What `ctx.font` reads back as after the last assignment this measurer
+  // made that actually took effect — also what it silently stays at if a
+  // later assignment is rejected, which is the only way a rejection shows up
+  // (a bad `ctx.font` string never throws).
+  let lastTaken = ctx.font
+
   return (text, font) => {
     // Pipe-joined rather than a null-character separator: a literal NUL byte
     // in this source file made `git diff` classify it as binary and hide the
@@ -49,8 +66,25 @@ export async function createCanvasMeasurer(): Promise<TextMeasurer> {
     const cached = cache.get(key)
     if (cached !== undefined) return cached
 
-    ctx.font = cssFont(font)
-    const widthIn = ctx.measureText(text).width / 96
+    const spec = cssFont(font)
+    const before = ctx.font
+    ctx.font = spec
+    const after = ctx.font
+
+    // A rejected assignment leaves `ctx.font` exactly where it was, so the
+    // only tell is a read-back that didn't move even though we asked for a
+    // genuinely different spec — or one that came back empty outright. Either
+    // way, measuring in the stale font would silently mis-size the box, so
+    // fall back to the DOM-free estimator for just this call.
+    const rejected = after === '' || (spec !== lastTaken && after === before)
+
+    let widthIn: number
+    if (rejected) {
+      widthIn = estimateMeasurer(text, font)
+    } else {
+      lastTaken = after
+      widthIn = ctx.measureText(text).width / 96
+    }
     cache.set(key, widthIn)
     return widthIn
   }

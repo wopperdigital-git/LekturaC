@@ -42,16 +42,45 @@ export const FLOOR_PT = 10
 export const DEFAULT_LINE_SPACING = 1.2
 
 /**
- * pptxgenjs text box margin, in points, ordered `[top, right, bottom, left]`
- * — the same inset applied on every text box so the fit maths and every app
- * agree on the usable width and height.
+ * `lineSpacing` in points for a run set at `sizePt` with a `spacing`
+ * multiple (the theme's `typography.lineHeight` where a box uses it, else
+ * `DEFAULT_LINE_SPACING`).
+ *
+ * pptxgenjs's `lineSpacingMultiple` option emits `<a:spcPct>`, which PowerPoint
+ * defines as a percentage of *single* spacing — roughly 1.2x the font size for
+ * most faces, not 1.0x — so passing the model's own `spacing` value through it
+ * under-counts the actual line pitch by about 20%. `lineSpacing` (exact points,
+ * `<a:spcPts>`) has no such ambiguity: every app draws exactly the pitch this
+ * fit assumed. One helper so every text box derives it the same way.
  */
-export const TEXT_MARGIN_PT: [number, number, number, number] = [3.6, 7.2, 3.6, 7.2]
+export function spacingPt(sizePt: number, spacing: number): number {
+  return sizePt * spacing
+}
+
+/**
+ * Bullet hanging indent, in inches, matching what pptxgenjs actually draws for
+ * `indentLevel: 0` (`marL` = `DEF_BULLET_MARGIN` = 27pt, verified against
+ * `pptxgen.es.js`). Each deeper level adds another `BULLET_INDENT_IN`.
+ */
+export const BULLET_INDENT_IN = 27 / 72
+
+/**
+ * pptxgenjs text box margin, in points, applied to every side.
+ *
+ * A scalar rather than the `[top, right, bottom, left]` array the d.ts
+ * suggests: pptxgenjs actually applies an array `margin` as
+ * `[left, right, bottom, top]` (verified against `pptxgen.es.js`), which is
+ * not what the typings claim and not an order worth relying on. A scalar sets
+ * all four sides identically regardless of which order the library reads them
+ * in, so the fit maths and every app agree on the usable width and height
+ * without depending on that quirk.
+ */
+export const TEXT_MARGIN_PT = 5.4
 
 /** Total horizontal inset (left + right margin), in inches. */
-export const INSET_X_IN = (TEXT_MARGIN_PT[1] + TEXT_MARGIN_PT[3]) / 72
+export const INSET_X_IN = (2 * TEXT_MARGIN_PT) / 72
 /** Total vertical inset (top + bottom margin), in inches. */
-export const INSET_Y_IN = (TEXT_MARGIN_PT[0] + TEXT_MARGIN_PT[2]) / 72
+export const INSET_Y_IN = (2 * TEXT_MARGIN_PT) / 72
 
 /** What kind of text a size is being picked for — indexes the ladder below. */
 export type SizeRole = 'title' | 'heading' | 'subheading' | 'body' | 'statSingle' | 'statGrid'
@@ -239,10 +268,17 @@ export function textHeight(
 /**
  * The largest size from `sizing.preferredPt` down (1pt steps) whose
  * `textHeight` fits `box.maxHeightIn`. `sizing.minPt` is not a hard stop —
- * the descent continues below it down to `FLOOR_PT` if nothing fit yet, and
- * `FLOOR_PT` itself is never crossed: if even that overflows, it is returned
+ * the descent continues below it down to `floor` if nothing fit yet, and
+ * `floor` itself is never crossed: if even that overflows, it is returned
  * anyway with its real, over-budget height, because words are never dropped
  * to make a size fit.
+ *
+ * `floor` is `Math.min(FLOOR_PT, sizing.preferredPt)`, not `FLOOR_PT` alone —
+ * a caller that asked for something smaller than `FLOOR_PT` (a box-proportional
+ * adjusted-card size, say 7pt) must get that size back unchanged when it
+ * already fits, and its own real height when it doesn't, never `FLOOR_PT`
+ * pushed back up past what was asked for. Text is never enlarged past
+ * `preferredPt` and never shrunk past this floor.
  */
 export function fitText(
   paragraphs: FitParagraph[],
@@ -250,12 +286,14 @@ export function fitText(
   sizing: FitSizing,
   measure: TextMeasurer,
 ): { sizePt: number; heightIn: number } {
-  for (let size = sizing.preferredPt; size > FLOOR_PT; size--) {
+  const floor = Math.min(FLOOR_PT, sizing.preferredPt)
+
+  for (let size = sizing.preferredPt; size > floor; size--) {
     const heightIn = textHeight(paragraphs, box.widthIn, sizing, size, measure)
     if (heightIn <= box.maxHeightIn) {
       return { sizePt: size, heightIn }
     }
   }
 
-  return { sizePt: FLOOR_PT, heightIn: textHeight(paragraphs, box.widthIn, sizing, FLOOR_PT, measure) }
+  return { sizePt: floor, heightIn: textHeight(paragraphs, box.widthIn, sizing, floor, measure) }
 }

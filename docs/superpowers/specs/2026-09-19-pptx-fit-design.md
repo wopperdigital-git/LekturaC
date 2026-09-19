@@ -153,6 +153,35 @@ ratios below the cap and still honours a user's font scale.
 - Generation speed (a separate investigation: log each stage's duration first).
 - Changing which of the five arrangements a card gets (`slideGroup.ts`).
 
+## Corrections after review
+
+The final whole-branch review (`2026-09-19`, against `pptxgen.es.js` v4.0.1)
+found four places where this design's assumptions didn't match what
+pptxgenjs actually does, and fixed them:
+
+- **Line spacing is emitted in points (`lineSpacing`), not `lineSpacingMultiple`.**
+  pptxgenjs's `lineSpacingMultiple` writes `<a:spcPct>`, which PowerPoint
+  defines as a percentage of *single* spacing — roughly 1.2× the font size for
+  most faces, not 1.0× — so this design's original reading of it as "× font
+  size" under-counted the real line pitch by about 20%. Every text box now
+  emits `lineSpacing = sizePt × spacing` (`textFit.ts`'s `spacingPt`) instead,
+  where `spacing` is whichever value the box's own fit used.
+- **`TEXT_MARGIN_PT` is a scalar (5.4pt), not the `[3.6, 7.2, 3.6, 7.2]`
+  array this design specified.** pptxgenjs applies an array `margin` as
+  `[left, right, bottom, top]`, not the `[top, right, bottom, left]` order its
+  own `.d.ts` claims — a scalar sets all four sides identically regardless of
+  that quirk, which is what actually guarantees the fit maths and the drawn
+  box agree. `INSET_X_IN`/`INSET_Y_IN` are both `(2 × TEXT_MARGIN_PT) / 72`
+  (0.15in) as a result.
+- **Bullet indent is `27 / 72`in (`BULLET_INDENT_IN`, matching pptxgenjs's own
+  `DEF_BULLET_MARGIN`), not the 0.3in this design's renderers originally
+  guessed.** A nested `indentLevel: 1` item uses twice that.
+- **`fitText` never enlarges text past `sizing.preferredPt`.** The floor it
+  descends to is `Math.min(FLOOR_PT, sizing.preferredPt)`, not `FLOOR_PT`
+  alone — a caller asking for something smaller than `FLOOR_PT` (an adjusted
+  card's box-proportional size) must get that back unchanged, not raised to
+  10pt.
+
 ## Risks
 
 - **Fonts measured in the browser can differ from the app that opens the file.** The
