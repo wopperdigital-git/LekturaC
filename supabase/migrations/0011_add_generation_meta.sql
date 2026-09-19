@@ -12,4 +12,4 @@
 -- a deck's other inserts succeed: an un-migrated project (this column
 -- missing) still creates the deck, it just fails to also store this,
 -- logging a warning rather than losing the presentation over it.
-alter table public.presentations add column if not exists generation jsonb not null default '{}'::jsonb;
+alter table presentations add column if not exists generation jsonb not null default '{}'::jsonb;

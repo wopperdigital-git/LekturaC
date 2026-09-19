@@ -693,17 +693,24 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         deck — the same shape as the `adjusts`/`narration` lesson in
         CLAUDE.md's Persistence section, just as an update instead of an
         insert column.
+
+        Wrapped in try/catch, not just a returned `error` check: a rejected
+        `.update()` (a network failure, not only a missing column) must warn
+        the same way rather than reject this whole function — the deck the
+        two inserts above already created must not come back as a failure.
       */
       if (result) {
-        const meta = buildGenerationMeta(result, cards.map((c) => c.id), new Date().toISOString())
-        const { error: metaError } = await supabase
-          .from('presentations')
-          .update({ generation: meta })
-          .eq('id', id)
-        if (metaError) {
+        try {
+          const meta = buildGenerationMeta(result, cards.map((c) => c.id), new Date().toISOString())
+          const { error: metaError } = await supabase
+            .from('presentations')
+            .update({ generation: meta })
+            .eq('id', id)
+          if (metaError) throw metaError
+        } catch (err) {
           console.warn(
             '[generation] could not store generation metadata (run migration 0011):',
-            metaError.message,
+            describeError(err),
           )
         }
       }

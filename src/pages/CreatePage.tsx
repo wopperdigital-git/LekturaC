@@ -210,6 +210,7 @@ export function CreatePage() {
     } finally {
       abortRef.current = null
       setStage(null)
+      setRepairSlideCount(0)
     }
   }
 
