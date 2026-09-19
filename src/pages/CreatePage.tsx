@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent 
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
-import { AIProviderError, type AIProvider } from '@/ai/provider'
+import { AIProviderError, type AIProvider, type GenerationBrief } from '@/ai/provider'
 import { DEFAULT_TONE } from '@/ai/prompts'
+import { generatePresentation, type GenerationStage } from '@/generation/pipeline'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
@@ -102,6 +103,12 @@ export function CreatePage() {
   const [elapsed, setElapsed] = useState(0)
   const [skipping, setSkipping] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  // Which stage of the pipeline is running, for the spinner copy below. `null`
+  // outside `generating` and reset once the request ends, so a stale "Checking
+  // quality" can't linger into the next attempt.
+  const [stage, setStage] = useState<GenerationStage | null>(null)
+  // Only meaningful during the 'repair' stage — how many slides the pass targeted.
+  const [repairSlideCount, setRepairSlideCount] = useState(0)
 
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -172,20 +179,23 @@ export function CreatePage() {
 
     try {
       const provider: AIProvider = new FallbackProvider(PROVIDER_CHAIN)
-      const deck = await provider.generateDeck(
-        t,
-        {
-          slideCount: count,
-          audience: aud,
-          detailLevel: level,
-          // The brief no longer asks for a tone; every deck is generated with
-          // the default the question used to preselect.
-          tone: DEFAULT_TONE,
-          guidance: brief.guidance ?? '',
+      const generationBrief: GenerationBrief = {
+        slideCount: count,
+        audience: aud,
+        detailLevel: level,
+        // The brief no longer asks for a tone; every deck is generated with
+        // the default the question used to preselect.
+        tone: DEFAULT_TONE,
+        guidance: brief.guidance ?? '',
+      }
+      const result = await generatePresentation(provider, t, generationBrief, {
+        signal: controller.signal,
+        onStage: (s, detail) => {
+          setStage(s)
+          if (detail?.slides !== undefined) setRepairSlideCount(detail.slides)
         },
-        controller.signal,
-      )
-      const id = await createDeckFromGeneration(deck, count)
+      })
+      const id = await createDeckFromGeneration(result.deck, count, result)
       deleteDraft(draftId)
       setPhase('done')
       void navigate(`/deck/${id}`)
@@ -199,6 +209,22 @@ export function CreatePage() {
       setError(err instanceof AIProviderError ? err.message : 'Generation failed. Try again.')
     } finally {
       abortRef.current = null
+      setStage(null)
+    }
+  }
+
+  /** The spinner's second line — what the pipeline is doing right now, by stage. */
+  function stageMessage(): string {
+    switch (stage) {
+      case 'research':
+        return 'Researching sources'
+      case 'validate':
+        return 'Checking quality'
+      case 'repair':
+        return `Tightening ${repairSlideCount} slide(s)`
+      case 'write':
+      default:
+        return 'Writing slides from your brief'
     }
   }
 
@@ -631,7 +657,7 @@ export function CreatePage() {
                         Generating your presentation…
                       </p>
                       <p className="mt-0.5 text-xs tabular-nums text-app-muted">
-                        Writing slides from your brief · {elapsed}s
+                        {stageMessage()} · {elapsed}s
                       </p>
                     </div>
                     <button

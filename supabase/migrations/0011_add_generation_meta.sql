@@ -1,0 +1,15 @@
+-- What the generation pipeline produced beside the deck itself: the model's
+-- own brief, the sources research turned up, each slide's plan, the claims
+-- checked against those sources, and any quality flags raised along the way.
+--
+-- Nothing in the app reads this column yet — it is written for a future
+-- feature (surfacing citations, showing why a slide was written the way it
+-- was) that does not exist yet, so there is nothing to migrate old rows
+-- into. `generatedAt` inside the JSON is what dates it.
+--
+-- Defaults to '{}' like `adjusts` and `narration` before it, so every
+-- existing row is valid immediately, and the app writes it best-effort after
+-- a deck's other inserts succeed: an un-migrated project (this column
+-- missing) still creates the deck, it just fails to also store this,
+-- logging a warning rather than losing the presentation over it.
+alter table public.presentations add column if not exists generation jsonb not null default '{}'::jsonb;
