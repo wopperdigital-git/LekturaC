@@ -33,15 +33,21 @@ function headingTextOf(card: GeneratedCard): string {
 }
 
 /**
- * The whole deck, compact: one line per slide (its 1-based position, heading
- * and `plan.keyMessage`), never its full content. Only the target slides
- * below get their full card JSON — the model needs the rest of the deck for
- * continuity, not to rewrite it.
+ * The whole deck, compact: title, brief, and — for every card — its 1-based
+ * slide number, heading and `plan.keyMessage`, never its full content. Only
+ * the target slides below get their full card JSON — the model needs the
+ * rest of the deck for continuity, not to rewrite it.
  */
-function deckSummary(deck: GeneratedDeck): string {
-  return deck.cards
-    .map((card, i) => `${i + 1}. ${headingTextOf(card)} — ${card.plan.keyMessage}`)
-    .join('\n')
+function compactDeckJson(deck: GeneratedDeck): string {
+  return JSON.stringify({
+    title: deck.title,
+    brief: deck.brief,
+    cards: deck.cards.map((card, i) => ({
+      slide: i + 1,
+      heading: headingTextOf(card),
+      keyMessage: card.plan.keyMessage,
+    })),
+  })
 }
 
 function targetSection(deck: GeneratedDeck, index: number, flags: QualityFlag[]): string {
@@ -59,10 +65,10 @@ ${JSON.stringify(card)}`
 }
 
 /**
- * The repair call's user prompt: today's date, the whole deck as a compact
- * summary for context, then the full card JSON and flags for each target
- * slide, then the evidence pack (or the no-evidence line) — see the design
- * spec's "[4] Targeted repair".
+ * The repair call's user prompt: today's date, the whole deck as compact JSON
+ * for context, then the full card JSON and flags for each target slide, then
+ * the evidence pack (or the no-evidence line) — see the design spec's "[4]
+ * Targeted repair".
  *
  * `targets` holds 0-based card indices, the same indexing `QualityFlag.slideIndex`
  * uses, so a flag can be matched to its target without a second lookup.
@@ -82,11 +88,8 @@ export function buildRepairUserPrompt(
 
   return `Today's date: ${context.today}
 
-Deck: "${deck.title}"
-Objective: ${deck.brief.objective}
-
-All slides, for context (heading — key message):
-${deckSummary(deck)}
+The deck, compact (title, brief, and every card's heading and key message):
+${compactDeckJson(deck)}
 
 Fix exactly these slides:
 
