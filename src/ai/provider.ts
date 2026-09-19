@@ -1,35 +1,17 @@
 import { z } from 'zod'
-import { contentBlockSchema, visualStyleSchema } from '@/engine/contentBlocks'
 import type { GenerationBrief } from './prompts'
+import type { GeneratedDeck } from '@/generation/schemas'
 
 export type { GenerationBrief }
 
-const blueprintIdSchema = z.enum(['inform', 'persuade', 'story'])
-
-const generatedCardSchema = z
-  .object({
-    blocks: z.array(contentBlockSchema).min(1),
-    visualStyle: visualStyleSchema,
-    /**
-     * The blueprint row this card fills. Free-form on purpose: the shape is
-     * required but the *value* is not checked against the chosen blueprint,
-     * because a sequence mismatch must warn rather than discard a deck nothing
-     * can regenerate (see `sequenceMismatch`).
-     */
-    role: z.string().min(1),
-  })
-  .refine((card) => card.blocks[0]?.type === 'heading', {
-    message: 'blocks[0] must be a heading block (every card must start with its title)',
-  })
-
-export const generatedDeckSchema = z.object({
-  title: z.string().min(1),
-  /** Which of the three structures the model chose. */
-  blueprint: blueprintIdSchema,
-  cards: z.array(generatedCardSchema).min(1),
-})
-
-export type GeneratedDeck = z.infer<typeof generatedDeckSchema>
+/*
+  The generated-deck schema (and the v2 research/plan types around it) now
+  live in `@/generation/schemas` — that module is the contract every later
+  generation-pipeline task imports, so it can't depend back on `ai/provider`.
+  Re-exported here so every existing `from '@/ai/provider'` import keeps
+  working unchanged.
+*/
+export { generatedDeckSchema, type GeneratedDeck, type GeneratedCard } from '@/generation/schemas'
 
 /**
  * One slide as the narration model sees it.

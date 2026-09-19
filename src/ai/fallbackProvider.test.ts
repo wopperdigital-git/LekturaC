@@ -14,7 +14,31 @@ function deck(title: string): GeneratedDeck {
   return {
     title,
     blueprint: 'inform',
-    cards: [{ blocks: [{ type: 'heading', text: title }], visualStyle: 'structured', role: 'title-roadmap' }],
+    brief: {
+      objective: 'Explain the topic',
+      audienceKnowledgeLevel: 'beginner',
+      presentationType: 'educational',
+      freshnessRequired: false,
+      keyQuestions: [],
+    },
+    cards: [
+      {
+        plan: {
+          purpose: 'hook',
+          audienceQuestion: 'Why does this matter?',
+          keyMessage: title,
+          visualType: 'text',
+          layoutFamily: 'hero',
+          transition: '',
+          importance: 'essential',
+        },
+        blocks: [{ type: 'heading', text: title }],
+        visualStyle: 'structured',
+        speakerNotes: 'A note for the speaker.',
+        claims: [],
+        role: 'title-roadmap',
+      },
+    ],
   }
 }
 

@@ -5,10 +5,27 @@ function deck(overrides: Record<string, unknown> = {}) {
   return {
     title: 'A deck',
     blueprint: 'inform',
+    brief: {
+      objective: 'Explain why retention drops',
+      audienceKnowledgeLevel: 'beginner',
+      presentationType: 'educational',
+      freshnessRequired: false,
+      keyQuestions: [],
+    },
     cards: [
       {
+        plan: {
+          purpose: 'hook',
+          audienceQuestion: 'Why does retention drop?',
+          keyMessage: 'Retention drops after fifteen minutes',
+          visualType: 'text',
+          layoutFamily: 'hero',
+          transition: '',
+          importance: 'essential',
+        },
         blocks: [{ type: 'heading', text: 'Retention drops after fifteen minutes' }],
         visualStyle: 'structured',
+        speakerNotes: 'Explain the fifteen-minute cliff and why it matters.',
         role: 'title-why-matters',
       },
     ],
@@ -34,14 +51,10 @@ describe('generatedDeckSchema', () => {
     expect(generatedDeckSchema.safeParse(d).success).toBe(false)
   })
 
-  it('rejects a card with no role', () => {
-    expect(
-      generatedDeckSchema.safeParse(
-        deck({
-          cards: [{ blocks: [{ type: 'heading', text: 'Hi' }], visualStyle: 'structured' }],
-        }),
-      ).success,
-    ).toBe(false)
+  it('accepts a card without role', () => {
+    const withoutRole = { ...deck().cards[0] } as Record<string, unknown>
+    delete withoutRole.role
+    expect(generatedDeckSchema.safeParse(deck({ cards: [withoutRole] })).success).toBe(true)
   })
 
   it('accepts a role the chosen blueprint does not use', () => {
@@ -55,7 +68,10 @@ describe('generatedDeckSchema', () => {
       generatedDeckSchema.safeParse(
         deck({
           cards: [
-            { blocks: [{ type: 'paragraph', text: 'no heading' }], visualStyle: 'structured', role: 'hook' },
+            {
+              ...deck().cards[0],
+              blocks: [{ type: 'paragraph', text: 'no heading' }],
+            },
           ],
         }),
       ).success,
