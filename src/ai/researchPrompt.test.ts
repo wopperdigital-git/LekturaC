@@ -132,4 +132,30 @@ describe('isUserMaterialOnly', () => {
   it('is false for "focus on costs"', () => {
     expect(isUserMaterialOnly('focus on costs')).toBe(false)
   })
+
+  // The bare phrases "only use"/"use only" are too broad — they also read as
+  // ordinary formatting instructions with no "don't research this" intent.
+  it('is false for "only use metric units"', () => {
+    expect(isUserMaterialOnly('only use metric units')).toBe(false)
+  })
+
+  it('is false for "use only plain English"', () => {
+    expect(isUserMaterialOnly('use only plain English')).toBe(false)
+  })
+
+  it('is true for "Only use the facts I gave you" (the article makes it point at the user\'s own material)', () => {
+    expect(isUserMaterialOnly('Only use the facts I gave you')).toBe(true)
+  })
+
+  it.each([
+    'only use my notes',
+    'only use these slides',
+    'only use this document',
+    'use only the attached PDF',
+    'use only my outline',
+    'use only these sources',
+    'use only this brief',
+  ])('is true for "%s"', (guidance) => {
+    expect(isUserMaterialOnly(guidance)).toBe(true)
+  })
 })

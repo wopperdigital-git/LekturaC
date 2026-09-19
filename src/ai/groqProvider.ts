@@ -69,6 +69,18 @@ interface CallGroqOptions {
   jsonMode: boolean
   tools?: { type: string }[]
   temperature: number
+  /**
+   * Overrides `ai/retry.ts`'s `MAX_RETRIES` for this call. Research and repair
+   * pass `0`: both are best-effort steps the pipeline degrades gracefully
+   * around (see `generation/pipeline.ts`), and the evidence measured
+   * 2026-09-19 shows a repair call landing right after a deck call usually
+   * meets an already-saturated TPM window — waiting out three rounds of
+   * backoff for a call that's allowed to just fail over wastes the time the
+   * spinner is showing the user. Deck and narration omit this, so they keep
+   * the full policy: there's no deck without `generateDeck`, so it's worth
+   * the wait.
+   */
+  maxRetries?: number
 }
 
 async function callGroq(
@@ -77,6 +89,7 @@ async function callGroq(
   options: CallGroqOptions,
   signal?: AbortSignal,
 ): Promise<string> {
+  const maxRetries = options.maxRetries ?? MAX_RETRIES
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(GROQ_ENDPOINT, {
       method: 'POST',
@@ -110,7 +123,7 @@ async function callGroq(
 
     const body = await res.json().catch(() => null)
     const message = body?.error?.message || (await res.text().catch(() => '')) || res.statusText
-    if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
+    if (!RETRYABLE_STATUS.has(res.status) || attempt >= maxRetries) {
       throw new AIProviderError(`Groq API error (${res.status}): ${message}`, {
         kind: kindForStatus(res.status),
         status: res.status,
@@ -219,10 +232,15 @@ export class GroqProvider implements AIProvider {
       messages,
       {
         model: RESEARCH_MODEL,
-        maxTokens: 2000,
+        // 2000 measured too tight for this reasoning model: reasoning alone
+        // can exhaust it before the 4-8 finding JSON is ever written, which
+        // makes parseEvidencePack return null rather than a shorter pack.
+        maxTokens: 4000,
         jsonMode: false,
         tools: [{ type: 'browser_search' }],
         temperature: 0.3,
+        // Best effort — see CallGroqOptions.maxRetries.
+        maxRetries: 0,
       },
       signal,
     )
@@ -252,6 +270,8 @@ export class GroqProvider implements AIProvider {
       maxTokens: REPAIR_MAX_TOKENS,
       jsonMode: true,
       temperature: 0.7,
+      // Best effort — see CallGroqOptions.maxRetries.
+      maxRetries: 0,
     }
 
     const first = await callGroq(this.apiKey, messages, options, signal)

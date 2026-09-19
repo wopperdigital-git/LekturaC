@@ -10,18 +10,22 @@ import { headingOf, normalize, visibleLines, wordCount } from './text'
   this uncertain reports "low" instead.
 */
 
-/** Headings that read as filler when the presentation isn't a lesson. */
-const FILLER_HEADINGS = [
-  'agenda',
-  'objectives',
-  'learning objectives',
-  'what you will learn',
-  'you will learn',
-  'introduction',
-  'thank you',
-  'thanks',
-  'questions',
-]
+/**
+ * Single-word filler headings — matched by EQUALITY only. A one-word entry is
+ * also an ordinary English word that starts plenty of legitimate headings
+ * ("Introduction to battery chemistry", "Questions to ask before buying an
+ * EV", "Objectives of the Paris Agreement"), so a prefix match here would
+ * flag real content constantly. The word alone, with nothing else on the
+ * heading, is what actually reads as a bare filler slide.
+ */
+const SINGLE_WORD_FILLER_HEADINGS = ['agenda', 'objectives', 'introduction', 'thanks', 'questions']
+
+/**
+ * Multi-word filler headings — matched by equality OR prefix, as before.
+ * These phrases don't double as the start of an ordinary sentence the way a
+ * single word does, so "Thank you for listening" still reads as filler.
+ */
+const MULTI_WORD_FILLER_HEADINGS = ['learning objectives', 'what you will learn', 'you will learn', 'thank you']
 
 /** Opening lines that describe the deck instead of starting it — banned regardless of presentation type. */
 const OPENING_FILLER_PREFIXES = ['this presentation', 'this deck', 'this slide', 'in this presentation']
@@ -99,6 +103,10 @@ function bodyTooDenseFlags(deck: GeneratedDeck): QualityFlag[] {
   const flags: QualityFlag[] = []
   deck.cards.forEach((card, index) => {
     if (card.plan.purpose === 'timeline' || card.plan.purpose === 'references') return
+    // The prompt exempts timelines and quotes from the visible-text ceiling by
+    // content too, not only by declared purpose — a card whose blocks carry a
+    // timelineStep or quote is exempt whatever `plan.purpose` says.
+    if (card.blocks.some((block) => block.type === 'timelineStep' || block.type === 'quote')) return
     const words = visibleLines(card).reduce((sum, line) => sum + wordCount(line), 0)
     if (words > 70) {
       flags.push({
@@ -185,8 +193,10 @@ function fillerSlideFlags(deck: GeneratedDeck): QualityFlag[] {
   deck.cards.forEach((card, index) => {
     const heading = normalize(headingOf(card))
     if (!heading) return
+    const isFillerHeading =
+      SINGLE_WORD_FILLER_HEADINGS.includes(heading) || matchesAny(heading, MULTI_WORD_FILLER_HEADINGS)
     const isAgendaLike =
-      presentationType !== 'educational' && presentationType !== 'tutorial' && matchesAny(heading, FILLER_HEADINGS)
+      presentationType !== 'educational' && presentationType !== 'tutorial' && isFillerHeading
     const isOpeningFiller = index === 0 && matchesAny(heading, OPENING_FILLER_PREFIXES)
     if (isAgendaLike || isOpeningFiller) {
       flags.push({

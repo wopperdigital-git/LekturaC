@@ -162,10 +162,24 @@ describe('evidenceFlags', () => {
       expect(flags[0].slideIndex).toBe(0)
     })
 
-    it('flags the same case as medium when there is no evidence pack', () => {
+    it('flags the same case as low when there is no evidence pack at all', () => {
+      // No pack means research was skipped or failed — nothing was ever
+      // available to cite, which is exactly the no-evidence behavior the
+      // prompt asks the model to follow (well-known facts, sourceIds: []).
+      // This must never cost a repair call, so it logs as low rather than
+      // medium/high.
       const d = deck([card({ blocks: [{ type: 'heading', text: 'Growth' }, { type: 'stat', value: '18%', label: 'yoy growth' }] })])
       const claims = verifyClaims(d, null)
       const flags = evidenceFlags(d, claims, ctx({ pack: null })).filter((f) => f.type === 'UNSUPPORTED_STATISTIC')
+      expect(flags).toHaveLength(1)
+      expect(flags[0].severity).toBe('low')
+    })
+
+    it('flags the same case as medium when a pack exists but has no sources', () => {
+      const p = pack({ sources: [] })
+      const d = deck([card({ blocks: [{ type: 'heading', text: 'Growth' }, { type: 'stat', value: '18%', label: 'yoy growth' }] })])
+      const claims = verifyClaims(d, p)
+      const flags = evidenceFlags(d, claims, ctx({ pack: p })).filter((f) => f.type === 'UNSUPPORTED_STATISTIC')
       expect(flags).toHaveLength(1)
       expect(flags[0].severity).toBe('medium')
     })
@@ -208,7 +222,10 @@ describe('evidenceFlags', () => {
   })
 
   describe('MISSING_SOURCE', () => {
-    it('flags unverified statistic/historical/scientific/comparison claims, counted in one flag', () => {
+    it('flags unverified statistic/historical/scientific/comparison claims as low when there is no pack at all', () => {
+      // Same reasoning as UNSUPPORTED_STATISTIC: with no pack there was
+      // nothing to cite, so this is the documented no-evidence behavior, not
+      // a defect worth a repair call.
       const d = deck([
         card({
           claims: [
@@ -219,11 +236,20 @@ describe('evidenceFlags', () => {
         }),
       ])
       const claims = verifyClaims(d, null)
-      const flags = evidenceFlags(d, claims, ctx()).filter((f) => f.type === 'MISSING_SOURCE')
+      const flags = evidenceFlags(d, claims, ctx({ pack: null })).filter((f) => f.type === 'MISSING_SOURCE')
       expect(flags).toHaveLength(1)
-      expect(flags[0].severity).toBe('medium')
+      expect(flags[0].severity).toBe('low')
       expect(flags[0].slideIndex).toBe(0)
       expect(flags[0].message).toContain('2')
+    })
+
+    it('flags the same case as medium when a pack exists', () => {
+      const p = pack({ sources: [{ id: 's1', title: 'Report', publisher: 'X', sourceType: 'other' }] })
+      const d = deck([card({ claims: [claim({ statement: 'A', type: 'statistic' })] })])
+      const claims = verifyClaims(d, p)
+      const flags = evidenceFlags(d, claims, ctx({ pack: p })).filter((f) => f.type === 'MISSING_SOURCE')
+      expect(flags).toHaveLength(1)
+      expect(flags[0].severity).toBe('medium')
     })
 
     it('does not flag a verified claim of a sourced type', () => {
@@ -360,6 +386,28 @@ describe('evidenceFlags', () => {
       ])
       const claims = verifyClaims(d, null)
       expect(evidenceFlags(d, claims, ctx()).filter((f) => f.type === 'CONFLICTING_CLAIM')).toEqual([])
+    })
+
+    it('does not flag the same claim shape about two different years', () => {
+      // Different years are different claims, not one claim stated two
+      // conflicting ways — the year must stay in the comparison key rather
+      // than being erased like an ordinary digit run.
+      const d = deck([
+        card({ claims: [claim({ statement: 'EV sales in 2023 were 14 million' })] }),
+        card({ claims: [claim({ statement: 'EV sales in 2024 were 17 million' })] }),
+      ])
+      const claims = verifyClaims(d, null)
+      expect(evidenceFlags(d, claims, ctx()).filter((f) => f.type === 'CONFLICTING_CLAIM')).toEqual([])
+    })
+
+    it('flags two different numbers stated for the same year', () => {
+      const d = deck([
+        card({ claims: [claim({ statement: 'EV sales in 2023 were 14 million' })] }),
+        card({ claims: [claim({ statement: 'EV sales in 2023 were 17 million' })] }),
+      ])
+      const claims = verifyClaims(d, null)
+      const flags = evidenceFlags(d, claims, ctx()).filter((f) => f.type === 'CONFLICTING_CLAIM')
+      expect(flags.some((f) => f.slideIndex === 1)).toBe(true)
     })
   })
 })

@@ -1,5 +1,4 @@
-import { generatedCardSchema, type Claim, type EvidencePack, type GeneratedCard, type GeneratedDeck, type RepairResponse, type Source } from './schemas'
-import { yearOf } from './validation/evidence'
+import { generatedCardSchema, type GeneratedDeck, type RepairResponse } from './schemas'
 
 /**
  * Writes a repair call's replacement cards into `deck`, but only for slides
@@ -35,7 +34,17 @@ export function applyRepairs(
     if (index < 0 || index >= cards.length) continue
     const parsed = generatedCardSchema.safeParse(repair.card)
     if (!parsed.success) continue
-    cards[index] = parsed.data
+    // A replacement that omits "role" while the original card had one keeps
+    // the original's role rather than losing it: `role` is what
+    // `roleLayoutHint` uses to give a story deck's insight/closing-line cards
+    // their hero treatment (see CLAUDE.md's Generation pipeline section), and
+    // the repair prompt asks the model to fix a slide's problems, not to
+    // decide from scratch whether it still fills a blueprint row.
+    const original = cards[index]
+    const card = parsed.data.role === undefined && original.role !== undefined
+      ? { ...parsed.data, role: original.role }
+      : parsed.data
+    cards[index] = card
     repaired.add(index)
   }
 
@@ -43,49 +52,4 @@ export function applyRepairs(
     deck: { ...deck, cards },
     repaired: [...repaired].sort((a, b) => a - b),
   }
-}
-
-/** `publisher || title`, then `, ${year}` appended when the source's `publicationDate` names one. */
-function citationLabel(source: Source): string {
-  const name = source.publisher || source.title
-  const year = yearOf(source.publicationDate)
-  return year !== undefined ? `${name}, ${year}` : name
-}
-
-/**
- * `card.speakerNotes`, followed by a `Sources:` line built deterministically
- * from whichever of `claims` are verified — no on-slide citations, per the
- * design spec's "Ingest and storage" ("No on-slide citations in this work").
- *
- * `claims` is expected to already be scoped to this card (the same
- * `slideIndex`-filtered slice `validateDeck` computes per slide) — the
- * function itself has no way to tell which slide `card` is, since a
- * `GeneratedCard` carries no index.
- *
- * Citations are `publisher || title` plus the year from `publicationDate`
- * when known (`yearOf`), deduplicated and kept in the order their claim was
- * first cited. Notes are returned unchanged when nothing verified here cites
- * a source that is actually in `pack`, or when `pack` is `null`.
- */
-export function notesWithCitations(card: GeneratedCard, claims: Claim[], pack: EvidencePack | null): string {
-  if (!pack) return card.speakerNotes
-
-  const sourcesById = new Map(pack.sources.map((source) => [source.id, source]))
-  const labels: string[] = []
-  const seen = new Set<string>()
-
-  for (const claim of claims) {
-    if (!claim.verified) continue
-    for (const sourceId of claim.sourceIds) {
-      const source = sourcesById.get(sourceId)
-      if (!source) continue
-      const label = citationLabel(source)
-      if (seen.has(label)) continue
-      seen.add(label)
-      labels.push(label)
-    }
-  }
-
-  if (labels.length === 0) return card.speakerNotes
-  return `${card.speakerNotes}\n\nSources: ${labels.join('; ')}`
 }

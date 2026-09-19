@@ -132,7 +132,12 @@ export interface AIProvider {
 export type AIFailureKind = 'capacity' | 'auth' | 'request' | 'response' | 'unknown'
 
 export function kindForStatus(status: number): AIFailureKind {
-  if (status === 429 || status === 503) return 'capacity'
+  // 413 ("payload too large") is a capacity failure too, not a bad request: the
+  // prompt overflowed *this* provider's request-size window, which is exactly
+  // what a different provider (a larger window, or none at all) can plausibly
+  // serve — the same reasoning as 429/503, just on the size axis instead of
+  // the rate axis.
+  if (status === 429 || status === 503 || status === 413) return 'capacity'
   if (status === 401 || status === 403) return 'auth'
   if (status >= 400 && status < 500) return 'request'
   return 'unknown'

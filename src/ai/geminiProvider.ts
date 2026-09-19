@@ -13,7 +13,7 @@ import {
   type QualityFlag,
   type RepairResponse,
 } from './provider'
-import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt, deckMaxTokens } from './prompts'
+import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt, geminiDeckMaxTokens } from './prompts'
 import {
   NARRATION_SYSTEM_PROMPT,
   buildNarrationUserPrompt,
@@ -45,6 +45,15 @@ interface CallGeminiOptions {
   jsonMode: boolean
   tools?: { google_search: Record<string, never> }[]
   temperature: number
+  /**
+   * Overrides `ai/retry.ts`'s `MAX_RETRIES` for this call. Research and repair
+   * pass `0` — both are best-effort steps the pipeline degrades gracefully
+   * around (see `generation/pipeline.ts`), so waiting out a full round of
+   * backoff for a call that's allowed to just fail over wastes the time the
+   * spinner is showing the user. Deck and narration omit this and keep the
+   * full policy, the same split `groqProvider.ts` makes.
+   */
+  maxRetries?: number
 }
 
 async function callGemini(
@@ -54,6 +63,7 @@ async function callGemini(
   options: CallGeminiOptions,
   signal?: AbortSignal,
 ): Promise<string> {
+  const maxRetries = options.maxRetries ?? MAX_RETRIES
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(GEMINI_ENDPOINT, {
       method: 'POST',
@@ -96,7 +106,7 @@ async function callGemini(
 
     const body = await res.json().catch(() => null)
     const message = body?.error?.message || (await res.text().catch(() => '')) || res.statusText
-    if (!RETRYABLE_STATUS.has(res.status) || attempt >= MAX_RETRIES) {
+    if (!RETRYABLE_STATUS.has(res.status) || attempt >= maxRetries) {
       throw new AIProviderError(`Gemini API error (${res.status}): ${message}`, {
         kind: kindForStatus(res.status),
         status: res.status,
@@ -155,7 +165,9 @@ export class GeminiProvider implements AIProvider {
     const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: userPrompt }] }]
 
     const options: CallGeminiOptions = {
-      maxOutputTokens: deckMaxTokens(brief.slideCount),
+      // Gemini's own budget, not Groq's `deckMaxTokens` — see
+      // `geminiDeckMaxTokens`'s own comment for why the two must not share one.
+      maxOutputTokens: geminiDeckMaxTokens(brief.slideCount),
       jsonMode: true,
       temperature: 0.7,
     }
@@ -203,7 +215,17 @@ export class GeminiProvider implements AIProvider {
       this.apiKey,
       RESEARCH_SYSTEM_PROMPT,
       contents,
-      { maxOutputTokens: 2000, jsonMode: false, tools: [{ google_search: {} }], temperature: 0.3 },
+      {
+        // 2000 measured too tight on Groq's equivalent reasoning model; raised
+        // in step with it so a 4-8 finding JSON always has room after whatever
+        // up-front reasoning this provider does too.
+        maxOutputTokens: 4000,
+        jsonMode: false,
+        tools: [{ google_search: {} }],
+        temperature: 0.3,
+        // Best effort — see CallGeminiOptions.maxRetries.
+        maxRetries: 0,
+      },
       signal,
     )
 
@@ -230,6 +252,8 @@ export class GeminiProvider implements AIProvider {
       maxOutputTokens: REPAIR_MAX_TOKENS,
       jsonMode: true,
       temperature: 0.7,
+      // Best effort — see CallGeminiOptions.maxRetries.
+      maxRetries: 0,
     }
 
     const first = await callGemini(this.apiKey, REPAIR_SYSTEM_PROMPT, contents, options, signal)

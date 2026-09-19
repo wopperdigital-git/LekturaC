@@ -159,6 +159,27 @@ describe('structureFlags', () => {
       ])
       expect(structureFlags(d).filter((f) => f.type === 'BODY_TOO_DENSE')).toEqual([])
     })
+
+    it('does not flag a card with a timelineStep block even at 90 words, whatever its purpose', () => {
+      const d = deck([
+        card({
+          blocks: [
+            { type: 'heading', text: 'Title' },
+            { type: 'timelineStep', label: 'Step', text: words(90) },
+          ],
+        }),
+      ])
+      expect(structureFlags(d).filter((f) => f.type === 'BODY_TOO_DENSE')).toEqual([])
+    })
+
+    it('does not flag a card with a quote block even at 90 words, whatever its purpose', () => {
+      const d = deck([
+        card({
+          blocks: [{ type: 'heading', text: 'Title' }, { type: 'quote', text: words(90) }],
+        }),
+      ])
+      expect(structureFlags(d).filter((f) => f.type === 'BODY_TOO_DENSE')).toEqual([])
+    })
   })
 
   describe('TOO_MANY_BULLETS', () => {
@@ -293,6 +314,30 @@ describe('structureFlags', () => {
       const d = deck([card({ blocks: [{ type: 'heading', text: 'Revenue is climbing' }, { type: 'paragraph', text: 'Body.' }] })])
       expect(structureFlags(d).filter((f) => f.type === 'FILLER_SLIDE')).toEqual([])
     })
+
+    // A single-word filler entry ("agenda", "questions", "thanks", ...) also
+    // starts plenty of ordinary content headings, so it only matches the
+    // heading exactly — never as a prefix.
+    it.each([
+      'Introduction to battery chemistry',
+      'Questions to ask before buying an EV',
+      'Thanks to subsidies, sales rose',
+      'Objectives of the Paris Agreement',
+    ])('does not flag "%s" — a single-word filler term used as an ordinary heading', (heading) => {
+      const d = deck([card({ blocks: [{ type: 'heading', text: heading }, { type: 'paragraph', text: 'Body.' }] })])
+      expect(structureFlags(d).filter((f) => f.type === 'FILLER_SLIDE')).toEqual([])
+    })
+
+    it.each(['Agenda', 'Questions', 'Thank you for listening'])(
+      'flags "%s" — a bare/prefix filler heading with nothing else on it',
+      (heading) => {
+        const d = deck(
+          [card({ blocks: [{ type: 'heading', text: heading }, { type: 'paragraph', text: 'Body.' }] })],
+          { presentationType: 'informational' },
+        )
+        expect(structureFlags(d).filter((f) => f.type === 'FILLER_SLIDE')).toHaveLength(1)
+      },
+    )
   })
 
   describe('VISUAL_MISMATCH', () => {

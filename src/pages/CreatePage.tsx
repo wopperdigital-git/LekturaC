@@ -195,6 +195,14 @@ export function CreatePage() {
           if (detail?.slides !== undefined) setRepairSlideCount(detail.slides)
         },
       })
+      if (controller.signal.aborted) {
+        // Cancel landed while the last await above was still settling — the
+        // generation finished (or was mid-resolution) right as the user left.
+        // Without this check the deck below would still get created and
+        // navigated to, which is exactly what Cancel promises won't happen.
+        setPhase('answering')
+        return
+      }
       const id = await createDeckFromGeneration(result.deck, count, result)
       deleteDraft(draftId)
       setPhase('done')
@@ -222,7 +230,7 @@ export function CreatePage() {
       case 'validate':
         return 'Checking quality'
       case 'repair':
-        return `Tightening ${repairSlideCount} slide(s)`
+        return `Tightening ${repairSlideCount} slide${repairSlideCount === 1 ? '' : 's'}`
       case 'write':
       default:
         return 'Writing slides from your brief'

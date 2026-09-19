@@ -14,7 +14,7 @@ export const REPAIR_SYSTEM_PROMPT = `You are fixing specific slides of a present
 
 You are given the whole deck for context, then a list of target slides, each with the problems it has and what to do about them.
 
-For every target slide, write a full replacement card in the same shape the deck was generated in: { "plan": {...}, "role"?: string, "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] }. Keep that slide's purpose and its position in the deck — you are repairing it, not swapping in a different slide. Fix every problem listed for it.
+For every target slide, write a full replacement card in the same shape the deck was generated in: { "plan": {...}, "role"?: string, "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] }. Keep that slide's purpose and its position in the deck — you are repairing it, not swapping in a different slide. If the slide you're given already has a "role", keep it. Fix every problem listed for it.
 
 Every other rule from deck generation still applies:
 - Headings are 3-10 words (14 at most), never more than one main idea per slide.
@@ -23,7 +23,7 @@ Every other rule from deck generation still applies:
 - Every number, date, or quotation must come from the evidence pack when one is given, cited in "claims" by its source id. Do not add a new factual claim unless the evidence pack supports it.
 
 Reply with ONLY this JSON object, no markdown fences and no commentary, and include exactly the slides you were asked to fix — no others:
-{ "repairs": [ { "slide": number, "card": { "plan": {...}, "blocks": [...], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] } } ] }
+{ "repairs": [ { "slide": number, "card": { "plan": {...}, "role"?: string, "blocks": [...], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] } } ] }
 
 "slide" is the slide's 1-based position in the deck, matching the numbering you were given below.`
 

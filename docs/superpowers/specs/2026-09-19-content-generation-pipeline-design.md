@@ -239,10 +239,15 @@ rule that cannot be sure reports `low`, which is logged but never repaired.
   flags. **It is written in a separate, best-effort update after the insert**, and an
   error there is logged and never thrown. The deck must land on a project that has
   not run 0011, the lesson 0006 and 0008 taught. Nothing reads it yet.
-- **No on-slide citations in this work.** Short citations ("Source: IEA, 2025") go at
-  the end of each slide's speaker notes, built deterministically from the verified
-  claims' sources. A visible citation needs a block or field the renderer, export and
-  editor all understand. That is follow-up work, like charts.
+- **No on-slide citations, and none appended to the notes either.** `speakerNotes`
+  becomes a slide's narration script (see above) — a voice reads it aloud, so a
+  "Source: IEA, 2025" line tacked onto the end would be read out loud along with
+  the rest. Citations instead stay in the stored metadata: `presentations.generation`
+  (migration `0011`, below) already carries the verified claims and their sources,
+  keyed by card id, which is enough to build a citations view later without ever
+  touching what gets spoken. A visible on-slide citation still needs a block or
+  field the renderer, export and editor all understand — that is follow-up work,
+  like charts.
 
 ### CreatePage
 

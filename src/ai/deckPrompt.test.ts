@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { DECK_SYSTEM_PROMPT, DEFAULT_TONE, buildDeckUserPrompt, deckMaxTokens, type DeckContext } from './prompts'
+import {
+  DECK_SYSTEM_PROMPT,
+  DEFAULT_TONE,
+  buildDeckUserPrompt,
+  deckMaxTokens,
+  geminiDeckMaxTokens,
+  type DeckContext,
+} from './prompts'
 import type { EvidencePack } from '@/generation/schemas'
 
 const BRIEF = {
@@ -116,5 +123,28 @@ describe('deckMaxTokens', () => {
 
   it("'auto' clamps to the ceiling", () => {
     expect(deckMaxTokens('auto')).toBe(7000)
+  })
+})
+
+describe('geminiDeckMaxTokens', () => {
+  it.each([
+    [1, 6000],
+    [5, 6500],
+    [10, 10000],
+    [13, 12000],
+    [20, 12000],
+  ])('geminiDeckMaxTokens(%i) === %i', (count, expected) => {
+    expect(geminiDeckMaxTokens(count)).toBe(expected)
+  })
+
+  it("'auto' clamps to the ceiling", () => {
+    expect(geminiDeckMaxTokens('auto')).toBe(12000)
+  })
+
+  it('is not the same budget as deckMaxTokens at the same count', () => {
+    // Gemini's window has nothing to do with Groq's free-tier TPM cap that
+    // deckMaxTokens is tuned to — the two must be independent functions, not
+    // one shared formula.
+    expect(geminiDeckMaxTokens(5)).not.toBe(deckMaxTokens(5))
   })
 })

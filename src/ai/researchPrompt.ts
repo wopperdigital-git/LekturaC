@@ -92,8 +92,18 @@ export function parseEvidencePack(raw: string): EvidencePack | null {
 }
 
 const USER_MATERIAL_ONLY_PHRASES = [
-  'only use',
-  'use only',
+  // Bare "only use"/"use only" is too broad: "only use metric units" or "use
+  // only plain English" are formatting instructions, not "don't research this
+  // topic" — each phrase below requires the article/possessive/demonstrative
+  // that actually points at the user's own material.
+  'only use the',
+  'only use my',
+  'only use these',
+  'only use this',
+  'use only the',
+  'use only my',
+  'use only these',
+  'use only this',
   'only the facts',
   'facts i gave',
   'information i provided',

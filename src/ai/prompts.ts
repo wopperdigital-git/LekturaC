@@ -36,7 +36,7 @@ const DETAIL_LEVEL_INSTRUCTIONS: Record<GenerationBrief['detailLevel'], string> 
   balanced:
     'Balance clarity with useful substance. Include real specifics, but do not overload any single card — say the one thing that matters most, well.',
   detailed:
-    'Go deep. Include specific data, technical detail, and thorough justification on each card — this audience wants the substance, not just headlines.',
+    'Go deep: precise data, technical specifics and the mechanism behind each point — keep the slide itself within the visible-text limits and put the extended justification in speakerNotes.',
 }
 
 const TONE_INSTRUCTIONS: Record<GenerationBrief['tone'], string> = {
@@ -233,6 +233,21 @@ ${blueprints}`
 export function deckMaxTokens(slideCount: number | 'auto'): number {
   if (slideCount === 'auto') return 7000
   return Math.min(7000, Math.max(5200, slideCount * 480 + 2600))
+}
+
+/**
+ * Gemini's own deck token budget — deliberately not `deckMaxTokens`.
+ *
+ * That budget is tuned to Groq's free-tier 8,000-token/minute window, which
+ * has nothing to do with Gemini; reusing it just imports an unrelated
+ * provider's ceiling. Gemini has no such per-minute cap in this app's usage,
+ * so its budget can sit well above the writer's measured ~3,400-token
+ * reasoning overhead without risk of tripping a window that doesn't apply to
+ * it — `clamp(slideCount * 700 + 3000, 6000, 12000)`, `12000` for `'auto'`.
+ */
+export function geminiDeckMaxTokens(slideCount: number | 'auto'): number {
+  if (slideCount === 'auto') return 12000
+  return Math.min(12000, Math.max(6000, slideCount * 700 + 3000))
 }
 
 /**

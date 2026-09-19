@@ -90,7 +90,15 @@ function unsupportedStatisticFlags(deck: GeneratedDeck, claims: Claim[], ctx: Ev
     if (!cardHasFigure(card)) return
     const hasVerifiedClaim = claimsForCard(claims, index).some((claim) => claim.verified)
     if (hasVerifiedClaim) return
-    const severity = (ctx.pack?.sources.length ?? 0) >= 1 ? 'high' : 'medium'
+    // No pack at all (research was skipped or failed) means there was never
+    // anything to cite — the prompt tells the model to list well-known facts
+    // approximately and cite them with `sourceIds: []` in that case, which
+    // this rule cannot tell apart from a genuinely unsupported number. `low`
+    // logs it without spending a repair call on content the model was asked
+    // to write exactly this way. A pack that exists but came back thin still
+    // reports `medium`: research ran, so an unsupported figure there is more
+    // likely a real gap.
+    const severity = ctx.pack === null ? 'low' : ctx.pack.sources.length >= 1 ? 'high' : 'medium'
     flags.push({
       type: 'UNSUPPORTED_STATISTIC',
       severity,
@@ -104,16 +112,19 @@ function unsupportedStatisticFlags(deck: GeneratedDeck, claims: Claim[], ctx: Ev
 
 const SOURCED_CLAIM_TYPES = new Set<ClaimType>(['statistic', 'historical', 'scientific', 'comparison'])
 
-function missingSourceFlags(deck: GeneratedDeck, claims: Claim[]): QualityFlag[] {
+function missingSourceFlags(deck: GeneratedDeck, claims: Claim[], ctx: EvidenceContext): QualityFlag[] {
   const flags: QualityFlag[] = []
   deck.cards.forEach((_card, index) => {
     const count = claimsForCard(claims, index).filter(
       (claim) => SOURCED_CLAIM_TYPES.has(claim.type) && !claim.verified,
     ).length
     if (count > 0) {
+      // Same reasoning as UNSUPPORTED_STATISTIC: with no pack at all there was
+      // nothing to cite, so an unverified sourced-type claim is the prompt's
+      // documented no-evidence behavior, not a defect — log it, don't repair it.
       flags.push({
         type: 'MISSING_SOURCE',
-        severity: 'medium',
+        severity: ctx.pack === null ? 'low' : 'medium',
         slideIndex: index,
         message: `${slideLabel(index)} has ${count} claim${count === 1 ? '' : 's'} of a sourced type with no verified source.`,
         suggestedAction: 'Cite a source from the evidence pack for each claim, or soften the wording.',
@@ -201,13 +212,27 @@ function conflictingStatFlags(deck: GeneratedDeck): QualityFlag[] {
   return flags
 }
 
-/** `statement`, normalized with every digit run replaced by `#`, alongside the digit runs it replaced. */
+/**
+ * `statement`, normalized with every digit run replaced by `#` EXCEPT a
+ * standalone 19xx/20xx year, which stays in the key as itself — alongside the
+ * (non-year) digit runs it replaced, comma-joined.
+ *
+ * A year is part of *which claim this is*, not a number the claim is making:
+ * "EV sales in 2023 were 14 million" and "EV sales in 2024 were 17 million"
+ * are two different claims about two different years, not one claim stated
+ * two conflicting ways — so they must land in different pattern buckets and
+ * never get compared. Only two statements about the *same* year, with
+ * different other numbers, are a real conflict.
+ */
 function digitPattern(statement: string): { pattern: string; digits: string } {
   const normalized = normalize(statement)
-  return {
-    pattern: normalized.replace(/\d+/g, '#'),
-    digits: (normalized.match(/\d+/g) ?? []).join(','),
-  }
+  const digits: string[] = []
+  const pattern = normalized.replace(/\d+/g, (match) => {
+    if (/^(19|20)\d{2}$/.test(match)) return match
+    digits.push(match)
+    return '#'
+  })
+  return { pattern, digits: digits.join(',') }
 }
 
 /** Rule 5(b): two claims identical once digits are removed, but whose digit sequences differ. */
@@ -242,7 +267,7 @@ function conflictingClaimStatementFlags(claims: Claim[]): QualityFlag[] {
 export function evidenceFlags(deck: GeneratedDeck, claims: Claim[], ctx: EvidenceContext): QualityFlag[] {
   return [
     ...unsupportedStatisticFlags(deck, claims, ctx),
-    ...missingSourceFlags(deck, claims),
+    ...missingSourceFlags(deck, claims, ctx),
     ...outdatedEvidenceFlags(deck, claims, ctx),
     ...ambiguousMetricFlags(deck),
     ...conflictingStatFlags(deck),

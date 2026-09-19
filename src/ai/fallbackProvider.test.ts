@@ -61,6 +61,7 @@ const succeeds = (title: string) => stub(() => Promise.resolve(deck(title)))
 const failsWith = (err: unknown) => stub(() => Promise.reject(err))
 
 const capacity = () => new AIProviderError('rate limited', { kind: 'capacity', status: 429 })
+const tooLarge = () => new AIProviderError('payload too large', { kind: 'capacity', status: 413 })
 const auth = () => new AIProviderError('bad key', { kind: 'auth', status: 401 })
 
 describe('FallbackProvider', () => {
@@ -87,6 +88,20 @@ describe('FallbackProvider', () => {
 
   it('falls through to the backup when the primary is out of capacity', async () => {
     const primary = failsWith(capacity())
+    const backup = succeeds('from backup')
+    const result = await new FallbackProvider([
+      { name: 'Primary', provider: primary },
+      { name: 'Backup', provider: backup },
+    ]).generateDeck('topic', BRIEF)
+
+    expect(result.title).toBe('from backup')
+    expect(backup.calls).toBe(1)
+  })
+
+  // A too-large request on Groq's window is exactly what a backup provider
+  // with a different (or no) size limit can plausibly serve.
+  it('falls through to the backup on a 413 (payload too large)', async () => {
+    const primary = failsWith(tooLarge())
     const backup = succeeds('from backup')
     const result = await new FallbackProvider([
       { name: 'Primary', provider: primary },

@@ -1,6 +1,6 @@
 import { isUserMaterialOnly } from '@/ai/researchPrompt'
 import type { AIProvider, DeckContext, GenerationBrief } from '@/ai/provider'
-import { applyRepairs, notesWithCitations } from './repair'
+import { applyRepairs } from './repair'
 import type { Claim, EvidencePack, GeneratedDeck, QualityFlag } from './schemas'
 import { requiresFreshness } from './validation/evidence'
 import { repairTargets, validateDeck } from './validation/validateDeck'
@@ -21,7 +21,13 @@ export interface PipelineOptions {
 }
 
 export interface PipelineResult {
-  /** Repaired where repair succeeded; every card's `speakerNotes` already carries its citations. */
+  /**
+   * Repaired where repair succeeded. `speakerNotes` are stored exactly as the
+   * model (and any repair) wrote them — no citations are appended here. A
+   * narration script is read aloud by a voice, so a "Sources: IEA, 2025" line
+   * would be spoken; citations are kept in the generation metadata instead
+   * (see `buildGenerationMeta`), available without ever landing in notes.
+   */
   deck: GeneratedDeck
   evidence: EvidencePack | null
   research: 'ok' | 'failed' | 'skipped'
@@ -54,8 +60,7 @@ function toUtcDateString(now: Date): string {
 
 /**
  * Runs the whole creation-time pipeline for one deck — research, write,
- * validate, and (when needed) one targeted repair pass — and returns a deck
- * whose speaker notes already carry their citations. See the design spec's
+ * validate, and (when needed) one targeted repair pass. See the design spec's
  * "The pipeline", "Generate-once is unchanged" and "[4] Targeted repair".
  *
  * Research and repair are both best effort: any failure other than
@@ -121,18 +126,6 @@ export async function generatePresentation(
       if (isAbort(err, signal)) throw err
       console.warn('[generation] repair failed; keeping the unrepaired deck:', messageOf(err))
     }
-  }
-
-  deck = {
-    ...deck,
-    cards: deck.cards.map((card, index) => ({
-      ...card,
-      speakerNotes: notesWithCitations(
-        card,
-        claims.filter((claim) => claim.slideIndex === index),
-        evidence,
-      ),
-    })),
   }
 
   if (flags.length > 0) {

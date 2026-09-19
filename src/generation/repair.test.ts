@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Claim, EvidencePack, GeneratedCard, GeneratedDeck, RepairResponse } from './schemas'
-import { applyRepairs, notesWithCitations } from './repair'
+import type { GeneratedCard, GeneratedDeck, RepairResponse } from './schemas'
+import { applyRepairs } from './repair'
 
 /** A minimal, schema-valid card, distinguishable by its heading text. */
 function validCard(heading: string, overrides: Partial<GeneratedCard> = {}): GeneratedCard {
@@ -107,57 +107,31 @@ describe('applyRepairs', () => {
     applyRepairs(original, response, [0])
     expect(original).toEqual(snapshot)
   })
-})
 
-describe('notesWithCitations', () => {
-  const pack: EvidencePack = {
-    sources: [
-      { id: 's1', title: 'Global EV Outlook', publisher: 'IEA', sourceType: 'government', publicationDate: '2024-05' },
-      { id: 's2', title: 'Vehicle Electrification Report', publisher: 'U.S. DOE', sourceType: 'government', publicationDate: '2023-01' },
-    ],
-    findings: [],
-    disagreements: [],
-  }
-
-  function claim(overrides: Partial<Claim> = {}): Claim {
-    return {
-      id: 'c1-1',
-      slideIndex: 0,
-      statement: 'EV sales grew sharply',
-      type: 'statistic',
-      sourceIds: ['s1'],
-      timeSensitive: false,
-      verified: true,
-      ...overrides,
+  it("carries the original card's role over when the replacement omits it", () => {
+    const original = deck([validCard('Original slide one', { role: 'title-roadmap' })])
+    const response: RepairResponse = {
+      repairs: [{ slide: 1, card: validCard('Repaired slide one') }],
     }
-  }
-
-  it('appends a Sources line for a verified claim citing a source', () => {
-    const card = validCard('A card', { speakerNotes: 'Some spoken framing.' })
-    const result = notesWithCitations(card, [claim()], pack)
-    expect(result).toBe('Some spoken framing.\n\nSources: IEA, 2024')
+    const result = applyRepairs(original, response, [0])
+    expect(result.deck.cards[0].role).toBe('title-roadmap')
   })
 
-  it('leaves notes unchanged when no claim is verified', () => {
-    const card = validCard('A card', { speakerNotes: 'Some spoken framing.' })
-    const result = notesWithCitations(card, [claim({ verified: false })], pack)
-    expect(result).toBe('Some spoken framing.')
+  it("keeps the replacement's own role when it names one", () => {
+    const original = deck([validCard('Original slide one', { role: 'title-roadmap' })])
+    const response: RepairResponse = {
+      repairs: [{ slide: 1, card: validCard('Repaired slide one', { role: 'closing-line' }) }],
+    }
+    const result = applyRepairs(original, response, [0])
+    expect(result.deck.cards[0].role).toBe('closing-line')
   })
 
-  it('leaves notes unchanged when the pack is null', () => {
-    const card = validCard('A card', { speakerNotes: 'Some spoken framing.' })
-    const result = notesWithCitations(card, [claim()], null)
-    expect(result).toBe('Some spoken framing.')
-  })
-
-  it('de-duplicates publishers and lists them in first-cited order', () => {
-    const card = validCard('A card', { speakerNotes: 'Some spoken framing.' })
-    const claims = [
-      claim({ id: 'c1-1', sourceIds: ['s1'] }),
-      claim({ id: 'c1-2', sourceIds: ['s2'] }),
-      claim({ id: 'c1-3', sourceIds: ['s1'] }),
-    ]
-    const result = notesWithCitations(card, claims, pack)
-    expect(result).toBe('Some spoken framing.\n\nSources: IEA, 2024; U.S. DOE, 2023')
+  it('leaves role undefined when neither the original nor the replacement has one', () => {
+    const original = deck([validCard('Original slide one')])
+    const response: RepairResponse = {
+      repairs: [{ slide: 1, card: validCard('Repaired slide one') }],
+    }
+    const result = applyRepairs(original, response, [0])
+    expect(result.deck.cards[0].role).toBeUndefined()
   })
 })
