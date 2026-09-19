@@ -6,6 +6,7 @@ import { slideGroup } from './slideGroup'
 import { RENDERERS, type PptxSlide } from './slideRenderers'
 import { backdropPng } from './backdrop/rasterize'
 import { hex } from './textRun'
+import { createCanvasMeasurer } from './measureText'
 
 /*
   The one entry point. Takes a deck as data and hands the browser a .pptx.
@@ -70,10 +71,15 @@ export async function exportDeckToPptx(deck: ExportableDeck): Promise<void> {
 
   const ordered = [...deck.cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
+  // Built once, not once per slide/re-measured word: the canvas, the loaded
+  // fonts, and the per-(font,text) cache are all shared across every slide in
+  // the deck.
+  const measure = await createCanvasMeasurer()
+
   ordered.forEach((card, index) => {
     const slide = pptx.addSlide({ masterName: MASTER })
     const style = mergeTextStyle(deck.textStyle, card.textStyle)
-    RENDERERS[slideGroup(card, index === 0)](slide as unknown as PptxSlide, card, deck.theme, style)
+    RENDERERS[slideGroup(card, index === 0)](slide as unknown as PptxSlide, card, deck.theme, style, measure)
   })
 
   await pptx.writeFile({ fileName: pptxFileName(deck.title) })

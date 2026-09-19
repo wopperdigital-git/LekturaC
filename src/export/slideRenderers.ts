@@ -6,6 +6,7 @@ import { cardBoxes, type Box } from './blockBoxes'
 import type { PptxTextRun } from './textRun'
 import { faceName, hex, markedRuns, pointSize, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
+import type { TextMeasurer } from './textFit'
 
 /*
   The five slide arrangements, as native PowerPoint text boxes and shapes.
@@ -26,6 +27,8 @@ export type SlideRenderer = (
   theme: ThemeTokens,
   /** Already `mergeTextStyle(deckStyle, card.textStyle)` — the run's own inline style is applied per run. */
   style: TextStyle,
+  /** Measures text width in inches for a given `FontSpec`. Plumbed through every renderer; not yet used to fit anything (see `textFit.ts` and the design doc's "4. Plumbing"). */
+  measure: TextMeasurer,
 ) => void
 
 /* LAYOUT_16x9 in inches. */
@@ -128,7 +131,7 @@ function addHeading(slide: PptxSlide, card: Card, theme: ThemeTokens, style: Tex
  * two or more paragraphs (`layoutEngine.ts`), so every paragraph is rendered
  * — as separate lines in one subtitle box — rather than only the first.
  */
-const renderTitle: SlideRenderer = (slide, card, theme, style) => {
+const renderTitle: SlideRenderer = (slide, card, theme, style, _measure) => {
   const paragraphs = allOfType(card, 'paragraph')
   const headingRef = textRef(0, 'text')
   const headingStyle = styleFor(card, headingRef, style)
@@ -275,7 +278,7 @@ function runsForLine(line: BulletLine, card: Card, isLast: boolean): PptxTextRun
   })
 }
 
-const renderBody: SlideRenderer = (slide, card, theme, style) => {
+const renderBody: SlideRenderer = (slide, card, theme, style, _measure) => {
   addHeading(slide, card, theme, style)
 
   const lines = flattenBlocks(card)
@@ -310,7 +313,7 @@ const MAX_STAT_COLUMNS = 4
  * A single stat lands centred and very large; several lay out in rows of at
  * most four, wrapping beyond that rather than shrinking indefinitely.
  */
-const renderStat: SlideRenderer = (slide, card, theme, style) => {
+const renderStat: SlideRenderer = (slide, card, theme, style, _measure) => {
   addHeading(slide, card, theme, style)
 
   const stats: { value: string; label: string; index: number }[] = []
@@ -417,7 +420,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style) => {
  * nothing, since `flattenBlocks` already renders every `comparisonGroup` as a
  * heading plus indented bullets.
  */
-const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
+const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
   const groups: { heading: string; items: string[]; index: number }[] = []
   card.blocks.forEach((block, i) => {
     if (block.type === 'comparisonGroup') {
@@ -432,7 +435,7 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
   // rather than a lone heading over an empty backdrop — or, as before, nothing
   // at all.
   if (groups.length === 0 || groups.length > 4) {
-    renderBody(slide, card, theme, style)
+    renderBody(slide, card, theme, style, measure)
     return
   }
 
@@ -494,10 +497,10 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style) => {
 /* ---------------------------------------------------------------- quote --- */
 
 /** `quote`: the words fill the slide, attribution beneath, or nothing if it has none. */
-const renderQuote: SlideRenderer = (slide, card, theme, style) => {
+const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
   const quote = firstOfType(card, 'quote')
   if (!quote) {
-    renderBody(slide, card, theme, style)
+    renderBody(slide, card, theme, style, measure)
     return
   }
 
@@ -637,6 +640,7 @@ function renderAdjustedBlock(
   fit: Fit,
   theme: ThemeTokens,
   style: TextStyle,
+  _measure: TextMeasurer,
 ) {
   const block = card.blocks[index]
 
@@ -875,12 +879,12 @@ function listRuns(card: Card, index: number, field: string, items: string[]): Pp
 }
 
 /** A card carrying element nudges: every block in the box the user left it in. */
-const renderAdjusted: SlideRenderer = (slide, card, theme, style) => {
+const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure) => {
   const { boxes, height } = cardBoxes(card)
   const fit = fitCard(height)
   card.blocks.forEach((_, index) => {
     const box = boxes[String(index)]
-    if (box) renderAdjustedBlock(slide, card, index, placed(box, fit), fit, theme, style)
+    if (box) renderAdjustedBlock(slide, card, index, placed(box, fit), fit, theme, style, measure)
   })
 }
 

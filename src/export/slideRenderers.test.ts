@@ -4,6 +4,7 @@ import { slideGroup } from './slideGroup'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { CREATABLE_KINDS, layoutForKind, starterBlocks } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
+import { estimateMeasurer } from './textFit'
 
 /*
   Every word on the slide has to reach the .pptx.
@@ -48,7 +49,7 @@ function fakeSlide() {
 
 function render(card: Card, isFirstCard = false) {
   const slide = fakeSlide()
-  RENDERERS[slideGroup(card, isFirstCard)](slide, card, DEFAULT_THEME, {})
+  RENDERERS[slideGroup(card, isFirstCard)](slide, card, DEFAULT_THEME, {}, estimateMeasurer)
   return slide
 }
 
