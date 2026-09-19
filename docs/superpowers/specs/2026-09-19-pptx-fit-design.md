@@ -1,0 +1,164 @@
+# PPTX export: fit text ourselves so the deck survives every app
+
+**Date:** 2026-09-19
+**Status:** approved design (user, 2026-09-19)
+**Builds on:** `2026-08-25-pptx-export-design.md`
+
+## The problem
+
+A deck exported to .pptx and opened in Canva showed three failures:
+
+- **Sliced headings.** A two-line heading at the H2 size (≈34pt) needs about
+  1.13 in, and `addHeading`'s box is a fixed 0.9 in. Canva clips text to its box, so
+  the top or bottom of the letters was cut off. The title slide had the same problem
+  at H1 (≈50pt) in a fixed 1.6 in box.
+- **Text too large.** `pointSize` = theme rem × `PT_PER_REM` (18) gives a 50pt title,
+  a 34pt heading and an 18pt body. Those sizes assume something will shrink them.
+- **Crowded at the top.** Every box has a fixed `y`, so a short slide's content sits
+  at the top and the bottom half is empty.
+
+**One root cause:** every renderer sizes boxes to fixed heights and relies on
+`fit: 'shrink'` (`<a:normAutofit/>`). That shrinking only happens when **PowerPoint**
+recalculates the file on open. Canva, Google Slides and Keynote draw the stored size
+into the stored box.
+
+## Decisions (user, 2026-09-19)
+
+| Question | Decision |
+| --- | --- |
+| Target apps | PowerPoint, Google Slides, Canva, Keynote — all four. |
+| Fonts | **Keep each theme's fonts and add headroom.** Size text so it still fits if a wider fallback font is used. |
+| Measuring | **The browser measures** (canvas `measureText` in the real font). The layout maths stays pure and takes the measurer as a parameter; tests use a deterministic fake. |
+
+Found while designing: the app never loads Inter as a web font. `index.css` only
+names it in font stacks, so Inter renders only where it is installed. The browser
+measurer therefore measures whatever font the browser resolves, and the headroom
+covers the difference. Loading Inter as a web font is a separate, app-wide decision
+and is not part of this work.
+
+## Design
+
+### 1. `export/textFit.ts`: pure fitting
+
+- **`TextMeasurer`**: `(text: string, font: FontSpec) => number`. It returns the
+  width in inches, where `FontSpec = { face: string; sizePt: number; bold: boolean;
+  italic: boolean }`.
+- **`estimateMeasurer`**: a deterministic fallback that needs no DOM. It uses an
+  average glyph width per em (≈0.55 regular, ≈0.6 bold, widened for all caps and
+  digits). It is used when no canvas is available and as the tests' fake.
+- **`wrapLines(text, widthIn, font, measure)`**: greedy word wrap that honours
+  explicit line breaks. A single word longer than the line is broken by characters.
+- **`fitText(paragraphs, box, sizing, measure)`** returns `{ sizePt, heightIn }`.
+  - `paragraphs` is a list of `{ text, bold?, indentIn? }`.
+  - `box` is `{ widthIn, maxHeightIn }`.
+  - `sizing` is `{ preferredPt, minPt, lineSpacing, face, bold, italic }`.
+  - It returns the largest size from `preferredPt` down to `minPt`, in 1pt steps,
+    whose wrapped height fits `maxHeightIn`. If nothing fits at `minPt`, it keeps
+    stepping down to `FLOOR_PT` (10). **Words are never dropped.**
+- **Headroom:** measured widths are multiplied by `WIDTH_HEADROOM = 1.1` before
+  wrapping, and the returned height is multiplied by `HEIGHT_HEADROOM = 1.1`. That
+  covers a wider substitute font and each app's line-metric differences.
+- **Height model:** `lines × sizePt × lineSpacing / 72` plus paragraph spacing,
+  plus the box's own top and bottom insets. `lineSpacing` defaults to 1.2 (the
+  "single" line height PowerPoint and Canva use) and to the theme's `lineHeight`
+  where a renderer already passes one.
+- **Insets** are set explicitly on every text box (`TEXT_INSET_IN`), so the maths
+  and every app agree on the usable width. Before choosing the option value, check
+  what unit pptxgenjs expects for `margin`/`inset`.
+
+### 2. Size ladder: caps and minimums
+
+Preferred size = `min(cap, pointSize(themeRem, fontScale))`. This keeps each theme's
+ratios below the cap and still honours a user's font scale.
+
+| Role | Cap (pt) | Min (pt) |
+| --- | --- | --- |
+| title (H1, hero) | 44 | 28 |
+| heading (H2) | 30 | 20 |
+| subheading (H3: quote text, column heading, subtitle) | 22 | 16 |
+| body | 18 | 12 |
+| stat value, single | 54 | 28 |
+| stat value, grid | 40 | 24 |
+
+### 3. Layout from measured heights
+
+- **Heading (all non-title arrangements):**
+  - top-anchored at `y = TOP` (0.45 in), `valign: 'top'`;
+  - `h` = its fitted height, with `maxHeightIn` ≈ 1.5 in, so a heading wraps to at
+    most about 3 lines before shrinking;
+  - the accent rule sits under the heading's real bottom, and the content area
+    starts a fixed gap below the rule.
+- **Body:**
+  - fitted into the content area (down to the slide's bottom margin);
+  - the box spans the whole area with `valign: 'middle'`, so short content sits
+    centred instead of crowding the top;
+  - all four apps honour the anchor.
+- **Title slide:**
+  - the title and subtitle are fitted independently;
+  - the pair is placed as one group, vertically centred on the slide, with each box
+    exactly its fitted height;
+  - the subtitle's `maxHeightIn` is whatever remains after the title.
+- **Stat:**
+  - the value and the label are each fitted to their cell;
+  - rows are laid out in the content area;
+  - paragraphs keep a bottom slice, fitted.
+- **Two-column:** each column heading and each column's bullets are fitted to the
+  column. The bullet sizes are unified: every column uses the smallest size any
+  column needed, so the columns match.
+- **Quote:** the quote is fitted into the content area at the subheading size; the
+  attribution is fitted beneath it; the pair is centred.
+- **Adjusted:**
+  - boxes keep the user's size;
+  - each run is fitted inside its box, with `fittedPointSize` as the preferred size
+    and the body minimum as the floor, so user-sized boxes are no longer overflowed
+    in Canva.
+- `fit: 'shrink'` stays on every box. The text now fits, so PowerPoint never needs
+  it, and it remains a harmless backstop.
+
+### 4. Plumbing
+
+- `SlideRenderer` gains a fifth parameter, `measure: TextMeasurer`.
+- `exportDeckToPptx` builds the measurer once:
+  - `createCanvasMeasurer()` (new file `export/measureText.ts`) awaits
+    `document.fonts.ready`;
+  - it measures on an offscreen canvas, with `ctx.font` set from the `FontSpec`
+    (`italic`, `700`/`400`, `${sizePt}pt "${face}", Arial, sans-serif`);
+  - it converts the canvas width to inches (CSS px / 96, since the font is set in
+    `pt`);
+  - it falls back to `estimateMeasurer` when no `document` or 2D context exists.
+- Nothing else in `src/export/` touches the DOM. `measureText.ts` is the one browser
+  file, alongside the existing `backdrop/rasterize` step.
+
+### 5. Testing
+
+- **`textFit.test.ts`** (pure, fake measurer with fixed per-character widths) covers:
+  - wrapping, explicit breaks and long-word breaking;
+  - that fitting steps down to the preferred size, stops at the size that fits, and
+    goes below `minPt` to `FLOOR_PT` only when needed;
+  - that headroom is applied;
+  - the ladder: preferred = min(cap, theme size × scale).
+- **`slideRenderers.test.ts` gains a fit harness:**
+  - it renders every arrangement (title, body, stat single and grid, two-column,
+    quote, adjusted) with a deliberately long heading and long body;
+  - it uses `estimateMeasurer`;
+  - it asserts that every text box's re-measured wrapped height is ≤ its `h`, and
+    that every box stays inside the 10 × 5.625 in slide;
+  - the existing "every word arrives" tests keep passing.
+- **Manual check:** export one deck and open it in Canva.
+
+## Not in this work
+
+- Loading Inter (or any theme font) as a web font.
+- Embedding fonts in the .pptx (pptxgenjs cannot do it).
+- Generation speed (a separate investigation: log each stage's duration first).
+- Changing which of the five arrangements a card gets (`slideGroup.ts`).
+
+## Risks
+
+- **Fonts measured in the browser can differ from the app that opens the file.** The
+  1.1 × width/height headroom is the mitigation. A wider-than-expected substitute
+  could still wrap one extra line.
+- **Vertically centred body text reads differently** from the old top-aligned text.
+  This was chosen to fix the empty-bottom look.
+- **Canvas `measureText` for a font that isn't loaded** measures the fallback font,
+  which is accepted and covered by headroom.
