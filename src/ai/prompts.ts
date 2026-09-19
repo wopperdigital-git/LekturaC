@@ -91,7 +91,7 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
         "transition": string,
         "importance": "essential" | "supporting" | "optional"
       },
-      "role": string,
+      "role"?: string,
       "blocks": ContentBlock[],
       "visualStyle": "structured" | "expressive",
       "speakerNotes": string,
@@ -139,6 +139,7 @@ EVIDENCE
 - Keep tailpipe emissions and lifecycle emissions distinct — never collapse "zero tailpipe emissions" into "zero emissions".
 - Use calibrated language. Do not write "proves", "always", "guarantees", or "clearly superior" unless the evidence pack genuinely supports it; prefer "suggests", "is associated with", "tends to", "can".
 - Without an evidence pack: do not invent specific statistics. Long-established, widely known facts are fine, stated approximately — still list them in "claims", with "sourceIds": [].
+- A "quote" block attributed to a real person or organization must be a verbatim quotation from the evidence pack, cited in that card's "claims" with the pack's source id. Without a supporting quotation in the pack, use a "quote" block only for the deck's own unattributed thesis or mission line.
 
 FRESHNESS
 - Today's date is given in the user prompt. When the topic asks about what's current, latest, or trending, prefer the newest evidence available and never present data more than two years old as current.
@@ -151,8 +152,8 @@ VISUAL CHOICE
   - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta) — this reads far better as one card than as several single-stat cards in a row.
   - Use 2-4 "comparisonGroup" blocks together when contrasting options/approaches/before-vs-after.
   - Use 2-5 "timelineStep" blocks together for anything sequential (process, history, roadmap, funding stages).
-  - Use a single "quote" block for a card built around one compelling verbatim line — a testimonial, an expert soundbite, a mission statement, a pointed rallying line. Set "attribution" whenever the line isn't the deck's own voice; omit it for a stated mission/thesis line. Reach for this often when the tone is casual or bold, or the audience responds to a human voice — not just for literal customer-quote topics.
-  - Use "bulletList" for scannable lists at whatever length actually fits the content — a short list (up to 6 items, each under ~6 words) reads as a compact grid; a longer or more detailed list reads as a clean numbered list. 5-7 items is the comfortable range for one card; past 7, comprehension drops. But this is a ceiling on how much lands on ONE card, never a reason to drop or blur a real item — a genuinely 8-point process stays 8 real steps, split across two cards, not compressed into 6 vague ones. Only trim items that were padding to begin with.
+  - Use a single "quote" block for the deck's own unattributed thesis or mission line, or for a verbatim quotation from the evidence pack attributed to a real person or organization (cite it in "claims" — see EVIDENCE above). Omit "attribution" for the deck's own thesis/mission line; set it whenever the line is someone else's words.
+  - Use "bulletList" for scannable lists: 3-5 items by default, never more than 6 on one card. Short items (each under ~6 words) read as a compact grid; longer or more detailed items read as a clean numbered list. This cap is never a reason to drop or blur a real item — a genuinely longer sequence is chronological (use "timelineStep" instead) or belongs split across two cards, which likely changes the slide's purpose too.
   - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven — a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" under ~40 words, and only when no more specific block type fits.
 
 CONTENT QUALITY

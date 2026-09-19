@@ -43,6 +43,38 @@ describe('DECK_SYSTEM_PROMPT (v2)', () => {
     }
   })
 
+  it('marks "role" as optional in the output shape', () => {
+    expect(DECK_SYSTEM_PROMPT).toContain('"role"?: string')
+  })
+
+  /*
+    Fix round 1: the bulletList guidance used to say "5-7 items is the
+    comfortable range", directly contradicting the "3-5 bullets" density rule
+    a few lines above and the TOO_MANY_BULLETS validator's > 6 threshold. The
+    cap is now stated once, at 6, with no other number in the prompt implying
+    a higher one is fine.
+  */
+  it('does not contain the old, contradictory "5-7 items" bullet-count guidance', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toContain('5-7 items')
+  })
+
+  /*
+    Fix round 1: "reach for this often" (VISUAL CHOICE) told the model to
+    freely write quote blocks for a "testimonial" or "expert soundbite",
+    which directly contradicts EVIDENCE's "never invent ... a quotation". A
+    quote attributed to a real person/org must now come from the evidence
+    pack; only the deck's own unattributed thesis/mission line is exempt.
+  */
+  it('does not contain the old "reach for this often" quote-block encouragement', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toContain('Reach for this often')
+  })
+
+  it('says a quote block must be the deck\'s own thesis line or a verbatim evidence-pack quotation, matching EVIDENCE and VISUAL CHOICE', () => {
+    const quoteRuleCount = (DECK_SYSTEM_PROMPT.match(/quote.*(thesis|mission)/gi) ?? []).length
+    expect(quoteRuleCount).toBeGreaterThanOrEqual(2)
+    expect(DECK_SYSTEM_PROMPT).not.toMatch(/testimonial|soundbite/i)
+  })
+
   it('drops the old full-sentence-assertion heading rule entirely', () => {
     expect(DECK_SYSTEM_PROMPT).not.toContain('FULL-SENTENCE')
   })
