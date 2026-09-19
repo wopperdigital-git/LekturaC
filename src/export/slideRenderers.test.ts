@@ -4,7 +4,8 @@ import { slideGroup } from './slideGroup'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { CREATABLE_KINDS, layoutForKind, starterBlocks } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
-import { estimateMeasurer } from './textFit'
+import { estimateMeasurer, textHeight, type FitParagraph, type FitSizing } from './textFit'
+import type { PptxTextRun } from './textRun'
 
 /*
   Every word on the slide has to reach the .pptx.
@@ -25,6 +26,8 @@ import { estimateMeasurer } from './textFit'
 interface Captured {
   text: string
   options: Record<string, unknown>
+  /** The runs as passed to `addText`, kept alongside the joined `text` for the fit harness below. */
+  runs: PptxTextRun[]
 }
 
 function fakeSlide() {
@@ -37,8 +40,9 @@ function fakeSlide() {
     addText(value, options) {
       // A box's runs are concatenated: the split into runs is a formatting
       // detail (one run per mark), not something a reader sees.
-      const text = typeof value === 'string' ? value : value.map((run) => run.text).join('')
-      texts.push({ text, options })
+      const runs = typeof value === 'string' ? [{ text: value, options: {} }] : value
+      const text = runs.map((run) => run.text).join('')
+      texts.push({ text, options, runs })
     },
     addShape(shape, options) {
       shapes.push({ shape, options })
@@ -141,6 +145,158 @@ describe('exporting a card of each creatable type', () => {
         expect(y + h).toBeLessThanOrEqual(5.626)
       }
     }
+  })
+})
+
+/*
+  Fit harness: reused as-is by Tasks 4 and 5 for the stat/two-column/quote/
+  adjusted arrangements, so it works on any captured text box rather than
+  assuming which renderer produced it.
+*/
+
+/** `n` distinct space-separated words, e.g. `words(3, 'w')` -> `"w1 w2 w3"`. */
+function words(n: number, prefix: string): string {
+  return Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`).join(' ')
+}
+
+/**
+ * Rebuilds one box's paragraphs from its captured runs: a run whose options
+ * carry `breakLine` ends a paragraph (the pptxgenjs break every renderer here
+ * writes between paragraphs), and a paragraph's indent is read off its first
+ * run — `indentLevel: 1` (a nested comparison item) inset 0.6in, a plain
+ * `bullet` inset 0.3in, neither un-inset — matching what the renderers
+ * actually draw, since only the first run of a line carries either option.
+ */
+function paragraphsOf(runs: PptxTextRun[]): FitParagraph[] {
+  const paragraphs: FitParagraph[] = []
+  let current: PptxTextRun[] = []
+
+  const flush = () => {
+    if (current.length === 0) return
+    const text = current.map((run) => run.text).join('')
+    const first = current[0].options as { bullet?: boolean; indentLevel?: number }
+    const indentIn = first.indentLevel === 1 ? 0.6 : first.bullet ? 0.3 : undefined
+    paragraphs.push({ text, indentIn })
+    current = []
+  }
+
+  for (const run of runs) {
+    current.push(run)
+    if (run.options.breakLine) flush()
+  }
+  flush()
+
+  return paragraphs
+}
+
+/**
+ * Asserts every captured text box on `slide` actually fits: its paragraphs,
+ * rebuilt from its own captured runs, re-measure (at the box's own
+ * `fontSize`/`fontFace`/`bold`, with `estimateMeasurer`) to no more than the
+ * height it was given, and the box itself lies within the slide.
+ */
+function expectFits(slide: PptxSlide & { texts: Captured[] }) {
+  for (const box of slide.texts) {
+    const options = box.options as {
+      x: number
+      y: number
+      w: number
+      h: number
+      fontSize: number
+      fontFace: string
+      bold?: boolean
+      lineSpacingMultiple?: number
+    }
+    const paragraphs = paragraphsOf(box.runs)
+    const sizing: FitSizing = {
+      preferredPt: options.fontSize,
+      minPt: options.fontSize,
+      face: options.fontFace,
+      bold: options.bold,
+      lineSpacing: options.lineSpacingMultiple ?? 1.2,
+    }
+    const height = textHeight(paragraphs, options.w, sizing, options.fontSize, estimateMeasurer)
+
+    expect(height).toBeLessThanOrEqual(options.h + 1e-6)
+    expect(options.x).toBeGreaterThanOrEqual(0)
+    expect(options.y).toBeGreaterThanOrEqual(0)
+    expect(options.x + options.w).toBeLessThanOrEqual(10 + 1e-6)
+    expect(options.y + options.h).toBeLessThanOrEqual(5.625 + 1e-6)
+  }
+}
+
+describe('fitting the title, heading and body arrangements', () => {
+  const LONG_HEADING = words(20, 'heading')
+  const LONG_BULLETS = Array.from({ length: 8 }, (_, i) => words(14, `b${i + 1}-`))
+  const TITLE_WORDS = words(16, 'title')
+  const SUBTITLE_WORDS = words(45, 'subtitle')
+
+  it('fits a body arrangement with a long heading and a long bulleted body', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: LONG_HEADING },
+        { type: 'bulletList', items: LONG_BULLETS },
+      ],
+      'standard',
+    )
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('fits a title arrangement with a long title and a long subtitle', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: TITLE_WORDS },
+        { type: 'paragraph', text: SUBTITLE_WORDS },
+      ],
+      'hero',
+    )
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('centres the body box with valign middle', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: LONG_HEADING },
+        { type: 'bulletList', items: LONG_BULLETS },
+      ],
+      'standard',
+    )
+    const slide = render(card)
+    const bodyBox = slide.texts[slide.texts.length - 1]
+    expect(bodyBox.options.valign).toBe('middle')
+  })
+
+  it('gives a short heading fontSize 30 (the cap) for DEFAULT_THEME', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: 'Three word heading' },
+        { type: 'paragraph', text: 'Some body text.' },
+      ],
+      'standard',
+    )
+    const slide = render(card)
+    const headingBox = slide.texts[0]
+    expect(headingBox.options.fontSize).toBe(30)
+  })
+
+  it("places the accent rule below the heading box's real bottom", () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: LONG_HEADING },
+        { type: 'paragraph', text: 'Some body text.' },
+      ],
+      'standard',
+    )
+    const slide = render(card)
+    const headingBox = slide.texts[0]
+    const { y: headingY, h: headingH } = headingBox.options as { y: number; h: number }
+    const rule = slide.shapes[0]
+    const ruleY = rule.options.y as number
+    expect(ruleY).toBeGreaterThan(headingY + headingH)
   })
 })
 

@@ -6,7 +6,8 @@ import { cardBoxes, type Box } from './blockBoxes'
 import type { PptxTextRun } from './textRun'
 import { faceName, hex, markedRuns, pointSize, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
-import type { TextMeasurer } from './textFit'
+import type { FitParagraph, FitSizing, TextMeasurer } from './textFit'
+import { SIZE_LADDER, TEXT_MARGIN_PT, fitText, preferredSize } from './textFit'
 
 /*
   The five slide arrangements, as native PowerPoint text boxes and shapes.
@@ -36,6 +37,19 @@ const SLIDE_W = 10
 const SLIDE_H = 5.625
 const MARGIN = 0.6
 const CONTENT_W = SLIDE_W - MARGIN * 2
+
+/*
+  Layout from measured heights (design doc section 3): a heading's box is
+  exactly as tall as its fitted text, the accent rule sits under its real
+  bottom, and the content area starts a fixed gap below that — rather than
+  every box assuming a fixed heading height that a long heading could overflow.
+*/
+const TOP = 0.45
+const BOTTOM = SLIDE_H - 0.45
+const HEADING_MAX_H = 1.5
+const RULE_GAP = 0.08
+const RULE_H = 0.045
+const CONTENT_GAP = 0.22
 
 /** Index into `theme.typography.scale`. */
 const H1 = 0
@@ -90,33 +104,66 @@ function allOfType<T extends ContentBlock['type']>(
   return out
 }
 
-/** The heading, plus a thin accent rule under it. Shared by every renderer that has one. */
-function addHeading(slide: PptxSlide, card: Card, theme: ThemeTokens, style: TextStyle) {
+/**
+ * The heading, plus a thin accent rule under it. Shared by every renderer that
+ * has one. Fitted rather than fixed-height (design doc section 3): the box is
+ * exactly as tall as the heading needs, up to `HEADING_MAX_H`, so a long
+ * heading shrinks and wraps instead of overflowing onto whatever follows it.
+ *
+ * Returns the y, in inches, where content below the heading may start —
+ * `TOP + h + RULE_GAP + RULE_H + CONTENT_GAP` — so callers place their own
+ * content against the heading's real bottom rather than an assumed one.
+ */
+function addHeading(
+  slide: PptxSlide,
+  card: Card,
+  theme: ThemeTokens,
+  style: TextStyle,
+  measure: TextMeasurer,
+): number {
   const ref = textRef(0, 'text')
   const runStyle = styleFor(card, ref, style)
+  const sizing: FitSizing = {
+    preferredPt: preferredSize('heading', theme.typography.scale[H2], runStyle.fontScale),
+    minPt: SIZE_LADDER.heading.min,
+    face: headingFace(theme, runStyle),
+    bold: runStyle.bold ?? true,
+    italic: runStyle.italic,
+  }
+  const { sizePt, heightIn } = fitText(
+    [{ text: headingText(card) }],
+    { widthIn: CONTENT_W, maxHeightIn: HEADING_MAX_H },
+    sizing,
+    measure,
+  )
+
   slide.addText(markedRuns(headingText(card), marksFor(card, ref)), {
     x: MARGIN,
-    y: MARGIN,
+    y: TOP,
     w: CONTENT_W,
-    h: 0.9,
+    h: heightIn,
     fontFace: headingFace(theme, runStyle),
-    fontSize: pointSize(theme.typography.scale[H2], runStyle.fontScale),
+    fontSize: sizePt,
     color: hex(theme.colors.foreground),
     bold: runStyle.bold ?? true,
     italic: runStyle.italic,
     align: runStyle.align ?? 'left',
-    valign: 'middle',
-    // A long heading can wrap to three or more lines at this font size; without
-    // this it overflows the fixed box height onto whatever sits beneath it.
+    valign: 'top',
+    margin: TEXT_MARGIN_PT,
+    // The text now fits by construction; this remains a harmless backstop.
     fit: 'shrink',
   })
+
+  const ruleY = TOP + heightIn + RULE_GAP
   slide.addShape('rect', {
     x: MARGIN,
-    y: MARGIN + 0.95,
+    y: ruleY,
     w: 1.2,
-    h: 0.045,
+    h: RULE_H,
     fill: { color: hex(theme.colors.accent) },
   })
+
+  return ruleY + RULE_H + CONTENT_GAP
 }
 
 /* ---------------------------------------------------------------- title --- */
@@ -131,32 +178,78 @@ function addHeading(slide: PptxSlide, card: Card, theme: ThemeTokens, style: Tex
  * two or more paragraphs (`layoutEngine.ts`), so every paragraph is rendered
  * — as separate lines in one subtitle box — rather than only the first.
  */
-const renderTitle: SlideRenderer = (slide, card, theme, style, _measure) => {
+const TITLE_MAX_H = 2.4
+const TITLE_SUBTITLE_GAP = 0.25
+const TITLE_SUBTITLE_INSET = 1.6
+
+const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
   const paragraphs = allOfType(card, 'paragraph')
   const headingRef = textRef(0, 'text')
   const headingStyle = styleFor(card, headingRef, style)
 
+  const titleSizing: FitSizing = {
+    preferredPt: preferredSize('title', theme.typography.scale[H1], headingStyle.fontScale),
+    minPt: SIZE_LADDER.title.min,
+    face: headingFace(theme, headingStyle),
+    bold: headingStyle.bold ?? true,
+    italic: headingStyle.italic,
+  }
+  const { sizePt: titleSize, heightIn: titleH } = fitText(
+    [{ text: headingText(card) }],
+    { widthIn: CONTENT_W, maxHeightIn: TITLE_MAX_H },
+    titleSizing,
+    measure,
+  )
+
+  // Box-level options (face, size, colour, alignment) follow the first
+  // paragraph's resolved style, same as the single-paragraph case did
+  // before; only bold/italic marks vary per run within the box.
+  const boxStyle =
+    paragraphs.length > 0 ? styleFor(card, textRef(paragraphs[0].index, 'text'), style) : style
+  let subH = 0
+  let subSize = 0
+  if (paragraphs.length > 0) {
+    const subSizing: FitSizing = {
+      preferredPt: preferredSize('subheading', theme.typography.scale[H3], boxStyle.fontScale),
+      minPt: SIZE_LADDER.subheading.min,
+      face: bodyFace(theme, boxStyle),
+      italic: boxStyle.italic,
+    }
+    const subParagraphs: FitParagraph[] = paragraphs.map(({ block }) => ({ text: block.text }))
+    const fitted = fitText(
+      subParagraphs,
+      {
+        widthIn: CONTENT_W - TITLE_SUBTITLE_INSET,
+        maxHeightIn: BOTTOM - TOP - titleH - TITLE_SUBTITLE_GAP,
+      },
+      subSizing,
+      measure,
+    )
+    subH = fitted.heightIn
+    subSize = fitted.sizePt
+  }
+
+  const groupH = paragraphs.length > 0 ? titleH + TITLE_SUBTITLE_GAP + subH : titleH
+  const groupY = (SLIDE_H - groupH) / 2
+
   slide.addText(markedRuns(headingText(card), marksFor(card, headingRef)), {
     x: MARGIN,
-    y: paragraphs.length > 0 ? 1.6 : 2.0,
+    y: groupY,
     w: CONTENT_W,
-    h: 1.6,
+    h: titleH,
     fontFace: headingFace(theme, headingStyle),
-    fontSize: pointSize(theme.typography.scale[H1], headingStyle.fontScale),
+    fontSize: titleSize,
     color: hex(theme.colors.foreground),
     bold: headingStyle.bold ?? true,
     italic: headingStyle.italic,
     align: headingStyle.align ?? 'center',
-    valign: 'middle',
-    // Same overflow risk as `addHeading`'s box, at an even larger font size.
+    valign: 'top',
+    margin: TEXT_MARGIN_PT,
+    // The text now fits by construction; this remains a harmless backstop.
     fit: 'shrink',
   })
 
   if (paragraphs.length > 0) {
-    // Box-level options (face, size, colour, alignment) follow the first
-    // paragraph's resolved style, same as the single-paragraph case did
-    // before; only bold/italic marks vary per run within the box.
-    const boxStyle = styleFor(card, textRef(paragraphs[0].index, 'text'), style)
     const runs = paragraphs.flatMap(({ block, index }, i) => {
       const ref = textRef(index, 'text')
       const marked = markedRuns(block.text, marksFor(card, ref))
@@ -168,17 +261,18 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, _measure) => {
     })
 
     slide.addText(runs, {
-      x: MARGIN + 0.8,
-      y: 3.3,
-      w: CONTENT_W - 1.6,
-      h: 1.0,
+      x: MARGIN + TITLE_SUBTITLE_INSET / 2,
+      y: groupY + titleH + TITLE_SUBTITLE_GAP,
+      w: CONTENT_W - TITLE_SUBTITLE_INSET,
+      h: subH,
       fontFace: bodyFace(theme, boxStyle),
-      fontSize: pointSize(theme.typography.scale[H3], boxStyle.fontScale),
+      fontSize: subSize,
       color: hex(theme.colors.muted),
       italic: boxStyle.italic,
       align: boxStyle.align ?? 'center',
       valign: 'top',
-      // Several paragraphs in a box sized for one must not run off the slide.
+      margin: TEXT_MARGIN_PT,
+      // The text now fits by construction; this remains a harmless backstop.
       fit: 'shrink',
     })
   }
@@ -278,27 +372,53 @@ function runsForLine(line: BulletLine, card: Card, isLast: boolean): PptxTextRun
   })
 }
 
-const renderBody: SlideRenderer = (slide, card, theme, style, _measure) => {
-  addHeading(slide, card, theme, style)
+/**
+ * A flattened line's fitting indent, matching the indent pptxgenjs actually
+ * draws it with (`runsForLine`'s `bullet`/`indentLevel`): a non-bulleted line
+ * has none, an ordinary bullet is inset 0.3in, and a comparison item nested at
+ * `indentLevel` 1 is inset 0.6in.
+ */
+function lineIndent(line: BulletLine): number | undefined {
+  if (!line.bullet) return undefined
+  return line.indent >= 1 ? 0.6 : 0.3
+}
+
+const renderBody: SlideRenderer = (slide, card, theme, style, measure) => {
+  const contentTop = addHeading(slide, card, theme, style, measure)
 
   const lines = flattenBlocks(card)
   if (lines.length === 0) return
 
   const runs = lines.flatMap((line, i) => runsForLine(line, card, i === lines.length - 1))
+  const paragraphs: FitParagraph[] = lines.map((line) => ({
+    text: line.text,
+    indentIn: lineIndent(line),
+  }))
+
+  const areaH = BOTTOM - contentTop
+  const sizing: FitSizing = {
+    preferredPt: preferredSize('body', theme.typography.scale[BODY], style.fontScale),
+    minPt: SIZE_LADDER.body.min,
+    face: bodyFace(theme, style),
+    bold: style.bold,
+    italic: style.italic,
+    lineSpacing: theme.typography.lineHeight,
+  }
+  const { sizePt } = fitText(paragraphs, { widthIn: CONTENT_W, maxHeightIn: areaH }, sizing, measure)
 
   slide.addText(runs, {
     x: MARGIN,
-    y: MARGIN + 1.2,
+    y: contentTop,
     w: CONTENT_W,
-    h: SLIDE_H - MARGIN * 2 - 1.2,
+    h: areaH,
     fontFace: bodyFace(theme, style),
-    fontSize: pointSize(theme.typography.scale[BODY], style.fontScale),
+    fontSize: sizePt,
     color: hex(theme.colors.foreground),
     align: style.align ?? 'left',
-    valign: 'top',
+    valign: 'middle',
     lineSpacingMultiple: theme.typography.lineHeight,
-    // Long cards must not spill off the slide; shrinking is less bad than
-    // truncating content the user can no longer see.
+    margin: TEXT_MARGIN_PT,
+    // The text now fits by construction; this remains a harmless backstop.
     fit: 'shrink',
   })
 }
@@ -313,8 +433,8 @@ const MAX_STAT_COLUMNS = 4
  * A single stat lands centred and very large; several lay out in rows of at
  * most four, wrapping beyond that rather than shrinking indefinitely.
  */
-const renderStat: SlideRenderer = (slide, card, theme, style, _measure) => {
-  addHeading(slide, card, theme, style)
+const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
+  addHeading(slide, card, theme, style, measure)
 
   const stats: { value: string; label: string; index: number }[] = []
   card.blocks.forEach((block, i) => {
@@ -439,7 +559,7 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
     return
   }
 
-  addHeading(slide, card, theme, style)
+  addHeading(slide, card, theme, style, measure)
 
   const shown = groups.slice(0, 4)
   const columns = shown.length
@@ -507,7 +627,7 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
   // `renderBody` above already draws its own heading for the no-quote
   // fallback; drawing it again here too would duplicate it, so this call
   // sits only on the path where a quote block actually exists.
-  addHeading(slide, card, theme, style)
+  addHeading(slide, card, theme, style, measure)
 
   // Shifted down from the top of the slide to clear `addHeading`'s box (to
   // y≈1.5) and its accent rule (to y≈1.6), with a small gap.
