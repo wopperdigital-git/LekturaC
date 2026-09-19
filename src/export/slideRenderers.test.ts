@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { RENDERERS, type PptxSlide } from './slideRenderers'
+import { RENDERERS, fitCard, fittedPointSize, type PptxSlide } from './slideRenderers'
 import { slideGroup } from './slideGroup'
+import { cardBoxes } from './blockBoxes'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { CREATABLE_KINDS, layoutForKind, starterBlocks } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
@@ -461,6 +462,47 @@ describe('fitting the stat, two-column and quote arrangements', () => {
       const { y } = box.options as { y: number }
       expect(y).toBeGreaterThanOrEqual(ruleBottom - 1e-9)
     }
+  })
+})
+
+describe('fitting the adjusted arrangement', () => {
+  /** `cardOf` plus a `card.adjusts` entry, which is what routes a card to `renderAdjusted`. */
+  function adjustedCard(blocks: ContentBlock[], adjusts: Card['adjusts']): Card {
+    return { ...cardOf(blocks), adjusts }
+  }
+
+  it('fits a paragraph box resized narrow, holding 60 words', () => {
+    const card = adjustedCard(
+      [
+        { type: 'heading', text: 'Adjusted heading' },
+        { type: 'paragraph', text: words(60, 'w') },
+      ],
+      { '1': { dx: 0, dy: 0, w: 0.85, rotation: 0 } },
+    )
+    const slide = render(card)
+    expect(slide.texts.length).toBeGreaterThan(0)
+    expectFits(slide)
+  })
+
+  it('keeps fittedPointSize for an untouched-size adjusted heading that already fits', () => {
+    const card = adjustedCard(
+      [
+        { type: 'heading', text: 'Short heading' },
+        { type: 'paragraph', text: 'Some body text.' },
+      ],
+      // Nudges the paragraph (block 1) only, with no size override, so the
+      // heading's box is exactly the baseline stack's — the "already fits" case.
+      { '1': { dx: 0, dy: 0.05, rotation: 0 } },
+    )
+    const slide = render(card)
+    const headingBox = slide.texts.find((t) => t.text === 'Short heading')
+    expect(headingBox).toBeDefined()
+
+    const { height } = cardBoxes(card)
+    const fit = fitCard(height)
+    // Index 1 is H2 in the theme's typography scale, matching addHeading's own use.
+    const expected = fittedPointSize(DEFAULT_THEME.typography.scale[1], undefined, fit)
+    expect(headingBox?.options.fontSize).toBe(expected)
   })
 })
 

@@ -831,7 +831,7 @@ interface Fit {
   offsetY: number
 }
 
-function fitCard(height: number): Fit {
+export function fitCard(height: number): Fit {
   // `MARGIN * 2` — one per side, the same usable area every other arrangement
   // in this file works inside. Subtracting a single margin gave adjusted slides
   // half the gutter of their neighbours, so a deck with one nudged card had
@@ -857,7 +857,7 @@ function fitCard(height: number): Fit {
  * screen. Deriving the size from the same card-relative scale the boxes use
  * keeps text and box in proportion however the card is fitted to the slide.
  */
-function fittedPointSize(rem: number, fontScale: number | undefined, fit: Fit): number {
+export function fittedPointSize(rem: number, fontScale: number | undefined, fit: Fit): number {
   // A 1rem line is about this fraction of a typical card's width; the same
   // proportion `blockBoxes.ts` estimates its line heights from.
   const REM_PER_CARD_WIDTH = 0.0167
@@ -904,7 +904,7 @@ function renderAdjustedBlock(
   fit: Fit,
   theme: ThemeTokens,
   style: TextStyle,
-  _measure: TextMeasurer,
+  measure: TextMeasurer,
 ) {
   const block = card.blocks[index]
 
@@ -917,21 +917,57 @@ function renderAdjustedBlock(
       // overflowing it is the expected failure. Shrinking beats spilling onto
       // whatever they positioned underneath.
       fit: 'shrink',
+      margin: TEXT_MARGIN_PT,
       ...options,
     })
   }
 
   const runStyle = (ref: string) => styleFor(card, ref, style)
 
+  /**
+   * The point size a run of paragraphs actually gets inside `area`.
+   *
+   * `preferredPt` stays `fittedPointSize` — the box-proportional size, so text
+   * keeps its proportion to the box the user drew — but that is now a starting
+   * point rather than the final answer: `fitText` steps it down until the
+   * paragraphs actually fit `area`, which a box resized smaller than its
+   * content needs. `minPt` falls back to 12 (the body floor) only when even
+   * `preferredPt` is already below it, so the floor never rises above what was
+   * asked for.
+   */
+  const fitSize = (
+    paragraphs: FitParagraph[],
+    area: PlacedBox,
+    preferredPt: number,
+    face: string,
+    bold?: boolean,
+    italic?: boolean,
+    lineSpacing?: number,
+  ): number => {
+    const sizing: FitSizing = {
+      preferredPt,
+      minPt: Math.min(preferredPt, SIZE_LADDER.body.min),
+      face,
+      bold,
+      italic,
+      lineSpacing,
+    }
+    return fitText(paragraphs, { widthIn: area.w, maxHeightIn: area.h }, sizing, measure).sizePt
+  }
+
   switch (block.type) {
     case 'heading': {
       const ref = textRef(index, 'text')
       const own = runStyle(ref)
+      const face = headingFace(theme, own)
+      const bold = own.bold ?? true
+      const preferredPt = fittedPointSize(theme.typography.scale[H2], own.fontScale, fit)
+      const sizePt = fitSize([{ text: block.text }], box, preferredPt, face, bold, own.italic)
       text(markedRuns(block.text, marksFor(card, ref)), {
-        fontFace: headingFace(theme, own),
-        fontSize: fittedPointSize(theme.typography.scale[H2], own.fontScale, fit),
+        fontFace: face,
+        fontSize: sizePt,
         color: hex(theme.colors.foreground),
-        bold: own.bold ?? true,
+        bold,
         italic: own.italic,
         align: own.align ?? 'left',
       })
@@ -941,9 +977,20 @@ function renderAdjustedBlock(
     case 'paragraph': {
       const ref = textRef(index, 'text')
       const own = runStyle(ref)
+      const face = bodyFace(theme, own)
+      const preferredPt = fittedPointSize(theme.typography.scale[BODY], own.fontScale, fit)
+      const sizePt = fitSize(
+        [{ text: block.text }],
+        box,
+        preferredPt,
+        face,
+        own.bold,
+        own.italic,
+        theme.typography.lineHeight,
+      )
       text(markedRuns(block.text, marksFor(card, ref)), {
-        fontFace: bodyFace(theme, own),
-        fontSize: fittedPointSize(theme.typography.scale[BODY], own.fontScale, fit),
+        fontFace: face,
+        fontSize: sizePt,
         color: hex(theme.colors.foreground),
         bold: own.bold,
         italic: own.italic,
@@ -954,9 +1001,13 @@ function renderAdjustedBlock(
     }
 
     case 'bulletList': {
+      const face = bodyFace(theme, style)
+      const preferredPt = fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit)
+      const paragraphs: FitParagraph[] = block.items.map((item) => ({ text: item, indentIn: 0.3 }))
+      const sizePt = fitSize(paragraphs, box, preferredPt, face, undefined, undefined, theme.typography.lineHeight)
       text(listRuns(card, index, 'items', block.items), {
-        fontFace: bodyFace(theme, style),
-        fontSize: fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
+        fontFace: face,
+        fontSize: sizePt,
         color: hex(theme.colors.foreground),
         align: style.align ?? 'left',
         lineSpacingMultiple: theme.typography.lineHeight,
@@ -971,34 +1022,58 @@ function renderAdjustedBlock(
     */
     case 'stat': {
       const VALUE_SHARE = 0.68
+      const valueArea = upperSlice(box, VALUE_SHARE)
+      const labelArea = lowerSlice(box, VALUE_SHARE)
+
       const valueRef = textRef(index, 'value')
       const valueStyle = runStyle(valueRef)
+      const valueFace = headingFace(theme, valueStyle)
+      const valueBold = valueStyle.bold ?? true
+      const valuePreferred = fittedPointSize(theme.typography.scale[H1], valueStyle.fontScale, fit)
+      const valueSize = fitSize(
+        [{ text: block.value }],
+        valueArea,
+        valuePreferred,
+        valueFace,
+        valueBold,
+        valueStyle.italic,
+      )
       text(
         markedRuns(block.value, marksFor(card, valueRef)),
         {
-          fontFace: headingFace(theme, valueStyle),
-          fontSize: fittedPointSize(theme.typography.scale[H1], valueStyle.fontScale, fit),
+          fontFace: valueFace,
+          fontSize: valueSize,
           color: hex(theme.colors.accent),
-          bold: valueStyle.bold ?? true,
+          bold: valueBold,
           italic: valueStyle.italic,
           align: valueStyle.align ?? 'left',
           valign: 'bottom',
         },
-        upperSlice(box, VALUE_SHARE),
+        valueArea,
       )
 
       const labelRef = textRef(index, 'label')
       const labelStyle = runStyle(labelRef)
+      const labelFace = bodyFace(theme, labelStyle)
+      const labelPreferred = fittedPointSize(theme.typography.scale[BODY], labelStyle.fontScale, fit)
+      const labelSize = fitSize(
+        [{ text: block.label }],
+        labelArea,
+        labelPreferred,
+        labelFace,
+        undefined,
+        labelStyle.italic,
+      )
       text(
         markedRuns(block.label, marksFor(card, labelRef)),
         {
-          fontFace: bodyFace(theme, labelStyle),
-          fontSize: fittedPointSize(theme.typography.scale[BODY], labelStyle.fontScale, fit),
+          fontFace: labelFace,
+          fontSize: labelSize,
           color: hex(theme.colors.muted),
           italic: labelStyle.italic,
           align: labelStyle.align ?? 'left',
         },
-        lowerSlice(box, VALUE_SHARE),
+        labelArea,
       )
       return
     }
@@ -1006,33 +1081,52 @@ function renderAdjustedBlock(
     case 'quote': {
       const attribution = block.attribution
       const QUOTE_SHARE = attribution ? 0.75 : 1
+      const quoteArea = upperSlice(box, QUOTE_SHARE)
       const ref = textRef(index, 'text')
       const own = runStyle(ref)
+      const face = bodyFace(theme, own)
+      const italic = own.italic ?? true
+      const preferredPt = fittedPointSize(theme.typography.scale[H3], own.fontScale, fit)
+      const quoteText = `“${block.text}”`
+      const sizePt = fitSize(
+        [{ text: quoteText }],
+        quoteArea,
+        preferredPt,
+        face,
+        undefined,
+        italic,
+        theme.typography.lineHeight,
+      )
       text(
-        markedRuns(`“${block.text}”`, marksFor(card, ref)),
+        markedRuns(quoteText, marksFor(card, ref)),
         {
-          fontFace: bodyFace(theme, own),
-          fontSize: fittedPointSize(theme.typography.scale[H3], own.fontScale, fit),
+          fontFace: face,
+          fontSize: sizePt,
           color: hex(theme.colors.foreground),
-          italic: own.italic ?? true,
+          italic,
           align: own.align ?? 'left',
           lineSpacingMultiple: theme.typography.lineHeight,
         },
-        upperSlice(box, QUOTE_SHARE),
+        quoteArea,
       )
 
       if (attribution) {
+        const attrArea = lowerSlice(box, QUOTE_SHARE)
         const attrRef = textRef(index, 'attribution')
         const attrStyle = runStyle(attrRef)
+        const attrFace = bodyFace(theme, attrStyle)
+        const attrPreferred = fittedPointSize(theme.typography.scale[BODY], attrStyle.fontScale, fit)
+        const attrText = `— ${attribution}`
+        const attrSize = fitSize([{ text: attrText }], attrArea, attrPreferred, attrFace)
         text(
-          markedRuns(`— ${attribution}`, marksFor(card, attrRef)),
+          markedRuns(attrText, marksFor(card, attrRef)),
           {
-            fontFace: bodyFace(theme, attrStyle),
-            fontSize: fittedPointSize(theme.typography.scale[BODY], attrStyle.fontScale, fit),
+            fontFace: attrFace,
+            fontSize: attrSize,
             color: hex(theme.colors.muted),
             align: attrStyle.align ?? 'left',
           },
-          lowerSlice(box, QUOTE_SHARE),
+          attrArea,
         )
       }
       return
@@ -1046,60 +1140,87 @@ function renderAdjustedBlock(
     */
     case 'timelineStep': {
       const LABEL_SHARE = 0.4
+      const labelArea = upperSlice(box, LABEL_SHARE)
+      const bodyArea = lowerSlice(box, LABEL_SHARE)
+
       const labelRef = textRef(index, 'label')
       const labelStyle = runStyle(labelRef)
+      const labelFace = headingFace(theme, labelStyle)
+      const labelBold = labelStyle.bold ?? true
+      const labelPreferred = fittedPointSize(theme.typography.scale[BODY], labelStyle.fontScale, fit)
+      const labelSize = fitSize([{ text: block.label }], labelArea, labelPreferred, labelFace, labelBold)
       text(
         markedRuns(block.label, marksFor(card, labelRef)),
         {
-          fontFace: headingFace(theme, labelStyle),
-          fontSize: fittedPointSize(theme.typography.scale[BODY], labelStyle.fontScale, fit),
+          fontFace: labelFace,
+          fontSize: labelSize,
           color: hex(theme.colors.accent),
-          bold: labelStyle.bold ?? true,
+          bold: labelBold,
           align: labelStyle.align ?? 'left',
         },
-        upperSlice(box, LABEL_SHARE),
+        labelArea,
       )
 
       const bodyRef = textRef(index, 'text')
       const bodyStyle = runStyle(bodyRef)
+      const bodyFaceName = bodyFace(theme, bodyStyle)
+      const bodyPreferred = fittedPointSize(theme.typography.scale[BODY], bodyStyle.fontScale, fit)
+      const bodySize = fitSize([{ text: block.text }], bodyArea, bodyPreferred, bodyFaceName)
       text(
         markedRuns(block.text, marksFor(card, bodyRef)),
         {
-          fontFace: bodyFace(theme, bodyStyle),
-          fontSize: fittedPointSize(theme.typography.scale[BODY], bodyStyle.fontScale, fit),
+          fontFace: bodyFaceName,
+          fontSize: bodySize,
           color: hex(theme.colors.foreground),
           align: bodyStyle.align ?? 'left',
         },
-        lowerSlice(box, LABEL_SHARE),
+        bodyArea,
       )
       return
     }
 
     case 'comparisonGroup': {
       const HEADING_SHARE = 0.24
+      const headingArea = upperSlice(box, HEADING_SHARE)
+      const itemsArea = lowerSlice(box, HEADING_SHARE)
+
       const headingRef = textRef(index, 'heading')
       const headingStyle = runStyle(headingRef)
+      const headingFaceName = headingFace(theme, headingStyle)
+      const headingBold = headingStyle.bold ?? true
+      const headingPreferred = fittedPointSize(theme.typography.scale[H3], headingStyle.fontScale, fit)
+      const headingSize = fitSize(
+        [{ text: block.heading }],
+        headingArea,
+        headingPreferred,
+        headingFaceName,
+        headingBold,
+      )
       text(
         markedRuns(block.heading, marksFor(card, headingRef)),
         {
-          fontFace: headingFace(theme, headingStyle),
-          fontSize: fittedPointSize(theme.typography.scale[H3], headingStyle.fontScale, fit),
+          fontFace: headingFaceName,
+          fontSize: headingSize,
           color: hex(theme.colors.accent),
-          bold: headingStyle.bold ?? true,
+          bold: headingBold,
           align: headingStyle.align ?? 'left',
         },
-        upperSlice(box, HEADING_SHARE),
+        headingArea,
       )
 
+      const face = bodyFace(theme, style)
+      const preferredPt = fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit)
+      const paragraphs: FitParagraph[] = block.items.map((item) => ({ text: item, indentIn: 0.3 }))
+      const sizePt = fitSize(paragraphs, itemsArea, preferredPt, face)
       text(
         listRuns(card, index, 'items', block.items),
         {
-          fontFace: bodyFace(theme, style),
-          fontSize: fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
+          fontFace: face,
+          fontSize: sizePt,
           color: hex(theme.colors.foreground),
           align: style.align ?? 'left',
         },
-        lowerSlice(box, HEADING_SHARE),
+        itemsArea,
       )
       return
     }
@@ -1114,9 +1235,12 @@ function renderAdjustedBlock(
     */
     case 'image': {
       if (!block.alt) return
+      const face = bodyFace(theme, style)
+      const preferredPt = fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit)
+      const sizePt = fitSize([{ text: block.alt }], box, preferredPt, face, undefined, true)
       text(block.alt, {
-        fontFace: bodyFace(theme, style),
-        fontSize: fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
+        fontFace: face,
+        fontSize: sizePt,
         color: hex(theme.colors.muted),
         italic: true,
         align: 'center',
