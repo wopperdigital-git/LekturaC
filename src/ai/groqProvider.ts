@@ -52,21 +52,24 @@ export const DECK_MODEL = 'openai/gpt-oss-120b'
 // on the 120b writer model and a `max_tokens: 3000` call on it failed with
 // `context_length_exceeded`. The 20b model handled the same query in 13.8k
 // prompt tokens. Groq's rate limits are per-model, so research spending its
-// own model's window never eats into the writer's. This is the *default* —
-// see `COMPOUND_RESEARCH_MODEL` below for the second link's override.
+// own model's window never eats into the writer's.
 export const RESEARCH_MODEL = 'openai/gpt-oss-20b'
 
 // The catalog probe on 2026-09-20 found no Kimi/Moonshot model on this
 // account, `qwen/qwen3.8-27b`'s OTPM cap (1000 tokens/minute) too small for
-// even a 5-slide deck, and `openai/gpt-oss-20b` (the research default above)
-// out of its 20,000/day quota that day — `groq/compound` and
-// `groq/compound-mini` are the second Groq link's models instead: reasoning
-// models with web search built in, measured to produce a schema-valid v2
-// deck through the real prompts. `groq/compound-mini` (research) has its own
-// search built in and rejects a `tools` array outright ("Request Entity Too
-// Large"), which is what `GroqModelOptions.researchTools: false` is for.
+// even a 5-slide deck, and `openai/gpt-oss-20b` (the research model above)
+// out of its 20,000/day quota that day — `groq/compound` is the second Groq
+// link's deck/repair/narration model instead: a reasoning model with web
+// search built in, measured to produce a schema-valid v2 deck through the
+// real prompts in 8.3s.
+//
+// There is deliberately no `COMPOUND_RESEARCH_MODEL`/`groq/compound-mini`
+// constant here: live probes the same day showed it returns 413 ("Request
+// Entity Too Large") for ANY prompt whose built-in search actually runs —
+// not a token-budget problem a smaller request could dodge, so the second
+// link doesn't attempt research at all (see `GroqModelOptions.supportsResearch`
+// below and `research()`'s early throw).
 export const COMPOUND_DECK_MODEL = 'groq/compound'
-export const COMPOUND_RESEARCH_MODEL = 'groq/compound-mini'
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
 
@@ -76,21 +79,38 @@ interface GroqMessage {
 }
 
 /**
- * Which models a `GroqProvider` instance calls, and whether research sends a
- * `tools` array at all. Defaults reproduce the provider's original,
- * single-model behaviour exactly (`DECK_MODEL`/`RESEARCH_MODEL`,
- * `researchTools: true`) — a second instance in `PROVIDER_CHAIN` passes the
- * `COMPOUND_*` constants and `researchTools: false` instead, since
- * `groq/compound-mini` searches on its own and a request carrying a `tools`
- * array is rejected outright (measured 2026-09-20: "Request Entity Too
- * Large"). There is deliberately no separate narration/repair model option:
- * both already share `deckModel` with `generateDeck`, and the brief this
- * shipped under didn't ask for a third axis of override.
+ * Which models a `GroqProvider` instance calls, whether research sends a
+ * `tools` array at all, and whether it can research at all. Defaults
+ * reproduce the provider's original, single-model behaviour exactly
+ * (`DECK_MODEL`/`RESEARCH_MODEL`, `researchTools: true`,
+ * `supportsResearch: true`) — the second `PROVIDER_CHAIN` instance passes
+ * `deckModel: COMPOUND_DECK_MODEL` and `supportsResearch: false` instead.
+ * There is deliberately no separate narration/repair model option: both
+ * already share `deckModel` with `generateDeck`, and the brief this shipped
+ * under didn't ask for a third axis of override.
+ *
+ * `researchTools` and `supportsResearch` answer different questions.
+ * `researchTools: false` would still ATTEMPT a research call, just without a
+ * `tools` array — that alone was this module's first theory for why
+ * `groq/compound-mini` might work, since it searches on its own and a
+ * request that also carries a `tools` array is rejected outright ("Request
+ * Entity Too Large"). Live probes (2026-09-20) found the real failure is
+ * worse and untied to `tools` at all: `groq/compound-mini` 413s on ANY
+ * prompt whose built-in search actually runs — a trivial "Say hi" succeeds,
+ * but a real research query fails identically at `max_tokens` 4000, 2000,
+ * 1000 and 800, with or without a system message, with or without
+ * temperature. The injected search results themselves exceed what this tier
+ * accepts, every time, so no combination of options here can rescue it.
+ * `supportsResearch: false` is what stops `research()` from ever attempting
+ * that doomed call (see the method body) — `researchTools` is kept for a
+ * future model that shares compound-mini's "searches on its own" trait
+ * without its size problem.
  */
 export interface GroqModelOptions {
   deckModel?: string
   researchModel?: string
   researchTools?: boolean
+  supportsResearch?: boolean
 }
 
 /**
@@ -209,12 +229,14 @@ export class GroqProvider implements AIProvider {
   private deckModel: string
   private researchModel: string
   private researchTools: boolean
+  private supportsResearch: boolean
 
   constructor(apiKey: string, options?: GroqModelOptions) {
     this.apiKey = apiKey
     this.deckModel = options?.deckModel ?? DECK_MODEL
     this.researchModel = options?.researchModel ?? RESEARCH_MODEL
     this.researchTools = options?.researchTools ?? true
+    this.supportsResearch = options?.supportsResearch ?? true
   }
 
   async generateDeck(
@@ -267,6 +289,21 @@ export class GroqProvider implements AIProvider {
     today: string,
     signal?: AbortSignal,
   ): Promise<EvidencePack> {
+    if (!this.supportsResearch) {
+      // groq/compound-mini's built-in search overflows Groq's request-size
+      // limit on this tier for ANY prompt where it actually searches
+      // (measured 2026-09-20: 413 "Request Entity Too Large" at max_tokens
+      // 4000, 2000, 1000 and 800 alike, with or without a system message or
+      // temperature) — not a budget problem a smaller request could dodge.
+      // `capacity` is what `FallbackProvider.isFailoverable` treats as "try
+      // the next link," so this throws before any network call rather than
+      // spending a request that will fail the same way every time.
+      throw new AIProviderError(
+        "This model's built-in search cannot serve a research query on this tier: groq/compound-mini returns 413 \"Request Entity Too Large\" for any prompt where its search actually runs, at every token budget tried.",
+        { kind: 'capacity' },
+      )
+    }
+
     if (!this.apiKey.trim()) throw noKeyError()
 
     const messages: GroqMessage[] = [

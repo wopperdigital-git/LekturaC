@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  COMPOUND_DECK_MODEL,
-  COMPOUND_RESEARCH_MODEL,
-  DECK_MODEL,
-  GroqProvider,
-  RESEARCH_MODEL,
-} from './groqProvider'
+import { COMPOUND_DECK_MODEL, DECK_MODEL, GroqProvider, RESEARCH_MODEL } from './groqProvider'
 import type { DeckContext, GenerationBrief } from './provider'
 import type { GeneratedDeck } from '@/generation/schemas'
 
@@ -137,9 +131,10 @@ describe('GroqProvider retry budget', () => {
   groq-compound brief item 2/3: `GroqProvider` now takes its models as
   constructor options, defaulting to today's single-model behaviour. A second
   `GroqProvider` instance in `PROVIDER_CHAIN` (fallbackProvider.ts) overrides
-  both models and drops research's `tools` array, since `groq/compound-mini`
-  searches on its own and rejects a request that also carries one (measured
-  2026-09-20: "Request Entity Too Large").
+  the deck model with `groq/compound`. (`researchTools: false` and a
+  `groq/compound-mini` research model were this module's first theory for
+  making that link research too — superseded below once live probes showed
+  the model 413s on any real search query regardless of `tools`.)
 */
 describe('GroqProvider model options', () => {
   afterEach(() => {
@@ -174,8 +169,7 @@ describe('GroqProvider model options', () => {
     vi.stubGlobal('fetch', fetchMock)
     const provider = new GroqProvider('key', {
       deckModel: COMPOUND_DECK_MODEL,
-      researchModel: COMPOUND_RESEARCH_MODEL,
-      researchTools: false,
+      supportsResearch: false,
     })
 
     await provider.generateDeck('EVs', BRIEF, undefined, CONTEXT)
@@ -183,21 +177,42 @@ describe('GroqProvider model options', () => {
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
     expect(body.model).toBe(COMPOUND_DECK_MODEL)
   })
+})
 
-  it('a compound-configured provider posts COMPOUND_RESEARCH_MODEL for research with no tools key at all', async () => {
+/*
+  Controller probe (2026-09-20, live): groq/compound-mini returns 413
+  "Request Entity Too Large" for ANY prompt whose built-in search actually
+  runs — a trivial "Say hi" succeeds, but a real research query fails
+  identically at max_tokens 4000, 2000, 1000 and 800, with or without a
+  system message, with or without temperature. `GroqProvider.research` on the
+  compound options failed the same way end to end. Not a token-budget problem
+  a smaller request could dodge, so `supportsResearch: false` must stop
+  `research()` before it ever reaches `fetch` — and the thrown error must be
+  `kind: 'capacity'`, since that's what `FallbackProvider` treats as "try the
+  next link" (see `fallbackProvider.test.ts`'s failover tests).
+*/
+describe('GroqProvider supportsResearch', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('a supportsResearch: false provider rejects with kind "capacity" and never calls fetch', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GroqProvider('key', { supportsResearch: false })
+
+    const pending = provider.research('EVs', BRIEF, '2026-09-19')
+    await expect(pending).rejects.toMatchObject({ kind: 'capacity' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('the default provider (supportsResearch: true) still performs research normally', async () => {
     const fetchMock = vi.fn().mockResolvedValue(rateLimited())
     vi.stubGlobal('fetch', fetchMock)
-    const provider = new GroqProvider('key', {
-      deckModel: COMPOUND_DECK_MODEL,
-      researchModel: COMPOUND_RESEARCH_MODEL,
-      researchTools: false,
-    })
+    const provider = new GroqProvider('key')
 
-    await expect(provider.research('EVs', BRIEF, '2026-09-19')).rejects.toThrow()
-
-    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
-    expect(body.model).toBe(COMPOUND_RESEARCH_MODEL)
-    expect(body).not.toHaveProperty('tools')
+    await expect(provider.research('EVs', BRIEF, '2026-09-19')).rejects.toThrow(/rate limited/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -10,7 +10,7 @@ import {
   type QualityFlag,
   type RepairResponse,
 } from './provider'
-import { GroqProvider, COMPOUND_DECK_MODEL, COMPOUND_RESEARCH_MODEL } from './groqProvider'
+import { GroqProvider, COMPOUND_DECK_MODEL } from './groqProvider'
 import { GeminiProvider } from './geminiProvider'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
@@ -23,9 +23,9 @@ const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
 const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
 
 /**
- * The app's provider chain, built once: Groq (`openai/gpt-oss-120b`) first,
- * then a second Groq link on `groq/compound`/`groq/compound-mini`, then
- * Gemini.
+ * The app's provider chain, built once: Groq (`openai/gpt-oss-120b`/
+ * `openai/gpt-oss-20b`) first, then a second Groq link on `groq/compound` for
+ * deck/repair/narration only, then Gemini.
  *
  * The second Groq link exists because a 2026-09-20 catalog probe found the
  * first link's models can each run out on their own: `openai/gpt-oss-20b`
@@ -33,10 +33,23 @@ const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
  * general-purpose model on this account's catalog that both fits the output
  * budget and honours JSON mode (`qwen/qwen3.8-27b`'s 1000 tokens/minute
  * output cap is under a single 5-slide deck's `deckMaxTokens`). `groq/compound`
- * measured a schema-valid deck through the real prompts, so it's a second,
- * independent shot on the same key before falling through to Gemini —
- * `researchTools: false` because `compound-mini` searches on its own and
- * rejects a request that also carries a `tools` array.
+ * measured a schema-valid deck through the real prompts in 8.3s, so it's a
+ * second, independent shot on the same key for deck/repair/narration before
+ * falling through to Gemini.
+ *
+ * Research on this link is a different story. Live probes the same day
+ * showed `groq/compound-mini` returns 413 ("Request Entity Too Large") for
+ * ANY prompt whose built-in search actually runs — a trivial "Say hi"
+ * succeeds, but a real research query fails identically at `max_tokens` 4000,
+ * 2000, 1000 and 800, with or without a system message, with or without
+ * temperature. That rules out retrying with a smaller budget: the injected
+ * search results themselves exceed what this tier accepts, every time. So
+ * this entry passes `supportsResearch: false` (`GroqModelOptions`, see
+ * `groqProvider.ts`), which makes `research()` throw a `capacity` error
+ * before any network call — `capacity` is exactly what `FallbackProvider`
+ * treats as "try the next link" (see `isFailoverable` below), so a deck's
+ * research step reaches Gemini with no wasted round-trip rather than
+ * spending one on a request that fails the same way every time.
  *
  * A provider whose key is missing is left OUT rather than added and allowed to
  * fail, so dropping VITE_GROQ_API_KEY makes this a Gemini-only app with no code
@@ -57,8 +70,7 @@ export const PROVIDER_CHAIN: NamedProvider[] = [
           name: 'Groq compound',
           provider: new GroqProvider(GROQ_API_KEY, {
             deckModel: COMPOUND_DECK_MODEL,
-            researchModel: COMPOUND_RESEARCH_MODEL,
-            researchTools: false,
+            supportsResearch: false,
           }),
         },
       ]
