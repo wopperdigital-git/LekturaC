@@ -22,6 +22,7 @@ import {
 import { RESEARCH_SYSTEM_PROMPT, buildResearchUserPrompt, parseEvidencePack } from './researchPrompt'
 import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
 import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
+import { extractJsonObject } from './jsonText'
 
 // Was `llama-3.3-70b-versatile` until Groq decommissioned it (the endpoint
 // now 404s with "model does not exist"). `openai/gpt-oss-120b` is the current
@@ -39,21 +40,57 @@ import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
 // The AbortSignal *is* honoured (threaded into fetch), which the create flow
 // depends on: cancelling a generation has to actually stop the request, or a
 // deck the user walked away from lands minutes later and hijacks navigation.
-const MODEL = 'openai/gpt-oss-120b'
+//
+// This is `GroqProvider`'s *default* deck/writer model (also used for repair
+// and narration, which share the same model as the deck call) — a second
+// `GroqProvider` instance in `PROVIDER_CHAIN` overrides it with
+// `COMPOUND_DECK_MODEL` (see `GroqModelOptions` below).
+export const DECK_MODEL = 'openai/gpt-oss-120b'
 
 // Research uses the smaller model deliberately (design spec "Measured
 // constraints"): a single browser_search query measured 62.7k prompt tokens
 // on the 120b writer model and a `max_tokens: 3000` call on it failed with
 // `context_length_exceeded`. The 20b model handled the same query in 13.8k
 // prompt tokens. Groq's rate limits are per-model, so research spending its
-// own model's window never eats into the writer's.
-const RESEARCH_MODEL = 'openai/gpt-oss-20b'
+// own model's window never eats into the writer's. This is the *default* —
+// see `COMPOUND_RESEARCH_MODEL` below for the second link's override.
+export const RESEARCH_MODEL = 'openai/gpt-oss-20b'
+
+// The catalog probe on 2026-09-20 found no Kimi/Moonshot model on this
+// account, `qwen/qwen3.8-27b`'s OTPM cap (1000 tokens/minute) too small for
+// even a 5-slide deck, and `openai/gpt-oss-20b` (the research default above)
+// out of its 20,000/day quota that day — `groq/compound` and
+// `groq/compound-mini` are the second Groq link's models instead: reasoning
+// models with web search built in, measured to produce a schema-valid v2
+// deck through the real prompts. `groq/compound-mini` (research) has its own
+// search built in and rejects a `tools` array outright ("Request Entity Too
+// Large"), which is what `GroqModelOptions.researchTools: false` is for.
+export const COMPOUND_DECK_MODEL = 'groq/compound'
+export const COMPOUND_RESEARCH_MODEL = 'groq/compound-mini'
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions'
 
 interface GroqMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
+}
+
+/**
+ * Which models a `GroqProvider` instance calls, and whether research sends a
+ * `tools` array at all. Defaults reproduce the provider's original,
+ * single-model behaviour exactly (`DECK_MODEL`/`RESEARCH_MODEL`,
+ * `researchTools: true`) — a second instance in `PROVIDER_CHAIN` passes the
+ * `COMPOUND_*` constants and `researchTools: false` instead, since
+ * `groq/compound-mini` searches on its own and a request carrying a `tools`
+ * array is rejected outright (measured 2026-09-20: "Request Entity Too
+ * Large"). There is deliberately no separate narration/repair model option:
+ * both already share `deckModel` with `generateDeck`, and the brief this
+ * shipped under didn't ask for a third axis of override.
+ */
+export interface GroqModelOptions {
+  deckModel?: string
+  researchModel?: string
+  researchTools?: boolean
 }
 
 /**
@@ -134,9 +171,11 @@ async function callGroq(
 }
 
 function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } {
+  const extracted = extractJsonObject(raw)
+  if (extracted === null) return { error: 'Invalid JSON: no JSON object found in the response' }
   let json: unknown
   try {
-    json = JSON.parse(raw)
+    json = JSON.parse(extracted)
   } catch (err) {
     return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -146,9 +185,11 @@ function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } 
 }
 
 function tryParseNarration(raw: string): { data: NarrationResponse } | { error: string } {
+  const extracted = extractJsonObject(raw)
+  if (extracted === null) return { error: 'Invalid JSON: no JSON object found in the response' }
   let json: unknown
   try {
-    json = JSON.parse(raw)
+    json = JSON.parse(extracted)
   } catch (err) {
     return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -165,9 +206,15 @@ function noKeyError(): AIProviderError {
 
 export class GroqProvider implements AIProvider {
   private apiKey: string
+  private deckModel: string
+  private researchModel: string
+  private researchTools: boolean
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, options?: GroqModelOptions) {
     this.apiKey = apiKey
+    this.deckModel = options?.deckModel ?? DECK_MODEL
+    this.researchModel = options?.researchModel ?? RESEARCH_MODEL
+    this.researchTools = options?.researchTools ?? true
   }
 
   async generateDeck(
@@ -185,7 +232,7 @@ export class GroqProvider implements AIProvider {
     ]
 
     const options: CallGroqOptions = {
-      model: MODEL,
+      model: this.deckModel,
       maxTokens: deckMaxTokens(brief.slideCount),
       jsonMode: true,
       temperature: 0.7,
@@ -231,13 +278,16 @@ export class GroqProvider implements AIProvider {
       this.apiKey,
       messages,
       {
-        model: RESEARCH_MODEL,
+        model: this.researchModel,
         // 2000 measured too tight for this reasoning model: reasoning alone
         // can exhaust it before the 4-8 finding JSON is ever written, which
         // makes parseEvidencePack return null rather than a shorter pack.
         maxTokens: 4000,
         jsonMode: false,
-        tools: [{ type: 'browser_search' }],
+        // Omitted entirely (not an empty array) when `researchTools` is
+        // false: `groq/compound-mini` searches on its own and rejects a
+        // request that also carries a `tools` array.
+        ...(this.researchTools ? { tools: [{ type: 'browser_search' }] } : {}),
         temperature: 0.3,
         // Best effort — see CallGroqOptions.maxRetries.
         maxRetries: 0,
@@ -266,7 +316,7 @@ export class GroqProvider implements AIProvider {
       { role: 'user', content: buildRepairUserPrompt(deck, targets, flags, context) },
     ]
     const options: CallGroqOptions = {
-      model: MODEL,
+      model: this.deckModel,
       maxTokens: REPAIR_MAX_TOKENS,
       jsonMode: true,
       temperature: 0.7,
@@ -308,7 +358,7 @@ export class GroqProvider implements AIProvider {
       { role: 'user', content: buildNarrationUserPrompt(title, slides) },
     ]
     const options: CallGroqOptions = {
-      model: MODEL,
+      model: this.deckModel,
       maxTokens: narrationMaxTokens(slides.length),
       jsonMode: true,
       temperature: 0.7,

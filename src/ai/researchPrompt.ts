@@ -1,4 +1,5 @@
 import { evidencePackSchema, SOURCE_TYPES, type EvidencePack } from '@/generation/schemas'
+import { extractJsonObject } from './jsonText'
 import type { GenerationBrief } from './prompts'
 
 const SOURCE_TYPE_LIST = SOURCE_TYPES.map((v) => `"${v}"`).join(' | ')
@@ -55,8 +56,10 @@ Find the facts this presentation needs and return them in the JSON shape describ
  * - `【…】`-style citation markers (a search-tool artifact seen in the wild)
  *   are stripped before scanning for braces, since they can themselves
  *   contain stray punctuation.
- * - The substring from the first `{` to the last `}` is taken so surrounding
- *   prose or ```json fences never reach `JSON.parse`.
+ * - `extractJsonObject` (`ai/jsonText.ts`) then takes the substring from the
+ *   first `{` to the last `}` so surrounding prose or ```json fences never
+ *   reach `JSON.parse` — the same tolerant extraction the deck/narration/
+ *   repair parsers use.
  * - After a successful zod parse, sources with neither a `url` nor a
  *   `publisher` are dropped (unverifiable), and any finding whose
  *   `sourceIds` — filtered down to ids that survived that drop — comes up
@@ -65,13 +68,12 @@ Find the facts this presentation needs and return them in the JSON shape describ
  */
 export function parseEvidencePack(raw: string): EvidencePack | null {
   const stripped = raw.replace(/【[^】]*】/g, '')
-  const start = stripped.indexOf('{')
-  const end = stripped.lastIndexOf('}')
-  if (start === -1 || end === -1 || end < start) return null
+  const extracted = extractJsonObject(stripped)
+  if (extracted === null) return null
 
   let json: unknown
   try {
-    json = JSON.parse(stripped.slice(start, end + 1))
+    json = JSON.parse(extracted)
   } catch {
     return null
   }

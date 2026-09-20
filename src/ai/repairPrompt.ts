@@ -1,4 +1,5 @@
 import { repairResponseSchema, type GeneratedCard, type GeneratedDeck, type QualityFlag, type RepairResponse } from '@/generation/schemas'
+import { extractJsonObject } from './jsonText'
 import { renderEvidencePack, type DeckContext } from './prompts'
 
 /** At most one repair call per generation (design spec's "[4] Targeted repair"). */
@@ -100,11 +101,17 @@ ${evidenceSection}
 Return only the JSON object described in the system prompt, with one entry in "repairs" for each slide listed above.`
 }
 
-/** `JSON.parse` + `repairResponseSchema`; `null` on any failure. */
+/**
+ * `extractJsonObject` (tolerant of a markdown fence or prose wrapper) +
+ * `JSON.parse` + `repairResponseSchema`; `null` on any failure.
+ */
 export function parseRepairResponse(raw: string): RepairResponse | null {
+  const extracted = extractJsonObject(raw)
+  if (extracted === null) return null
+
   let json: unknown
   try {
-    json = JSON.parse(raw)
+    json = JSON.parse(extracted)
   } catch {
     return null
   }

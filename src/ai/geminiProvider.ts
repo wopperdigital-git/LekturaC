@@ -22,6 +22,7 @@ import {
 import { RESEARCH_SYSTEM_PROMPT, buildResearchUserPrompt, parseEvidencePack } from './researchPrompt'
 import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
 import { MAX_RETRIES, RETRYABLE_STATUS, backoffDelayMs, sleep } from './retry'
+import { extractJsonObject } from './jsonText'
 
 // "-latest" alias instead of a pinned version — new API keys lose access to
 // older pinned model generations over time (e.g. gemini-2.5-flash 404s for
@@ -117,9 +118,11 @@ async function callGemini(
 }
 
 function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } {
+  const extracted = extractJsonObject(raw)
+  if (extracted === null) return { error: 'Invalid JSON: no JSON object found in the response' }
   let json: unknown
   try {
-    json = JSON.parse(raw)
+    json = JSON.parse(extracted)
   } catch (err) {
     return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -129,9 +132,11 @@ function tryParseDeck(raw: string): { deck: GeneratedDeck } | { error: string } 
 }
 
 function tryParseNarration(raw: string): { data: NarrationResponse } | { error: string } {
+  const extracted = extractJsonObject(raw)
+  if (extracted === null) return { error: 'Invalid JSON: no JSON object found in the response' }
   let json: unknown
   try {
-    json = JSON.parse(raw)
+    json = JSON.parse(extracted)
   } catch (err) {
     return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
   }

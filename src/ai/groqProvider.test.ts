@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GroqProvider } from './groqProvider'
+import {
+  COMPOUND_DECK_MODEL,
+  COMPOUND_RESEARCH_MODEL,
+  DECK_MODEL,
+  GroqProvider,
+  RESEARCH_MODEL,
+} from './groqProvider'
 import type { DeckContext, GenerationBrief } from './provider'
 import type { GeneratedDeck } from '@/generation/schemas'
 
@@ -65,6 +71,18 @@ function rateLimited(): Response {
   } as unknown as Response
 }
 
+/** A minimal fetch Response stand-in for a successful chat completion. */
+function okResponse(content: string): Response {
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: { get: () => null },
+    json: async () => ({ choices: [{ message: { content } }] }),
+    text: async () => '',
+  } as unknown as Response
+}
+
 describe('GroqProvider retry budget', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -112,5 +130,100 @@ describe('GroqProvider retry budget', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     await assertion
     expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+})
+
+/*
+  groq-compound brief item 2/3: `GroqProvider` now takes its models as
+  constructor options, defaulting to today's single-model behaviour. A second
+  `GroqProvider` instance in `PROVIDER_CHAIN` (fallbackProvider.ts) overrides
+  both models and drops research's `tools` array, since `groq/compound-mini`
+  searches on its own and rejects a request that also carries one (measured
+  2026-09-20: "Request Entity Too Large").
+*/
+describe('GroqProvider model options', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('the default provider posts DECK_MODEL for a deck', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(JSON.stringify(MINIMAL_DECK)))
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GroqProvider('key')
+
+    await provider.generateDeck('EVs', BRIEF, undefined, CONTEXT)
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
+    expect(body.model).toBe(DECK_MODEL)
+  })
+
+  it('the default provider posts RESEARCH_MODEL with a tools array for research', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(rateLimited())
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GroqProvider('key')
+
+    await expect(provider.research('EVs', BRIEF, '2026-09-19')).rejects.toThrow()
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
+    expect(body.model).toBe(RESEARCH_MODEL)
+    expect(body.tools).toEqual([{ type: 'browser_search' }])
+  })
+
+  it('a compound-configured provider posts COMPOUND_DECK_MODEL for a deck', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(JSON.stringify(MINIMAL_DECK)))
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GroqProvider('key', {
+      deckModel: COMPOUND_DECK_MODEL,
+      researchModel: COMPOUND_RESEARCH_MODEL,
+      researchTools: false,
+    })
+
+    await provider.generateDeck('EVs', BRIEF, undefined, CONTEXT)
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
+    expect(body.model).toBe(COMPOUND_DECK_MODEL)
+  })
+
+  it('a compound-configured provider posts COMPOUND_RESEARCH_MODEL for research with no tools key at all', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(rateLimited())
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GroqProvider('key', {
+      deckModel: COMPOUND_DECK_MODEL,
+      researchModel: COMPOUND_RESEARCH_MODEL,
+      researchTools: false,
+    })
+
+    await expect(provider.research('EVs', BRIEF, '2026-09-19')).rejects.toThrow()
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string)
+    expect(body.model).toBe(COMPOUND_RESEARCH_MODEL)
+    expect(body).not.toHaveProperty('tools')
+  })
+})
+
+/*
+  groq-compound brief item 1: `groq/compound` measured 2026-09-20 replies with
+  a markdown preamble and fence around the deck JSON and ignores
+  `response_format` entirely. `tryParseDeck` now runs `extractJsonObject`
+  first, so a fenced reply parses on the first attempt rather than failing
+  schema validation and burning the one self-correcting retry on noise the
+  extraction already strips.
+*/
+describe('GroqProvider tolerant JSON parsing', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('parses a deck reply wrapped in a markdown preamble and ```json fence', async () => {
+    const fenced = `**Presentation Deck (JSON)**\n\`\`\`json\n${JSON.stringify(MINIMAL_DECK)}\n\`\`\``
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(fenced))
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = new GroqProvider('key', { deckModel: COMPOUND_DECK_MODEL })
+
+    const deck = await provider.generateDeck('EVs', BRIEF, undefined, CONTEXT)
+
+    expect(deck.title).toBe(MINIMAL_DECK.title)
+    // No self-correcting retry needed once the fence is stripped.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

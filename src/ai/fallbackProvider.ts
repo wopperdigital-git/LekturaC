@@ -10,7 +10,7 @@ import {
   type QualityFlag,
   type RepairResponse,
 } from './provider'
-import { GroqProvider } from './groqProvider'
+import { GroqProvider, COMPOUND_DECK_MODEL, COMPOUND_RESEARCH_MODEL } from './groqProvider'
 import { GeminiProvider } from './geminiProvider'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
@@ -23,19 +23,46 @@ const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
 const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
 
 /**
- * The app's provider chain, built once: Groq first, Gemini behind it.
+ * The app's provider chain, built once: Groq (`openai/gpt-oss-120b`) first,
+ * then a second Groq link on `groq/compound`/`groq/compound-mini`, then
+ * Gemini.
+ *
+ * The second Groq link exists because a 2026-09-20 catalog probe found the
+ * first link's models can each run out on their own: `openai/gpt-oss-20b`
+ * (research) hit its 20,000 tokens/day quota, and there is no other
+ * general-purpose model on this account's catalog that both fits the output
+ * budget and honours JSON mode (`qwen/qwen3.8-27b`'s 1000 tokens/minute
+ * output cap is under a single 5-slide deck's `deckMaxTokens`). `groq/compound`
+ * measured a schema-valid deck through the real prompts, so it's a second,
+ * independent shot on the same key before falling through to Gemini —
+ * `researchTools: false` because `compound-mini` searches on its own and
+ * rejects a request that also carries a `tools` array.
  *
  * A provider whose key is missing is left OUT rather than added and allowed to
  * fail, so dropping VITE_GROQ_API_KEY makes this a Gemini-only app with no code
- * change. `.trim()` matters: a key blanked rather than deleted is not a key, and
- * an empty-but-present one would otherwise stay in the chain and throw `auth`,
- * which by design does not fail over.
+ * change — and since both Groq links share the one `VITE_GROQ_API_KEY`, a
+ * missing key drops both of them, not just the first. `.trim()` matters: a key
+ * blanked rather than deleted is not a key, and an empty-but-present one would
+ * otherwise stay in the chain and throw `auth`, which by design does not fail
+ * over.
  *
  * Shared by the create flow and the narration page — two copies of this drifted
  * once already.
  */
 export const PROVIDER_CHAIN: NamedProvider[] = [
-  ...(GROQ_API_KEY ? [{ name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) }] : []),
+  ...(GROQ_API_KEY
+    ? [
+        { name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) },
+        {
+          name: 'Groq compound',
+          provider: new GroqProvider(GROQ_API_KEY, {
+            deckModel: COMPOUND_DECK_MODEL,
+            researchModel: COMPOUND_RESEARCH_MODEL,
+            researchTools: false,
+          }),
+        },
+      ]
+    : []),
   ...(GEMINI_API_KEY ? [{ name: 'Gemini', provider: new GeminiProvider(GEMINI_API_KEY) }] : []),
 ]
 
