@@ -127,13 +127,13 @@ describe('structureFlags', () => {
   })
 
   describe('BODY_TOO_DENSE', () => {
-    it('does not flag exactly 70 visible words', () => {
-      const d = deck([card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(70) }] })])
+    it('does not flag exactly 55 visible words', () => {
+      const d = deck([card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(55) }] })])
       expect(structureFlags(d).filter((f) => f.type === 'BODY_TOO_DENSE')).toEqual([])
     })
 
-    it('flags 71 visible words as medium', () => {
-      const d = deck([card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(71) }] })])
+    it('flags 56 visible words as medium', () => {
+      const d = deck([card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(56) }] })])
       const flags = structureFlags(d).filter((f) => f.type === 'BODY_TOO_DENSE')
       expect(flags).toHaveLength(1)
       expect(flags[0].severity).toBe('medium')

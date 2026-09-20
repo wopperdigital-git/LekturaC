@@ -89,12 +89,18 @@ export type SizeRole = 'title' | 'heading' | 'subheading' | 'body' | 'statSingle
  * Caps and minimums per role, in points. A theme's own rem scale decides the
  * ratio between roles; this ladder only keeps the result inside a band that
  * still fits a slide and stays legible — see the design doc's table.
+ *
+ * Density brief (2026-09-19, measured against a real Gamma PPTX export):
+ * `body`/`subheading` were cut and `title` was dropped to the same cap as
+ * `heading` — a title slide is now distinguished by `renderTitle`'s bold
+ * weight and centred group layout, not by a larger size, matching how Gamma's
+ * own title slide reuses its regular heading size.
  */
 export const SIZE_LADDER: Record<SizeRole, { cap: number; min: number }> = {
-  title: { cap: 44, min: 28 },
+  title: { cap: 30, min: 24 },
   heading: { cap: 30, min: 20 },
-  subheading: { cap: 22, min: 16 },
-  body: { cap: 18, min: 12 },
+  subheading: { cap: 18, min: 14 },
+  body: { cap: 14, min: 10 },
   statSingle: { cap: 54, min: 28 },
   statGrid: { cap: 40, min: 24 },
 }

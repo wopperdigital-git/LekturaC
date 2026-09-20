@@ -18,7 +18,7 @@ For every target slide, write a full replacement card in the same shape the deck
 
 Every other rule from deck generation still applies:
 - Headings are 3-10 words (14 at most), never more than one main idea per slide.
-- Visible text is 20-50 words (70 at most) excluding the heading; bullets run 3-5 items of 12 words or fewer.
+- Visible text is 20-40 words (55 at most) excluding the heading; bullets run 3-5 items of 8 words or fewer.
 - Speaker notes are 40-90 words and never repeat the visible text.
 - Every number, date, or quotation must come from the evidence pack when one is given, cited in "claims" by its source id. Do not add a new factual claim unless the evidence pack supports it.
 

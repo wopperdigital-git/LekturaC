@@ -173,22 +173,26 @@ describe('preferredSize', () => {
   })
 
   it('passes a body size through unchanged when inside its band', () => {
-    expect(preferredSize('body', 1, undefined)).toBe(18)
+    // pointSize(0.7, undefined) = round(0.7 * 18) = 13, inside the [10, 14] band.
+    expect(preferredSize('body', 0.7, undefined)).toBe(13)
   })
 
   it('raises a small scaled body size up to its ladder minimum', () => {
-    expect(preferredSize('body', 1, 0.5)).toBe(12)
+    expect(preferredSize('body', 1, 0.5)).toBe(10)
   })
 
   it('caps a title at its ladder cap', () => {
-    expect(preferredSize('title', 2.5, 1)).toBe(44)
+    expect(preferredSize('title', 2.5, 1)).toBe(30)
   })
 
   it('matches the documented ladder', () => {
-    expect(SIZE_LADDER.title).toEqual({ cap: 44, min: 28 })
+    // Ruling 3 (2026-09-19 density brief): the title slide's heading is now
+    // the same cap as `heading` — bold weight and `renderTitle`'s centred
+    // group layout are what still distinguish it, not size.
+    expect(SIZE_LADDER.title).toEqual({ cap: 30, min: 24 })
     expect(SIZE_LADDER.heading).toEqual({ cap: 30, min: 20 })
-    expect(SIZE_LADDER.subheading).toEqual({ cap: 22, min: 16 })
-    expect(SIZE_LADDER.body).toEqual({ cap: 18, min: 12 })
+    expect(SIZE_LADDER.subheading).toEqual({ cap: 18, min: 14 })
+    expect(SIZE_LADDER.body).toEqual({ cap: 14, min: 10 })
     expect(SIZE_LADDER.statSingle).toEqual({ cap: 54, min: 28 })
     expect(SIZE_LADDER.statGrid).toEqual({ cap: 40, min: 24 })
   })

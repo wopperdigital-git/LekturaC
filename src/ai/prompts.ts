@@ -121,8 +121,8 @@ HEADINGS
 
 ONE MAIN IDEA PER SLIDE
 - Exactly one idea per card. Everything on it supports plan.keyMessage; do not cram in a second, unrelated point.
-- Visible text — everything except the heading — is 20-50 words, 70 at most. Timelines and quotes are exempt from this ceiling.
-- Bullet lists run 3-5 items, each 12 words or fewer.
+- Visible text — everything except the heading — is 20-40 words, 55 at most. Timelines and quotes are exempt from this ceiling.
+- Bullet lists run 3-5 items, each 8 words or fewer.
 
 NO FILLER SLIDES
 - Do not add an agenda, "objectives", "what you will learn", introduction, or "thank you" slide by default. Only include one when presentationType is "educational" or "tutorial" and this is a formal lesson, or the user explicitly asked for it.
@@ -154,7 +154,7 @@ VISUAL CHOICE
   - Use 2-5 "timelineStep" blocks together for anything sequential (process, history, roadmap, funding stages).
   - Use a single "quote" block for the deck's own unattributed thesis or mission line, or for a verbatim quotation from the evidence pack attributed to a real person or organization (cite it in "claims" — see EVIDENCE above). Omit "attribution" for the deck's own thesis/mission line; set it whenever the line is someone else's words.
   - Use "bulletList" for scannable lists: 3-5 items by default, never more than 6 on one card. Short items (each under ~6 words) read as a compact grid; longer or more detailed items read as a clean numbered list. This cap is never a reason to drop or blur a real item — a genuinely longer sequence is chronological (use "timelineStep" instead) or belongs split across two cards, which likely changes the slide's purpose too.
-  - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven — a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" under ~40 words, and only when no more specific block type fits.
+  - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven — a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" of 35 words or fewer, and only when no more specific block type fits.
 
 CONTENT QUALITY
 - Be concrete and specific, never generic. Ground claims in named entities, real-world comparables, timeframes, or examples — not vague qualities.

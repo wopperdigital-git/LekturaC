@@ -108,12 +108,12 @@ function bodyTooDenseFlags(deck: GeneratedDeck): QualityFlag[] {
     // timelineStep or quote is exempt whatever `plan.purpose` says.
     if (card.blocks.some((block) => block.type === 'timelineStep' || block.type === 'quote')) return
     const words = visibleLines(card).reduce((sum, line) => sum + wordCount(line), 0)
-    if (words > 70) {
+    if (words > 55) {
       flags.push({
         type: 'BODY_TOO_DENSE',
         severity: 'medium',
         slideIndex: index,
-        message: `${slideLabel(index)} carries ${words} visible words, past the 70-word limit.`,
+        message: `${slideLabel(index)} carries ${words} visible words, past the 55-word limit.`,
         suggestedAction: 'Move explanation into speaker notes and trim the visible text.',
       })
     }
