@@ -16,7 +16,7 @@ import { useSlideTheme } from './slideThemeContext'
  *
  * Font family and size ride as inline custom properties, which cascade and so
  * override whatever `applyTheme` wrote on the ThemeProvider scope above.
- * Bold/italic/alignment ride as data attributes, because they must out-specify
+ * Bold/italic/underline/colour/alignment ride as data attributes, because they must out-specify
  * the layout components' own Tailwind utilities — see the rules in index.css.
  *
  * `display: contents` keeps the wrapper out of layout flow entirely, so adding
@@ -42,6 +42,8 @@ export function TextStyleScope({ style, children }: { style: TextStyle; children
     })
   }
 
+  if (style.color) Object.assign(vars, { '--slide-user-color': style.color })
+
   return (
     <div
       className="contents"
@@ -50,6 +52,8 @@ export function TextStyleScope({ style, children }: { style: TextStyle; children
       // still match a bare `[data-deck-bold]` selector.
       data-deck-bold={style.bold ? 'true' : undefined}
       data-deck-italic={style.italic ? 'true' : undefined}
+      data-deck-underline={style.underline ? 'true' : undefined}
+      data-deck-color={style.color ? 'true' : undefined}
       data-deck-align={style.align}
     >
       {children}

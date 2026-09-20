@@ -32,10 +32,15 @@ const GROUP_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, PptxGroup> = {
   timeline: 'body',
   iconGrid: 'body',
   numberedList: 'body',
+  checklist: 'body',
+  splitList: 'body',
+  timelineRow: 'body',
   gallery: 'body',
   statHero: 'stat',
   statGrid: 'stat',
+  statList: 'stat',
   comparison: 'twoCol',
+  comparisonTable: 'twoCol',
   quote: 'quote',
 }
 

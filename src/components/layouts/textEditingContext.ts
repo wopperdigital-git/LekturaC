@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Mark, MarkType, TextRange } from '@/engine/marks'
+import type { Mark, FlagMarkType, TextRange } from '@/engine/marks'
 import type { TextStyle } from '@/engine/textStyle'
 
 /**
@@ -32,7 +32,7 @@ export interface TextEditing {
    * range from *before* it. The run has the live selection in hand at that
    * moment, so it passes it.
    */
-  onToggleMark: (ref: string, range: TextRange, type: MarkType) => void
+  onToggleMark: (ref: string, range: TextRange, type: FlagMarkType) => void
 }
 
 export const TextEditingContext = createContext<TextEditing | null>(null)

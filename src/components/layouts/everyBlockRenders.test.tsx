@@ -134,6 +134,11 @@ const LAYOUTS: LayoutType[] = [
   'timeline',
   'iconGrid',
   'numberedList',
+  'checklist',
+  'splitList',
+  'statList',
+  'timelineRow',
+  'comparisonTable',
   'quote',
   'textFocus',
   'gallery',
@@ -172,6 +177,15 @@ describe('every block on a card reaches the screen', () => {
       })
     }
   }
+})
+
+describe('a blank card', () => {
+  // Removing a card's last element leaves it with no blocks. Cards size to their
+  // content, so it needs a floor of height or it collapses to its padding.
+  it.each(LAYOUTS)('draws as a slide-sized blank under %s, not a thin strip', (layout) => {
+    const html = renderToStaticMarkup(<LayoutRenderer card={card([], layout, 'structured')} />)
+    expect(html).toContain('min-h-64')
+  })
 })
 
 /** Asserts the markers appear in the markup in exactly this order. */

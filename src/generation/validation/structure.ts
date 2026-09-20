@@ -52,8 +52,16 @@ const LAYOUT_FAMILY: Record<ReturnType<typeof resolveLayout>, string> = {
   comparison: 'comparison',
   timeline: 'timeline',
   quote: 'quote',
-  iconGrid: 'grid',
+  // A chip grid and a numbered list are the same composition to a viewer — a
+  // heading over a few short items — so they share a family. Keeping them apart
+  // let `grid, list, grid, list` read as varied to this rule.
+  iconGrid: 'list',
   numberedList: 'list',
+  checklist: 'list',
+  splitList: 'list',
+  statList: 'data',
+  timelineRow: 'timeline',
+  comparisonTable: 'comparison',
   textFocus: 'text',
   standard: 'text',
   standardSplit: 'text',
@@ -158,6 +166,64 @@ function layoutRepetitionFlags(deck: GeneratedDeck): QualityFlag[] {
   return flags
 }
 
+/** A deck this long or longer is expected to vary its structure; shorter ones legitimately may not. */
+const LIST_DOMINANCE_MIN_CARDS = 5
+
+/** No more than this share of a deck should be drawn as a list or a grid of short items. */
+const MAX_LIST_SHARE = 0.4
+
+/** `true` when the card is drawn as a list of items — what a viewer sees, not what the model planned. */
+function isListLed(card: GeneratedDeck['cards'][number], index: number): boolean {
+  const layout = resolveLayout('auto', card.blocks, { isFirstCard: index === 0 })
+  return layout === 'iconGrid' || layout === 'numberedList'
+}
+
+/**
+ * `bulletList` is the easiest valid answer to almost any slide, and the
+ * classifier draws every one of them as a list, so a deck of individually
+ * reasonable bullet slides collapses into "heading + little cards" repeated.
+ * No single slide is wrong; the accumulation is. Two things are flagged, each
+ * per slide so a repair can act on it: a list slide directly after another
+ * (the second of the pair), and — when lists exceed `MAX_LIST_SHARE` of the
+ * deck — the latest surplus ones.
+ */
+function listDominantFlags(deck: GeneratedDeck): QualityFlag[] {
+  if (deck.cards.length < LIST_DOMINANCE_MIN_CARDS) return []
+  const listLed = deck.cards.map(isListLed)
+  const listCount = listLed.filter(Boolean).length
+  const allowed = Math.floor(deck.cards.length * MAX_LIST_SHARE)
+  const surplus = listCount - allowed
+
+  const reasons = new Map<number, string>()
+  listLed.forEach((isList, index) => {
+    if (isList && index > 0 && listLed[index - 1]) {
+      reasons.set(index, `${slideLabel(index)} is a list slide straight after ${slideLabel(index - 1)}, another list slide.`)
+    }
+  })
+  if (surplus > 0) {
+    const listIndices = listLed.flatMap((isList, index) => (isList ? [index] : []))
+    listIndices.slice(-surplus).forEach((index) => {
+      if (!reasons.has(index)) {
+        reasons.set(
+          index,
+          `${listCount} of ${deck.cards.length} slides are lists, past the ${allowed} a deck this long should have; ${slideLabel(index)} is one of the surplus.`,
+        )
+      }
+    })
+  }
+
+  return [...reasons.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([index, message]) => ({
+      type: 'LIST_DOMINANT' as const,
+      severity: 'medium' as const,
+      slideIndex: index,
+      message,
+      suggestedAction:
+        'Re-express the same key message in a different structure: a timelineStep run if it is a sequence, two or more comparisonGroup blocks if it weighs alternatives, stat blocks if it is really about numbers the evidence supports, or a single short paragraph if it is one idea. Keep it a bulletList only if the items are truly parallel and unordered.',
+    }))
+}
+
 function textOnlyDeckFlags(deck: GeneratedDeck): QualityFlag[] {
   if (deck.cards.length < 4) return []
   const hasRichBlock = deck.cards.some((card) => card.blocks.some((block) => RICH_BLOCK_TYPES.has(block.type)))
@@ -219,18 +285,25 @@ function visualMismatchFlags(deck: GeneratedDeck): QualityFlag[] {
     const comparisonGroupCount = card.blocks.filter((block) => block.type === 'comparisonGroup').length
     const hasStat = card.blocks.some((block) => block.type === 'stat')
 
+    // Chart types are deliberately absent: the only block that can back one is
+    // `stat`, and demanding stats of a deck with no evidence would push the
+    // writer toward inventing numbers. The prompt steers it to drawable
+    // visual types instead.
     const mismatch =
-      (visualType === 'timeline' && !hasTimelineStep) ||
+      ((visualType === 'timeline' || visualType === 'process_flow') && !hasTimelineStep) ||
       ((visualType === 'two_column_comparison' || visualType === 'comparison_table') && comparisonGroupCount < 2) ||
       (visualType === 'metric_cards' && !hasStat)
 
     if (mismatch) {
+      // Medium, so it is repairable: the plan said one structure and the blocks
+      // delivered a list, which is exactly how a varied plan yields a uniform deck.
       flags.push({
         type: 'VISUAL_MISMATCH',
-        severity: 'low',
+        severity: 'medium',
         slideIndex: index,
         message: `${slideLabel(index)} claims visual type "${visualType}" but its blocks don't support it.`,
-        suggestedAction: "Add the matching block type, or change the plan's visual type.",
+        suggestedAction:
+          "Rebuild the blocks so they deliver the plan's visual type (a timelineStep run for timeline/process_flow, 2+ comparisonGroup blocks for a comparison, stat blocks for metric_cards). Change the visual type instead only if the content genuinely isn't that shape.",
       })
     }
   })
@@ -353,6 +426,7 @@ export function structureFlags(deck: GeneratedDeck): QualityFlag[] {
     ...bodyTooDenseFlags(deck),
     ...tooManyBulletsFlags(deck),
     ...layoutRepetitionFlags(deck),
+    ...listDominantFlags(deck),
     ...textOnlyDeckFlags(deck),
     ...weakConclusionFlags(deck),
     ...fillerSlideFlags(deck),

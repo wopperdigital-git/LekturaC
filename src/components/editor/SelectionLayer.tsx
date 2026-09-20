@@ -20,7 +20,13 @@ import { SelectionOverlay, type GestureKind } from './SelectionOverlay'
 export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement | null> }) {
   const adjusting = useContext(BlockAdjustContext)
   const data = useContext(BlockDataContext)
-  const selected = adjusting?.selected ?? null
+  /*
+    No box while an item is picked out. The box belongs to the whole element and
+    its handles would move or resize the list; with one item lit up that reads as
+    the item being what you are holding. The list is still selected underneath,
+    and Escape steps back out to it.
+  */
+  const selected = adjusting?.selectedItem != null ? null : (adjusting?.selected ?? null)
   const adjust = selected === null ? undefined : data?.adjusts?.[String(selected)]
 
   const [measured, setMeasured] = useState<Measured | null>(null)

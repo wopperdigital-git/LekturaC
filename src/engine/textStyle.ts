@@ -42,11 +42,40 @@ export const MIN_FONT_SCALE = 0.7
 export const MAX_FONT_SCALE = 1.6
 export const FONT_SCALE_STEP = 0.1
 
+/** Six-digit hex, with the `#`. The only shape stored, so every consumer can trust it. */
+export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+/**
+ * Colours offered as swatches by the toolbar. Fixed hexes rather than theme
+ * tokens: a colour somebody picked should stay that colour when the theme
+ * changes, where "theme text" (no override) is the option that follows it.
+ */
+export const COLOR_CHOICES = [
+  { label: 'Black', value: '#111827' },
+  { label: 'Slate', value: '#64748b' },
+  { label: 'White', value: '#ffffff' },
+  { label: 'Red', value: '#ef4444' },
+  { label: 'Orange', value: '#f97316' },
+  { label: 'Yellow', value: '#eab308' },
+  { label: 'Green', value: '#22c55e' },
+  { label: 'Teal', value: '#14b8a6' },
+  { label: 'Blue', value: '#3b82f6' },
+  { label: 'Violet', value: '#8b5cf6' },
+  { label: 'Pink', value: '#ec4899' },
+  { label: 'Gold', value: '#d4a017' },
+] as const
+
 export const textStyleSchema = z.object({
   fontFamily: z.string().min(1).optional(),
   fontScale: z.number().min(MIN_FONT_SCALE).max(MAX_FONT_SCALE).optional(),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  /** A `#rrggbb` colour for the text. Absent means "whatever the theme says". */
+  color: z
+    .string()
+    .regex(HEX_COLOR)
+    .optional(),
   align: z.enum(TEXT_ALIGNMENTS).optional(),
 })
 

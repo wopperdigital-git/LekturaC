@@ -54,6 +54,10 @@ export const slidePlanSchema = z.object({
   audienceQuestion: z.string(),
   keyMessage: z.string().min(1),
   visualType: z.enum(VISUAL_TYPES).catch('text'),
+  // No longer asked for: nothing read it (the classifier lays out from the
+  // blocks), so it cost output tokens on every slide for no effect. Kept so
+  // stored decks and older replies still parse; `.catch` also covers it being
+  // omitted.
   layoutFamily: z.enum(LAYOUT_FAMILIES).catch('list'),
   transition: z.string().default(''),
   importance: z.enum(['essential', 'supporting', 'optional']).catch('supporting'),
@@ -144,6 +148,7 @@ export const QUALITY_FLAG_TYPES = [
   'MISSING_SOURCE', 'OUTDATED_EVIDENCE', 'AMBIGUOUS_METRIC', 'CONFLICTING_CLAIM',
   'LAYOUT_REPETITION', 'TEXT_ONLY_DECK', 'WEAK_CONCLUSION', 'FILLER_SLIDE',
   'VISUAL_MISMATCH', 'DUPLICATE_CONTENT', 'OVERCLAIM', 'NARRATION_DUPLICATES_SLIDE',
+  'LIST_DOMINANT',
 ] as const
 export type QualityFlagType = (typeof QUALITY_FLAG_TYPES)[number]
 

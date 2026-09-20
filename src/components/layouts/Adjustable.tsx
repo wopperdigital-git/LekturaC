@@ -140,6 +140,22 @@ function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: 
   // layout's own classes say, not override them with a neutral value.
   node.style.fontWeight = style?.bold ? '700' : ''
   node.style.fontStyle = style?.italic ? 'italic' : ''
+  node.style.textDecoration = style?.underline ? 'underline' : ''
+
+  /*
+    Colour needs both halves. The inline `color` covers the element's own text;
+    the attribute switches on the `[data-deck-color]` rule in `index.css`, which
+    reaches the descendants — a layout colours a stat's label or a list item with
+    its own utility class, and an inherited colour loses to that.
+  */
+  node.style.color = style?.color ?? ''
+  if (style?.color) {
+    node.setAttribute('data-deck-color', 'true')
+    node.style.setProperty('--slide-user-color', style.color)
+  } else {
+    node.removeAttribute('data-deck-color')
+    node.style.removeProperty('--slide-user-color')
+  }
 
   if (style?.fontFamily) {
     node.style.setProperty(SLIDE_FONT_VARS.heading, style.fontFamily)

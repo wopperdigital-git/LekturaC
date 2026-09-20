@@ -1,5 +1,7 @@
 import { useContext, useLayoutEffect, useRef, type CSSProperties } from 'react'
-import { textSegments, type Mark, type MarkType } from '@/engine/marks'
+import { textSegments, type FlagMarkType, type Mark, type TextSegment } from '@/engine/marks'
+import { NEW_ITEM_TEXT } from '@/engine/listItems'
+import { parseTextRef } from '@/engine/blockText'
 import { useTextEditing } from './textEditingContext'
 import { BlockDataContext, blockIndexOf, useBlockAdjusting } from './adjustContext'
 
@@ -60,7 +62,29 @@ export function EditableText({
     nothing else to say which run is live.
   */
   const index = blockIndexOf(textRef)
-  const boxed = index !== null && adjusting?.selected === index
+  const boxed = index !== null && adjusting?.selected === index && adjusting.selectedItem === null
+
+  /*
+    Whether *this run's* element is the picked-out one, decided at the moment of
+    the press and not after it.
+
+    A press selects and a click edits, and the click fires after the selection
+    has already changed — so by then every run looks selected and the two cannot
+    be told apart. The press handler below runs before the `Adjustable` or item
+    container above it (events bubble outward), so it still sees the selection as
+    it stood before the press. That is what makes "click to select, click again
+    to type" possible: the first press finds nothing selected and only selects;
+    the second finds it selected and goes on to edit.
+  */
+  const parsed = parseTextRef(textRef)
+  const runSelected =
+    parsed !== null &&
+    adjusting?.selected === parsed.blockIndex &&
+    adjusting.selectedItem === (parsed.itemIndex ?? null)
+  // An item that is picked out is outlined by its own container; the ring around
+  // its text as well would be a second box saying the same thing.
+  const itemLit = runSelected && parsed?.itemIndex !== undefined
+  const selectedAtPress = useRef(false)
 
   /*
     While a run is active, React must stop rendering into it.
@@ -86,7 +110,10 @@ export function EditableText({
     paintRun(node, value, marks)
     painted.current = { value, marks: marksKey }
     node.focus()
-    placeCaretAtEnd(node)
+    // A just-added list item is still its placeholder: select it so the first
+    // keystroke replaces it instead of appending to "New item".
+    if (value === NEW_ITEM_TEXT) selectWholeRun(node)
+    else placeCaretAtEnd(node)
     // `value` and `marks` are deliberately not dependencies: repainting on every
     // keystroke is exactly what this effect exists to avoid. The one case that
     // does need a repaint is handled below.
@@ -157,10 +184,20 @@ export function EditableText({
         role="textbox"
         aria-label="Edit text"
         className={`outline-none ${
-          boxed ? '' : 'ring-2 ring-app-accent/70 ring-offset-2 ring-offset-transparent'
+          boxed || itemLit ? '' : 'ring-2 ring-app-accent/70 ring-offset-2 ring-offset-transparent'
         } ${className ?? ''}`}
-        style={style}
+        style={{ whiteSpace: 'pre-wrap', ...style }}
         onInput={(e) => editing?.onChangeText(textRef, e.currentTarget.textContent ?? '')}
+        onPaste={(e) => {
+          // Plain text only. A rich paste would drop elements into a node whose
+          // contents are read back as `textContent`, losing every line break it
+          // carried and letting foreign markup into the slide.
+          const text = e.clipboardData.getData('text/plain').replace(/\r\n?/g, '\n')
+          e.preventDefault()
+          if (!text || !ref.current) return
+          insertTextAtCaret(ref.current, text)
+          editing?.onChangeText(textRef, ref.current.textContent ?? '')
+        }}
         onKeyUp={reportSelection}
         // Clicking inside the run must not bubble to the card, whose handler
         // clears the active run and would kick the user out of editing on the
@@ -171,16 +208,39 @@ export function EditableText({
           e.stopPropagation()
           reportSelection()
         }}
-        onBlur={reportSelection}
+        /*
+          No `onBlur` report. Blur used to clear the reported range, which was
+          harmless while the only thing that needed the selection was a button
+          that refused focus. The colour input has to take focus to open its
+          picker, and clearing the range at that moment sent a colour meant for
+          three selected letters to the whole element instead. The last reported
+          range stays until something else selects: leaving the run ends the edit
+          and resets it anyway.
+        */
         onKeyDown={(e) => {
-          // A slide run is a single line of text; Enter would insert a <div> the
-          // plain-text model has no way to represent.
+          /*
+            Enter is a line break inside the run, stored as a newline character
+            in its text.
+
+            Left to the browser it would insert a <div> or <br>, neither of which
+            survives being read back through `textContent` — the break would
+            vanish on the next render. So the key is taken and a real newline
+            character is written instead, which the plain-text model, the marks,
+            the export and the narration all already understand. Shift+Enter is
+            the same thing; IME composition is left alone, since its Enter
+            confirms a candidate rather than typing a break.
+          */
           if (e.key === 'Enter') {
+            if (e.nativeEvent.isComposing) return
             e.preventDefault()
+            if (!ref.current) return
+            insertTextAtCaret(ref.current, '\n')
+            editing?.onChangeText(textRef, ref.current.textContent ?? '')
+            reportSelection()
             return
           }
           /*
-            ⌘B / ⌘I, routed to our own marks.
+            ⌘B / ⌘I / ⌘U, routed to our own marks.
 
             Left alone, the browser runs its native bold and injects a `<b>` the
             store never hears about — `onInput` only reads `textContent`, so the
@@ -204,17 +264,34 @@ export function EditableText({
     <span
       key="reading"
       className={`${selectable ? 'cursor-text rounded-sm hover:bg-app-accent/10' : ''} ${className ?? ''}`}
-      style={style}
+      // `pre-wrap` so a line break typed in the editor shows on every surface —
+      // the presenter and the thumbnails included — rather than collapsing to a
+      // space the moment the run is no longer live.
+      style={{ whiteSpace: 'pre-wrap', ...style }}
+      onPointerDown={
+        editing
+          ? () => {
+              selectedAtPress.current = runSelected
+            }
+          : undefined
+      }
       onClick={
         editing
           ? (e) => {
               // The card underneath also listens; without this the click would
               // select the card and immediately drop back to Level 2.
               e.stopPropagation()
-              editing.onSelectText(textRef)
+              // A click on something that was already picked out goes on to
+              // edit it. The click that *picked* it only selected, which is what
+              // leaves Backspace free to remove the element rather than a
+              // character of it.
+              if (selectedAtPress.current) editing.onSelectText(textRef)
             }
           : undefined
       }
+      // The direct route in, for someone who knows it: edits whether or not the
+      // run was selected first.
+      onDoubleClick={editing ? () => editing.onSelectText(textRef) : undefined}
     >
       {segments.map((segment, i) => (
         <span
@@ -222,6 +299,8 @@ export function EditableText({
           style={{
             fontWeight: segment.bold ? 700 : undefined,
             fontStyle: segment.italic ? 'italic' : undefined,
+            textDecoration: segment.underline ? 'underline' : undefined,
+            ...valueStyle(segment),
           }}
         >
           {segment.text}
@@ -240,7 +319,23 @@ export function EditableText({
   they do is kept small enough to read instead.
 */
 
-const MARK_KEYS: Record<string, MarkType | undefined> = { b: 'bold', i: 'italic' }
+const MARK_KEYS: Record<string, FlagMarkType | undefined> = { b: 'bold', i: 'italic', u: 'underline' }
+
+/**
+ * The inline style a segment's value marks ask for.
+ *
+ * Inline, and that is what makes them win: an element's own colour and font are
+ * applied by rules and custom properties higher up, and an inline declaration on
+ * the span beats every one of them. Size is in `em`, a multiple of the text
+ * around the span, which is exactly what a value mark of that kind means.
+ */
+function valueStyle(segment: TextSegment): CSSProperties {
+  const style: CSSProperties = {}
+  if (segment.color) style.color = segment.color
+  if (segment.fontFamily) style.fontFamily = segment.fontFamily
+  if (segment.fontScale && segment.fontScale !== 1) style.fontSize = `${segment.fontScale}em`
+  return style
+}
 
 /**
  * Rewrites the run's contents as one span per formatted stretch.
@@ -253,16 +348,63 @@ const MARK_KEYS: Record<string, MarkType | undefined> = { b: 'bold', i: 'italic'
 function paintRun(node: HTMLElement, value: string, marks: Mark[] | undefined) {
   node.textContent = ''
   for (const segment of textSegments(value, marks)) {
-    if (!segment.bold && !segment.italic) {
+    const values = valueStyle(segment)
+    if (!segment.bold && !segment.italic && !segment.underline && Object.keys(values).length === 0) {
       node.appendChild(document.createTextNode(segment.text))
       continue
     }
     const span = document.createElement('span')
     if (segment.bold) span.style.fontWeight = '700'
     if (segment.italic) span.style.fontStyle = 'italic'
+    if (segment.underline) span.style.textDecoration = 'underline'
+    Object.assign(span.style, values)
     span.textContent = segment.text
     node.appendChild(span)
   }
+  keepTrailingBreakVisible(node)
+}
+
+/**
+ * Makes a run that ends in a newline show its last, empty line.
+ *
+ * A trailing newline alone renders nothing after it, so the caret would have
+ * nowhere to sit and Enter at the end of a run would look like it did nothing. A
+ * `<br>` after it supplies the line box. It has no text, so `textContent` — all
+ * the model ever reads back — is unaffected.
+ */
+function keepTrailingBreakVisible(node: HTMLElement) {
+  node.querySelector('br[data-run-end]')?.remove()
+  if (!(node.textContent ?? '').endsWith('\n')) return
+  const br = document.createElement('br')
+  br.setAttribute('data-run-end', '')
+  node.appendChild(br)
+}
+
+/** Replaces the selection with `text`, as a text node, and leaves the caret after it. */
+function insertTextAtCaret(node: HTMLElement, text: string) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+  const range = selection.getRangeAt(0)
+  if (!node.contains(range.commonAncestorContainer)) return
+
+  range.deleteContents()
+  const inserted = document.createTextNode(text)
+  range.insertNode(inserted)
+  range.setStartAfter(inserted)
+  range.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(range)
+  keepTrailingBreakVisible(node)
+}
+
+/** The whole run selected, so typing replaces it. */
+function selectWholeRun(node: HTMLElement) {
+  const selection = window.getSelection()
+  if (!selection) return
+  const range = document.createRange()
+  range.selectNodeContents(node)
+  selection.removeAllRanges()
+  selection.addRange(range)
 }
 
 /** The caret at the end of the run, wherever focus happened to land it. */

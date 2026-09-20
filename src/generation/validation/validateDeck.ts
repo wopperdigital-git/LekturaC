@@ -24,9 +24,15 @@ export function validateDeck(deck: GeneratedDeck, ctx: ValidationContext): { fla
 /**
  * Flag types a repair call can plausibly fix by rewriting a slide's plan or
  * copy. Deliberately excludes deck-level or purely cosmetic types
- * (`LAYOUT_REPETITION`, `TEXT_ONLY_DECK`, `DUPLICATE_CONTENT`,
- * `VISUAL_MISMATCH`, `OVERCLAIM`, `TOO_MANY_BULLETS`, `AMBIGUOUS_METRIC`) —
- * see the design spec's "[4] Targeted repair".
+ * (`LAYOUT_REPETITION`, `TEXT_ONLY_DECK`, `DUPLICATE_CONTENT`, `OVERCLAIM`,
+ * `TOO_MANY_BULLETS`, `AMBIGUOUS_METRIC`) — see the design spec's "[4]
+ * Targeted repair".
+ *
+ * `VISUAL_MISMATCH` and `LIST_DOMINANT` are in on purpose, and are the
+ * exception to "cosmetic": a deck whose slides all become a heading over a list
+ * of cards is the failure users see first. Both are per-slide and both are
+ * fixed by re-choosing the blocks, which a replacement card can do. They still
+ * go through the same once-per-generation, `MAX_REPAIR_SLIDES`-capped repair.
  */
 export const REPAIRABLE: ReadonlySet<QualityFlagType> = new Set<QualityFlagType>([
   'TITLE_TOO_LONG',
@@ -38,6 +44,8 @@ export const REPAIRABLE: ReadonlySet<QualityFlagType> = new Set<QualityFlagType>
   'NARRATION_DUPLICATES_SLIDE',
   'OUTDATED_EVIDENCE',
   'CONFLICTING_CLAIM',
+  'VISUAL_MISMATCH',
+  'LIST_DOMINANT',
 ])
 
 /** At most one repair call per generation targets at most this many slides. */

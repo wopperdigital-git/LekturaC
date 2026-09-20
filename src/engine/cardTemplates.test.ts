@@ -80,6 +80,17 @@ describe('convertBlocks', () => {
     expect(cardKind(converted, contextFor(kind))).toBe(kind)
   })
 
+  /*
+    Removing a card's last element leaves it blank, and "change slide type" is
+    how a blank card gets content again — so converting nothing has to produce a
+    real card of the chosen type, not an empty one.
+  */
+  it.each(CREATABLE_KINDS)('turns a blank card into a real %s card', (kind) => {
+    const converted = convertBlocks([], kind)
+    expect(converted.length).toBeGreaterThan(0)
+    expect(cardKind(converted, contextFor(kind))).toBe(kind)
+  })
+
   it.each(CREATABLE_KINDS)('keeps the heading when converting to %s', (kind) => {
     const converted = convertBlocks([HEADING, { type: 'paragraph', text: 'Body' }], kind)
     expect(converted[0]).toEqual({ type: 'heading', text: 'The heading' })

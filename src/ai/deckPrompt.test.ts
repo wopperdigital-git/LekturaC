@@ -85,6 +85,34 @@ describe('DECK_SYSTEM_PROMPT (v2)', () => {
   it('drops the old full-sentence-assertion heading rule entirely', () => {
     expect(DECK_SYSTEM_PROMPT).not.toContain('FULL-SENTENCE')
   })
+
+  /*
+    Decks came out as nearly all list/card slides: the prompt called visualType
+    "a planning signal, not a rendering instruction", so plans varied while the
+    blocks (which are what actually get drawn) stayed `heading + bulletList`.
+  */
+  it('binds plan.visualType to the blocks instead of calling it a planning-only signal', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toMatch(/planning signal, not a rendering instruction/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/must be the structure the blocks actually deliver/)
+  })
+
+  it('frames bulletList as a fallback and asks for the structure before the wording', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/information structure before you choose its wording/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/not the default/)
+  })
+
+  it('states the deck-level list cap and the no-adjacent-lists rule the validator enforces', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/no more than about 40%/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/never put two "bulletList" slides next to each other/)
+  })
+
+  it('tells the writer charts and diagrams cannot be drawn, so it does not plan them', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/cannot draw charts/)
+  })
+
+  it('no longer asks for layoutFamily, which nothing read', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toContain('layoutFamily')
+  })
 })
 
 describe('buildDeckUserPrompt', () => {

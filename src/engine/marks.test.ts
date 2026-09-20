@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_RUN_SCALE,
+  MIN_RUN_SCALE,
   applyMark,
+  applyValueMark,
+  clampRunScale,
+  markSchema,
+  markValueAt,
   hasMarkThroughout,
   normalizeMarks,
   shiftMarks,
@@ -107,21 +113,21 @@ describe('shiftMarks', () => {
 
 describe('textSegments', () => {
   it('returns one plain segment when there are no marks', () => {
-    expect(textSegments('hello', [])).toEqual([{ text: 'hello', bold: false, italic: false }])
+    expect(textSegments('hello', [])).toEqual([{ text: 'hello', bold: false, italic: false, underline: false }])
   })
 
   it('splits at mark boundaries', () => {
     expect(textSegments('abcdef', [bold(2, 4)])).toEqual([
-      { text: 'ab', bold: false, italic: false },
-      { text: 'cd', bold: true, italic: false },
-      { text: 'ef', bold: false, italic: false },
+      { text: 'ab', bold: false, italic: false, underline: false },
+      { text: 'cd', bold: true, italic: false, underline: false },
+      { text: 'ef', bold: false, italic: false, underline: false },
     ])
   })
 
   it('represents overlapping types in one segment', () => {
     expect(textSegments('abcd', [bold(0, 4), italic(2, 4)])).toEqual([
-      { text: 'ab', bold: true, italic: false },
-      { text: 'cd', bold: true, italic: true },
+      { text: 'ab', bold: true, italic: false, underline: false },
+      { text: 'cd', bold: true, italic: true, underline: false },
     ])
   })
 
@@ -134,5 +140,133 @@ describe('textSegments', () => {
   it('survives marks left pointing past the end of shortened text', () => {
     // Guards the drift case: a stale mark must not throw or emit phantom text.
     expect(textSegments('abc', [bold(1, 99)]).map((s) => s.text).join('')).toBe('abc')
+  })
+})
+
+describe('underline', () => {
+  it('is a mark like bold and italic: it toggles over a range and can be cleared', () => {
+    const on = applyMark([], { start: 0, end: 4 }, 'underline', true)
+    expect(on).toEqual([{ type: 'underline', start: 0, end: 4 }])
+    expect(hasMarkThroughout(on, { start: 0, end: 4 }, 'underline')).toBe(true)
+    expect(applyMark(on, { start: 0, end: 4 }, 'underline', false)).toEqual([])
+  })
+
+  it('is independent of the other marks over the same characters', () => {
+    const marks = applyMark(applyMark([], { start: 0, end: 4 }, 'bold', true), { start: 2, end: 6 }, 'underline', true)
+    expect(hasMarkThroughout(marks, { start: 0, end: 4 }, 'underline')).toBe(false)
+    expect(hasMarkThroughout(marks, { start: 2, end: 6 }, 'underline')).toBe(true)
+    expect(hasMarkThroughout(marks, { start: 0, end: 4 }, 'bold')).toBe(true)
+  })
+
+  it('shows up in the segments a renderer draws, alongside the others', () => {
+    const marks = [
+      { type: 'bold' as const, start: 0, end: 4 },
+      { type: 'underline' as const, start: 2, end: 6 },
+    ]
+    expect(textSegments('abcdef', marks)).toEqual([
+      { text: 'ab', bold: true, italic: false, underline: false },
+      { text: 'cd', bold: true, italic: false, underline: true },
+      { text: 'ef', bold: false, italic: false, underline: true },
+    ])
+  })
+
+  it('moves with the text like any other mark', () => {
+    const shifted = shiftMarks([{ type: 'underline', start: 4, end: 8 }], 0, 0, 3)
+    expect(shifted).toEqual([{ type: 'underline', start: 7, end: 11 }])
+  })
+})
+
+describe('value marks', () => {
+  const red = (start: number, end: number): Mark => ({ type: 'color', start, end, value: '#ef4444' })
+  const blue = (start: number, end: number): Mark => ({ type: 'color', start, end, value: '#3b82f6' })
+
+  describe('applyValueMark', () => {
+    it('sets a value over a range', () => {
+      expect(applyValueMark([], { start: 2, end: 5 }, 'color', '#ef4444')).toEqual([red(2, 5)])
+    })
+
+    it('replaces whatever value the range held rather than merging into it', () => {
+      const marks = applyValueMark([blue(0, 8)], { start: 2, end: 5 }, 'color', '#ef4444')
+      // The middle turns red; either side keeps its blue, clipped to the new edges.
+      expect(marks).toEqual([blue(0, 2), red(2, 5), blue(5, 8)])
+    })
+
+    it('clears the value over a range with null, keeping what lies outside it', () => {
+      expect(applyValueMark([red(0, 8)], { start: 2, end: 5 }, 'color', null)).toEqual([red(0, 2), red(5, 8)])
+      expect(applyValueMark([red(2, 5)], { start: 0, end: 9 }, 'color', null)).toEqual([])
+    })
+
+    it('leaves the other types alone', () => {
+      const marks = applyValueMark([bold(0, 4)], { start: 0, end: 4 }, 'color', '#ef4444')
+      expect(marks).toContainEqual(bold(0, 4))
+      expect(marks).toContainEqual(red(0, 4))
+    })
+
+    it('does nothing for an empty range', () => {
+      expect(applyValueMark([red(0, 3)], { start: 4, end: 4 }, 'color', '#3b82f6')).toEqual([red(0, 3)])
+    })
+  })
+
+  describe('normalizeMarks with values', () => {
+    it('merges touching ranges of the same value', () => {
+      expect(normalizeMarks([red(0, 3), red(3, 6)])).toEqual([red(0, 6)])
+    })
+
+    it('keeps touching ranges of different values apart — the value is part of the identity', () => {
+      expect(normalizeMarks([red(0, 3), blue(3, 6)])).toEqual([red(0, 3), blue(3, 6)])
+    })
+  })
+
+  describe('markValueAt', () => {
+    it('reads the value at the selection’s first character', () => {
+      expect(markValueAt([red(2, 6)], { start: 3, end: 8 }, 'color')).toBe('#ef4444')
+    })
+
+    it('is null where the first character has none, even if later ones do', () => {
+      expect(markValueAt([red(5, 8)], { start: 2, end: 8 }, 'color')).toBeNull()
+    })
+
+    it('is null for a different type', () => {
+      expect(markValueAt([red(0, 8)], { start: 1, end: 3 }, 'fontFamily')).toBeNull()
+    })
+  })
+
+  describe('textSegments with values', () => {
+    it('carries a value only on the segment it covers', () => {
+      const marks: Mark[] = [
+        { type: 'color', start: 2, end: 4, value: '#ef4444' },
+        { type: 'fontScale', start: 2, end: 4, value: 1.5 },
+        { type: 'fontFamily', start: 3, end: 6, value: 'Georgia' },
+      ]
+      const segments = textSegments('abcdef', marks)
+      expect(segments[0]).toEqual({ text: 'ab', bold: false, italic: false, underline: false })
+      expect(segments[1]).toMatchObject({ text: 'c', color: '#ef4444', fontScale: 1.5 })
+      expect(segments[1].fontFamily).toBeUndefined()
+      expect(segments[2]).toMatchObject({ text: 'd', color: '#ef4444', fontScale: 1.5, fontFamily: 'Georgia' })
+      expect(segments[3]).toMatchObject({ text: 'ef', fontFamily: 'Georgia' })
+      expect(segments[3].color).toBeUndefined()
+    })
+
+    it('lets a value mark and a flag mark share the same characters', () => {
+      const marks: Mark[] = [bold(0, 3), { type: 'color', start: 0, end: 3, value: '#22c55e' }]
+      expect(textSegments('abc', marks)).toEqual([
+        { text: 'abc', bold: true, italic: false, underline: false, color: '#22c55e' },
+      ])
+    })
+  })
+
+  it('keeps its value when the text before it changes', () => {
+    expect(shiftMarks([red(4, 8)], 0, 0, 3)).toEqual([red(7, 11)])
+  })
+
+  it('still parses a mark stored before value marks existed', () => {
+    expect(markSchema.safeParse({ type: 'bold', start: 0, end: 3 }).success).toBe(true)
+    expect(markSchema.safeParse({ type: 'color', start: 0, end: 3, value: '#ef4444' }).success).toBe(true)
+  })
+
+  it('holds a run’s size to its own, wider range', () => {
+    expect(clampRunScale(9)).toBe(MAX_RUN_SCALE)
+    expect(clampRunScale(0)).toBe(MIN_RUN_SCALE)
+    expect(clampRunScale(1.2 + 0.1)).toBe(1.3)
   })
 })

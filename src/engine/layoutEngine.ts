@@ -200,6 +200,11 @@ const KIND_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, CardKind> = {
   quote: 'quote',
   iconGrid: 'list',
   numberedList: 'list',
+  checklist: 'list',
+  splitList: 'list',
+  statList: 'stats',
+  timelineRow: 'timeline',
+  comparisonTable: 'comparison',
   gallery: 'gallery',
 }
 
@@ -235,15 +240,15 @@ function componentsForKind(kind: CardKind, blocks: ContentBlock[]): Exclude<Layo
     case 'title':
       return ['hero']
     case 'stats':
-      return blocksOfType(blocks, 'stat').length >= 2 ? ['statHero', 'statGrid'] : ['statHero']
+      return blocksOfType(blocks, 'stat').length >= 2 ? ['statHero', 'statGrid', 'statList'] : ['statHero']
     case 'comparison':
-      return ['comparison']
+      return ['comparison', 'comparisonTable']
     case 'timeline':
-      return ['timeline']
+      return ['timeline', 'timelineRow']
     case 'quote':
       return ['quote']
     case 'list':
-      return ['iconGrid', 'numberedList']
+      return ['iconGrid', 'numberedList', 'checklist', 'splitList']
     case 'gallery':
       return ['gallery']
     case 'text':

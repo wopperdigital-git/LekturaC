@@ -258,3 +258,31 @@ describe('BULLET_INDENT_IN', () => {
     expect(BULLET_INDENT_IN).toBeCloseTo(0.375, 6)
   })
 })
+
+
+describe('a paragraph with an enlarged word', () => {
+  const fake = (text: string, font: { sizePt: number }) => (text.length * font.sizePt * 0.5) / 72
+  const sizing = { preferredPt: 20, minPt: 10, face: 'X', lineSpacing: 1.2 }
+
+  it('is measured taller than the same paragraph at its plain size', () => {
+    const text = 'word '.repeat(30).trim()
+    const plain = textHeight([{ text }], 4, sizing, 20, fake)
+    const enlarged = textHeight([{ text, scale: 2 }], 4, sizing, 20, fake)
+    expect(enlarged).toBeGreaterThan(plain)
+  })
+
+  it('is not changed by a scale of one or by a shrunken word, which cannot make it taller', () => {
+    const text = 'word '.repeat(30).trim()
+    const plain = textHeight([{ text }], 4, sizing, 20, fake)
+    expect(textHeight([{ text, scale: 1 }], 4, sizing, 20, fake)).toBe(plain)
+    expect(textHeight([{ text, scale: 0.6 }], 4, sizing, 20, fake)).toBe(plain)
+  })
+
+  it('makes the fit step the whole paragraph down so the enlarged word still fits its box', () => {
+    const text = 'word '.repeat(12).trim()
+    const box = { widthIn: 4, maxHeightIn: 1.4 }
+    const plain = fitText([{ text }], box, sizing, fake)
+    const enlarged = fitText([{ text, scale: 2 }], box, sizing, fake)
+    expect(enlarged.sizePt).toBeLessThan(plain.sizePt)
+  })
+})

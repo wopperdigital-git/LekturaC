@@ -1,4 +1,5 @@
-import { BUILTIN_THEMES, type ThemeTokens } from '@/lib/theme-tokens'
+import type { CSSProperties } from 'react'
+import { BUILTIN_THEMES, DARK_INK, LIGHT_INK, readableInk, stageColor, type ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from './ThemeProvider'
 import { SlideSurface } from './SlideSurface'
 import { SlideStage } from './SlideStage'
@@ -82,6 +83,38 @@ function ThemePreview({ theme }: { theme: ThemeTokens }) {
   )
 }
 
+/**
+ * The ink, and the fills drawn in it, for text that sits straight on the deck's
+ * stage.
+ *
+ * This panel floats on the stage rather than on a surface of its own, and the
+ * stage is a different colour for every theme — near-white under Moonlight,
+ * near-black under Deep Space. Chrome text is one fixed colour per light/dark
+ * setting, so it was right on some stages and unreadable on the rest. The ink is
+ * therefore chosen from the *stage's* colour (`readableInk`), and everything that
+ * has to show against it — the muted labels, the hover and active fills, the
+ * selection outline — is that same ink at a lower opacity, so all of them stay
+ * legible together and follow the theme when it changes.
+ *
+ * Handed to the markup as custom properties so the classes stay ordinary.
+ */
+function panelInk(theme: ThemeTokens): CSSProperties {
+  const ink = readableInk(stageColor(theme))
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(ink.slice(i, i + 2), 16))
+  const alpha = (a: number) => `rgba(${r}, ${g}, ${b}, ${a})`
+  // A halo in the opposite tone, so a label crossing a glow or a star in the
+  // backdrop still has an edge to read against.
+  const halo = ink === LIGHT_INK ? DARK_INK : LIGHT_INK
+  return {
+    '--panel-ink': ink,
+    '--panel-ink-muted': alpha(0.72),
+    '--panel-hover': alpha(0.1),
+    '--panel-active': alpha(0.16),
+    '--panel-outline': alpha(0.6),
+    '--panel-halo': `0 1px 2px ${halo}55`,
+  } as CSSProperties
+}
+
 /** Preset-only theme gallery — no manual color/font/radius/spacing editing. */
 export function ThemePanel({
   theme,
@@ -96,9 +129,16 @@ export function ThemePanel({
     // strip above it uncovered, and scrolled previews show through that gap.
     // `h-full` on the shell is what gives the list below a height to overflow
     // against — without it the list just grows past the dock.
-    <div className="flex h-full flex-col overflow-hidden p-3">
-      <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-app-muted">Theme</p>
-      <div className="scrollbar-subtle flex flex-col gap-2 overflow-y-auto">
+    // The list has no visible scrollbar (`scrollbar-none`) but still scrolls, like the
+    // slide rail's; the previews are sized from the width they are given, and a
+    // bar that takes no space cannot change it.
+    <div className="flex h-full flex-col overflow-hidden p-3" style={panelInk(theme)}>
+      <p
+        className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-[var(--panel-ink-muted)] [text-shadow:var(--panel-halo)]"
+      >
+        Theme
+      </p>
+      <div className="scrollbar-none flex flex-col gap-2 overflow-y-auto">
         {BUILTIN_THEMES.map((t) => {
           const isActive = t.id === theme.id
           return (
@@ -108,8 +148,10 @@ export function ThemePanel({
               aria-pressed={isActive}
               // `shrink-0`: these are flex children of a scrolling column, so
               // without it the previews compress instead of overflowing.
-              className={`flex shrink-0 cursor-pointer flex-col items-stretch gap-2 rounded-app-sm border p-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
-                isActive ? 'border-app-accent bg-app-surface' : 'border-transparent hover:bg-app-surface'
+              className={`flex shrink-0 cursor-pointer flex-col items-stretch gap-2 rounded-app-sm border p-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--panel-ink)] ${
+                isActive
+                  ? 'border-[var(--panel-outline)] bg-[var(--panel-active)]'
+                  : 'border-transparent hover:bg-[var(--panel-hover)]'
               }`}
             >
               {/* Each preview needs its own scope: it renders a theme that is not
@@ -118,8 +160,10 @@ export function ThemePanel({
                 <ThemePreview theme={t} />
               </ThemeProvider>
               <span className="flex items-baseline justify-between gap-2 px-0.5">
-                <span className="truncate text-sm font-medium text-app-foreground">{t.name}</span>
-                <span className="shrink-0 text-xs text-app-muted">
+                <span className="truncate text-sm font-medium text-[var(--panel-ink)] [text-shadow:var(--panel-halo)]">
+                  {t.name}
+                </span>
+                <span className="shrink-0 text-xs text-[var(--panel-ink-muted)] [text-shadow:var(--panel-halo)]">
                   {t.typography.headingFont.split(',')[0].replace(/['"]/g, '')}
                 </span>
               </span>

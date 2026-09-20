@@ -51,11 +51,11 @@ export interface LeafNode {
  * the items inside that list, not to a run of lists.
  */
 export type GroupNode =
-  | { kind: 'group'; arrangement: 'boxes'; items: Indexed<StatBlock>[] }
-  | { kind: 'group'; arrangement: 'timeline'; items: Indexed<TimelineStepBlock>[] }
-  | { kind: 'group'; arrangement: 'columns'; items: Indexed<ComparisonGroupBlock>[] }
+  | { kind: 'group'; arrangement: 'boxes' | 'statRows'; items: Indexed<StatBlock>[] }
+  | { kind: 'group'; arrangement: 'timeline' | 'timelineRow'; items: Indexed<TimelineStepBlock>[] }
+  | { kind: 'group'; arrangement: 'columns' | 'table'; items: Indexed<ComparisonGroupBlock>[] }
   | { kind: 'group'; arrangement: 'gallery'; items: Indexed<ImageBlock>[] }
-  | { kind: 'group'; arrangement: 'chips' | 'numbered'; items: [Indexed<BulletListBlock>] }
+  | { kind: 'group'; arrangement: ListArrangement; items: [Indexed<BulletListBlock>] }
 
 export type RenderNode = LeafNode | GroupNode
 
@@ -77,17 +77,24 @@ const RUN_TYPES: ReadonlySet<ContentBlock['type']> = new Set([
   'image',
 ])
 
+/** Every way a single bullet list can be drawn. */
+export type ListArrangement = 'chips' | 'numbered' | 'checklist' | 'split'
+
 /**
  * How a bullet list is arranged.
  *
  * An explicit layout wins, which is what keeps the Level 2 picker working: a
  * user who chose "Numbered list" for a card of three short items gets numbers,
  * not chips. Otherwise it is the classifier's own `iconGrid` rule, read from the
- * same exported constants so the two cannot drift apart.
+ * same exported constants so the two cannot drift apart. `checklist` and
+ * `splitList` are only ever reached by that explicit choice — the classifier
+ * never awards them.
  */
-export function listArrangement(list: BulletListBlock, hint: LayoutType): 'chips' | 'numbered' {
+export function listArrangement(list: BulletListBlock, hint: LayoutType): ListArrangement {
   if (hint === 'iconGrid') return 'chips'
   if (hint === 'numberedList') return 'numbered'
+  if (hint === 'checklist') return 'checklist'
+  if (hint === 'splitList') return 'split'
   const short =
     list.items.length <= MAX_CHIP_ITEMS && list.items.every((item) => item.length <= SHORT_ITEM_MAX_CHARS)
   return short ? 'chips' : 'numbered'
@@ -101,15 +108,27 @@ export function listArrangement(list: BulletListBlock, hint: LayoutType): 'chips
   type matches. TypeScript cannot follow that across the loop, so it is
   asserted here, once, next to the switch that proves which type it is.
 */
-function runGroup(run: Indexed[]): GroupNode | null {
+function runGroup(run: Indexed[], hint: LayoutType): GroupNode | null {
   if (run.length < MIN_RUN) return null
   switch (run[0].block.type) {
     case 'stat':
-      return { kind: 'group', arrangement: 'boxes', items: run as Indexed<StatBlock>[] }
+      return {
+        kind: 'group',
+        arrangement: hint === 'statList' ? 'statRows' : 'boxes',
+        items: run as Indexed<StatBlock>[],
+      }
     case 'timelineStep':
-      return { kind: 'group', arrangement: 'timeline', items: run as Indexed<TimelineStepBlock>[] }
+      return {
+        kind: 'group',
+        arrangement: hint === 'timelineRow' ? 'timelineRow' : 'timeline',
+        items: run as Indexed<TimelineStepBlock>[],
+      }
     case 'comparisonGroup':
-      return { kind: 'group', arrangement: 'columns', items: run as Indexed<ComparisonGroupBlock>[] }
+      return {
+        kind: 'group',
+        arrangement: hint === 'comparisonTable' ? 'table' : 'columns',
+        items: run as Indexed<ComparisonGroupBlock>[],
+      }
     case 'image':
       return { kind: 'group', arrangement: 'gallery', items: run as Indexed<ImageBlock>[] }
     default:
@@ -126,7 +145,7 @@ function runGroup(run: Indexed[]): GroupNode | null {
  * keeping the author's order is what lets every index stay put.
  *
  * `hint` is the card's stored `layout` (usually `'auto'`), passed so an
- * explicit picker choice still governs a bullet list's arrangement.
+ * explicit picker choice still governs how a run or a bullet list is arranged.
  */
 export function inferGroups(blocks: ContentBlock[], hint: LayoutType = 'auto'): RenderNode[] {
   const nodes: RenderNode[] = []
@@ -148,7 +167,7 @@ export function inferGroups(blocks: ContentBlock[], hint: LayoutType = 'auto'): 
       let end = i + 1
       while (end < blocks.length && blocks[end].type === block.type) end += 1
       const run = blocks.slice(i, end).map((item, offset) => ({ block: item, index: i + offset }))
-      const group = runGroup(run)
+      const group = runGroup(run, hint)
       if (group) nodes.push(group)
       else for (const item of run) nodes.push({ kind: 'leaf', block: item.block, index: item.index })
       i = end

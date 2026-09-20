@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, type HTMLAttributes } from 'react'
 import type { BlockAdjust, BlockAdjusts } from '@/engine/blockAdjust'
 import { parseTextRef } from '@/engine/blockText'
 import type { Card } from '@/engine/contentBlocks'
@@ -69,7 +69,15 @@ export function blockIndexOf(ref: string): number | null {
 export interface BlockAdjusting {
   /** The element carrying the selection box, or null. */
   selected: number | null
+  /**
+   * The item of `selected` that is picked out, or null. Only meaningful with a
+   * selected element: an item belongs to a list, so it is a refinement of that
+   * element rather than a second selection beside it.
+   */
+  selectedItem: number | null
   select: (index: number | null) => void
+  /** A press on one item of a list — one bullet, one entry of a comparison group. */
+  selectItem: (blockIndex: number, itemIndex: number) => void
   /** `commit` marks the release of a gesture, which is persisted right away. */
   change: (index: number, adjust: BlockAdjust, commit?: boolean) => void
 }
@@ -78,6 +86,44 @@ export const BlockAdjustContext = createContext<BlockAdjusting | null>(null)
 
 export function useBlockAdjusting(): BlockAdjusting | null {
   return useContext(BlockAdjustContext)
+}
+
+/**
+ * The attribute an item carries while it is the selected one. The highlight is
+ * plain CSS on this attribute (see `index.css`) rather than a box we draw, which
+ * is what lets every arrangement's own container — a chip, a tile, a row, a table
+ * cell — be the thing that lights up without any of them knowing about selection.
+ */
+export const ITEM_SELECTED_ATTR = 'data-item-selected'
+
+const NO_ITEM_PROPS = (): HTMLAttributes<HTMLElement> => ({})
+
+/**
+ * What to spread onto an item's own container so it can be picked out on its own.
+ *
+ * Returned as a function of the item's address so a layout that draws a whole
+ * list calls the hook once and then spreads per item. With no editing context —
+ * the presenter, the thumbnails — it spreads nothing, so those surfaces carry no
+ * handlers and no attribute.
+ *
+ * The press stops here. Left to bubble, the `Adjustable` around the list would
+ * read it as a press on the list and replace the item selection with a list
+ * selection in the same gesture; a press in the *gap* between items still
+ * reaches it, which is how the list itself is picked.
+ */
+export function useItemProps(): (blockIndex: number, itemIndex: number) => HTMLAttributes<HTMLElement> {
+  const adjusting = useContext(BlockAdjustContext)
+  if (!adjusting) return NO_ITEM_PROPS
+  return (blockIndex, itemIndex) => ({
+    onPointerDown: (event) => {
+      event.stopPropagation()
+      adjusting.selectItem(blockIndex, itemIndex)
+    },
+    onClick: (event) => event.stopPropagation(),
+    ...(adjusting.selected === blockIndex && adjusting.selectedItem === itemIndex
+      ? { [ITEM_SELECTED_ATTR]: '' }
+      : {}),
+  })
 }
 
 /**

@@ -127,6 +127,48 @@ export function darken(hex: string, amount: number): string {
 }
 
 /**
+ * The colour of the ground a deck's cards sit on — the stage — for a theme.
+ * The same derivation `applyTheme` writes as `--slide-canvas-background`, so what
+ * is measured against and what is painted cannot disagree.
+ */
+export function stageColor(theme: Pick<ThemeTokens, 'colors'>): string {
+  return darken(theme.colors.background, CANVAS_DARKEN_AMOUNT)
+}
+
+/** WCAG relative luminance of a `#rrggbb`: 0 for black, 1 for white. */
+export function relativeLuminance(hex: string): number {
+  const value = hex.replace(/^#/, '')
+  const channel = (i: number) => {
+    const c = parseInt(value.slice(i, i + 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+}
+
+/** WCAG contrast ratio between two `#rrggbb` colours, from 1 (identical) to 21 (black on white). */
+export function contrastRatio(a: string, b: string): number {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+  return (light + 0.05) / (dark + 0.05)
+}
+
+/** The two inks `readableInk` chooses between: near-white and near-black, not pure, so text sits softly. */
+export const LIGHT_INK = '#f8f7fb'
+export const DARK_INK = '#14121a'
+
+/**
+ * Whichever of a light or a dark ink reads better on `background`.
+ *
+ * Decided by contrast rather than by a lightness cut-off: a mid-tone background is
+ * exactly where a fixed threshold picks the worse of the two, and the ratio picks
+ * the better one however the palette is tuned. Text that has to sit directly on a
+ * surface that changes with the theme — the theme picker's own labels, on the
+ * deck's stage — uses this so it can never be the wrong colour for it.
+ */
+export function readableInk(background: string): string {
+  return contrastRatio(LIGHT_INK, background) >= contrastRatio(DARK_INK, background) ? LIGHT_INK : DARK_INK
+}
+
+/**
  * Writes a ThemeTokens object onto `root` as --slide-* CSS custom properties,
  * scoped to that element (never document.documentElement) so it only affects
  * descendants — the slide content rendered inside a ThemeProvider wrapper.

@@ -222,46 +222,50 @@ export function CardOutlineSidebar({
 
   return (
     /*
-      `scrollbar-gutter: stable` is load-bearing, not cosmetic.
+      Two stacked parts: the list, which scrolls, and the Add slide button, which
+      does not. The button used to be the last thing *in* the list, so on a long
+      deck it sat off the bottom of the panel until you had scrolled to the end.
+      Outside the scroller it stays where it is whatever the length.
 
-      A thumbnail scales itself to the measured width of this container, so on a
-      platform with classic (space-taking) scrollbars the rail had a feedback
-      loop with no fixed point: the list overflows, its scrollbar appears, every
-      thumbnail loses that width and shrinks, the list now fits, the scrollbar
-      goes away, every thumbnail grows, the list overflows again — forever, at
-      screen refresh rate. Whether a deck lands in that window is pure
-      coincidence of card count and window height, which is why it looked
-      random.
-
-      Reserving the gutter whether or not it is used makes the content width
-      constant, so a thumbnail's size no longer depends on whether the list
-      happens to overflow. (No effect where scrollbars are overlays and take no
-      space — those platforms never had the loop.)
+      The scroller has no visible scrollbar (`scrollbar-none`) — it still scrolls
+      by wheel, trackpad, touch and keyboard. That also settles something that
+      used to need care here. A thumbnail scales itself to the measured width of
+      its container, so a classic, space-taking scrollbar had a feedback loop with
+      no fixed point: the list overflows, the bar appears, every thumbnail loses
+      that width and shrinks, the list now fits, the bar goes, every thumbnail
+      grows, the list overflows again — forever, at screen refresh rate. That was
+      guarded by reserving a gutter (`scrollbar-gutter: stable`). A bar that is
+      never drawn takes no space on any platform, so the loop cannot start and the
+      reservation is gone. Do not swap the hidden bar for a visible one without
+      putting the gutter back.
     */
-    <div className="scrollbar-subtle flex h-full flex-col gap-1.5 overflow-y-auto p-2 [scrollbar-gutter:stable]">
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          <ThemeProvider theme={theme}>
-            <div className="flex flex-col gap-1.5">
-              {sorted.map((card, i) => (
-                <SortableRow
-                  key={card.id}
-                  card={card}
-                  index={i}
-                  isActive={card.id === activeCardId}
-                  onSelect={() => onSelect(card.id)}
-                  onDelete={() => onDelete(card.id)}
-                  deckTextStyle={deckTextStyle}
-                />
-              ))}
-            </div>
-          </ThemeProvider>
-        </SortableContext>
-      </DndContext>
+    <div className="flex h-full flex-col gap-1.5 p-2">
+      <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            <ThemeProvider theme={theme}>
+              <div className="flex flex-col gap-1.5">
+                {sorted.map((card, i) => (
+                  <SortableRow
+                    key={card.id}
+                    card={card}
+                    index={i}
+                    isActive={card.id === activeCardId}
+                    onSelect={() => onSelect(card.id)}
+                    onDelete={() => onDelete(card.id)}
+                    deckTextStyle={deckTextStyle}
+                  />
+                ))}
+              </div>
+            </ThemeProvider>
+          </SortableContext>
+        </DndContext>
+      </div>
 
       {/*
         Below the list rather than above it, because a new slide is added
         *after* the active card and the eye reads that as "and then one more".
+        Pinned to the bottom of the panel, outside the scroller.
 
         It carries a solid surface of its own, unlike everything else in this
         rail: the rail floats directly on the deck's themed stage, which is
@@ -272,7 +276,7 @@ export function CardOutlineSidebar({
       <button
         type="button"
         onClick={onAddCard}
-        className="mt-0.5 flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-app-sm border border-app-border bg-app-background/95 py-2 text-xs font-medium text-app-foreground shadow-sm transition-colors hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+        className="flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-app-sm border border-app-border bg-app-background/95 py-2 text-xs font-medium text-app-foreground shadow-sm transition-colors hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
       >
         <svg
           viewBox="0 0 20 20"

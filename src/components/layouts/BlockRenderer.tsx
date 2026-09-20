@@ -4,7 +4,7 @@ import { leftoverBlocks } from '@/engine/blockPartition'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
-import { blockIndexOf } from './adjustContext'
+import { blockIndexOf, useItemProps } from './adjustContext'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
 /**
@@ -68,6 +68,7 @@ export function Leftovers({
   the simplest way to guarantee it gets one.
 */
 function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
+  const itemProps = useItemProps()
   switch (block.type) {
     case 'heading':
       return <Heading text={block.text} textRef={textRef(index, 'text')} />
@@ -84,7 +85,7 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       return (
         <ul className="flex max-w-prose flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT }}>
           {block.items.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-[length:var(--slide-size-body)]">
+            <li key={i} {...itemProps(index, i)} className="flex items-start gap-2 text-[length:var(--slide-size-body)]">
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slide-accent" />
               <EditableText textRef={textRef(index, 'items', i)} value={item} />
             </li>
@@ -141,7 +142,7 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
           </div>
           <ul className="flex flex-col gap-1">
             {block.items.map((item, i) => (
-              <li key={i} className="text-sm text-slide-foreground/90">
+              <li key={i} {...itemProps(index, i)} className="text-sm text-slide-foreground/90">
                 <EditableText textRef={textRef(index, 'items', i)} value={item} />
               </li>
             ))}

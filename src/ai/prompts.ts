@@ -1,7 +1,6 @@
 import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor, type BlueprintId } from './slideBlueprints'
 import {
   CLAIM_TYPES,
-  LAYOUT_FAMILIES,
   PRESENTATION_TYPES,
   SLIDE_PURPOSES,
   VISUAL_TYPES,
@@ -59,7 +58,6 @@ export const DEFAULT_TONE: GenerationBrief['tone'] = 'professional'
 const PRESENTATION_TYPE_LIST = PRESENTATION_TYPES.map((v) => `"${v}"`).join(' | ')
 const SLIDE_PURPOSE_LIST = SLIDE_PURPOSES.map((v) => `"${v}"`).join(' | ')
 const VISUAL_TYPE_LIST = VISUAL_TYPES.map((v) => `"${v}"`).join(' | ')
-const LAYOUT_FAMILY_LIST = LAYOUT_FAMILIES.map((v) => `"${v}"`).join(' | ')
 const CLAIM_TYPE_LIST = CLAIM_TYPES.map((v) => `"${v}"`).join(' | ')
 
 export const DECK_SYSTEM_PROMPT = `You are planning and writing a presentation, not an article. Your job is to help an audience understand a topic through a sequence of slides, each one scanned in seconds — not a document broken into pages.
@@ -87,7 +85,6 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
         "audienceQuestion": string,
         "keyMessage": string,
         "visualType": ${VISUAL_TYPE_LIST},
-        "layoutFamily": ${LAYOUT_FAMILY_LIST},
         "transition": string,
         "importance": "essential" | "supporting" | "optional"
       },
@@ -145,9 +142,15 @@ FRESHNESS
 - Today's date is given in the user prompt. When the topic asks about what's current, latest, or trending, prefer the newest evidence available and never present data more than two years old as current.
 
 VISUAL CHOICE
-- Chronology → a run of "timelineStep" blocks. Alternatives being weighed → a pair of "comparisonGroup" blocks. Several related numbers → 2-4 "stat" blocks together. One striking number → a single "stat" block. Categories → a short "bulletList".
-- Set plan.visualType to what the slide actually needs, even when the block vocabulary above renders it as stats or a list (e.g. plan.visualType: "bar_chart" backed by "stat" blocks) — visualType is a planning signal, not a rendering instruction.
-- Vary the block types across cards on purpose so the deck doesn't look repetitive — avoid three consecutive cards using the same block-type pattern:
+Choose each slide's information structure before you choose its wording. Ask what shape the point has, then pick the block that draws that shape. Do not reach for a "bulletList" merely because a slide has several points — a bullet list is the fallback for items that are parallel and unordered, not the default for anything with more than one part.
+- Sequence, steps, chronology, cause → effect → a run of "timelineStep" blocks.
+- Two or more alternatives, before/after, pros/cons → "comparisonGroup" blocks.
+- Quantitative evidence → "stat" blocks: one striking number as a single "stat", several related numbers as 2-4 together.
+- One explanatory idea → a single short "paragraph".
+- A thesis or a verbatim quotation → a "quote" block.
+- Only 3-5 parallel items where order does not matter (categories, features, criteria) → a short "bulletList".
+- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList". We cannot draw charts, maps, diagrams, photos or illustrations, so never plan one of those as the visualType. A trend or a set of numbers is "metric_cards" — but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
+- Vary the structure across the deck on purpose. In a deck of 5 or more slides no more than about 40% of the slides should be "bulletList" slides, never put two "bulletList" slides next to each other, and use at least three different block structures across the deck when the subject supports it. Avoid three consecutive cards using the same block-type pattern:
   - Use a single "stat" block for a card that leads with one striking number (market size, growth rate, performance metric, savings, etc).
   - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta) — this reads far better as one card than as several single-stat cards in a row.
   - Use 2-4 "comparisonGroup" blocks together when contrasting options/approaches/before-vs-after.

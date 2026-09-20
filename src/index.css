@@ -316,6 +316,40 @@ body {
 }
 
 /*
+  A scroller with no visible scrollbar that still scrolls — by wheel, trackpad,
+  touch and keyboard. Used where a bar would only be noise: the slide rail, whose
+  thumbnails already show how far down the deck you are. Because it takes no
+  space, it also cannot resize its own content (see the note in
+  `CardOutlineSidebar` on the loop a space-taking bar caused there).
+*/
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+  Panning the canvas (Ctrl + drag, see `useCanvasPan`). A hand over everything
+  while Ctrl is held, closed while a pan is under way. `!important` because every
+  text run, element edge and card sets a cursor of its own, and the hand has to
+  read as a mode of the whole canvas rather than of whatever is under the
+  pointer. Text selection is off for the duration, or the drag would paint a
+  selection across the slides it passes over.
+*/
+[data-pan-ready] * {
+  cursor: grab !important;
+}
+
+[data-panning],
+[data-panning] * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+/*
   Variant for the always-dark surfaces (the dashboard's AppSidebar rail), which
   don't follow the light/dark toggle. `--app-border` is near-white in light
   mode, so the default utility would put a bright bar on that dark rail; these
@@ -374,6 +408,24 @@ body {
   font-style: italic;
 }
 
+[data-deck-underline='true'] :is(h1, h2, h3, h4, p, li, span, blockquote, figcaption) {
+  text-decoration: underline;
+}
+
+/*
+  A colour somebody picked has to beat the layouts' own — stat values are the
+  accent, labels are muted, list text is the foreground at 90% — all set by
+  utility classes on the elements themselves, so an inherited colour would lose
+  to every one of them. Unlayered CSS beats Tailwind's layered utilities.
+
+  Text placed on a filled disc (the number badges) is left alone: it is coloured
+  for contrast against the fill, and forcing the picked colour onto it would make
+  it unreadable.
+*/
+[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']) {
+  color: var(--slide-user-color);
+}
+
 [data-deck-align='left'] :is(h1, h2, h3, h4, p, li, blockquote, figcaption) {
   text-align: left;
 }
@@ -384,4 +436,15 @@ body {
 
 [data-deck-align='right'] :is(h1, h2, h3, h4, p, li, blockquote, figcaption) {
   text-align: right;
+}
+
+/*
+  The picked-out item of a list (see `useItemProps`). An outline rather than a
+  border or a box-shadow: it takes no room, so lighting an item up cannot reflow
+  the slide, and it follows whatever shape the arrangement gave the item's own
+  container — a pill, a tile, a ruled row, a table cell.
+*/
+[data-item-selected] {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 3px;
 }

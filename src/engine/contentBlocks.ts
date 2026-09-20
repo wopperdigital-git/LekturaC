@@ -82,6 +82,11 @@ export const layoutTypeSchema = z.enum([
   'timeline',
   'iconGrid',
   'numberedList',
+  'checklist',
+  'splitList',
+  'statList',
+  'timelineRow',
+  'comparisonTable',
   'quote',
   'textFocus',
   'gallery',
@@ -96,7 +101,14 @@ export type VisualStyle = z.infer<typeof visualStyleSchema>
 export const cardSchema = z.object({
   id: z.string(),
   orderIndex: z.number(),
-  blocks: z.array(contentBlockSchema).min(1),
+  /*
+    May be empty. Removing the last element of a card leaves a blank card, not a
+    deleted one, so nothing may assume a card has a block to read: `heading` and
+    `first` lookups already fall back, and every layout draws an empty list of
+    blocks as nothing. (The generation schema still requires a heading — that is
+    a rule about what the model writes, not about what a card can become.)
+  */
+  blocks: z.array(contentBlockSchema),
   layout: layoutTypeSchema,
   visualStyle: visualStyleSchema,
   /*

@@ -2,6 +2,7 @@ import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } fr
 import { HANDLES, type Frame, type Handle } from '@/engine/frame'
 import { HANDLE_CURSOR, HANDLE_POSITION, resizeFrame } from '@/engine/frameGeometry'
 import { startPointerDrag } from './pointerDrag'
+import { useCanvasZoom } from './zoomContext'
 
 /*
   The selection box for one element.
@@ -22,7 +23,10 @@ import { startPointerDrag } from './pointerDrag'
   twice the speed of the pointer.
 */
 
-/** Screen sizes. Cards are not scaled in the editor, so these are CSS pixels. */
+/**
+ * Handle and border sizes. They are drawn inside the card, so they scale with the
+ * canvas zoom like everything else on it.
+ */
 const HANDLE_PX = 9
 const BORDER_PX = 1.5
 /** How wide the draggable edge is — wider than the visible line, so it can be hit. */
@@ -55,6 +59,9 @@ export function SelectionOverlay({
   onCommit: () => void
 }) {
   const root = useRef<HTMLDivElement>(null)
+  // The canvas may be zoomed. The pointer moves in screen pixels; the frame is in
+  // the card's own, so a drag is divided by the zoom before it becomes a delta.
+  const zoom = useCanvasZoom()
 
   function begin(
     event: ReactPointerEvent,
@@ -64,7 +71,7 @@ export function SelectionOverlay({
     // and start a second gesture at the same time.
     event.preventDefault()
     event.stopPropagation()
-    startPointerDrag(event, run, onCommit)
+    startPointerDrag(event, (dx, dy, live) => run(dx / zoom, dy / zoom, live), onCommit)
   }
 
   function beginMove(event: ReactPointerEvent) {
@@ -101,7 +108,9 @@ export function SelectionOverlay({
     const startAngle = angleAt(fromX, fromY)
 
     begin(event, (dx, dy, live) => {
-      const swept = angleAt(fromX + dx, fromY + dy) - startAngle
+      // `dx`/`dy` are in card pixels; the angle is measured on screen, where the
+      // centre and the pointer both are, so the zoom goes back on.
+      const swept = angleAt(fromX + dx * zoom, fromY + dy * zoom) - startAngle
       onChange({ ...start, rotation: snap(start.rotation + swept, live.shiftKey) }, 'rotate')
     })
   }

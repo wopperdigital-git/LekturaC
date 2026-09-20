@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
@@ -12,16 +12,22 @@ import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngin
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
-import { hasMarkThroughout, type TextRange } from '@/engine/marks'
+import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
+import { listTarget } from '@/engine/listItems'
 import {
   selectionAfterCardPress,
   selectionAfterElementPress,
+  selectionAfterEscape,
+  selectionAfterItemPress,
   typographyScope,
   type Selection,
 } from '@/engine/textScope'
-import { SLIDE_BODY_ATTR, blockStyleKey } from '@/components/layouts/adjustContext'
+import { parseTextRef } from '@/engine/blockText'
+import { SLIDE_BODY_ATTR, blockIndexOf, blockStyleKey } from '@/components/layouts/adjustContext'
 import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
+import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
+import { useCanvasPan } from '@/components/editor/useCanvasPan'
 
 const SIDEBAR_WIDTH_PX = 160
 const RIGHT_PANEL_WIDTH_PX = 256
@@ -46,6 +52,10 @@ export function EditorPage() {
   // different events — picking a different card drops the element, but editing
   // text inside the element must not.
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null)
+  // Which item of that element is picked out, when it is a list. Held beside the
+  // element rather than in place of it: the list stays the selected element and
+  // the item is a refinement of it.
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   // Open, and in which of its two jobs — adding a slide, or changing the type
   // of the one that is selected.
   const [typePicker, setTypePicker] = useState<'add' | 'change' | null>(null)
@@ -53,8 +63,45 @@ export function EditorPage() {
   // render, so the scroll has to wait for its ref rather than run inline.
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  // How large the canvas is drawn. A view setting: not stored, not undoable.
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+  const canvasRef = useRef<HTMLElement>(null)
+  const previousZoom = useRef(DEFAULT_ZOOM)
   const { status: exportStatus, error: exportError, exportDeck } = useExportPptx()
 
+
+  /*
+    Ctrl+scroll zooms the canvas. React's `onWheel` is passive, so it cannot stop
+    the browser zooming the whole *page* on the same gesture — a native listener
+    with `passive: false` is what makes `preventDefault` take effect. A trackpad
+    pinch arrives as a Ctrl+wheel too, so it works the same way. ⌘ is accepted for
+    the same reason the rest of the editor accepts it.
+  */
+  useEffect(() => {
+    const node = canvasRef.current
+    if (!node) return
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      setZoom((current) => zoomFromWheel(current, e.deltaY))
+    }
+    node.addEventListener('wheel', onWheel, { passive: false })
+    return () => node.removeEventListener('wheel', onWheel)
+    // The canvas only exists once the deck has loaded, hence the dependency.
+  }, [store.status])
+
+  // Ctrl + drag grabs the canvas and moves it, for getting around once zoomed in.
+  useCanvasPan(canvasRef, store.status !== 'loading')
+
+  // Keeps the middle of the view on the same content when the zoom changes; the
+  // content grows or shrinks under a fixed scroll offset otherwise.
+  useLayoutEffect(() => {
+    const node = canvasRef.current
+    if (node && previousZoom.current !== zoom) {
+      node.scrollTop = scrollTopAfterZoom(node.scrollTop, node.clientHeight, previousZoom.current, zoom)
+    }
+    previousZoom.current = zoom
+  }, [zoom])
 
   useEffect(() => {
     if (id) void store.loadDeck(id)
@@ -129,13 +176,43 @@ export function EditorPage() {
     The rule itself lives in `engine/textScope.ts`; this only applies it.
   */
   function selectElement(cardId: string, index: number) {
-    const current: Selection = { cardId: selectedCardId, blockIndex: selectedBlockIndex }
+    const current: Selection = { cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }
     apply(selectionAfterElementPress(current, { cardId, blockIndex: index }))
+    endEditOutside(index)
+  }
+
+  // The same drill-in for one item of a list.
+  function selectItem(cardId: string, blockIndex: number, itemIndex: number) {
+    const current: Selection = { cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }
+    apply(selectionAfterItemPress(current, { cardId, blockIndex, itemIndex }))
+    endEditOutside(blockIndex, itemIndex)
+  }
+
+  /*
+    Picking something other than the run being typed in ends that edit.
+
+    Selecting no longer implies editing, so a press elsewhere can no longer rely
+    on its own click to move the edit along: the old run would stay live, the
+    toolbar would stay at Level 3, and Backspace — which now removes the selected
+    element — would be swallowed as a keystroke for a run the user has left. A
+    press *inside* the run being edited must not end it, though, or clicking to
+    move the caret would throw the user out of the text they are editing; and a
+    press on the list around an item being edited does not either.
+  */
+  function endEditOutside(blockIndex: number, itemIndex?: number) {
+    if (!activeTextRef) return
+    const active = parseTextRef(activeTextRef)
+    const sameBlock = active?.blockIndex === blockIndex
+    const sameItem = itemIndex === undefined || (active?.itemIndex ?? null) === itemIndex
+    if (sameBlock && sameItem) return
+    setActiveTextRef(null)
+    setTextRange(null)
   }
 
   function apply(next: Selection) {
     setSelectedCardId(next.cardId)
     setSelectedBlockIndex(next.blockIndex)
+    setSelectedItemIndex(next.itemIndex)
   }
 
   function scrollToCard(cardId: string) {
@@ -143,11 +220,28 @@ export function EditorPage() {
     cardRefs.current.get(cardId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  /*
+    The selection-dependent keys — Backspace and Delete to remove, Escape to step
+    out — read what is selected *now*. The listener is registered once, so it
+    reaches them through a ref that is refreshed after every render; listing them
+    as dependencies instead would tear the listener down and re-add it on every
+    selection change.
+  */
+  const selectionKeys = useRef<{ remove: () => boolean; escape: () => void }>({
+    remove: () => false,
+    escape: () => {},
+  })
+  useEffect(() => {
+    selectionKeys.current = { remove: removeSelected, escape: stepOut }
+  })
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       // A field owns its own keys — the deck title in TopBar, above all.
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+        return
+      }
       /*
         A live run of slide text owns them too, and that is not a nicety.
 
@@ -163,6 +257,16 @@ export function EditorPage() {
       if (target?.isContentEditable) return
 
       const mod = e.metaKey || e.ctrlKey
+      if (!mod && !e.altKey && (e.key === 'Backspace' || e.key === 'Delete')) {
+        if (selectionKeys.current.remove()) e.preventDefault()
+        return
+      }
+      // An Escape a dropdown already used to close itself is not also a request
+      // to step the selection back.
+      if (e.key === 'Escape') {
+        if (!e.defaultPrevented) selectionKeys.current.escape()
+        return
+      }
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) redo()
@@ -178,6 +282,38 @@ export function EditorPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [undo, redo])
+
+  /*
+    Removes whatever is highlighted: the item if one is picked out, otherwise the
+    element. Does nothing while text is being edited (Backspace is then a
+    keystroke for that text) or while a dialog is open, and reports whether it
+    removed anything so the key is only swallowed when it did.
+  */
+  function removeSelected(): boolean {
+    if (activeTextRef || typePicker) return false
+    const card = cards.find((c) => c.id === selectedCardId)
+    if (!card || selectedBlockIndex === null) return false
+
+    if (selectedItemIndex !== null) {
+      const result = store.removeListItem(card.id, selectedBlockIndex, selectedItemIndex)
+      if (!result) return false
+      // The list stays selected unless it was the last item that took it with it.
+      apply({ cardId: card.id, blockIndex: result.blockRemoved ? null : selectedBlockIndex, itemIndex: null })
+      return true
+    }
+
+    if (!store.removeBlock(card.id, selectedBlockIndex)) return false
+    // Every later element moved up a place, so a selection kept at this index
+    // would now be a different element.
+    apply(selectionAfterCardPress(card.id))
+    return true
+  }
+
+  // One step back out: item to list, list to card.
+  function stepOut() {
+    if (activeTextRef || typePicker) return
+    apply(selectionAfterEscape({ cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }))
+  }
 
   const sortedCards = [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
   const selectedIndex = sortedCards.findIndex((c) => c.id === selectedCardId)
@@ -203,7 +339,7 @@ export function EditorPage() {
     the toolbar used to do, and no surface renders that: every ordinary attempt
     to change a slide's font stored the choice and moved nothing on screen.
   */
-  const scope = typographyScope({ cardId: selectedCardId, blockIndex: selectedBlockIndex })
+  const scope = typographyScope({ cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex })
   const typographyRef = scope.kind === 'element' ? blockStyleKey(scope.blockIndex) : null
   const elementStyle = typographyRef ? selectedCard?.inline?.[typographyRef]?.style : undefined
 
@@ -219,7 +355,17 @@ export function EditorPage() {
   const markState = {
     bold: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'bold'),
     italic: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'italic'),
+    underline: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'underline'),
   }
+  // What the selected characters currently are, for the font, size and colour
+  // controls — read at the selection's first character (see `markValueAt`).
+  const runValues = hasTextSelection
+    ? {
+        fontFamily: markValueAt(activeInline?.marks ?? [], textRange!, 'fontFamily') as string | null,
+        fontScale: markValueAt(activeInline?.marks ?? [], textRange!, 'fontScale') as number | null,
+        color: markValueAt(activeInline?.marks ?? [], textRange!, 'color') as string | null,
+      }
+    : undefined
 
   /*
     The card's type, and the layout it is actually rendering as.
@@ -235,6 +381,31 @@ export function EditorPage() {
   const selectedResolvedLayout = selectedCard
     ? resolveLayout(selectedCard.layout, selectedCard.blocks, { isFirstCard: selectedIndex === 0 })
     : undefined
+
+  /*
+    The list an "Add item" would grow. While a run is being edited that is the
+    list the run belongs to; otherwise it is the selected element. With neither,
+    `listTarget` falls back to the card's only list, and to nothing at all when
+    the card has two — see `engine/listItems.ts`.
+  */
+  const listIndex = selectedCard
+    ? listTarget(
+        selectedCard.blocks,
+        activeTextRef ? blockIndexOf(activeTextRef) : selectedBlockIndex,
+      )
+    : null
+
+  function addListItem() {
+    if (!selectedCard || listIndex === null) return
+    const itemIndex = store.addListItem(selectedCard.id, listIndex)
+    if (itemIndex === null) return
+    // Open the new item for typing straight away: adding one and then having to
+    // find it and click into it is the slow half of the job.
+    setSelectedBlockIndex(listIndex)
+    setSelectedItemIndex(itemIndex)
+    setActiveTextRef(textRef(listIndex, 'items', itemIndex))
+    setTextRange(null)
+  }
 
   function addCardOfKind(kind: CreatableKind) {
     // After the card the user is looking at — the selected one if there is one,
@@ -345,7 +516,7 @@ export function EditorPage() {
         </div>
 
         {/* Transparent: the stage layer above is the background now. */}
-        <main className="scrollbar-subtle relative flex-1 overflow-y-auto">
+        <main ref={canvasRef} className="scrollbar-subtle relative flex-1 overflow-auto">
           {/*
             Floats over the canvas rather than scrolling with it: `sticky top-0`
             with `h-0` means the bar reserves no height, so the first card sits
@@ -354,7 +525,7 @@ export function EditorPage() {
             bar doesn't swallow clicks meant for the cards underneath.
           */}
           {cards.length > 0 && (
-            <div className="pointer-events-none sticky top-0 z-20 flex h-0 justify-center">
+            <div className="pointer-events-none sticky left-0 top-0 z-20 flex h-0 justify-center">
               <div className="pt-3">
                 <EditorToolbar
                   level={level}
@@ -362,6 +533,7 @@ export function EditorPage() {
                   canRedo={store.future.length > 0}
                   onUndo={undo}
                   onRedo={redo}
+                  presentHref={`/deck/${id}/present`}
                   // Read from the same scope it writes to, or the bar reports a
                   // state it is not editing.
                   textStyle={
@@ -395,6 +567,12 @@ export function EditorPage() {
                       store.toggleTextMark(selectedCard.id, activeTextRef, textRange, type)
                     }
                   }}
+                  runValues={runValues}
+                  onRunValue={(type, value) => {
+                    if (selectedCard && activeTextRef && textRange) {
+                      store.setTextMarkValue(selectedCard.id, activeTextRef, textRange, type, value)
+                    }
+                  }}
                   themeName={store.theme.name}
                   onOpenThemes={() => setRightPanel((current) => (current === 'theme' ? null : 'theme'))}
                   themesOpen={rightPanel === 'theme'}
@@ -410,6 +588,13 @@ export function EditorPage() {
                   cardKind={selectedCardKind}
                   resolvedLayout={selectedResolvedLayout}
                   onChangeCardType={selectedCard ? () => setTypePicker('change') : undefined}
+                  zoom={zoom}
+                  onZoomChange={(next, direction) =>
+                    setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
+                  }
+                  onAddItem={listIndex !== null ? addListItem : undefined}
+                  onRemove={selectedCard && selectedBlockIndex !== null ? () => void removeSelected() : undefined}
+                  removeLabel={selectedItemIndex !== null ? 'Remove item' : 'Remove element'}
                 />
               </div>
             </div>
@@ -460,8 +645,11 @@ export function EditorPage() {
                   },
                 }}
                 selectedBlockIndex={selectedBlockIndex}
+                selectedItemIndex={selectedItemIndex}
                 onSelectElement={selectElement}
+                onSelectItem={selectItem}
                 onChangeAdjust={store.setBlockAdjust}
+                zoom={zoom}
               />
             </ThemeProvider>
           )}
@@ -494,6 +682,7 @@ export function EditorPage() {
                 // block 3 would now be measuring a different element — or one
                 // that no longer exists.
                 setSelectedBlockIndex(null)
+                setSelectedItemIndex(null)
               }
             } else {
               addCardOfKind(kind)

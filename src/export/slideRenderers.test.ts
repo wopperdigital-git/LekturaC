@@ -60,9 +60,9 @@ function fakeSlide() {
   return slide
 }
 
-function render(card: Card, isFirstCard = false) {
+function render(card: Card, isFirstCard = false, style: Parameters<(typeof RENDERERS)['body']>[3] = {}) {
   const slide = fakeSlide()
-  RENDERERS[slideGroup(card, isFirstCard)](slide, card, DEFAULT_THEME, {}, estimateMeasurer)
+  RENDERERS[slideGroup(card, isFirstCard)](slide, card, DEFAULT_THEME, style, estimateMeasurer)
   return slide
 }
 
@@ -101,6 +101,132 @@ function wordsOf(blocks: ContentBlock[]): string[] {
   }
   return out
 }
+
+describe('colour and underline in the exported file', () => {
+  const blocks: ContentBlock[] = [
+    { type: 'heading', text: 'The heading' },
+    { type: 'paragraph', text: 'The body text' },
+  ]
+  const textOf = (slide: ReturnType<typeof fakeSlide>, needle: string) =>
+    slide.texts.find((t) => t.text.includes(needle))!
+
+  it('writes a per-word underline as an underlined run', () => {
+    const card = {
+      ...cardOf(blocks),
+      inline: { '1:text': { marks: [{ type: 'underline' as const, start: 4, end: 8 }] } },
+    }
+    const runs = textOf(render(card), 'body').runs
+    expect(runs.filter((r) => r.options.underline === true).map((r) => r.text)).toEqual(['body'])
+  })
+
+  /*
+    Regression: the toolbar writes an element's typography under its bare block
+    index, and the export only read a *run's* key — so a font, size, alignment or
+    colour set on one selected element showed on screen and vanished from the file.
+  */
+  it('colours a heading with the colour picked for that element', () => {
+    const card = { ...cardOf(blocks), inline: { '0': { style: { color: '#ef4444', underline: true } } } }
+    const box = textOf(render(card), 'heading')
+    expect(box.options.color).toBe('ef4444')
+    expect(box.options.underline).toBe(true)
+  })
+
+  it('carries a paragraph’s own colour and underline on its runs inside the merged body box', () => {
+    const card = { ...cardOf(blocks), inline: { '1': { style: { color: '#ef4444', underline: true } } } }
+    const runs = textOf(render(card), 'body').runs
+    expect(runs.every((r) => r.options.color === 'ef4444' && r.options.underline === true)).toBe(true)
+  })
+
+  it('does not touch the other paragraphs’ runs', () => {
+    // A paragraph plus a list is a body slide; two paragraphs would be a title one.
+    const two = [...blocks, { type: 'bulletList', items: ['Second point'] } as ContentBlock]
+    const card = { ...cardOf(two), inline: { '1': { style: { color: '#ef4444' } } } }
+    const box = textOf(render(card), 'body')
+    expect(box.runs.find((r) => r.text.includes('body'))!.options.color).toBe('ef4444')
+    expect(box.runs.find((r) => r.text.includes('Second'))!.options.color).toBeUndefined()
+  })
+
+  it('lets a run override its element, and an element override its card', () => {
+    const card = {
+      ...cardOf(blocks),
+      inline: { '0': { style: { color: '#222222' } } },
+    }
+    expect(textOf(render(card, false, { color: '#111111' }), 'heading').options.color).toBe('222222')
+    const withRun = { ...card, inline: { ...card.inline, '0:text': { style: { color: '#333333' } } } }
+    expect(textOf(render(withRun, false, { color: '#111111' }), 'heading').options.color).toBe('333333')
+  })
+
+  it('applies a card- or deck-level colour to every text box on the card', () => {
+    const slide = render(cardOf(blocks), false, { color: '#8b5cf6' })
+    expect(textOf(slide, 'heading').options.color).toBe('8b5cf6')
+    expect(textOf(slide, 'body').options.color).toBe('8b5cf6')
+  })
+
+  it('leaves the theme colour alone when none was picked', () => {
+    const box = textOf(render(cardOf(blocks)), 'body')
+    expect(box.options.color).toBeTypeOf('string')
+    expect(box.options.color).not.toBe('ef4444')
+  })
+})
+
+describe('word-level colour, font and size in the exported file', () => {
+  const blocks: ContentBlock[] = [
+    { type: 'heading', text: 'The heading' },
+    { type: 'paragraph', text: 'plain marked plain' },
+  ]
+  const body = (marks: import('@/engine/marks').Mark[]) => {
+    const card = { ...cardOf(blocks), inline: { '1:text': { marks } } }
+    return render(card).texts.find((t) => t.text.includes('marked'))!
+  }
+
+  it('colours just the marked words', () => {
+    const box = body([{ type: 'color', start: 6, end: 12, value: '#ef4444' }])
+    expect(box.runs.find((r) => r.text === 'marked')!.options.color).toBe('ef4444')
+    expect(box.runs.find((r) => r.text === 'plain ')!.options.color).toBeUndefined()
+  })
+
+  it('sets the font face for just the marked words, as one family name the app can resolve', () => {
+    const box = body([{ type: 'fontFamily', start: 6, end: 12, value: "Georgia, 'Times New Roman', serif" }])
+    expect(box.runs.find((r) => r.text === 'marked')!.options.fontFace).toBe('Georgia')
+  })
+
+  it('turns a size multiple into points against the box’s own size, and never leaks the private key', () => {
+    const box = body([{ type: 'fontScale', start: 6, end: 12, value: 1.5 }])
+    const boxPt = box.options.fontSize as number
+    const run = box.runs.find((r) => r.text === 'marked')!
+    expect(run.options.fontSize).toBeCloseTo(boxPt * 1.5, 0)
+    expect(box.runs.every((r) => !('sizeScale' in r.options))).toBe(true)
+    expect(box.runs.find((r) => r.text === 'plain ')!.options.fontSize).toBeUndefined()
+  })
+
+  it('shrinks the box’s own size to make room for an enlarged word rather than letting it spill', () => {
+    const long = { type: 'paragraph', text: 'word '.repeat(60).trim() } as ContentBlock
+    const make = (marks: import('@/engine/marks').Mark[]) => {
+      const card = { ...cardOf([blocks[0], long]), inline: { '1:text': { marks } } }
+      return render(card).texts.find((t) => t.text.includes('word'))!.options.fontSize as number
+    }
+    const plain = make([])
+    const enlarged = make([{ type: 'fontScale', start: 0, end: 4, value: 2.5 }])
+    expect(enlarged).toBeLessThanOrEqual(plain)
+    expectFits(render({ ...cardOf([blocks[0], long]), inline: { '1:text': { marks: [{ type: 'fontScale', start: 0, end: 4, value: 2.5 }] } } }))
+  })
+})
+
+describe('exporting a blank card', () => {
+  // Removing a card's last element leaves it with no blocks. It is still a slide
+  // in the deck, so the export must produce one — empty — rather than throw.
+  it.each([false, true])('writes a blank slide without throwing (first card: %s)', (isFirst) => {
+    expect(() => render(cardOf([]), isFirst)).not.toThrow()
+    expect(render(cardOf([]), isFirst).texts.map((t) => t.text).join('').trim()).toBe('')
+  })
+
+  it.each(['auto', 'hero', 'timeline', 'statGrid', 'comparison', 'quote', 'numberedList'] as const)(
+    'survives a blank card whose stored layout is %s',
+    (layout) => {
+      expect(() => render(cardOf([], layout))).not.toThrow()
+    },
+  )
+})
 
 describe('exporting a card of each creatable type', () => {
   it.each(CREATABLE_KINDS)('carries every word of a new %s card onto the slide', (kind) => {

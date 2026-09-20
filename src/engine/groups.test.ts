@@ -13,7 +13,16 @@ const image: ContentBlock = { type: 'image', url: 'https://example.test/i.png' }
 const shortList: BulletListBlock = { type: 'bulletList', items: ['a', 'b'] }
 
 /** The hints that change behaviour; every other layout behaves as `'auto'`. */
-const HINTS: LayoutType[] = ['auto', 'iconGrid', 'numberedList']
+const HINTS: LayoutType[] = [
+  'auto',
+  'iconGrid',
+  'numberedList',
+  'checklist',
+  'splitList',
+  'statList',
+  'timelineRow',
+  'comparisonTable',
+]
 
 /** Every sequence of up to `maxLength` blocks drawn from `alphabet`. */
 function allSequences(alphabet: ContentBlock[], maxLength: number): ContentBlock[][] {
@@ -90,6 +99,19 @@ describe('runs', () => {
     expect(shape(inferGroups([image, image]))).toEqual(['gallery×2'])
   })
 
+  it('lets an explicit layout choose the arrangement of a run', () => {
+    expect(shape(inferGroups([stat, stat], 'statList'))).toEqual(['statRows×2'])
+    expect(shape(inferGroups([step, step, step], 'timelineRow'))).toEqual(['timelineRow×3'])
+    expect(shape(inferGroups([side, side], 'comparisonTable'))).toEqual(['table×2'])
+  })
+
+  it('ignores a hint that belongs to a different type of run', () => {
+    // A card whose layout says "statList" but which also holds a timeline must
+    // not draw the timeline as anything but a timeline.
+    expect(shape(inferGroups([stat, stat, step, step], 'statList'))).toEqual(['statRows×2', 'timeline×2'])
+    expect(shape(inferGroups([side, side], 'timelineRow'))).toEqual(['columns×2'])
+  })
+
   it('keeps a run shorter than MIN_RUN as leaves, for every run type', () => {
     expect(MIN_RUN).toBe(2)
     for (const block of [stat, step, side, image]) {
@@ -125,6 +147,15 @@ describe('runs', () => {
 
 describe('listArrangement', () => {
   const exactlyMaxChars = 'x'.repeat(SHORT_ITEM_MAX_CHARS)
+
+  it('reaches a checklist or a two-column list only by explicit choice', () => {
+    expect(listArrangement(list(['a', 'b']), 'checklist')).toBe('checklist')
+    expect(listArrangement(list(['a', 'b']), 'splitList')).toBe('split')
+    // The classifier never awards either, so 'auto' can never produce them.
+    for (const items of [['a'], repeat('a', MAX_CHIP_ITEMS + 3), [exactlyMaxChars + 'x']]) {
+      expect(['chips', 'numbered']).toContain(listArrangement(list(items), 'auto'))
+    }
+  })
 
   it('arranges a short list as chips', () => {
     expect(listArrangement(list(['a', 'b']), 'auto')).toBe('chips')

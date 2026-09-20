@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COLOR_CHOICES,
   EMPTY_TEXT_STYLE,
+  HEX_COLOR,
   clampFontScale,
   mergeTextStyle,
   parseTextStyle,
@@ -64,5 +66,28 @@ describe('clampFontScale', () => {
     // which would then fail the schema's range check on the way to the database.
     expect(clampFontScale(0.7 + 0.1 + 0.1)).toBe(0.9)
     expect(clampFontScale(1.1 + 0.1)).toBe(1.2)
+  })
+})
+
+describe('colour and underline', () => {
+  it('accepts a six-digit hex colour and underline', () => {
+    expect(parseTextStyle({ color: '#3b82f6', underline: true })).toEqual({ color: '#3b82f6', underline: true })
+  })
+
+  it('drops a style whose colour is not a six-digit hex, rather than storing something a renderer would misread', () => {
+    for (const color of ['blue', '#fff', 'rgb(0,0,0)', '3b82f6', '#3b82f6ff', '']) {
+      expect(parseTextStyle({ color })).toEqual({})
+    }
+  })
+
+  it('lets a card override just the colour while inheriting the rest', () => {
+    expect(mergeTextStyle({ fontFamily: 'Georgia', color: '#111827' }, { color: '#ef4444' })).toEqual({
+      fontFamily: 'Georgia',
+      color: '#ef4444',
+    })
+  })
+
+  it('offers only swatches the schema itself would accept', () => {
+    for (const { value } of COLOR_CHOICES) expect(HEX_COLOR.test(value)).toBe(true)
   })
 })

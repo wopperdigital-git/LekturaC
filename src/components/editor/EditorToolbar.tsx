@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import {
+  COLOR_CHOICES,
   FONT_CHOICES,
   FONT_SCALE_STEP,
   MAX_FONT_SCALE,
@@ -11,6 +13,16 @@ import {
 } from '@/engine/textStyle'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { LayoutType } from '@/engine/contentBlocks'
+import {
+  MAX_RUN_SCALE,
+  MIN_RUN_SCALE,
+  RUN_SCALE_STEP,
+  clampRunScale,
+  type FlagMarkType,
+  type MarkValue,
+  type ValueMarkType,
+} from '@/engine/marks'
+import { MAX_ZOOM, MIN_ZOOM } from '@/lib/zoom'
 import { cardKindLabel, type CardKind, type LayoutVariety } from '@/engine/layoutEngine'
 import type { VisualStyle } from '@/engine/contentBlocks'
 
@@ -55,6 +67,7 @@ export function EditorToolbar({
   canRedo,
   onUndo,
   onRedo,
+  presentHref,
   textStyle,
   onTextStyleChange,
   themeName,
@@ -67,8 +80,15 @@ export function EditorToolbar({
   cardKind,
   resolvedLayout,
   onChangeCardType,
+  onAddItem,
+  onRemove,
+  removeLabel,
+  zoom,
+  onZoomChange,
   markState,
   onToggleMark,
+  runValues,
+  onRunValue,
   hasTextSelection,
   activeAlign,
 }: {
@@ -77,6 +97,8 @@ export function EditorToolbar({
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  /** Where Present goes. When given, the button sits between Undo and Redo. */
+  presentHref?: string
   textStyle: TextStyle
   onTextStyleChange: (patch: Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>) => void
   themeName: ThemeTokens['name']
@@ -96,10 +118,32 @@ export function EditorToolbar({
   resolvedLayout?: Exclude<LayoutType, 'auto'>
   /** Level 2: opens the card type picker for the selected card. */
   onChangeCardType?: () => void
+  /** Levels 2 and 3: appends an item to the list being worked on. Absent when there is no list to grow. */
+  onAddItem?: () => void
+  /** Levels 2 and 3: removes the selected element, or the selected item of a list. Absent when nothing is selected. */
+  onRemove?: () => void
+  removeLabel?: string
+  /** How large the canvas is drawn, as a multiple of natural size. With `onZoomChange`, shows the zoom controls. */
+  zoom?: number
+  /** Called with the requested zoom; the page clamps it. `null` asks for the default. */
+  onZoomChange?: (zoom: number | null, direction?: 1 | -1) => void
   /** Level 3: whether the current character selection is fully bold / italic. */
-  markState?: { bold: boolean; italic: boolean }
+  markState?: { bold: boolean; italic: boolean; underline: boolean }
   /** Level 3: toggles a mark over the current character selection. */
-  onToggleMark?: (type: 'bold' | 'italic') => void
+  onToggleMark?: (type: FlagMarkType) => void
+  /**
+   * Level 3, with characters selected: what the selection currently is, for the
+   * font, size and colour controls. `null` for a value the selection's first
+   * character does not have. Read only while `hasTextSelection` is true.
+   */
+  runValues?: { fontFamily: string | null; fontScale: number | null; color: string | null }
+  /**
+   * Level 3, with characters selected: sets or, with `null`, clears a value on
+   * the selected characters. When there is a selection, font, size and colour go
+   * here instead of to the element — a selection is the narrowest scope there is,
+   * and the tools always act on the narrowest thing selected.
+   */
+  onRunValue?: (type: ValueMarkType, value: MarkValue | null) => void
   /** Level 3: true while there is a non-empty character selection to format. */
   hasTextSelection?: boolean
   /**
@@ -113,11 +157,37 @@ export function EditorToolbar({
    */
   activeAlign?: TextAlign | null
 }) {
-  const scale = textStyle.fontScale ?? 1
-  const activeFont = textStyle.fontFamily ?? ''
+  /*
+    Font, size and colour act on the narrowest thing selected. With characters
+    selected that is the characters — a value mark on the run — and otherwise the
+    element, card or deck as before. Alignment has no character scope (it belongs
+    to a whole paragraph), so it never takes this route.
+  */
+  const onRun = level === 3 && hasTextSelection === true && onRunValue !== undefined
+  const scale = onRun ? (runValues?.fontScale ?? 1) : (textStyle.fontScale ?? 1)
+  const activeFont = onRun ? (runValues?.fontFamily ?? '') : (textStyle.fontFamily ?? '')
+  const activeColor = onRun ? (runValues?.color ?? '') : (textStyle.color ?? '')
+  const minScale = onRun ? MIN_RUN_SCALE : MIN_FONT_SCALE
+  const maxScale = onRun ? MAX_RUN_SCALE : MAX_FONT_SCALE
 
   function stepScale(direction: 1 | -1) {
+    if (onRun) {
+      // Back at 100% is "no override", not a stored 1 — so the mark goes away.
+      const next = clampRunScale(scale + direction * RUN_SCALE_STEP)
+      onRunValue?.('fontScale', next === 1 ? null : next)
+      return
+    }
     onTextStyleChange({ fontScale: clampFontScale(scale + direction * FONT_SCALE_STEP) })
+  }
+
+  function setFont(fontFamily: string | null) {
+    if (onRun) onRunValue?.('fontFamily', fontFamily)
+    else onTextStyleChange({ fontFamily })
+  }
+
+  function setColor(color: string | null) {
+    if (onRun) onRunValue?.('color', color)
+    else onTextStyleChange({ color })
   }
 
   return (
@@ -140,6 +210,24 @@ export function EditorToolbar({
       >
         <UndoIcon />
       </ToolButton>
+
+      {/*
+        Present sits between Undo and Redo — the middle of the bar's first group —
+        as a bare triangle, styled like the tools around it: no fill, and only a
+        hover tint. It is a link, not a button, because it navigates; the label
+        and tooltip say what the triangle does.
+      */}
+      {presentHref && (
+        <Link
+          to={presentHref}
+          aria-label="Present"
+          title="Present this deck"
+          className="flex size-8 shrink-0 items-center justify-center rounded-app-sm text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent"
+        >
+          <PlayIcon />
+        </Link>
+      )}
+
       <ToolButton
         label="Redo"
         title="Redo (Ctrl+Shift+Z)"
@@ -151,26 +239,14 @@ export function EditorToolbar({
 
       <Divider />
 
-      <select
-        aria-label="Font style"
-        value={activeFont}
-        onChange={(e) => onTextStyleChange({ fontFamily: e.target.value || null })}
-        className="h-8 cursor-pointer rounded-app-sm bg-transparent px-1.5 text-xs text-app-foreground/90 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent"
-      >
-        <option value="">Theme font</option>
-        {FONT_CHOICES.map((font) => (
-          <option key={font.value} value={font.value}>
-            {font.label}
-          </option>
-        ))}
-      </select>
+      <FontPicker value={activeFont} onChange={setFont} selection={onRun} />
 
       <Divider />
 
       <ToolButton
         label="Decrease font size"
         onClick={() => stepScale(-1)}
-        disabled={scale <= MIN_FONT_SCALE}
+        disabled={scale <= minScale}
       >
         <MinusIcon />
       </ToolButton>
@@ -182,7 +258,7 @@ export function EditorToolbar({
       <ToolButton
         label="Increase font size"
         onClick={() => stepScale(1)}
-        disabled={scale >= MAX_FONT_SCALE}
+        disabled={scale >= maxScale}
       >
         <PlusIcon />
       </ToolButton>
@@ -221,6 +297,23 @@ export function EditorToolbar({
       >
         <ItalicIcon />
       </ToolButton>
+      <ToolButton
+        label="Underline"
+        pressed={level === 3 ? markState?.underline === true : textStyle.underline === true}
+        disabled={level === 3 && !hasTextSelection}
+        title={
+          level === 3 && !hasTextSelection ? 'Select some text to format it' : 'Underline (Ctrl+U)'
+        }
+        onClick={() =>
+          level === 3
+            ? onToggleMark?.('underline')
+            : onTextStyleChange({ underline: textStyle.underline ? null : true })
+        }
+      >
+        <UnderlineIcon />
+      </ToolButton>
+
+      <ColorPicker value={activeColor} onChange={setColor} selection={onRun} />
 
       <Divider />
 
@@ -276,6 +369,74 @@ export function EditorToolbar({
           <SwapIcon />
         </ToolButton>
       )}
+
+      {level !== 1 && onAddItem && (
+        <>
+          <Divider />
+          <button
+            type="button"
+            // Never takes focus, for the same reason `ToolButton` does not: from
+            // inside a run it would blur the run and end the edit before the
+            // click landed.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onAddItem}
+            title="Add an item to this list"
+            className="flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-app-sm px-2 text-xs text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent"
+          >
+            <PlusIcon />
+            Add item
+          </button>
+        </>
+      )}
+
+      {level !== 1 && onRemove && (
+        <>
+          <Divider />
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onRemove}
+            title={`${removeLabel ?? 'Remove'} (Backspace)`}
+            className="flex h-8 shrink-0 cursor-pointer items-center rounded-app-sm px-2 text-xs text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent"
+          >
+            {removeLabel ?? 'Remove'}
+          </button>
+        </>
+      )}
+
+      {zoom !== undefined && onZoomChange && (
+        <>
+          <Divider />
+          <ToolButton
+            label="Zoom out"
+            title="Zoom out (Ctrl+scroll down)"
+            disabled={zoom <= MIN_ZOOM}
+            onClick={() => onZoomChange(null, -1)}
+          >
+            <ZoomIcon direction="out" />
+          </ToolButton>
+          {/* Also the way back: clicking the figure returns to 100%, the same as
+              every editor whose zoom readout is a button. */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onZoomChange(1)}
+            title="Reset zoom to 100%"
+            aria-label={`Zoom ${Math.round(zoom * 100)}% — reset to 100%`}
+            className="h-8 w-11 shrink-0 cursor-pointer rounded-app-sm text-center text-xs tabular-nums text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <ToolButton
+            label="Zoom in"
+            title="Zoom in (Ctrl+scroll up)"
+            disabled={zoom >= MAX_ZOOM}
+            onClick={() => onZoomChange(null, 1)}
+          >
+            <ZoomIcon direction="in" />
+          </ToolButton>
+        </>
+      )}
     </div>
   )
 }
@@ -289,6 +450,11 @@ const LAYOUT_LABELS: Record<Exclude<LayoutType, 'auto'>, string> = {
   quote: 'Quote',
   iconGrid: 'Icon grid',
   numberedList: 'Numbered list',
+  checklist: 'Checklist',
+  splitList: 'Two-column list',
+  statList: 'Stat rows',
+  timelineRow: 'Horizontal timeline',
+  comparisonTable: 'Comparison table',
   textFocus: 'Text focus',
   gallery: 'Gallery',
   standardSplit: 'Split',
@@ -324,26 +490,7 @@ function LayoutPicker({
   kind?: CardKind
   resolvedLayout?: Exclude<LayoutType, 'auto'>
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  // Close on an outside click or Escape. Registered only while open so the
-  // toolbar isn't holding document listeners for a menu nobody opened.
-  useEffect(() => {
-    if (!open) return
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
+  const { open, setOpen, ref } = useDropdown()
 
   return (
     <div ref={ref} className="relative">
@@ -387,7 +534,7 @@ function LayoutPicker({
           {/* Naming the resolved layout is what makes Automatic legible: it is
               otherwise the only option that does not say what the slide will
               look like, and it is the state nearly every card is in. */}
-          <LayoutOption
+          <MenuOption
             label={
               resolvedLayout && activeLayout === 'auto'
                 ? `Automatic · ${LAYOUT_LABELS[resolvedLayout]}`
@@ -405,7 +552,7 @@ function LayoutPicker({
             const ordinal =
               options.filter((o, j) => o.layout === variety.layout && j <= i).length
             return (
-              <LayoutOption
+              <MenuOption
                 key={`${variety.layout}:${variety.visualStyle}`}
                 label={`${LAYOUT_LABELS[variety.layout]} · ${ordinal}`}
                 active={
@@ -424,27 +571,262 @@ function LayoutPicker({
   )
 }
 
-function LayoutOption({
+function MenuOption({
   label,
   active,
   onClick,
+  style,
 }: {
   label: string
   active: boolean
   onClick: () => void
+  /** Lets an option preview itself — the font picker sets each row in its own typeface. */
+  style?: CSSProperties
 }) {
   return (
     <button
       type="button"
       role="menuitemradio"
       aria-checked={active}
+      // Never takes focus: a choice made for selected characters needs the run to
+      // still be the focused element when the click lands.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
+      style={style}
       className={`block w-full cursor-pointer rounded-app-sm px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent ${
         active ? 'bg-app-accent/20 text-app-accent-text' : 'text-app-foreground hover:bg-app-surface'
       }`}
     >
       {label}
     </button>
+  )
+}
+
+/**
+ * Open/closed state for a toolbar dropdown, and the two ways out of it.
+ *
+ * Closes on an outside press or Escape. The listeners are registered only while
+ * open, so the toolbar is not holding document listeners for a menu nobody
+ * opened. Shared by every dropdown in the bar so they cannot drift apart on
+ * something as easy to get subtly wrong as dismissal.
+ */
+function useDropdown() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: PointerEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      // Escape closed a menu; it must not also step the slide's selection back.
+      // The page's own Escape handler is on `window`, after this one, and stands
+      // down for a key that has already been claimed.
+      e.preventDefault()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return { open, setOpen, ref }
+}
+
+/**
+ * The font picker.
+ *
+ * A menu built like the layout picker beside it — same trigger, same panel, same
+ * option rows — rather than a native `<select>`, whose popup is drawn by the
+ * operating system and looks like a different application dropped into the bar.
+ *
+ * Each option is set in its own typeface, so the list is a specimen: choosing a
+ * font by name alone meant picking blind and undoing. "Theme font" is first and
+ * is not a font but the absence of one — it hands the text back to whatever the
+ * deck's theme says, which is the state every element starts in.
+ *
+ * `value` is the stored font stack, or `''` for none; `onChange` gets `null` to
+ * clear it, matching how the rest of the toolbar clears an override.
+ */
+function FontPicker({
+  value,
+  onChange,
+  selection = false,
+}: {
+  value: string
+  onChange: (fontFamily: string | null) => void
+  /** True while the choice will go to the selected characters rather than the element. */
+  selection?: boolean
+}) {
+  const { open, setOpen, ref } = useDropdown()
+
+  const current = FONT_CHOICES.find((font) => font.value === value)
+  // A stack that is not one of ours (an older deck, or a hand-edited row) still
+  // gets a label and a preview rather than reading as "Theme font".
+  const label = value === '' ? 'Theme font' : (current?.label ?? 'Custom')
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        // Never takes focus, for the same reason `ToolButton` does not: the
+        // caret and selection inside a live run must survive the click.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((v) => !v)}
+        aria-label={`Font — ${label}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title={`Font — ${label}`}
+        className={`flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-app-sm px-2 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent ${
+          open ? 'bg-app-accent/20 text-app-accent-text' : 'text-app-foreground/90 hover:bg-app-foreground/10'
+        }`}
+      >
+        <span className="w-20 truncate text-left" style={value ? { fontFamily: value } : undefined}>
+          {label}
+        </span>
+        <ChevronIcon open={open} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 top-full z-30 mt-2 min-w-44 rounded-app border border-app-border bg-app-background p-1 shadow-app"
+        >
+          <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-app-muted">
+            {selection ? 'Font · selected text' : 'Font'}
+          </p>
+          <MenuOption
+            label="Theme font"
+            active={value === ''}
+            onClick={() => {
+              onChange(null)
+              setOpen(false)
+            }}
+          />
+          {FONT_CHOICES.map((font) => (
+            <MenuOption
+              key={font.value}
+              label={font.label}
+              active={value === font.value}
+              style={{ fontFamily: font.value }}
+              onClick={() => {
+                onChange(font.value)
+                setOpen(false)
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The text colour picker.
+ *
+ * Built like the font and layout pickers beside it. "Theme colour" is first and
+ * is the absence of a colour, not one: it hands the text back to whatever the
+ * deck's theme says, which is how every element starts and what keeps following
+ * the theme when it changes. The swatches are fixed hexes, so a colour somebody
+ * picked stays that colour across a theme switch; the native colour input at the
+ * end covers everything else.
+ *
+ * `value` is the stored `#rrggbb`, or `''` for none; `onChange` gets `null` to
+ * clear it, like the rest of the toolbar.
+ */
+function ColorPicker({
+  value,
+  onChange,
+  selection = false,
+}: {
+  value: string
+  onChange: (color: string | null) => void
+  /** True while the choice will go to the selected characters rather than the element. */
+  selection?: boolean
+}) {
+  const { open, setOpen, ref } = useDropdown()
+  const label = value === '' ? 'Theme colour' : (COLOR_CHOICES.find((c) => c.value === value)?.label ?? value)
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((v) => !v)}
+        aria-label={`Text colour — ${label}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title={`Text colour — ${label}`}
+        className={`flex size-8 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-app-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent ${
+          open ? 'bg-app-accent/20 text-app-accent-text' : 'text-app-foreground/90 hover:bg-app-foreground/10'
+        }`}
+      >
+        <span className="text-sm font-bold leading-none">A</span>
+        {/* The bar under the letter is the picked colour; with none picked it
+            is the text colour, so it reads as "no override" rather than as a
+            colour of its own. */}
+        <span
+          aria-hidden="true"
+          className="h-[3px] w-4 rounded-full"
+          style={{ backgroundColor: value || 'currentColor' }}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute left-0 top-full z-30 mt-2 w-48 rounded-app border border-app-border bg-app-background p-1 shadow-app"
+        >
+          <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-app-muted">
+            {selection ? 'Text colour · selected text' : 'Text colour'}
+          </p>
+          <MenuOption
+            label="Theme colour"
+            active={value === ''}
+            onClick={() => {
+              onChange(null)
+              setOpen(false)
+            }}
+          />
+          <div className="grid grid-cols-6 gap-1.5 px-2 py-2">
+            {COLOR_CHOICES.map((color) => (
+              <button
+                key={color.value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={value === color.value}
+                aria-label={color.label}
+                title={color.label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(color.value)
+                  setOpen(false)
+                }}
+                className={`size-6 cursor-pointer rounded-full border transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent ${
+                  value === color.value ? 'border-app-accent ring-2 ring-app-accent/40' : 'border-app-border'
+                }`}
+                style={{ backgroundColor: color.value }}
+              />
+            ))}
+          </div>
+          <label className="flex cursor-pointer items-center justify-between gap-2 rounded-app-sm px-2 py-1.5 text-xs text-app-foreground hover:bg-app-surface">
+            Custom…
+            <input
+              type="color"
+              aria-label="Custom text colour"
+              value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#3b82f6'}
+              onChange={(e) => onChange(e.target.value)}
+              className="size-6 cursor-pointer rounded border border-app-border bg-transparent p-0"
+            />
+          </label>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -522,6 +904,43 @@ const strokeProps = {
 
 /* One glyph for both directions — redo is the same arrow mirrored, which is how
    every editor draws the pair and keeps them unmistakably a pair. */
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-4">
+      <path d="M6 4.2v11.6a.6.6 0 0 0 .92.5l9-5.8a.6.6 0 0 0 0-1l-9-5.8A.6.6 0 0 0 6 4.2Z" />
+    </svg>
+  )
+}
+
+function UnderlineIcon() {
+  return (
+    <svg {...strokeProps}>
+      <path d="M6 4v5.5a4 4 0 0 0 8 0V4M4.5 16.5h11" />
+    </svg>
+  )
+}
+
+function ZoomIcon({ direction }: { direction: 'in' | 'out' }) {
+  return (
+    <svg {...strokeProps}>
+      <circle cx="8.5" cy="8.5" r="5" />
+      <path d="M12.5 12.5L16.5 16.5" />
+      <path d={direction === 'in' ? 'M6.5 8.5h4M8.5 6.5v4' : 'M6.5 8.5h4'} />
+    </svg>
+  )
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      {...strokeProps}
+      className={`size-3 shrink-0 text-app-muted transition-transform ${open ? 'rotate-180' : ''}`}
+    >
+      <path d="M5 8l5 5 5-5" />
+    </svg>
+  )
+}
+
 function UndoIcon({ flip }: { flip?: boolean }) {
   return (
     <svg {...strokeProps} style={flip ? { transform: 'scaleX(-1)' } : undefined}>

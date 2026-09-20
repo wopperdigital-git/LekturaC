@@ -234,6 +234,87 @@ describe('structureFlags', () => {
     })
   })
 
+  describe('list families in LAYOUT_REPETITION', () => {
+    it('treats an icon grid and a numbered list as the same family', () => {
+      const chips = card({
+        blocks: [{ type: 'heading', text: 'Chips' }, { type: 'bulletList', items: ['one', 'two', 'three'] }],
+      })
+      // Items over 40 characters resolve to numberedList rather than iconGrid.
+      const longItem = 'an item long enough that it cannot be drawn as a compact chip'
+      const numbered = card({
+        blocks: [{ type: 'heading', text: 'Numbered' }, { type: 'bulletList', items: [longItem, longItem] }],
+      })
+      const d = deck([chips, numbered, chips])
+      expect(structureFlags(d).filter((f) => f.type === 'LAYOUT_REPETITION')).toHaveLength(1)
+    })
+  })
+
+  describe('LIST_DOMINANT', () => {
+    const listCard = (n: number) =>
+      card({
+        blocks: [
+          { type: 'heading', text: `List ${n}` },
+          { type: 'bulletList', items: ['first', 'second', 'third'] },
+        ],
+      })
+    const statCard = (n: number) =>
+      card({ blocks: [{ type: 'heading', text: `Stat ${n}` }, { type: 'stat', value: `${n}`, label: 'metric' }] })
+    const proseCard = (n: number) =>
+      card({ blocks: [{ type: 'heading', text: `Prose ${n}` }, { type: 'paragraph', text: 'One idea, said plainly.' }] })
+    const timelineCard = (n: number) =>
+      card({
+        blocks: [
+          { type: 'heading', text: `Steps ${n}` },
+          { type: 'timelineStep', label: 'A', text: 'first' },
+          { type: 'timelineStep', label: 'B', text: 'second' },
+        ],
+      })
+    const listFlags = (d: GeneratedDeck) => structureFlags(d).filter((f) => f.type === 'LIST_DOMINANT')
+
+    it('flags nothing for a deck that alternates structures with lists under 40%', () => {
+      const d = deck([proseCard(1), listCard(2), statCard(3), timelineCard(4), listCard(5)])
+      expect(listFlags(d)).toEqual([])
+    })
+
+    it('flags the latest surplus list slide when lists pass 40% without any two touching', () => {
+      // 6 cards allow floor(6 * 0.4) = 2 lists; this has 3, none adjacent, so one is surplus — the last.
+      const d = deck([listCard(1), statCard(2), listCard(3), timelineCard(4), listCard(5), proseCard(6)])
+      const flags = listFlags(d)
+      expect(flags).toHaveLength(1)
+      expect(flags[0].slideIndex).toBe(4)
+      expect(flags[0].severity).toBe('medium')
+      expect(flags[0].message).toMatch(/3 of 6/)
+    })
+
+    it('flags the second of two adjacent list slides even when the share is fine', () => {
+      const d = deck([proseCard(1), listCard(2), listCard(3), statCard(4), timelineCard(5), proseCard(6)])
+      const flags = listFlags(d)
+      expect(flags).toHaveLength(1)
+      expect(flags[0].slideIndex).toBe(2)
+    })
+
+    it('never flags the first list slide of an adjacent pair', () => {
+      const d = deck([listCard(1), listCard(2), statCard(3), timelineCard(4), proseCard(5)])
+      expect(listFlags(d).map((f) => f.slideIndex)).toEqual([1])
+    })
+
+    it('does not judge a deck shorter than 5 slides', () => {
+      const d = deck([listCard(1), listCard(2), listCard(3), listCard(4)])
+      expect(listFlags(d)).toEqual([])
+    })
+
+    it('flags at most one entry per slide', () => {
+      const d = deck([listCard(1), listCard(2), listCard(3), listCard(4), listCard(5), listCard(6)])
+      const indices = listFlags(d).map((f) => f.slideIndex)
+      expect(new Set(indices).size).toBe(indices.length)
+    })
+
+    it('tells the writer which structure to move to', () => {
+      const d = deck([listCard(1), listCard(2), statCard(3), timelineCard(4), proseCard(5)])
+      expect(listFlags(d)[0].suggestedAction).toMatch(/timelineStep/)
+    })
+  })
+
   describe('TEXT_ONLY_DECK', () => {
     const textCard = (n: number) =>
       card({ blocks: [{ type: 'heading', text: `Slide ${n}` }, { type: 'paragraph', text: 'Just prose here.' }] })
@@ -345,7 +426,18 @@ describe('structureFlags', () => {
       const d = deck([card({ plan: { visualType: 'timeline' } })])
       const flags = structureFlags(d).filter((f) => f.type === 'VISUAL_MISMATCH')
       expect(flags).toHaveLength(1)
-      expect(flags[0].severity).toBe('low')
+      // Medium so it is repairable — a plan that says "timeline" over a bullet list is the failure.
+      expect(flags[0].severity).toBe('medium')
+    })
+
+    it('flags process_flow with no timelineStep block', () => {
+      const d = deck([card({ plan: { visualType: 'process_flow' } })])
+      expect(structureFlags(d).filter((f) => f.type === 'VISUAL_MISMATCH')).toHaveLength(1)
+    })
+
+    it('does not demand stats of a chart visualType, which would push the writer to invent numbers', () => {
+      const d = deck([card({ plan: { visualType: 'bar_chart' } })])
+      expect(structureFlags(d).filter((f) => f.type === 'VISUAL_MISMATCH')).toEqual([])
     })
 
     it('does not flag a timeline visualType with a timelineStep block', () => {

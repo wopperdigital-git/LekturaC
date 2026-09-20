@@ -31,16 +31,32 @@
   drifted apart in the first place.
 */
 
-/** What the canvas currently has selected. A card can be selected without an element; an element never without its card. */
+/**
+ * What the canvas currently has selected. A card can be selected without an
+ * element; an element never without its card, and an item never without the
+ * element (the list) it belongs to.
+ *
+ * An item is the narrowest thing that can be picked — one bullet of a list, one
+ * entry of a comparison group — and it is held beside `blockIndex` rather than
+ * replacing it, so the list stays the selected element and the item is a
+ * refinement of it. Typography still resolves to the element: font, size and
+ * alignment are whole-element properties, and an item has none of its own.
+ */
 export type Selection = {
   cardId: string | null
   blockIndex: number | null
+  itemIndex: number | null
 }
 
 /** A press that landed on one of a card's elements. */
 export type ElementPress = {
   cardId: string
   blockIndex: number
+}
+
+/** A press that landed on one item of a list inside one of a card's elements. */
+export type ItemPress = ElementPress & {
+  itemIndex: number
 }
 
 /**
@@ -63,8 +79,30 @@ export type TypographyScope =
  * the top of this file for why the first press stops at the card.
  */
 export function selectionAfterElementPress(current: Selection, press: ElementPress): Selection {
-  if (current.cardId !== press.cardId) return { cardId: press.cardId, blockIndex: null }
-  return { cardId: press.cardId, blockIndex: press.blockIndex }
+  if (current.cardId !== press.cardId) return { cardId: press.cardId, blockIndex: null, itemIndex: null }
+  return { cardId: press.cardId, blockIndex: press.blockIndex, itemIndex: null }
+}
+
+/**
+ * The selection after a press on one item of a list.
+ *
+ * The same drill-in as `selectionAfterElementPress` — a press on a card that is
+ * not selected yet stops at the card — and then it goes one step further than an
+ * element press does: it takes the item, and the list along with it.
+ */
+export function selectionAfterItemPress(current: Selection, press: ItemPress): Selection {
+  if (current.cardId !== press.cardId) return { cardId: press.cardId, blockIndex: null, itemIndex: null }
+  return { cardId: press.cardId, blockIndex: press.blockIndex, itemIndex: press.itemIndex }
+}
+
+/**
+ * One step back out: an item falls back to its list, a list to its card. A card
+ * stays selected — leaving the card is a press on the canvas, not a keystroke.
+ */
+export function selectionAfterEscape(current: Selection): Selection {
+  if (current.itemIndex !== null) return { ...current, itemIndex: null }
+  if (current.blockIndex !== null) return { ...current, blockIndex: null }
+  return current
 }
 
 /**
@@ -75,7 +113,7 @@ export function selectionAfterElementPress(current: Selection, press: ElementPre
  * everything in it, and that is the way back out to formatting the whole slide.
  */
 export function selectionAfterCardPress(cardId: string | null): Selection {
-  return { cardId, blockIndex: null }
+  return { cardId, blockIndex: null, itemIndex: null }
 }
 
 /** Narrowest thing selected wins: the element, else the card, else the deck. */

@@ -2,9 +2,10 @@ import type { Card, ContentBlock } from '@/engine/contentBlocks'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { TextStyle } from '@/engine/textStyle'
 import { textRef } from '@/engine/marks'
+import { parseTextRef } from '@/engine/blockText'
 import { cardBoxes, type Box } from './blockBoxes'
 import type { PptxTextRun } from './textRun'
-import { faceName, hex, markedRuns, resolveRunStyle } from './textRun'
+import { SIZE_SCALE_KEY, faceName, hex, markedRuns, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
 import type { FitParagraph, FitSizing, SizeRole, TextMeasurer } from './textFit'
 import {
@@ -86,7 +87,24 @@ function marksFor(card: Card, ref: string) {
 
 /** The merged style for one run, with its own inline overrides on top. */
 function styleFor(card: Card, ref: string, style: TextStyle): TextStyle {
-  return resolveRunStyle(style, card.inline?.[ref]?.style)
+  /*
+    Three levels, narrowest last: deck and card (already merged into `style`),
+    then the element the run belongs to, then the run itself.
+
+    The element's own typography — what the toolbar writes while an element is
+    selected — lives under the bare block index, not under any run's ref (see
+    `blockStyleKey` in the editor). It used to be skipped here, so a font, size,
+    alignment or colour set on one selected element showed on screen and vanished
+    from the exported file. Written as `String(index)` because `src/export/` may
+    not import from a component.
+  */
+  return resolveRunStyle(resolveRunStyle(style, elementStyleOf(card, ref)), card.inline?.[ref]?.style)
+}
+
+/** The typography set on the whole element a run belongs to, or undefined if nobody set any. */
+function elementStyleOf(card: Card, ref: string | null): TextStyle | undefined {
+  const block = ref ? parseTextRef(ref)?.blockIndex : undefined
+  return block === undefined ? undefined : card.inline?.[String(block)]?.style
 }
 
 /**
@@ -102,6 +120,22 @@ function styleFor(card: Card, ref: string, style: TextStyle): TextStyle {
 function markBold(card: Card, ref: string | null): true | undefined {
   if (!ref) return undefined
   return marksFor(card, ref)?.some((mark) => mark.type === 'bold') ? true : undefined
+}
+
+/**
+ * The largest size multiple any size mark on `ref` sets, or `undefined` if none
+ * enlarges it. Only enlargement matters to the fit — a run set *smaller* than the
+ * box's size cannot make its paragraph taller — and, like `markBold`, it is
+ * deliberately conservative: a paragraph with one enlarged word is measured as if
+ * every word were that size.
+ */
+function markScale(card: Card, ref: string | null): number | undefined {
+  if (!ref) return undefined
+  let largest = 1
+  for (const mark of marksFor(card, ref) ?? []) {
+    if (mark.type === 'fontScale' && typeof mark.value === 'number') largest = Math.max(largest, mark.value)
+  }
+  return largest > 1 ? largest : undefined
 }
 
 function firstOfType<T extends ContentBlock['type']>(
@@ -154,7 +188,7 @@ function addHeading(
     italic: runStyle.italic,
   }
   const { sizePt, heightIn } = fitText(
-    [{ text: headingText(card), bold: markBold(card, ref) }],
+    [{ text: headingText(card), bold: markBold(card, ref), scale: markScale(card, ref) }],
     { widthIn: CONTENT_W, maxHeightIn: HEADING_MAX_H },
     sizing,
     measure,
@@ -167,9 +201,10 @@ function addHeading(
     h: heightIn,
     fontFace: headingFace(theme, runStyle),
     fontSize: sizePt,
-    color: hex(theme.colors.foreground),
+    color: hex(runStyle.color ?? theme.colors.foreground),
     bold: runStyle.bold ?? true,
     italic: runStyle.italic,
+    underline: runStyle.underline,
     align: runStyle.align ?? 'left',
     valign: 'top',
     margin: TEXT_MARGIN_PT,
@@ -219,7 +254,7 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
     italic: headingStyle.italic,
   }
   const { sizePt: titleSize, heightIn: titleH } = fitText(
-    [{ text: headingText(card), bold: markBold(card, headingRef) }],
+    [{ text: headingText(card), bold: markBold(card, headingRef), scale: markScale(card, headingRef) }],
     { widthIn: CONTENT_W, maxHeightIn: TITLE_MAX_H },
     titleSizing,
     measure,
@@ -241,7 +276,7 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
     }
     const subParagraphs: FitParagraph[] = paragraphs.map(({ block, index }) => ({
       text: block.text,
-      bold: markBold(card, textRef(index, 'text')),
+      bold: markBold(card, textRef(index, 'text')), scale: markScale(card, textRef(index, 'text')),
     }))
     const fitted = fitText(
       subParagraphs,
@@ -270,9 +305,10 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
     h: titleH,
     fontFace: headingFace(theme, headingStyle),
     fontSize: titleSize,
-    color: hex(theme.colors.foreground),
+    color: hex(headingStyle.color ?? theme.colors.foreground),
     bold: headingStyle.bold ?? true,
     italic: headingStyle.italic,
+    underline: headingStyle.underline,
     align: headingStyle.align ?? 'center',
     valign: 'top',
     margin: TEXT_MARGIN_PT,
@@ -299,8 +335,9 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
       h: subH,
       fontFace: bodyFace(theme, boxStyle),
       fontSize: subSize,
-      color: hex(theme.colors.muted),
+      color: hex(boxStyle.color ?? theme.colors.muted),
       italic: boxStyle.italic,
+      underline: boxStyle.underline,
       align: boxStyle.align ?? 'center',
       valign: 'top',
       margin: TEXT_MARGIN_PT,
@@ -396,8 +433,21 @@ function flattenBlocks(card: Card): BulletLine[] {
  */
 function runsForLine(line: BulletLine, card: Card, isLast: boolean): PptxTextRun[] {
   const runs = markedRuns(line.text, line.ref ? marksFor(card, line.ref) : undefined)
+  /*
+    A merged box has one alignment, one face and one size, so an element's own
+    values for those cannot be honoured inside it. Colour, underline, italic and
+    bold *can* differ run by run, so the element's own go on its runs — without
+    this a colour picked for one paragraph of a body slide would show on screen
+    and vanish from the file.
+  */
+  const element = elementStyleOf(card, line.ref)
+  const own: Record<string, unknown> = {}
+  if (element?.color) own.color = hex(element.color)
+  if (element?.underline) own.underline = true
+  if (element?.italic) own.italic = true
+  if (element?.bold) own.bold = true
   return runs.map((run, i) => {
-    const options = { ...run.options }
+    const options = { ...own, ...run.options }
     if (i === 0) {
       options.bullet = line.bullet
       options.indentLevel = line.indent
@@ -429,7 +479,7 @@ const renderBody: SlideRenderer = (slide, card, theme, style, measure) => {
   const paragraphs: FitParagraph[] = lines.map((line) => ({
     text: line.text,
     indentIn: lineIndent(line),
-    bold: markBold(card, line.ref),
+    bold: markBold(card, line.ref), scale: markScale(card, line.ref),
   }))
 
   const areaH = BOTTOM - contentTop
@@ -450,7 +500,7 @@ const renderBody: SlideRenderer = (slide, card, theme, style, measure) => {
     h: areaH,
     fontFace: bodyFace(theme, style),
     fontSize: sizePt,
-    color: hex(theme.colors.foreground),
+    color: hex(style.color ?? theme.colors.foreground),
     align: style.align ?? 'left',
     valign: 'middle',
     lineSpacing: spacingPt(sizePt, sizing.lineSpacing ?? DEFAULT_LINE_SPACING),
@@ -513,7 +563,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
     paragraphStyle = styleFor(card, textRef(paragraphs[0].index, 'text'), style)
     const subParagraphs: FitParagraph[] = paragraphs.map(({ block, index }) => ({
       text: block.text,
-      bold: markBold(card, textRef(index, 'text')),
+      bold: markBold(card, textRef(index, 'text')), scale: markScale(card, textRef(index, 'text')),
     }))
     const sizing: FitSizing = {
       preferredPt: preferredSize('body', theme.typography.scale[BODY], paragraphStyle.fontScale),
@@ -551,7 +601,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       italic: valueStyle.italic,
     }
     return fitText(
-      [{ text: stat.value, bold: markBold(card, valueRef) }],
+      [{ text: stat.value, bold: markBold(card, valueRef), scale: markScale(card, valueRef) }],
       { widthIn: cellW - 2 * CELL_PAD_IN, maxHeightIn: cellH * 0.62 },
       sizing,
       measure,
@@ -567,7 +617,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       italic: labelStyle.italic,
     }
     return fitText(
-      [{ text: stat.label, bold: markBold(card, labelRef) }],
+      [{ text: stat.label, bold: markBold(card, labelRef), scale: markScale(card, labelRef) }],
       { widthIn: cellW - 2 * CELL_PAD_IN, maxHeightIn: cellH * 0.34 },
       sizing,
       measure,
@@ -592,9 +642,10 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       h: cellH * 0.62,
       fontFace: headingFace(theme, valueStyle),
       fontSize: valueSize,
-      color: hex(theme.colors.accent),
+      color: hex(valueStyle.color ?? theme.colors.accent),
       bold: valueStyle.bold ?? true,
       italic: valueStyle.italic,
+      underline: valueStyle.underline,
       align: 'center',
       valign: 'bottom',
       margin: TEXT_MARGIN_PT,
@@ -611,8 +662,9 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       h: cellH * 0.34,
       fontFace: bodyFace(theme, labelStyle),
       fontSize: labelSize,
-      color: hex(theme.colors.muted),
+      color: hex(labelStyle.color ?? theme.colors.muted),
       italic: labelStyle.italic,
+      underline: labelStyle.underline,
       align: 'center',
       valign: 'top',
       margin: TEXT_MARGIN_PT,
@@ -639,8 +691,9 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
       h: paragraphH,
       fontFace: bodyFace(theme, paragraphStyle),
       fontSize: paragraphSize,
-      color: hex(theme.colors.muted),
+      color: hex(paragraphStyle.color ?? theme.colors.muted),
       italic: paragraphStyle.italic,
+      underline: paragraphStyle.underline,
       align: paragraphStyle.align ?? 'center',
       valign: 'top',
       margin: TEXT_MARGIN_PT,
@@ -709,7 +762,7 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
       italic: headingStyle.italic,
     }
     return fitText(
-      [{ text: group.heading, bold: markBold(card, headingRef) }],
+      [{ text: group.heading, bold: markBold(card, headingRef), scale: markScale(card, headingRef) }],
       { widthIn: colW, maxHeightIn: HEADING_CAP_H },
       sizing,
       measure,
@@ -727,7 +780,7 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
     const paragraphs: FitParagraph[] = group.items.map((item, j) => ({
       text: item,
       indentIn: BULLET_INDENT_IN,
-      bold: markBold(card, textRef(group.index, 'items', j)),
+      bold: markBold(card, textRef(group.index, 'items', j)), scale: markScale(card, textRef(group.index, 'items', j)),
     }))
     const sizing: FitSizing = {
       preferredPt: preferredSize('body', theme.typography.scale[BODY], style.fontScale),
@@ -753,9 +806,10 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
       h: headingH,
       fontFace: headingFace(theme, headingStyle),
       fontSize: headingSize,
-      color: hex(theme.colors.accent),
+      color: hex(headingStyle.color ?? theme.colors.accent),
       bold: headingStyle.bold ?? true,
       italic: headingStyle.italic,
+      underline: headingStyle.underline,
       align: 'left',
       valign: 'middle',
       margin: TEXT_MARGIN_PT,
@@ -781,7 +835,8 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
       h: bulletsAreaH,
       fontFace: bodyFace(theme, style),
       fontSize: bulletSize,
-      color: hex(theme.colors.foreground),
+      color: hex(style.color ?? theme.colors.foreground),
+      underline: style.underline,
       align: 'left',
       valign: 'top',
       lineSpacing: spacingPt(bulletSize, theme.typography.lineHeight),
@@ -823,7 +878,7 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
     italic: quoteStyle.italic ?? true,
   }
   const quoteFit = fitText(
-    [{ text: `“${quote.block.text}”`, bold: markBold(card, textRefKey) }],
+    [{ text: `“${quote.block.text}”`, bold: markBold(card, textRefKey), scale: markScale(card, textRefKey) }],
     { widthIn: quoteW, maxHeightIn: area - (attribution ? ATTRIBUTION_MAX_H : 0) },
     quoteSizing,
     measure,
@@ -841,7 +896,7 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
       italic: attrStyle.italic,
     }
     attrFit = fitText(
-      [{ text: `— ${attribution}`, bold: markBold(card, attrRef) }],
+      [{ text: `— ${attribution}`, bold: markBold(card, attrRef), scale: markScale(card, attrRef) }],
       { widthIn: quoteW, maxHeightIn: ATTRIBUTION_MAX_H },
       attrSizing,
       measure,
@@ -858,8 +913,9 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
     h: quoteFit.heightIn,
     fontFace: headingFace(theme, quoteStyle),
     fontSize: quoteFit.sizePt,
-    color: hex(theme.colors.foreground),
+    color: hex(quoteStyle.color ?? theme.colors.foreground),
     italic: quoteStyle.italic ?? true,
+    underline: quoteStyle.underline,
     align: quoteStyle.align ?? 'center',
     valign: 'middle',
     margin: TEXT_MARGIN_PT,
@@ -876,7 +932,8 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
       h: attrFit.heightIn,
       fontFace: bodyFace(theme, attrStyle),
       fontSize: attrFit.sizePt,
-      color: hex(theme.colors.muted),
+      color: hex(attrStyle.color ?? theme.colors.muted),
+      underline: attrStyle.underline,
       align: attrStyle.align ?? 'center',
       valign: 'top',
       margin: TEXT_MARGIN_PT,
@@ -1043,7 +1100,7 @@ function renderAdjustedBlock(
       const bold = own.bold ?? true
       const preferredPt = fittedPointSize(theme.typography.scale[H2], own.fontScale, fit)
       const { sizePt, spacing } = fitSize(
-        [{ text: block.text, bold: markBold(card, ref) }],
+        [{ text: block.text, bold: markBold(card, ref), scale: markScale(card, ref) }],
         box,
         preferredPt,
         face,
@@ -1053,9 +1110,10 @@ function renderAdjustedBlock(
       text(markedRuns(block.text, marksFor(card, ref)), {
         fontFace: face,
         fontSize: sizePt,
-        color: hex(theme.colors.foreground),
+        color: hex(own.color ?? theme.colors.foreground),
         bold,
         italic: own.italic,
+        underline: own.underline,
         align: own.align ?? 'left',
         lineSpacing: spacingPt(sizePt, spacing),
       })
@@ -1068,7 +1126,7 @@ function renderAdjustedBlock(
       const face = bodyFace(theme, own)
       const preferredPt = fittedPointSize(theme.typography.scale[BODY], own.fontScale, fit)
       const { sizePt, spacing } = fitSize(
-        [{ text: block.text, bold: markBold(card, ref) }],
+        [{ text: block.text, bold: markBold(card, ref), scale: markScale(card, ref) }],
         box,
         preferredPt,
         face,
@@ -1079,9 +1137,10 @@ function renderAdjustedBlock(
       text(markedRuns(block.text, marksFor(card, ref)), {
         fontFace: face,
         fontSize: sizePt,
-        color: hex(theme.colors.foreground),
+        color: hex(own.color ?? theme.colors.foreground),
         bold: own.bold,
         italic: own.italic,
+        underline: own.underline,
         align: own.align ?? 'left',
         lineSpacing: spacingPt(sizePt, spacing),
       })
@@ -1094,7 +1153,7 @@ function renderAdjustedBlock(
       const paragraphs: FitParagraph[] = block.items.map((item, j) => ({
         text: item,
         indentIn: BULLET_INDENT_IN,
-        bold: markBold(card, textRef(index, 'items', j)),
+        bold: markBold(card, textRef(index, 'items', j)), scale: markScale(card, textRef(index, 'items', j)),
       }))
       const { sizePt, spacing } = fitSize(
         paragraphs,
@@ -1108,7 +1167,8 @@ function renderAdjustedBlock(
       text(listRuns(card, index, 'items', block.items), {
         fontFace: face,
         fontSize: sizePt,
-        color: hex(theme.colors.foreground),
+        color: hex(style.color ?? theme.colors.foreground),
+        underline: style.underline,
         align: style.align ?? 'left',
         lineSpacing: spacingPt(sizePt, spacing),
       })
@@ -1131,7 +1191,7 @@ function renderAdjustedBlock(
       const valueBold = valueStyle.bold ?? true
       const valuePreferred = fittedPointSize(theme.typography.scale[H1], valueStyle.fontScale, fit)
       const { sizePt: valueSize, spacing: valueSpacing } = fitSize(
-        [{ text: block.value, bold: markBold(card, valueRef) }],
+        [{ text: block.value, bold: markBold(card, valueRef), scale: markScale(card, valueRef) }],
         valueArea,
         valuePreferred,
         valueFace,
@@ -1143,9 +1203,10 @@ function renderAdjustedBlock(
         {
           fontFace: valueFace,
           fontSize: valueSize,
-          color: hex(theme.colors.accent),
+          color: hex(valueStyle.color ?? theme.colors.accent),
           bold: valueBold,
           italic: valueStyle.italic,
+          underline: valueStyle.underline,
           align: valueStyle.align ?? 'left',
           valign: 'bottom',
           lineSpacing: spacingPt(valueSize, valueSpacing),
@@ -1158,7 +1219,7 @@ function renderAdjustedBlock(
       const labelFace = bodyFace(theme, labelStyle)
       const labelPreferred = fittedPointSize(theme.typography.scale[BODY], labelStyle.fontScale, fit)
       const { sizePt: labelSize, spacing: labelSpacing } = fitSize(
-        [{ text: block.label, bold: markBold(card, labelRef) }],
+        [{ text: block.label, bold: markBold(card, labelRef), scale: markScale(card, labelRef) }],
         labelArea,
         labelPreferred,
         labelFace,
@@ -1170,8 +1231,9 @@ function renderAdjustedBlock(
         {
           fontFace: labelFace,
           fontSize: labelSize,
-          color: hex(theme.colors.muted),
+          color: hex(labelStyle.color ?? theme.colors.muted),
           italic: labelStyle.italic,
+          underline: labelStyle.underline,
           align: labelStyle.align ?? 'left',
           lineSpacing: spacingPt(labelSize, labelSpacing),
         },
@@ -1191,7 +1253,7 @@ function renderAdjustedBlock(
       const preferredPt = fittedPointSize(theme.typography.scale[H3], own.fontScale, fit)
       const quoteText = `“${block.text}”`
       const { sizePt, spacing } = fitSize(
-        [{ text: quoteText, bold: markBold(card, ref) }],
+        [{ text: quoteText, bold: markBold(card, ref), scale: markScale(card, ref) }],
         quoteArea,
         preferredPt,
         face,
@@ -1204,7 +1266,8 @@ function renderAdjustedBlock(
         {
           fontFace: face,
           fontSize: sizePt,
-          color: hex(theme.colors.foreground),
+          color: hex(own.color ?? theme.colors.foreground),
+          underline: own.underline,
           italic,
           align: own.align ?? 'left',
           lineSpacing: spacingPt(sizePt, spacing),
@@ -1220,7 +1283,7 @@ function renderAdjustedBlock(
         const attrPreferred = fittedPointSize(theme.typography.scale[BODY], attrStyle.fontScale, fit)
         const attrText = `— ${attribution}`
         const { sizePt: attrSize, spacing: attrSpacing } = fitSize(
-          [{ text: attrText, bold: markBold(card, attrRef) }],
+          [{ text: attrText, bold: markBold(card, attrRef), scale: markScale(card, attrRef) }],
           attrArea,
           attrPreferred,
           attrFace,
@@ -1230,7 +1293,8 @@ function renderAdjustedBlock(
           {
             fontFace: attrFace,
             fontSize: attrSize,
-            color: hex(theme.colors.muted),
+            color: hex(attrStyle.color ?? theme.colors.muted),
+            underline: attrStyle.underline,
             align: attrStyle.align ?? 'left',
             lineSpacing: spacingPt(attrSize, attrSpacing),
           },
@@ -1257,7 +1321,7 @@ function renderAdjustedBlock(
       const labelBold = labelStyle.bold ?? true
       const labelPreferred = fittedPointSize(theme.typography.scale[BODY], labelStyle.fontScale, fit)
       const { sizePt: labelSize, spacing: labelSpacing } = fitSize(
-        [{ text: block.label, bold: markBold(card, labelRef) }],
+        [{ text: block.label, bold: markBold(card, labelRef), scale: markScale(card, labelRef) }],
         labelArea,
         labelPreferred,
         labelFace,
@@ -1268,7 +1332,8 @@ function renderAdjustedBlock(
         {
           fontFace: labelFace,
           fontSize: labelSize,
-          color: hex(theme.colors.accent),
+          color: hex(labelStyle.color ?? theme.colors.accent),
+          underline: labelStyle.underline,
           bold: labelBold,
           align: labelStyle.align ?? 'left',
           lineSpacing: spacingPt(labelSize, labelSpacing),
@@ -1281,7 +1346,7 @@ function renderAdjustedBlock(
       const bodyFaceName = bodyFace(theme, bodyStyle)
       const bodyPreferred = fittedPointSize(theme.typography.scale[BODY], bodyStyle.fontScale, fit)
       const { sizePt: bodySize, spacing: bodySpacing } = fitSize(
-        [{ text: block.text, bold: markBold(card, bodyRef) }],
+        [{ text: block.text, bold: markBold(card, bodyRef), scale: markScale(card, bodyRef) }],
         bodyArea,
         bodyPreferred,
         bodyFaceName,
@@ -1291,7 +1356,8 @@ function renderAdjustedBlock(
         {
           fontFace: bodyFaceName,
           fontSize: bodySize,
-          color: hex(theme.colors.foreground),
+          color: hex(bodyStyle.color ?? theme.colors.foreground),
+          underline: bodyStyle.underline,
           align: bodyStyle.align ?? 'left',
           lineSpacing: spacingPt(bodySize, bodySpacing),
         },
@@ -1311,7 +1377,7 @@ function renderAdjustedBlock(
       const headingBold = headingStyle.bold ?? true
       const headingPreferred = fittedPointSize(theme.typography.scale[H3], headingStyle.fontScale, fit)
       const { sizePt: headingSize, spacing: headingSpacing } = fitSize(
-        [{ text: block.heading, bold: markBold(card, headingRef) }],
+        [{ text: block.heading, bold: markBold(card, headingRef), scale: markScale(card, headingRef) }],
         headingArea,
         headingPreferred,
         headingFaceName,
@@ -1322,7 +1388,8 @@ function renderAdjustedBlock(
         {
           fontFace: headingFaceName,
           fontSize: headingSize,
-          color: hex(theme.colors.accent),
+          color: hex(headingStyle.color ?? theme.colors.accent),
+          underline: headingStyle.underline,
           bold: headingBold,
           align: headingStyle.align ?? 'left',
           lineSpacing: spacingPt(headingSize, headingSpacing),
@@ -1335,7 +1402,7 @@ function renderAdjustedBlock(
       const paragraphs: FitParagraph[] = block.items.map((item, j) => ({
         text: item,
         indentIn: BULLET_INDENT_IN,
-        bold: markBold(card, textRef(index, 'items', j)),
+        bold: markBold(card, textRef(index, 'items', j)), scale: markScale(card, textRef(index, 'items', j)),
       }))
       const { sizePt, spacing } = fitSize(paragraphs, itemsArea, preferredPt, face)
       text(
@@ -1343,7 +1410,8 @@ function renderAdjustedBlock(
         {
           fontFace: face,
           fontSize: sizePt,
-          color: hex(theme.colors.foreground),
+          color: hex(style.color ?? theme.colors.foreground),
+          underline: style.underline,
           align: style.align ?? 'left',
           lineSpacing: spacingPt(sizePt, spacing),
         },
@@ -1368,7 +1436,8 @@ function renderAdjustedBlock(
       text(block.alt, {
         fontFace: face,
         fontSize: sizePt,
-        color: hex(theme.colors.muted),
+        color: hex(style.color ?? theme.colors.muted),
+        underline: style.underline,
         italic: true,
         align: 'center',
         valign: 'middle',
@@ -1404,11 +1473,41 @@ const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure) => {
   })
 }
 
+/**
+ * Turns each run's size multiple into points, when the box is written.
+ *
+ * `markedRuns` cannot do it: a size mark is a multiple of the box's own size, and
+ * only `addText` sees a box's runs and its `fontSize` together. Wrapping the slide
+ * here, once, covers every renderer — none of them has to remember.
+ */
+function withRunSizes(slide: PptxSlide): PptxSlide {
+  return {
+    addShape: (shape, options) => slide.addShape(shape, options),
+    addText(text, options) {
+      if (typeof text === 'string' || typeof options.fontSize !== 'number') return slide.addText(text, options)
+      const boxPt = options.fontSize
+      const runs = text.map((run) => {
+        const scale = run.options[SIZE_SCALE_KEY]
+        if (typeof scale !== 'number') return run
+        const { [SIZE_SCALE_KEY]: _scale, ...rest } = run.options
+        void _scale
+        return { text: run.text, options: { ...rest, fontSize: Math.round(boxPt * scale * 10) / 10 } }
+      })
+      return slide.addText(runs, options)
+    },
+  }
+}
+
+const sized =
+  (render: SlideRenderer): SlideRenderer =>
+  (slide, ...rest) =>
+    render(withRunSizes(slide), ...rest)
+
 export const RENDERERS: Record<PptxGroup, SlideRenderer> = {
-  title: renderTitle,
-  body: renderBody,
-  stat: renderStat,
-  twoCol: renderTwoCol,
-  quote: renderQuote,
-  adjusted: renderAdjusted,
+  title: sized(renderTitle),
+  body: sized(renderBody),
+  stat: sized(renderStat),
+  twoCol: sized(renderTwoCol),
+  quote: sized(renderQuote),
+  adjusted: sized(renderAdjusted),
 }

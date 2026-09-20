@@ -104,6 +104,17 @@ describe('repairTargets', () => {
     expect(repairTargets([flag({ type: 'BODY_TOO_DENSE', severity: 'medium', slideIndex: 3 })])).toEqual([3])
   })
 
+  it.each(['LIST_DOMINANT', 'VISUAL_MISMATCH'] as const)(
+    'sends a medium %s flag to repair, so a deck of all lists is acted on rather than only logged',
+    (type) => {
+      expect(repairTargets([flag({ type, severity: 'medium', slideIndex: 2 })])).toEqual([2])
+    },
+  )
+
+  it('still never repairs LAYOUT_REPETITION, which is low and deck-shaped', () => {
+    expect(repairTargets([flag({ type: 'LAYOUT_REPETITION', severity: 'low', slideIndex: 2 })])).toEqual([])
+  })
+
   it('includes any high-severity flag regardless of type', () => {
     expect(repairTargets([flag({ type: 'TOO_MANY_BULLETS', severity: 'high', slideIndex: 2 })])).toEqual([2])
   })

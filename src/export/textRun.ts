@@ -52,7 +52,7 @@ export interface PptxTextRun {
 }
 
 /**
- * Splits text into the runs its bold/italic marks require.
+ * Splits text into the runs its bold/italic/underline marks require.
  *
  * `textSegments` already produces the shortest uniform split, which is exactly
  * what a pptxgenjs rich-text array wants — so this is a shape change and not a
@@ -67,9 +67,23 @@ export function markedRuns(text: string, marks: Mark[] | undefined): PptxTextRun
     const options: Record<string, unknown> = {}
     if (segment.bold) options.bold = true
     if (segment.italic) options.italic = true
+    if (segment.underline) options.underline = true
+    if (segment.color) options.color = hex(segment.color)
+    if (segment.fontFamily) options.fontFace = faceName(segment.fontFamily)
+    /*
+      A size mark is a multiple of the box's own size, and this function does not
+      know the box's size — the fit hasn't necessarily run, and the box is where
+      it lives. So the multiple travels on the run under a private key and
+      `withRunSizes` turns it into points when the box is written, at the one
+      place that has both.
+    */
+    if (segment.fontScale) options[SIZE_SCALE_KEY] = segment.fontScale
     return { text: segment.text, options }
   })
 }
+
+/** The private run option that carries a size mark's multiple until the box's size is known. */
+export const SIZE_SCALE_KEY = 'sizeScale'
 
 /** pptxgenjs colors are hex without the leading `#`; theme tokens carry one. */
 export function hex(color: string): string {

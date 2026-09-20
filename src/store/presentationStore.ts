@@ -2,7 +2,17 @@ import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
 import { DEFAULT_THEME, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
 import { EMPTY_TEXT_STYLE, parseTextStyle, type TextStyle } from '@/engine/textStyle'
-import { applyMark, hasMarkThroughout, shiftMarks, type Mark, type MarkType, type TextRange } from '@/engine/marks'
+import {
+  applyMark,
+  applyValueMark,
+  hasMarkThroughout,
+  shiftMarks,
+  type FlagMarkType,
+  type Mark,
+  type MarkValue,
+  type TextRange,
+  type ValueMarkType,
+} from '@/engine/marks'
 import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockText'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
@@ -19,6 +29,8 @@ import {
 import { buildGenerationMeta } from '@/generation/meta'
 import type { PipelineResult } from '@/generation/pipeline'
 import { inOrder, withCardAfter, withoutCard } from './cardMutations'
+import { withItemAdded } from '@/engine/listItems'
+import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
 
 export interface DeckSummary {
   id: string
@@ -124,8 +136,38 @@ interface PresentationState {
 
   /** Level 3: replaces one run of a card's text, keeping its marks on the same characters. */
   setBlockText: (cardId: string, ref: string, nextText: string) => void
+  /**
+   * Appends one placeholder item to the list (a bullet list or a comparison
+   * group) at `blockIndex`, and returns the new item's position so the editor
+   * can open it for typing — `null` when that block is not a list or is full.
+   */
+  addListItem: (cardId: string, blockIndex: number) => number | null
+  /**
+   * Removes one element from a card outright. Every later element's formatting
+   * and nudges are renumbered to follow it. Returns false when there was nothing
+   * to remove or it may not be — the card's last element stays.
+   */
+  removeBlock: (cardId: string, blockIndex: number) => boolean
+  /**
+   * Removes one item from a list (a bullet list or a comparison group). When that
+   * empties a bullet list the whole list goes, and `blockRemoved` says so, because
+   * the caller's selection then points at an element that no longer exists.
+   * `null` when there was nothing to remove.
+   */
+  removeListItem: (cardId: string, blockIndex: number, itemIndex: number) => { blockRemoved: boolean } | null
   /** Level 3: toggles bold/italic over a character range within one run. */
-  toggleTextMark: (cardId: string, ref: string, range: TextRange, type: MarkType) => void
+  toggleTextMark: (cardId: string, ref: string, range: TextRange, type: FlagMarkType) => void
+  /**
+   * Sets — or with `null` clears — a value mark (colour, font, size) over a range
+   * of one run. Unlike a toggle it replaces whatever the range held.
+   */
+  setTextMarkValue: (
+    cardId: string,
+    ref: string,
+    range: TextRange,
+    type: ValueMarkType,
+    value: MarkValue | null,
+  ) => void
   /** Level 3: font/size/alignment for one whole run of text. */
   setInlineStyle: (
     cardId: string,
@@ -491,6 +533,39 @@ function snapshotOf(get: Getter): DeckSnapshot {
 */
 const COALESCE_WINDOW_MS = 700
 let lastPush: { key: string; at: number } | null = null
+
+/**
+ * Applies a removal to one card: one undo step, in memory at once, and written
+ * immediately.
+ *
+ * Immediate rather than debounced, and the card's pending writes are dropped
+ * first — each of them captured `blocks`, `inline` or `adjusts` as they were
+ * before this removal, so one landing afterwards would put the element back, or
+ * re-attach formatting to the wrong one. All three columns go together because a
+ * removal renumbers all three; writing any one alone leaves them disagreeing
+ * about which element is which.
+ */
+function commitRemoval(set: StatusSetter, get: Getter, cardId: string, removal: Removal) {
+  pushHistory(set, get)
+  set({
+    cards: get().cards.map((c) =>
+      c.id === cardId ? { ...c, blocks: removal.blocks, inline: removal.inline, adjusts: removal.adjusts } : c,
+    ),
+  })
+
+  const id = get().presentationId
+  if (!id) return
+  clearScheduledSave(`blockText:${cardId}`)
+  clearScheduledSave(`inline:${cardId}`)
+  clearScheduledSave(`adjusts:${cardId}`)
+  void runSave(set, () =>
+    persistCardPatch(cardId, {
+      blocks: removal.blocks,
+      inline: removal.inline ?? {},
+      adjusts: removal.adjusts ?? {},
+    }),
+  )
+}
 
 function pushHistory(set: StatusSetter, get: Getter, coalesceKey?: string) {
   if (coalesceKey && lastPush && lastPush.key === coalesceKey) {
@@ -893,6 +968,50 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     }
   },
 
+  addListItem(cardId, blockIndex) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return null
+    const added = withItemAdded(card.blocks, blockIndex)
+    if (!added) return null
+
+    pushHistory(set, get)
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, blocks: added.blocks } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      /*
+        Written now rather than debounced, and the pending writes for this card
+        are dropped first. Each of them carries `blocks` as it was when the
+        timer was set — the text typed a moment ago, without this item — so one
+        landing after this write would quietly take the new item back out.
+        `inline` goes with `blocks` for the same reason `toggleTextMark` sends
+        both: the two halves are written together or not at all.
+      */
+      clearScheduledSave(`blockText:${cardId}`)
+      clearScheduledSave(`inline:${cardId}`)
+      void runSave(set, () => persistCardPatch(cardId, { blocks: added.blocks, inline: card.inline ?? {} }))
+    }
+    return added.itemIndex
+  },
+
+  removeBlock(cardId, blockIndex) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return false
+    const removal = withBlockRemoved(card, blockIndex)
+    if (!removal) return false
+    commitRemoval(set, get, cardId, removal)
+    return true
+  },
+
+  removeListItem(cardId, blockIndex, itemIndex) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return null
+    const removal = withItemRemoved(card, blockIndex, itemIndex)
+    if (!removal) return null
+    commitRemoval(set, get, cardId, removal)
+    return { blockRemoved: removal.blockRemoved }
+  },
+
   toggleTextMark(cardId, ref, range, type) {
     const card = get().cards.find((c) => c.id === cardId)
     if (!card || range.end <= range.start) return
@@ -920,6 +1039,27 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         that used to leave asterisks and misplaced bold on screen for good. The
         two halves are written together or not at all.
       */
+      scheduleSave(`inline:${cardId}`, () =>
+        runSave(set, () => persistCardPatch(cardId, { inline, blocks: card.blocks })),
+      )
+    }
+  },
+
+  setTextMarkValue(cardId, ref, range, type, value) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card || range.end <= range.start) return
+
+    // Coalesced: the colour input reports on every drag of its picker, and that
+    // is one intent, so it undoes as one step.
+    pushHistory(set, get, `markValue:${cardId}:${ref}:${type}`)
+    const entry = card.inline?.[ref] ?? {}
+    const inline = { ...card.inline, [ref]: { ...entry, marks: applyValueMark(entry.marks ?? [], range, type, value) } }
+
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, inline } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      // `blocks` alongside `inline`, for the reason `toggleTextMark` gives.
       scheduleSave(`inline:${cardId}`, () =>
         runSave(set, () => persistCardPatch(cardId, { inline, blocks: card.blocks })),
       )

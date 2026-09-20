@@ -65,6 +65,16 @@ export function measureAt(
 
   const rect = node.getBoundingClientRect()
   const base = card.getBoundingClientRect()
+  /*
+    Rectangles come back in screen pixels, and when the canvas is zoomed those
+    are not the card's own pixels: a card laid out 1000 wide and drawn at 150%
+    reports 1500. Everything downstream — the selection box, the drag maths, the
+    size written back to `node.style` above — works in the card's own pixels, so
+    the rectangle is brought back into them. The scale is read off the card
+    itself (its drawn width over its laid-out width) rather than passed in, so
+    this cannot disagree with what is actually on screen.
+  */
+  const scale = card.offsetWidth > 0 ? base.width / card.offsetWidth : 1
 
   node.style.transform = transform
   node.style.width = width
@@ -73,10 +83,10 @@ export function measureAt(
   node.style.maxHeight = maxHeight
 
   return {
-    x: rect.left - base.left,
-    y: rect.top - base.top,
-    w: rect.width,
-    h: rect.height,
+    x: (rect.left - base.left) / scale,
+    y: (rect.top - base.top) / scale,
+    w: rect.width / scale,
+    h: rect.height / scale,
     rotation: 0,
   }
 }

@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   applyTheme,
   BUILTIN_THEMES,
+  contrastRatio,
+  DARK_INK,
   darken,
+  LIGHT_INK,
+  readableInk,
+  relativeLuminance,
+  stageColor,
   DEFAULT_THEME,
   resolveTheme,
   SLIDE_BODY_FONT,
@@ -172,3 +178,40 @@ function readSlideSources(): { file: string; source: string }[] {
   }) as Record<string, string>
   return Object.entries(sources).map(([file, source]) => ({ file, source }))
 }
+
+describe('readableInk', () => {
+  it('measures luminance and contrast the WCAG way', () => {
+    expect(relativeLuminance('#000000')).toBe(0)
+    expect(relativeLuminance('#ffffff')).toBeCloseTo(1, 5)
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 1)
+    expect(contrastRatio('#123456', '#123456')).toBe(1)
+  })
+
+  it('picks dark ink on a light background and light ink on a dark one', () => {
+    expect(readableInk('#f7f5fa')).toBe(DARK_INK)
+    expect(readableInk('#0b0d1a')).toBe(LIGHT_INK)
+  })
+
+  // The reason it is contrast and not a lightness threshold: a mid-tone is where a
+  // fixed cut-off picks the worse ink.
+  it('always picks the ink with the higher contrast, including on mid-tones', () => {
+    for (const bg of ['#808080', '#7a7f9a', '#9a7f7a', '#5a6a3a', '#ffcc00', '#3366cc']) {
+      const chosen = readableInk(bg)
+      const other = chosen === LIGHT_INK ? DARK_INK : LIGHT_INK
+      expect(contrastRatio(chosen, bg)).toBeGreaterThanOrEqual(contrastRatio(other, bg))
+    }
+  })
+
+  it('reads well on the stage of every built-in theme — AA for normal text', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const stage = stageColor(theme)
+      expect(contrastRatio(readableInk(stage), stage), theme.name).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('derives the stage from the same tokens applyTheme paints', () => {
+    const { element, props } = fakeElement()
+    applyTheme(DEFAULT_THEME, element)
+    expect(props.get('--slide-canvas-background')).toBe(stageColor(DEFAULT_THEME))
+  })
+})

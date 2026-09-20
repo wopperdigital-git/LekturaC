@@ -21,7 +21,19 @@ import { TextFocusLayout } from './TextFocusLayout'
   `LAYOUT_COMPONENTS` below is typed to exclude exactly these names, so moving a
   layout into this list is a type error until its entry there is removed too.
 */
-const FLOW_LAYOUTS = ['statGrid', 'timeline', 'comparison', 'iconGrid', 'numberedList', 'gallery'] as const
+const FLOW_LAYOUTS = [
+  'statGrid',
+  'timeline',
+  'comparison',
+  'iconGrid',
+  'numberedList',
+  'checklist',
+  'splitList',
+  'statList',
+  'timelineRow',
+  'comparisonTable',
+  'gallery',
+] as const
 
 type FlowLayoutName = (typeof FLOW_LAYOUTS)[number]
 
@@ -52,6 +64,14 @@ const LAYOUT_COMPONENTS: Record<
  * still riding on top.
  */
 export function LayoutRenderer({ card, context }: { card: Card; context?: LayoutContext }) {
+  /*
+    A card with no blocks is a blank slide. Cards size to their content, so with
+    nothing in it the surface would collapse to its padding — a thin strip that
+    reads as a rendering fault rather than an empty slide, and is barely a target
+    to click. A floor of height keeps it slide-shaped on every surface that draws
+    a card: the canvas, the presenter, the thumbnails and the dashboard cover.
+  */
+  if (card.blocks.length === 0) return <div aria-hidden="true" className="min-h-64" />
   const resolved = resolveLayout(card.layout, card.blocks, context)
   if (rendersAsFlow(resolved)) {
     return <FlowLayout blocks={card.blocks} variant={card.visualStyle} hint={card.layout} />

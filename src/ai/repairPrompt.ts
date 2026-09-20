@@ -15,7 +15,7 @@ export const REPAIR_SYSTEM_PROMPT = `You are fixing specific slides of a present
 
 You are given the whole deck for context, then a list of target slides, each with the problems it has and what to do about them.
 
-For every target slide, write a full replacement card in the same shape the deck was generated in: { "plan": {...}, "role"?: string, "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] }. Keep that slide's purpose and its position in the deck — you are repairing it, not swapping in a different slide. If the slide you're given already has a "role", keep it. Fix every problem listed for it.
+For every target slide, write a full replacement card in the same shape the deck was generated in: { "plan": {...}, "role"?: string, "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] }. Keep that slide's purpose and its position in the deck — you are repairing it, not swapping in a different slide. If the slide you're given already has a "role", keep it. Fix every problem listed for it. When a problem asks for a different structure (a list that should be a timeline, a comparison or a set of stats), change the blocks themselves — restructuring is the fix, not a rewording of the same bullets — while keeping the slide's key message and never inventing a number to fill a stat.
 
 Every other rule from deck generation still applies:
 - Headings are 3-10 words (14 at most), never more than one main idea per slide.

@@ -21,18 +21,18 @@ describe('layoutVarieties', () => {
     into a quote layout is a different kind of slide, not a restyle.
   */
   it('never offers a layout belonging to another card type', () => {
-    expect(layoutsIn([heading, bullets], 'list')).toEqual(['iconGrid', 'numberedList'])
+    expect(layoutsIn([heading, bullets], 'list')).toEqual(['iconGrid', 'numberedList', 'checklist', 'splitList'])
     expect(layoutsIn([heading, quote], 'quote')).toEqual(['quote'])
-    expect(layoutsIn([heading, step('a'), step('b')], 'timeline')).toEqual(['timeline'])
-    expect(layoutsIn([heading, group('a'), group('b')], 'comparison')).toEqual(['comparison'])
+    expect(layoutsIn([heading, step('a'), step('b')], 'timeline')).toEqual(['timeline', 'timelineRow'])
+    expect(layoutsIn([heading, group('a'), group('b')], 'comparison')).toEqual(['comparison', 'comparisonTable'])
     expect(layoutsIn([heading, image('a'), image('b')], 'gallery')).toEqual(['gallery'])
     expect(layoutsIn([heading, paragraph], 'title')).toEqual(['hero'])
   })
 
   it('offers both treatments of every component in the family', () => {
-    // Two components x two treatments is what gives a list card four varieties.
+    // Four components x two treatments is what gives a list card eight varieties.
     const list = layoutVarieties([heading, bullets], 'list')
-    expect(list).toHaveLength(4)
+    expect(list).toHaveLength(8)
     expect(list.filter((v) => v.layout === 'iconGrid').map((v) => v.visualStyle)).toEqual([
       'structured',
       'expressive',
@@ -49,7 +49,7 @@ describe('layoutVarieties', () => {
   it('withholds a component the card lacks the blocks for', () => {
     // A stat grid needs two stats; a split needs a picture beside the prose.
     expect(layoutsIn([heading, stat('1')], 'stats')).toEqual(['statHero'])
-    expect(layoutsIn([heading, stat('1'), stat('2')], 'stats')).toEqual(['statHero', 'statGrid'])
+    expect(layoutsIn([heading, stat('1'), stat('2')], 'stats')).toEqual(['statHero', 'statGrid', 'statList'])
     expect(layoutsIn([heading, paragraph], 'text')).not.toContain('standardSplit')
     expect(layoutsIn([heading, paragraph, image('a')], 'text')).toContain('standardSplit')
   })

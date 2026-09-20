@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   selectionAfterCardPress,
   selectionAfterElementPress,
+  selectionAfterEscape,
+  selectionAfterItemPress,
   typographyScope,
   type Selection,
 } from './textScope'
 
-const NOTHING: Selection = { cardId: null, blockIndex: null }
+const NOTHING: Selection = { cardId: null, blockIndex: null, itemIndex: null }
 
 describe('selectionAfterElementPress', () => {
   /*
@@ -21,22 +23,25 @@ describe('selectionAfterElementPress', () => {
     expect(selectionAfterElementPress(NOTHING, { cardId: 'a', blockIndex: 2 })).toEqual({
       cardId: 'a',
       blockIndex: null,
+      itemIndex: null,
     })
   })
 
   it('selects the element once its card is already selected', () => {
-    const cardSelected: Selection = { cardId: 'a', blockIndex: null }
+    const cardSelected: Selection = { cardId: 'a', blockIndex: null, itemIndex: null }
     expect(selectionAfterElementPress(cardSelected, { cardId: 'a', blockIndex: 2 })).toEqual({
       cardId: 'a',
       blockIndex: 2,
+      itemIndex: null,
     })
   })
 
   it('moves between elements of the selected card without a press in between', () => {
-    const onBlockTwo: Selection = { cardId: 'a', blockIndex: 2 }
+    const onBlockTwo: Selection = { cardId: 'a', blockIndex: 2, itemIndex: null }
     expect(selectionAfterElementPress(onBlockTwo, { cardId: 'a', blockIndex: 5 })).toEqual({
       cardId: 'a',
       blockIndex: 5,
+      itemIndex: null,
     })
   })
 
@@ -46,10 +51,11 @@ describe('selectionAfterElementPress', () => {
     position on the new card — a different element, or none.
   */
   it('drops the previous card element when the press lands on a different card', () => {
-    const onBlockTwo: Selection = { cardId: 'a', blockIndex: 2 }
+    const onBlockTwo: Selection = { cardId: 'a', blockIndex: 2, itemIndex: null }
     expect(selectionAfterElementPress(onBlockTwo, { cardId: 'b', blockIndex: 2 })).toEqual({
       cardId: 'b',
       blockIndex: null,
+      itemIndex: null,
     })
   })
 })
@@ -58,7 +64,7 @@ describe('selectionAfterCardPress', () => {
   // A press that reached the card means it landed *around* the elements, which
   // is the way back out to slide-wide formatting.
   it('selects the card and clears any element', () => {
-    expect(selectionAfterCardPress('a')).toEqual({ cardId: 'a', blockIndex: null })
+    expect(selectionAfterCardPress('a')).toEqual({ cardId: 'a', blockIndex: null, itemIndex: null })
   })
 
   it('clears everything when the press was on the canvas', () => {
@@ -68,7 +74,7 @@ describe('selectionAfterCardPress', () => {
 
 describe('typographyScope', () => {
   it('targets the element when one is selected', () => {
-    expect(typographyScope({ cardId: 'a', blockIndex: 2 })).toEqual({
+    expect(typographyScope({ cardId: 'a', blockIndex: 2, itemIndex: null })).toEqual({
       kind: 'element',
       cardId: 'a',
       blockIndex: 2,
@@ -76,7 +82,7 @@ describe('typographyScope', () => {
   })
 
   it('targets the whole card when a card is selected but nothing inside it', () => {
-    expect(typographyScope({ cardId: 'a', blockIndex: null })).toEqual({ kind: 'card', cardId: 'a' })
+    expect(typographyScope({ cardId: 'a', blockIndex: null, itemIndex: null })).toEqual({ kind: 'card', cardId: 'a' })
   })
 
   it('targets the deck when nothing is selected', () => {
@@ -86,7 +92,7 @@ describe('typographyScope', () => {
   // A block index without a card is not a state the editor can reach, but it
   // must not resolve to an element scope with nowhere to write it.
   it('ignores an orphaned block index', () => {
-    expect(typographyScope({ cardId: null, blockIndex: 2 })).toEqual({ kind: 'deck' })
+    expect(typographyScope({ cardId: null, blockIndex: 2, itemIndex: null })).toEqual({ kind: 'deck' })
   })
 })
 
@@ -105,8 +111,54 @@ describe('the press-to-scope path end to end', () => {
   })
 
   it('goes back to the whole slide when the press lands around the elements', () => {
-    const onElement: Selection = { cardId: 'a', blockIndex: 2 }
+    const onElement: Selection = { cardId: 'a', blockIndex: 2, itemIndex: null }
     expect(typographyScope(selectionAfterCardPress('a'))).toEqual({ kind: 'card', cardId: 'a' })
     expect(typographyScope(onElement)).toEqual({ kind: 'element', cardId: 'a', blockIndex: 2 })
+  })
+})
+
+describe('selectionAfterItemPress', () => {
+  it('stops at the card when the card was not already selected, like an element press', () => {
+    expect(selectionAfterItemPress(NOTHING, { cardId: 'a', blockIndex: 2, itemIndex: 1 })).toEqual({
+      cardId: 'a',
+      blockIndex: null,
+      itemIndex: null,
+    })
+  })
+
+  it('takes the item, and its list, once the card is selected', () => {
+    const cardSelected: Selection = { cardId: 'a', blockIndex: null, itemIndex: null }
+    expect(selectionAfterItemPress(cardSelected, { cardId: 'a', blockIndex: 2, itemIndex: 1 })).toEqual({
+      cardId: 'a',
+      blockIndex: 2,
+      itemIndex: 1,
+    })
+  })
+
+  it('moves from one item to another without a press in between', () => {
+    const onItem: Selection = { cardId: 'a', blockIndex: 2, itemIndex: 1 }
+    expect(selectionAfterItemPress(onItem, { cardId: 'a', blockIndex: 2, itemIndex: 3 }).itemIndex).toBe(3)
+  })
+})
+
+describe('an element press after an item', () => {
+  it('drops the item, so a press on the list itself is a press on the list', () => {
+    const onItem: Selection = { cardId: 'a', blockIndex: 2, itemIndex: 1 }
+    expect(selectionAfterElementPress(onItem, { cardId: 'a', blockIndex: 2 })).toEqual({
+      cardId: 'a',
+      blockIndex: 2,
+      itemIndex: null,
+    })
+  })
+})
+
+describe('selectionAfterEscape', () => {
+  it('steps out one level at a time: item, then element, then rests on the card', () => {
+    const onItem: Selection = { cardId: 'a', blockIndex: 2, itemIndex: 1 }
+    const onList = selectionAfterEscape(onItem)
+    expect(onList).toEqual({ cardId: 'a', blockIndex: 2, itemIndex: null })
+    const onCard = selectionAfterEscape(onList)
+    expect(onCard).toEqual({ cardId: 'a', blockIndex: null, itemIndex: null })
+    expect(selectionAfterEscape(onCard)).toEqual(onCard)
   })
 })

@@ -143,6 +143,14 @@ export interface FitParagraph {
   bold?: boolean
   /** Narrows this paragraph's usable width, e.g. a bullet's hanging indent. */
   indentIn?: number
+  /**
+   * The largest size multiple any run in this paragraph is set at (a word
+   * enlarged by the user). The whole paragraph is measured at that size — wider
+   * than it really is, which can only over-estimate the height and never leave
+   * text spilling out of its box. Conservative in the same way, and for the same
+   * reason, as the bold override above.
+   */
+  scale?: number
 }
 
 /** The size band and font a run of paragraphs is fit within. */
@@ -255,20 +263,24 @@ export function textHeight(
   if (paragraphs.length === 0) return INSET_Y_IN
 
   const lineSpacing = sizing.lineSpacing ?? DEFAULT_LINE_SPACING
-  let totalLines = 0
+
+  let heightPt = 0
 
   for (const paragraph of paragraphs) {
     const usableWidth = boxWidthIn - INSET_X_IN - (paragraph.indentIn ?? 0)
+    const paragraphPt = sizePt * Math.max(1, paragraph.scale ?? 1)
     const font: FontSpec = {
       face: sizing.face,
-      sizePt,
+      sizePt: paragraphPt,
       bold: paragraph.bold ?? sizing.bold ?? false,
       italic: sizing.italic ?? false,
     }
-    totalLines += wrapLines(paragraph.text, usableWidth, font, measure).length
+    // Each paragraph's lines are as tall as its own size: a line holding one big
+    // word is as tall as that word.
+    heightPt += wrapLines(paragraph.text, usableWidth, font, measure).length * paragraphPt * lineSpacing
   }
 
-  return ((totalLines * sizePt * lineSpacing) / 72) * HEIGHT_HEADROOM + INSET_Y_IN
+  return (heightPt / 72) * HEIGHT_HEADROOM + INSET_Y_IN
 }
 
 /**

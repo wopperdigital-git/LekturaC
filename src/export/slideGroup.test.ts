@@ -54,6 +54,12 @@ describe('slideGroup', () => {
   it('maps both stat layouts to the stat group', () => {
     expect(slideGroup(card([HEADING], 'statHero'), false)).toBe('stat')
     expect(slideGroup(card([HEADING], 'statGrid'), false)).toBe('stat')
+    expect(slideGroup(card([HEADING], 'statList'), false)).toBe('stat')
+  })
+
+  it('maps both comparison layouts to the two-column group', () => {
+    expect(slideGroup(card([HEADING], 'comparison'), false)).toBe('twoCol')
+    expect(slideGroup(card([HEADING], 'comparisonTable'), false)).toBe('twoCol')
   })
 
   it('maps hero and textFocus to the title group', () => {
@@ -62,7 +68,17 @@ describe('slideGroup', () => {
   })
 
   it('maps the remaining layouts to body', () => {
-    for (const layout of ['standard', 'standardSplit', 'timeline', 'iconGrid', 'numberedList', 'gallery'] as const) {
+    for (const layout of [
+      'standard',
+      'standardSplit',
+      'timeline',
+      'timelineRow',
+      'iconGrid',
+      'numberedList',
+      'checklist',
+      'splitList',
+      'gallery',
+    ] as const) {
       expect(slideGroup(card([HEADING], layout), false)).toBe('body')
     }
   })
