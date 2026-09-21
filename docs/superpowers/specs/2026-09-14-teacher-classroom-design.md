@@ -480,3 +480,22 @@ classroom page or sign-up with a role works.
 - Verifying teacher accounts
 - A student-facing performance page
 - Statistics computed in SQL
+
+
+---
+
+## Implementation invariants (moved from CLAUDE.md)
+
+As-built rules for this feature, kept here so CLAUDE.md stays small. Read before changing `src/classroom/`, the classroom pages, or the classroom RLS/RPCs. **Migrations 0009 and 0010 are required** for typed sign-up or any classroom page.
+
+Account type is **General, Teacher or Student**, chosen at sign-up and permanent. Design: `docs/superpowers/specs/2026-09-14-teacher-classroom-design.md`. **Migrations 0009 and 0010 are required** for typed sign-up or any classroom page.
+
+- **The type is pinned in the DB** (`guard_profile_update`, 0010): `role` (like `id`/`email`/`created_at`) can't be moved by an update — pinned, not rejected (an exception would report a failure for an action no UI offers). `display_name` is the only mutable profile column (`authStore.updateDisplayName`), so the settings modal shows email and account type as plain text, not disabled inputs.
+- **The one legal transition is General → Student, only inside `join_class`**: promotion first (`class_members_require_student()` rejects a non-student insert), same transaction, via a transaction-local flag `app.role_promotion` set to the **id of the account being promoted** (not a bare `'1'`, so it can't promote someone else). A teacher is refused (demotion would strand their classes). Client must catch up before navigating: `authStore.refreshProfile()` (doesn't touch `status`) is awaited by `MyClassesPage`, else `RequireRole` bounces the student-only `/classes/:classId`. `canAccess` takes a role or list (`/classes` admits General + Student).
+- `delete_own_account()` is the only account-deletion route (anon key can't touch `auth.users`); takes no args, reads `auth.uid()`. It must delete `presentations` and `themes` explicitly (no FK to `auth.users`; else undeletable orphans). Classroom rows cascade from `profiles` — deleting a **teacher** also deletes their classes and every announcement/quiz/attempt in them (why `DangerSection` uses a typed confirm).
+- Profiles are created by a trigger on `auth.users` from sign-up metadata (`role`, `display_name`); `profiles.email` is a copy (client can't read `auth.users`). `authStore` holds `status` at `'loading'` until the profile resolves, **except** a token refresh for the same user with a profile loaded (only swaps `user`; flipping to loading would unmount the editor). **Unreadable → General** (`resolveProfile`), so an un-migrated DB degrades instead of locking everyone out.
+- **No RLS policy selects from another RLS table** (mutual references recurse). All checks go through `security definer` helpers: `is_class_teacher`, `is_class_member`, `teaches_student`, `is_my_teacher`, `owns_quiz`, `can_read_quiz`. Never join tables directly in a policy.
+- Joining is only `join_class(p_code)` (students have no insert policy on `class_members`). Codes use an alphabet without `0 O 1 I L` (`classroom/joinCode.ts` must match `generate_join_code()`). **Students cannot read `quiz_questions`** (rows carry `answer`); quiz taking needs a `security definer` RPC returning questions without answers and scoring server-side. Questions store their own text (`prompt`, `slide_number`, `slide_heading`, `quizzes.deck_title`) rather than referencing live cards; `presentation_id`/`card_id` are `on delete set null`. An attempt records its class.
+- **Statistics live only in `classroom/stats.ts`**: expected = every posting in the student's current classes (no due dates); completion = submitted ÷ expected, `null` (`—`) if none expected; average = submitted scores only (a missing quiz isn't zero); trend = latest 3 vs up to 3 before, needs ≥4 scores, ±5 points, delta rounded before comparing; attempts outside current classes ignored.
+- All I/O via `classroom/api.ts`: update/delete `select` affected rows and throw on zero (RLS reports forbidden writes as 0 rows); RPC refusals rethrown as `Error` with the bare message. Pages load with `useAsync` (keeps data during reload, no optimistic updates). The rail's class list is a `useSyncExternalStore` cache (`useMyClasses`) that any write changing the list must invalidate.
+- Nothing writes quizzes, questions, postings or attempts yet; those pages show honest empty states.
