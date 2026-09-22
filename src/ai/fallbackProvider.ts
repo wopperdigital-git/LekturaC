@@ -12,6 +12,7 @@ import {
 } from './provider'
 import { GroqProvider, COMPOUND_DECK_MODEL } from './groqProvider'
 import { GeminiProvider } from './geminiProvider'
+import { AnthropicProvider } from './anthropicProvider'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
 export interface NamedProvider {
@@ -19,13 +20,14 @@ export interface NamedProvider {
   provider: AIProvider
 }
 
+const ANTHROPIC_API_KEY = (import.meta.env.VITE_ANTHROPIC_API_KEY ?? '').trim()
 const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
 const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
 
 /**
- * The app's provider chain, built once: Groq (`openai/gpt-oss-120b`/
- * `openai/gpt-oss-20b`) first, then a second Groq link on `groq/compound` for
- * deck/repair/narration only, then Gemini.
+ * The app's provider chain, built once: Claude first, then Groq
+ * (`openai/gpt-oss-120b`/`openai/gpt-oss-20b`), then a second Groq link on
+ * `groq/compound` for deck/repair/narration only, then Gemini.
  *
  * The second Groq link exists because a 2026-09-20 catalog probe found the
  * first link's models can each run out on their own: `openai/gpt-oss-20b`
@@ -54,15 +56,17 @@ const GEMINI_API_KEY = (import.meta.env.VITE_GEMINI_API_KEY ?? '').trim()
  * A provider whose key is missing is left OUT rather than added and allowed to
  * fail, so dropping VITE_GROQ_API_KEY makes this a Gemini-only app with no code
  * change — and since both Groq links share the one `VITE_GROQ_API_KEY`, a
- * missing key drops both of them, not just the first. `.trim()` matters: a key
- * blanked rather than deleted is not a key, and an empty-but-present one would
- * otherwise stay in the chain and throw `auth`, which by design does not fail
- * over.
+ * missing key drops both of them, not just the first. Same rule for
+ * VITE_ANTHROPIC_API_KEY: absent, Claude is simply not in the chain and Groq
+ * becomes the primary. `.trim()` matters: a key blanked rather than deleted is
+ * not a key, and an empty-but-present one would otherwise stay in the chain and
+ * throw `auth`, which by design does not fail over.
  *
  * Shared by the create flow and the narration page — two copies of this drifted
  * once already.
  */
 export const PROVIDER_CHAIN: NamedProvider[] = [
+  ...(ANTHROPIC_API_KEY ? [{ name: 'Anthropic', provider: new AnthropicProvider(ANTHROPIC_API_KEY) }] : []),
   ...(GROQ_API_KEY
     ? [
         { name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) },

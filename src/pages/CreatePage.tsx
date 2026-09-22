@@ -391,7 +391,8 @@ export function CreatePage() {
               <div className="flex flex-col gap-4">
                 <Alert tone="error">
                   No AI key configured. Add{' '}
-                  <code className="font-mono text-xs">VITE_GROQ_API_KEY</code> or{' '}
+                  <code className="font-mono text-xs">VITE_ANTHROPIC_API_KEY</code>,{' '}
+                  <code className="font-mono text-xs">VITE_GROQ_API_KEY</code>, or{' '}
                   <code className="font-mono text-xs">VITE_GEMINI_API_KEY</code> to your{' '}
                   <code className="font-mono text-xs">.env</code> file and restart the dev server.
                 </Alert>

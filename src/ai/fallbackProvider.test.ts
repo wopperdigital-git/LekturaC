@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FallbackProvider } from './fallbackProvider'
 import { AIProviderError, type AIProvider, type GeneratedDeck, type GenerationBrief } from './provider'
 
@@ -204,5 +204,43 @@ describe('FallbackProvider', () => {
     )
 
     expect(seen).toEqual(['lighthouses', BRIEF, controller.signal])
+  })
+})
+
+/**
+ * `PROVIDER_CHAIN` is built once, from `import.meta.env`, at module load — so
+ * each case here stubs the env vars first and re-imports the module fresh
+ * (`vi.resetModules()`), the same approach `appTheme.test.ts` and
+ * `briefDrafts.test.ts` take to a module with load-time environment reads.
+ */
+describe('PROVIDER_CHAIN', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  async function loadChain() {
+    vi.resetModules()
+    return (await import('./fallbackProvider')).PROVIDER_CHAIN
+  }
+
+  it('puts Anthropic first when VITE_ANTHROPIC_API_KEY is set', async () => {
+    vi.stubEnv('VITE_ANTHROPIC_API_KEY', 'anthropic-key')
+    vi.stubEnv('VITE_GROQ_API_KEY', 'groq-key')
+    vi.stubEnv('VITE_GEMINI_API_KEY', 'gemini-key')
+
+    const chain = await loadChain()
+
+    expect(chain.map((link) => link.name)).toEqual(['Anthropic', 'Groq', 'Groq compound', 'Gemini'])
+  })
+
+  it("omitting VITE_ANTHROPIC_API_KEY reproduces today's chain exactly (Groq-first, same length)", async () => {
+    vi.stubEnv('VITE_ANTHROPIC_API_KEY', '')
+    vi.stubEnv('VITE_GROQ_API_KEY', 'groq-key')
+    vi.stubEnv('VITE_GEMINI_API_KEY', 'gemini-key')
+
+    const chain = await loadChain()
+
+    expect(chain.map((link) => link.name)).toEqual(['Groq', 'Groq compound', 'Gemini'])
+    expect(chain).toHaveLength(3)
   })
 })
