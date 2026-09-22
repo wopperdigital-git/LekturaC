@@ -25,7 +25,7 @@ Vitest covers **only pure, high-value logic**, in `*.test.ts` files beside the m
 ## Environment
 
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (see `.env.example`). If absent, `supabaseConfigured` (`src/lib/supabaseClient.ts`) is `false`, store methods no-op, and `/login` shows an explanatory message instead of a form — nobody can log in, so the app is effectively unusable.
-- `VITE_GROQ_API_KEY` (two chain links) and `VITE_GEMINI_API_KEY` (one), read in `CreatePage.tsx` and **baked into the client bundle** — fine for local/personal use, readable by anyone who can load a deployed build. Either may be omitted (its providers drop out of the chain) but at least one is required; `/new` checks on mount. No in-app key entry, no server proxy, by design.
+- `VITE_ANTHROPIC_API_KEY` (one chain link, first), `VITE_GROQ_API_KEY` (two chain links) and `VITE_GEMINI_API_KEY` (one), built into `PROVIDER_CHAIN` in `fallbackProvider.ts` (imported by `CreatePage.tsx` and the narration page) and **baked into the client bundle** — fine for local/personal use, readable by anyone who can load a deployed build. Any may be omitted (its provider drops out of the chain) but at least one is required; `/new` checks on mount. No in-app key entry, no server proxy, by design. **Unlike Groq/Gemini's free tiers, the Anthropic key is billed per token** — a deployed build isn't just readable, it's spendable; see `.env.example`.
 - Accounts are required: every route except `/login` and `/reset-password` is under `<RequireAuth>`. No guest mode. `store/authStore.ts` = Supabase email/password with email confirmation. `ensureSession()` only waits for hydration.
 
 ## Core rule: generate once
