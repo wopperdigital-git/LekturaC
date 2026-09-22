@@ -17,7 +17,7 @@ import {
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
 import { NARRATION_SYSTEM_PROMPT, buildNarrationUserPrompt, narrationMaxTokens } from './narrationPrompt'
 import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
-import { deckOutputSchema } from './deckOutputSchema'
+import { deckOutputSchema, generatedCardOutputSchema } from './deckOutputSchema'
 import type { ZodError } from 'zod'
 
 /*
@@ -70,16 +70,24 @@ type AnthropicClient = InstanceType<(typeof import('@anthropic-ai/sdk'))['defaul
  * have a type defined if anyOf/oneOf/allOf are not used" — reproduced
  * directly against the installed SDK (`@anthropic-ai/sdk@0.127.0`).
  *
- * This one-field variant exists only to give `output_config.format`
- * something the SDK will accept: `card` becomes an open object instead of
- * truly unknown. That changes nothing about what's ultimately accepted —
+ * A `z.record(z.string(), z.unknown())` does NOT fix this the way it looks
+ * like it should: the SDK's JSON Schema transform keeps only explicitly
+ * declared `properties` (a record declares none) and unconditionally sets
+ * `additionalProperties: false`, so the resulting schema only accepts `{}` —
+ * confirmed by running `zodOutputFormat` on that variant and inspecting the
+ * emitted schema. A real call would then very likely emit `"card": {}` for
+ * every repair, which the real (unconstrained) `repairResponseSchema` would
+ * happily accept, silently no-op-ing every repair.
+ *
+ * So `card` here is the real card shape — `generatedCardOutputSchema`, the
+ * same per-card mirror `deckOutputSchema` uses — not a loosened stand-in.
+ * This is only what's offered to the SDK as a generation-time shape hint;
  * `repairSlides` still runs the reply through `parseRepairResponse` (the real
- * `repairResponseSchema`) before trusting it — so this is the same
- * structured-output-schema-vs-acceptance-schema split `deckOutputSchema.ts`
- * uses, just one field wide instead of a whole mirror file.
+ * `repairResponseSchema`, `card: z.unknown()`) before trusting it, so nothing
+ * about what's *accepted* changes.
  */
 const repairOutputSchema = z.object({
-  repairs: z.array(z.object({ slide: z.number().int().positive(), card: z.record(z.string(), z.unknown()) })).default([]),
+  repairs: z.array(z.object({ slide: z.number().int().positive(), card: generatedCardOutputSchema })).default([]),
 })
 
 function noKeyError(): AIProviderError {
@@ -152,15 +160,13 @@ export class AnthropicProvider implements AIProvider {
     if (err instanceof RateLimitError) {
       return new AIProviderError(err.message, { kind: 'capacity', status: err.status })
     }
-    // 529 ("overloaded") and 413 ("payload too large") have no dedicated SDK
-    // error class, unlike 401/403/429 above — `kindForStatus` is the single
-    // source of truth for the status→kind mapping (it now treats both as
-    // `capacity`, alongside 429/503), so this reuses it rather than
-    // reimplementing the check.
-    if (err instanceof APIError && (err.status === 529 || err.status === 413)) {
-      return new AIProviderError(err.message, { kind: kindForStatus(err.status), status: err.status })
-    }
-    if (err instanceof APIError && err.status !== undefined && err.status >= 400 && err.status < 500) {
+    // Every other `APIError` (503, 529 "overloaded", 413 "payload too large",
+    // other 4xx, …) funnels through `kindForStatus` — the single source of
+    // truth for the status→kind mapping — rather than hand-picking which
+    // statuses to check here. `kindForStatus` already treats 429/503/413/529
+    // as `capacity`, 401/403 as `auth` (unreachable here — both have their
+    // own SDK classes, handled above), and other 4xx as `request`.
+    if (err instanceof APIError && err.status !== undefined) {
       return new AIProviderError(err.message, { kind: kindForStatus(err.status), status: err.status })
     }
 

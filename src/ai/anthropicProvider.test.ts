@@ -183,6 +183,28 @@ describe('AnthropicProvider', () => {
       await expect(provider.repairSlides(deck, targets, flags, context)).rejects.toMatchObject({ kind: 'response' })
       expect(parseMock).toHaveBeenCalledTimes(2)
     })
+
+    // Regression guard for the specific bug the reviewer caught: an earlier
+    // version gave `card` a `z.record(z.string(), z.unknown())` shape, which
+    // the SDK's JSON Schema transform turns into an object with NO declared
+    // properties and `additionalProperties: false` — i.e. only `{}` is
+    // accepted, so a real call would very likely emit an empty card and
+    // repair would silently no-op. `card` must have the real card structure.
+    it('gives the structured-output schema a real structural shape for card, not an empty/unconstrained object', async () => {
+      parseMock.mockResolvedValueOnce(textResponse({ repairs: [{ slide: 1, card: validCard }] }))
+      const provider = new AnthropicProvider('key')
+
+      await provider.repairSlides(deck, targets, flags, context)
+
+      const params = parseMock.mock.calls[0][0]
+      const cardSchema = params.output_config.format.schema.properties.repairs.items.properties.card
+
+      expect(cardSchema).toBeTruthy()
+      const cardProperties = Object.keys(cardSchema.properties ?? {})
+      expect(cardProperties).toEqual(
+        expect.arrayContaining(['plan', 'blocks', 'visualStyle', 'speakerNotes', 'claims']),
+      )
+    })
   })
 
   describe('generateNarration', () => {
@@ -217,6 +239,17 @@ describe('AnthropicProvider', () => {
 
     it('maps RateLimitError to kind capacity', async () => {
       parseMock.mockRejectedValueOnce(new RateLimitError(429, {}, 'rate limited', new Headers()))
+      const provider = new AnthropicProvider('key')
+      await expect(provider.generateDeck('topic', brief)).rejects.toMatchObject({ kind: 'capacity' })
+    })
+
+    // Regression guard: `mapError` previously hand-picked which `APIError`
+    // statuses to check (529, 413, then a 400-500 range) instead of
+    // consulting `kindForStatus` for every status, so 503 fell through to the
+    // generic `kind: 'unknown'` fallback despite `kindForStatus(503)` already
+    // being `'capacity'`.
+    it('maps a 503 (service unavailable) APIError to kind capacity', async () => {
+      parseMock.mockRejectedValueOnce(new APIError(503, {}, 'service unavailable', new Headers()))
       const provider = new AnthropicProvider('key')
       await expect(provider.generateDeck('topic', brief)).rejects.toMatchObject({ kind: 'capacity' })
     })

@@ -60,7 +60,17 @@ const deckBriefOutputSchema = z.object({
   keyQuestions: z.array(z.string()).default([]),
 })
 
-const generatedCardOutputSchema = z.object({
+/**
+ * Exported (unlike the other pieces above) because `anthropicProvider.ts`'s
+ * `repairSlides` reuses it for `repairOutputSchema.card` — a repair reply's
+ * `card` is one full replacement card, same shape as a deck card, and the
+ * real `repairResponseSchema.card` is `z.unknown()` there for the same
+ * "JSON Schema can't represent this" reason `.catch()`/`.refine()` are
+ * dropped everywhere else in this file. See `anthropicProvider.ts`'s comment
+ * on `repairOutputSchema` for why `z.unknown()` can't be handed to
+ * `zodOutputFormat` directly.
+ */
+export const generatedCardOutputSchema = z.object({
   plan: slidePlanOutputSchema,
   role: z.string().optional(),
   blocks: z.array(contentBlockSchema).min(1),
