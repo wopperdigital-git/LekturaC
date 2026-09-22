@@ -16,20 +16,27 @@ import {
 } from './provider'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
 import { NARRATION_SYSTEM_PROMPT, buildNarrationUserPrompt, narrationMaxTokens } from './narrationPrompt'
-import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
+import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt } from './repairPrompt'
 import { RESEARCH_SYSTEM_PROMPT, buildResearchUserPrompt, parseEvidencePack } from './researchPrompt'
 import { deckOutputSchema, generatedCardOutputSchema } from './deckOutputSchema'
 import type { ZodError } from 'zod'
 
 /*
   Claude as a content-generation provider, alongside `GroqProvider` and
-  `GeminiProvider`. Mirrors `groqProvider.ts`'s shape (constructor, per-method
-  system+user messages, one self-correcting retry on a schema failure) — read
-  that file first if this one is confusing.
+  `GeminiProvider`. Mirrors `groqProvider.ts`'s shape (constructor, one
+  self-correcting retry on a schema failure) — read that file first if this
+  one is confusing.
 
-  `research()` is a stub in this file (Task 1 of the plan); a later task
-  replaces it with a real implementation. `FallbackProvider`/`PROVIDER_CHAIN`
-  are NOT wired to this class here — that's a separate later task too.
+  All four `AIProvider` methods are implemented here, including `research()`
+  (Claude's own `web_search` server tool, not Groq's), and this class is
+  wired into `FallbackProvider`/`PROVIDER_CHAIN` (`ai/fallbackProvider.ts`)
+  as the first link in the chain.
+
+  The system prompt for every method goes through the top-level `system`
+  request parameter, never a `{ role: 'system' }` message: `claude-sonnet-5`
+  rejects a mid-`messages` system role with a 400, and even on the small set
+  of models that accept one, it can't be `messages[0]` anyway. `AnthropicMessage`
+  below is typed to only `'user' | 'assistant'` so this can't regress silently.
 
   The SDK (`@anthropic-ai/sdk`, and its `helpers/zod` subpath) is never
   imported at module top level, the same discipline `export/pptx.ts` uses for
@@ -40,16 +47,26 @@ import type { ZodError } from 'zod'
 
 // `VITE_ANTHROPIC_MODEL` lets a `.env` override the model without a code
 // change, same as every other env-driven knob in `ai/`; falls back to
-// Anthropic's current default model otherwise.
-const DEFAULT_MODEL = import.meta.env.VITE_ANTHROPIC_MODEL ?? 'claude-sonnet-5'
+// Anthropic's current default model otherwise. `.trim() || fallback` (not
+// `?? fallback`) so a present-but-blank `VITE_ANTHROPIC_MODEL=` line — which
+// `.env.example` ships right next to a real value — degrades to the default
+// instead of resolving to `model: ''`, matching the `.trim()` convention
+// every API key constant in `fallbackProvider.ts` already uses.
+const DEFAULT_MODEL = (import.meta.env.VITE_ANTHROPIC_MODEL ?? '').trim() || 'claude-sonnet-5'
 
 export interface AnthropicModelOptions {
   deckModel?: string
   researchModel?: string
 }
 
+/**
+ * Message shape for every method's `messages` array except `research()`'s
+ * (see `AnthropicResearchMessage` below). No `'system'` role — see this
+ * file's header comment — so a `{ role: 'system' }` message can't be
+ * reintroduced without a type error.
+ */
 interface AnthropicMessage {
-  role: 'system' | 'user' | 'assistant'
+  role: 'user' | 'assistant'
   content: string
 }
 
@@ -97,9 +114,9 @@ type AnthropicResearchMessage = Parameters<AnthropicClient['messages']['create']
  * So `card` here is the real card shape — `generatedCardOutputSchema`, the
  * same per-card mirror `deckOutputSchema` uses — not a loosened stand-in.
  * This is only what's offered to the SDK as a generation-time shape hint;
- * `repairSlides` still runs the reply through `parseRepairResponse` (the real
- * `repairResponseSchema`, `card: z.unknown()`) before trusting it, so nothing
- * about what's *accepted* changes.
+ * `repairSlides` below reads `response.parsed_output` directly rather than
+ * re-parsing against the real (looser) `repairResponseSchema` — see its own
+ * comment for why that's safe here.
  */
 const repairOutputSchema = z.object({
   repairs: z.array(z.object({ slide: z.number().int().positive(), card: generatedCardOutputSchema })).default([]),
@@ -134,6 +151,31 @@ function textOf(response: { content: unknown }): string {
     .join('')
 }
 
+/**
+ * Server-tool (web search) errors don't raise an exception — they come back
+ * as a normal 200 response with a `web_search_tool_result` content block
+ * whose `.content` is a single error object (e.g. `{error_code:
+ * 'max_uses_exceeded'}`) instead of the usual list of `web_search_result`s.
+ * `textOf()` only reads `text` blocks, so a turn where every search failed
+ * looks identical (no findings) to one that succeeded and genuinely found
+ * nothing — both end up as `parseEvidencePack` returning `null`. This is
+ * diagnostic only: it logs the error so a live run's console tells the two
+ * apart, and never changes control flow or throws.
+ */
+function warnOnFailedSearches(response: { content: unknown }): void {
+  const blocks = response.content
+  if (!Array.isArray(blocks)) return
+  for (const block of blocks) {
+    if (typeof block !== 'object' || block === null) continue
+    const b = block as { type?: unknown; content?: unknown }
+    if (b.type !== 'web_search_tool_result') continue
+    // Success shape is a list of results; the error shape is a single object.
+    if (!Array.isArray(b.content) && b.content !== undefined) {
+      console.warn('[ai] Anthropic web_search_tool_result returned an error', b.content)
+    }
+  }
+}
+
 export class AnthropicProvider implements AIProvider {
   private apiKey: string
   private deckModel: string
@@ -143,10 +185,11 @@ export class AnthropicProvider implements AIProvider {
   constructor(apiKey: string, options?: AnthropicModelOptions) {
     this.apiKey = apiKey
     this.deckModel = options?.deckModel ?? DEFAULT_MODEL
-    // Not used until Task 2's `research()` implementation. Anthropic has no
-    // Groq-style token-budget reason to reach for a smaller model here, so
-    // this defaults to the same resolved model as `deckModel` unless a caller
-    // overrides it.
+    // Anthropic has no Groq-style token-budget reason to reach for a smaller
+    // model for research than for the deck (that split exists for Groq
+    // because its free-tier writer and research models have different quota
+    // ceilings), so this defaults to the same resolved model as `deckModel`
+    // unless a caller overrides it.
     this.researchModel = options?.researchModel ?? DEFAULT_MODEL
   }
 
@@ -167,7 +210,9 @@ export class AnthropicProvider implements AIProvider {
   private async mapError(err: unknown): Promise<AIProviderError> {
     if (err instanceof AIProviderError) return err
 
-    const { AuthenticationError, PermissionDeniedError, RateLimitError, APIError } = await import('@anthropic-ai/sdk')
+    const { AuthenticationError, PermissionDeniedError, RateLimitError, APIError, AnthropicError } = await import(
+      '@anthropic-ai/sdk'
+    )
 
     if (err instanceof AuthenticationError || err instanceof PermissionDeniedError) {
       return new AIProviderError(err.message, { kind: 'auth', status: err.status })
@@ -183,6 +228,18 @@ export class AnthropicProvider implements AIProvider {
     // own SDK classes, handled above), and other 4xx as `request`.
     if (err instanceof APIError && err.status !== undefined) {
       return new AIProviderError(err.message, { kind: kindForStatus(err.status), status: err.status })
+    }
+    // `client.messages.parse()` throws a plain `AnthropicError` (not an
+    // `APIError`) when the model's text fails `JSON.parse` or fails the zod
+    // schema handed to `output_config.format` — see `zodOutputFormat`'s
+    // `parse` closure in `@anthropic-ai/sdk/helpers/zod`. `APIError extends
+    // AnthropicError`, so this check MUST stay after every `APIError`
+    // (sub)class check above, or a rate limit/auth/etc error would be
+    // misclassified as a generic parse failure.
+    if (err instanceof AnthropicError) {
+      return new AIProviderError('The AI returned content that could not be parsed. Try again.', {
+        kind: 'response',
+      })
     }
 
     const message = err instanceof Error ? err.message : String(err)
@@ -201,14 +258,12 @@ export class AnthropicProvider implements AIProvider {
     const { zodOutputFormat } = await import('@anthropic-ai/sdk/helpers/zod')
 
     const userPrompt = buildDeckUserPrompt(topic, brief, context)
-    const messages: AnthropicMessage[] = [
-      { role: 'system', content: DECK_SYSTEM_PROMPT },
-      { role: 'user', content: userPrompt },
-    ]
+    const messages: AnthropicMessage[] = [{ role: 'user', content: userPrompt }]
 
     const baseParams = {
       model: this.deckModel,
       max_tokens: 16000,
+      system: DECK_SYSTEM_PROMPT,
       thinking: { type: 'adaptive' as const },
       output_config: { format: zodOutputFormat(deckOutputSchema), effort: 'medium' as const },
     }
@@ -275,15 +330,19 @@ export class AnthropicProvider implements AIProvider {
     const client = await this.getClient()
 
     const messages: AnthropicResearchMessage[] = [
-      { role: 'system', content: RESEARCH_SYSTEM_PROMPT },
       { role: 'user', content: buildResearchUserPrompt(topic, brief, today) },
     ]
 
     const baseParams = {
       model: this.researchModel,
       max_tokens: 4000,
+      system: RESEARCH_SYSTEM_PROMPT,
       tools: [{ type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: 4 }],
-      temperature: 0.3,
+      // No `temperature`: models released after Claude Opus 4.6 (including
+      // `claude-sonnet-5`) reject any value other than 1.0 with a 400 — see
+      // the SDK's own JSDoc on `temperature` in
+      // `resources/messages/messages.d.ts`. Sonnet 5's decoding defaults are
+      // correct without it.
     }
 
     let response
@@ -305,6 +364,7 @@ export class AnthropicProvider implements AIProvider {
     // split across a pause boundary — rather than keeping only the last
     // turn's text, so a capped-out loop still has everything Claude wrote so
     // far to hand to `parseEvidencePack`.
+    warnOnFailedSearches(response)
     let combinedText = textOf(response)
     let resumptions = 0
     while (response.stop_reason === 'pause_turn' && resumptions < AnthropicProvider.MAX_RESEARCH_RESUMPTIONS) {
@@ -315,6 +375,7 @@ export class AnthropicProvider implements AIProvider {
       } catch (err) {
         throw await this.mapError(err)
       }
+      warnOnFailedSearches(response)
       combinedText += textOf(response)
     }
 
@@ -338,51 +399,45 @@ export class AnthropicProvider implements AIProvider {
     const { zodOutputFormat } = await import('@anthropic-ai/sdk/helpers/zod')
 
     const messages: AnthropicMessage[] = [
-      { role: 'system', content: REPAIR_SYSTEM_PROMPT },
       { role: 'user', content: buildRepairUserPrompt(deck, targets, flags, context) },
     ]
     const baseParams = {
       model: this.deckModel,
       max_tokens: REPAIR_MAX_TOKENS,
+      system: REPAIR_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(repairOutputSchema), effort: 'low' as const },
     }
 
-    let first
+    // No retry loop here, unlike `generateDeck`/`generateNarration`: a
+    // self-correcting retry only makes sense when the first reply can come
+    // back *parsed but schema-invalid*. With `output_config.format` set,
+    // `client.messages.parse()` itself throws (mapped through `mapError`
+    // above, including the `AnthropicError` branch for a structured-output
+    // parse/validation failure) before ever handing back a malformed
+    // `parsed_output` — so a retry branch after a successful `parse()` call
+    // is unreachable. `response.parsed_output` is already schema-valid
+    // against `repairOutputSchema` (the structured-output mirror) by the
+    // time we see it; the real, looser `repairResponseSchema` (`card:
+    // z.unknown()`) is intentionally not re-run here, because
+    // `generation/repair.ts`'s `applyRepairs` already validates each
+    // returned card against `generatedCardSchema` before writing it.
+    let response
     try {
       // Best effort, like Groq's repair call: `maxRetries: 0` rather than the
       // SDK's default retry policy — a repair call landing right after a deck
       // call often meets an already-saturated window anyway, and repair
       // failure just keeps the unrepaired deck rather than costing the user
       // anything.
-      first = await client.messages.parse({ ...baseParams, messages }, { signal, maxRetries: 0 })
+      response = await client.messages.parse({ ...baseParams, messages }, { signal, maxRetries: 0 })
     } catch (err) {
       throw await this.mapError(err)
     }
-    const firstText = textOf(first)
-    const firstResult = parseRepairResponse(firstText)
-    if (firstResult) return firstResult
-
-    // One self-correcting retry, as the deck and narration paths do.
-    const retryMessages: AnthropicMessage[] = [
-      ...messages,
-      { role: 'assistant', content: firstText },
-      {
-        role: 'user',
-        content: 'That response failed schema validation. Reply again with ONLY the corrected JSON object, no other text.',
-      },
-    ]
-    let second
-    try {
-      second = await client.messages.parse({ ...baseParams, messages: retryMessages }, { signal, maxRetries: 0 })
-    } catch (err) {
-      throw await this.mapError(err)
+    if (!response.parsed_output) {
+      throw new AIProviderError('The AI returned repairs that could not be parsed. Try again.', {
+        kind: 'response',
+      })
     }
-    const secondResult = parseRepairResponse(textOf(second))
-    if (secondResult) return secondResult
-
-    throw new AIProviderError('The AI returned repairs that could not be parsed. Try again.', {
-      kind: 'response',
-    })
+    return response.parsed_output
   }
 
   async generateNarration(
@@ -395,12 +450,10 @@ export class AnthropicProvider implements AIProvider {
     const client = await this.getClient()
     const { zodOutputFormat } = await import('@anthropic-ai/sdk/helpers/zod')
 
-    const messages: AnthropicMessage[] = [
-      { role: 'system', content: NARRATION_SYSTEM_PROMPT },
-      { role: 'user', content: buildNarrationUserPrompt(title, slides) },
-    ]
+    const messages: AnthropicMessage[] = [{ role: 'user', content: buildNarrationUserPrompt(title, slides) }]
     const baseParams = {
       model: this.deckModel,
+      system: NARRATION_SYSTEM_PROMPT,
       // `narrationMaxTokens`'s ceiling of 7000 is tuned to Groq's free-tier
       // 8,000-token/minute window (see its doc comment) — a constraint that
       // has nothing to do with Claude. Reusing it as-is would cap Claude's

@@ -19,10 +19,17 @@ import {
   for "substitute this on failure") or the real schema's `.refine()` (first
   block must be a heading — an arbitrary predicate, not a shape). So every
   `.catch()` below becomes a plain `z.enum`/type with no fallback, and the
-  refinement is dropped entirely. Structured output still constrains the
-  model to one of the enum's literal values in the first place, so losing
-  `.catch()` here costs nothing; `.default()` fields keep their default,
-  since JSON Schema has no trouble with that.
+  refinement is dropped entirely. Losing `.catch()` here does NOT mean the
+  model is grammar-constrained to the enum's literal values instead:
+  `zodOutputFormat`'s JSON Schema conversion (`transform-json-schema.js`)
+  demotes a `z.enum`/`z.literal` node to a plain `{"type":"string"}` with the
+  allowed values folded into its `description` — a hint that steers the
+  model, not a constraint the response grammar enforces, so an off-list
+  string is still possible here. It costs nothing in practice anyway:
+  `anthropicProvider.ts` always re-runs the REAL `generatedDeckSchema.safeParse()`
+  on `response.parsed_output` afterward, and that schema's `.catch()`s are
+  what actually catch an off-list value. `.default()` fields keep their
+  default, since JSON Schema has no trouble with that.
 
   This schema's own validation is NOT what the app trusts. `anthropicProvider.ts`
   always re-runs the REAL `generatedDeckSchema.safeParse()` on

@@ -13,7 +13,6 @@ export type { GenerationBrief, DeckContext }
 */
 export {
   generatedDeckSchema,
-  repairResponseSchema,
   type GeneratedCard,
   type GeneratedDeck,
   type EvidencePack,

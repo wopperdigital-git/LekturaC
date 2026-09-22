@@ -1,10 +1,23 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { AuthenticationError, PermissionDeniedError, RateLimitError, APIError, APIUserAbortError } from '@anthropic-ai/sdk'
+import {
+  AuthenticationError,
+  PermissionDeniedError,
+  RateLimitError,
+  APIError,
+  APIUserAbortError,
+  AnthropicError,
+} from '@anthropic-ai/sdk'
 import { AnthropicProvider } from './anthropicProvider'
-import type { GenerationBrief } from './prompts'
+import { DECK_SYSTEM_PROMPT, type GenerationBrief } from './prompts'
 import type { DeckContext, GeneratedDeck, QualityFlag, NarrationSlide } from './provider'
-import { REPAIR_MAX_TOKENS } from './repairPrompt'
-import { narrationMaxTokens } from './narrationPrompt'
+import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT } from './repairPrompt'
+import { NARRATION_SYSTEM_PROMPT, narrationMaxTokens } from './narrationPrompt'
+import { RESEARCH_SYSTEM_PROMPT } from './researchPrompt'
+
+/** No `messages` entry may carry `role: 'system'` — see `anthropicProvider.ts`'s header comment (C1). */
+function hasNoSystemRoleMessage(messages: Array<{ role: string }>): boolean {
+  return messages.every((m) => m.role !== 'system')
+}
 
 /*
   Mocks the default export (the `Anthropic` client constructor) with a fake
@@ -83,10 +96,6 @@ const invalidDeckOutput = {
   cards: [{ ...validCard, blocks: [{ type: 'paragraph', text: 'Not a heading' }] }],
 }
 
-function textResponse(json: unknown) {
-  return { content: [{ type: 'text', text: JSON.stringify(json) }] }
-}
-
 beforeEach(() => {
   parseMock.mockReset()
   createMock.mockReset()
@@ -137,6 +146,11 @@ describe('AnthropicProvider', () => {
       expect(params.output_config.effort).toBe('medium')
       expect(params.output_config.format).toBeTruthy()
       expect(params.output_config.format.type).toBe('json_schema')
+      // C1: the system prompt is a top-level request param, never a
+      // `{ role: 'system' }` message — `claude-sonnet-5` returns a 400 for
+      // the latter.
+      expect(params.system).toBe(DECK_SYSTEM_PROMPT)
+      expect(hasNoSystemRoleMessage(params.messages)).toBe(true)
     })
 
     it('omits maxRetries from the request options', async () => {
@@ -159,11 +173,14 @@ describe('AnthropicProvider', () => {
 
       expect(result).toEqual(validDeck)
       expect(parseMock).toHaveBeenCalledTimes(2)
-      const retryMessages = parseMock.mock.calls[1][0].messages
+      const retryParams = parseMock.mock.calls[1][0]
+      const retryMessages = retryParams.messages
       const retryUserMessage = retryMessages[retryMessages.length - 1]
       expect(retryUserMessage.role).toBe('user')
       expect(retryUserMessage.content).toContain('failed schema validation')
       expect(retryUserMessage.content).toContain('heading')
+      expect(retryParams.system).toBe(DECK_SYSTEM_PROMPT)
+      expect(hasNoSystemRoleMessage(retryMessages)).toBe(true)
     })
 
     it('throws kind response when the retry also fails schema validation', async () => {
@@ -185,26 +202,44 @@ describe('AnthropicProvider', () => {
     ]
     const context: DeckContext = { evidence: null, today: '2026-09-22' }
 
-    it('sends effort low, REPAIR_MAX_TOKENS, and maxRetries 0', async () => {
-      parseMock.mockResolvedValueOnce(textResponse({ repairs: [{ slide: 1, card: validCard }] }))
+    it('sends effort low, REPAIR_MAX_TOKENS, maxRetries 0, system as a top-level param, and no system-role message', async () => {
+      parseMock.mockResolvedValueOnce({ parsed_output: { repairs: [{ slide: 1, card: validCard }] }, content: [] })
       const provider = new AnthropicProvider('key')
 
-      await provider.repairSlides(deck, targets, flags, context)
+      const result = await provider.repairSlides(deck, targets, flags, context)
 
+      expect(result).toEqual({ repairs: [{ slide: 1, card: validCard }] })
       const params = parseMock.mock.calls[0][0]
       const options = parseMock.mock.calls[0][1]
       expect(params.output_config.effort).toBe('low')
       expect(params.max_tokens).toBe(REPAIR_MAX_TOKENS)
       expect(options.maxRetries).toBe(0)
+      expect(params.system).toBe(REPAIR_SYSTEM_PROMPT)
+      expect(hasNoSystemRoleMessage(params.messages)).toBe(true)
     })
 
-    it('retries once on an unparseable response, then throws kind response if the retry also fails', async () => {
-      const notJson = { content: [{ type: 'text', text: 'not JSON at all, no braces here' }] }
-      parseMock.mockResolvedValueOnce(notJson).mockResolvedValueOnce(notJson)
+    // M2: `client.messages.parse()` itself throws (an `AnthropicError`, per
+    // `helpers/zod`'s `parse` closure) when the model's text fails the
+    // `output_config.format` schema — the code never gets a chance to see a
+    // parsed-but-invalid `parsed_output` to retry against, so there is no
+    // self-correcting retry branch here (unlike `generateDeck`/
+    // `generateNarration`). This exercises exactly that reachable path: the
+    // throw maps through `mapError`'s `AnthropicError` branch to `kind:
+    // 'response'`, in a single call with no retry.
+    it('maps a structured-output parse failure (client.messages.parse throwing) to kind response, without retrying', async () => {
+      parseMock.mockRejectedValueOnce(new AnthropicError('Failed to parse structured output: invalid'))
       const provider = new AnthropicProvider('key')
 
       await expect(provider.repairSlides(deck, targets, flags, context)).rejects.toMatchObject({ kind: 'response' })
-      expect(parseMock).toHaveBeenCalledTimes(2)
+      expect(parseMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('throws kind response when parse succeeds but parsed_output is null', async () => {
+      parseMock.mockResolvedValueOnce({ parsed_output: null, content: [] })
+      const provider = new AnthropicProvider('key')
+
+      await expect(provider.repairSlides(deck, targets, flags, context)).rejects.toMatchObject({ kind: 'response' })
+      expect(parseMock).toHaveBeenCalledTimes(1)
     })
 
     // Regression guard for the specific bug the reviewer caught: an earlier
@@ -214,7 +249,7 @@ describe('AnthropicProvider', () => {
     // accepted, so a real call would very likely emit an empty card and
     // repair would silently no-op. `card` must have the real card structure.
     it('gives the structured-output schema a real structural shape for card, not an empty/unconstrained object', async () => {
-      parseMock.mockResolvedValueOnce(textResponse({ repairs: [{ slide: 1, card: validCard }] }))
+      parseMock.mockResolvedValueOnce({ parsed_output: { repairs: [{ slide: 1, card: validCard }] }, content: [] })
       const provider = new AnthropicProvider('key')
 
       await provider.repairSlides(deck, targets, flags, context)
@@ -233,7 +268,7 @@ describe('AnthropicProvider', () => {
   describe('generateNarration', () => {
     const slides: NarrationSlide[] = [{ slide: 1, heading: 'Heading', lines: ['a line'], write: true }]
 
-    it('sends effort low and a Claude-widened max_tokens ceiling', async () => {
+    it('sends effort low, a Claude-widened max_tokens ceiling, system as a top-level param, and no system-role message', async () => {
       parseMock.mockResolvedValueOnce({ parsed_output: { scripts: [{ slide: 1, text: 'script text' }] }, content: [] })
       const provider = new AnthropicProvider('key')
 
@@ -244,6 +279,8 @@ describe('AnthropicProvider', () => {
       expect(params.output_config.effort).toBe('low')
       expect(params.max_tokens).toBe(Math.max(narrationMaxTokens(slides.length), 16000))
       expect('maxRetries' in options).toBe(false)
+      expect(params.system).toBe(NARRATION_SYSTEM_PROMPT)
+      expect(hasNoSystemRoleMessage(params.messages)).toBe(true)
     })
   })
 
@@ -292,6 +329,28 @@ describe('AnthropicProvider', () => {
       await expect(provider.generateDeck('topic', brief, controller.signal)).rejects.toBeTruthy()
       expect(parseMock).toHaveBeenCalledTimes(1)
     })
+
+    // I3: `client.messages.parse()` throws a plain `AnthropicError` (not an
+    // `APIError` subclass — see `@anthropic-ai/sdk/helpers/zod`'s `parse`
+    // closure) when the model's text fails `JSON.parse` or fails the zod
+    // schema handed to `output_config.format`. Before this fix that fell
+    // through `mapError`'s `instanceof APIError` check (false — `APIError`
+    // extends `AnthropicError`, not the reverse) into the generic `kind:
+    // 'unknown'` branch, leaking the raw SDK/zod message to the user via
+    // `CreatePage.tsx`'s `setError(err.message)`.
+    it('maps a plain AnthropicError (structured-output parse/validation failure) to kind response, with a friendly message', async () => {
+      parseMock.mockRejectedValueOnce(new AnthropicError('Failed to parse structured output: ZodError: ...'))
+      const provider = new AnthropicProvider('key')
+
+      const rejection = provider.generateDeck('topic', brief)
+      await expect(rejection).rejects.toMatchObject({ kind: 'response' })
+      await expect(rejection).rejects.not.toThrow(/ZodError/)
+      // The `maps RateLimitError to kind capacity` test above is also the
+      // regression guard for this fix's ordering requirement: `RateLimitError`
+      // (and every other `APIError` subclass) extends `AnthropicError` too, so
+      // the `AnthropicError` catch-all must sit after every specific check —
+      // if it didn't, that test would now fail with `kind: 'response'`.
+    })
   })
 
   describe('research', () => {
@@ -316,6 +375,56 @@ describe('AnthropicProvider', () => {
       expect(params.model).toBe('claude-sonnet-5')
       expect(params.tools).toEqual([{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }])
       expect(options.maxRetries).toBe(0)
+      // C1: system prompt as a top-level param, no `{ role: 'system' }` message.
+      expect(params.system).toBe(RESEARCH_SYSTEM_PROMPT)
+      expect(hasNoSystemRoleMessage(params.messages)).toBe(true)
+      // C2: `temperature` is entirely absent — `claude-sonnet-5` returns a 400
+      // for any value other than 1.0.
+      expect('temperature' in params).toBe(false)
+    })
+
+    // M4: a server-tool (web search) error comes back as a normal 200 with a
+    // `web_search_tool_result` block whose `.content` is a single error
+    // object, not the usual list of results — `textOf()` can't see it, so
+    // this is surfaced as a console warning instead (diagnostic only; control
+    // flow is unaffected and `parseEvidencePack` still runs on whatever text
+    // came back).
+    it('warns on a web_search_tool_result error shape without throwing or changing the result', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      createMock.mockResolvedValueOnce({
+        stop_reason: 'end_turn',
+        content: [
+          { type: 'web_search_tool_result', tool_use_id: 'tool1', content: { error_code: 'max_uses_exceeded' } },
+          { type: 'text', text: JSON.stringify({ sources: [validSource], findings: [validFinding], disagreements: [] }) },
+        ],
+      })
+      const provider = new AnthropicProvider('key')
+
+      const result = await provider.research('topic', brief, '2026-09-22')
+
+      expect(result.findings).toHaveLength(1)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('web_search_tool_result'),
+        { error_code: 'max_uses_exceeded' },
+      )
+      warnSpy.mockRestore()
+    })
+
+    it('does not warn when web_search_tool_result carries the normal list-of-results success shape', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      createMock.mockResolvedValueOnce({
+        stop_reason: 'end_turn',
+        content: [
+          { type: 'web_search_tool_result', tool_use_id: 'tool1', content: [{ type: 'web_search_result', url: 'https://example.com', title: 't' }] },
+          { type: 'text', text: JSON.stringify({ sources: [validSource], findings: [validFinding], disagreements: [] }) },
+        ],
+      })
+      const provider = new AnthropicProvider('key')
+
+      await provider.research('topic', brief, '2026-09-22')
+
+      expect(warnSpy).not.toHaveBeenCalled()
+      warnSpy.mockRestore()
     })
 
     // The model's JSON can legitimately be split across a pause boundary: the
