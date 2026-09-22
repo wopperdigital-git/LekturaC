@@ -79,13 +79,14 @@ Retries `RETRYABLE_STATUS` (429/503) up to `maxRetries` (default `MAX_RETRIES` =
 
 ### Fallback (`ai/fallbackProvider.ts`)
 
-`FallbackProvider` implements `AIProvider` over an ordered chain built once in `CreatePage` (`PROVIDER_CHAIN`); all four methods go through one private `run<T>(label, call, signal)` failover loop. Chain: `GroqProvider` on `openai/gpt-oss-120b` (research on `openai/gpt-oss-20b` with `browser_search`) → second `GroqProvider` on `groq/compound` (deck/repair/narration only) → `GeminiProvider` (`gemini-flash-latest`). `GroqProvider` takes `GroqModelOptions` (`deckModel`, `researchModel`, `researchTools`, `supportsResearch`).
+`FallbackProvider` implements `AIProvider` over an ordered chain built once in `fallbackProvider.ts` (`PROVIDER_CHAIN`), imported by both `CreatePage` and the narration page; all four methods go through one private `run<T>(label, call, signal)` failover loop. Chain: `AnthropicProvider` → `GroqProvider` on `openai/gpt-oss-120b` (research on `openai/gpt-oss-20b` with `browser_search`) → second `GroqProvider` on `groq/compound` (deck/repair/narration only) → `GeminiProvider` (`gemini-flash-latest`). `GroqProvider` takes `GroqModelOptions` (`deckModel`, `researchModel`, `researchTools`, `supportsResearch`).
 
 - **Only `capacity` failures (429/503/413) hand off.** `AIProviderError` carries `kind` (`capacity|auth|request|response|unknown`) + status via `kindForStatus`. An `auth` failover would hide a mistyped key behind Gemini; `request`/`response` fail identically on the backup. This is load-bearing and mutation-tested.
 - **Cancellation never hands off** (aborted signal or bare `AbortError`), or the deck the user walked away from still arrives.
 - The compound link's `supportsResearch: false` makes `research()` throw `capacity` before any network call: `groq/compound-mini` returns 413 for any prompt whose built-in search runs, at every token budget. `capacity` makes the chain skip straight to Gemini.
 - `groq/compound` ignores `response_format` and wraps replies (`**…**\n```json\n{…}`); `ai/jsonText.ts` `extractJsonObject` (first `{` to last `}`) is used by every JSON parser. JSON mode is still requested everywhere.
-- A provider with a missing key is left **out** of the chain; dropping `VITE_GROQ_API_KEY` drops both Groq links → Gemini-only with no code change.
+- A provider with a missing key is left **out** of the chain; `AnthropicProvider` is included only when `VITE_ANTHROPIC_API_KEY` is present, same pattern as the other two; dropping `VITE_GROQ_API_KEY` drops both Groq links → Anthropic-then-Gemini with no code change.
+- **Research now runs through Claude's paid web search by default**, not Groq's free `browser_search` link, because Anthropic leads the chain for all four methods. This is a deliberate cost tradeoff (the user chose Claude end-to-end over the cheaper Groq-first-research default) — do not "fix" it back to research-only-on-Groq.
 
 ## Brief drafts (`src/lib/briefDrafts.ts`)
 
