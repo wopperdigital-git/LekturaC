@@ -20,6 +20,7 @@ import { narrationMaxTokens } from './narrationPrompt'
   `anthropicProvider.ts` builds.
 */
 const parseMock = vi.fn()
+const createMock = vi.fn()
 
 vi.mock('@anthropic-ai/sdk', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@anthropic-ai/sdk')>()
@@ -28,7 +29,7 @@ vi.mock('@anthropic-ai/sdk', async (importOriginal) => {
     constructor(opts: { apiKey: string }) {
       this.apiKey = opts.apiKey
     }
-    messages = { parse: parseMock }
+    messages = { parse: parseMock, create: createMock }
   }
   return {
     ...actual,
@@ -88,7 +89,29 @@ function textResponse(json: unknown) {
 
 beforeEach(() => {
   parseMock.mockReset()
+  createMock.mockReset()
 })
+
+const validSource = {
+  id: 's1',
+  title: 'A Source',
+  publisher: 'A Publisher',
+  url: 'https://example.com',
+  publicationDate: '2026',
+  sourceType: 'news',
+}
+
+const validFinding = {
+  statement: 'A statement',
+  value: '1',
+  unit: '',
+  geography: '',
+  population: '',
+  year: 2026,
+  definition: '',
+  sourceIds: ['s1'],
+  confidence: 0.9,
+}
 
 describe('AnthropicProvider', () => {
   describe('no key configured', () => {
@@ -272,12 +295,91 @@ describe('AnthropicProvider', () => {
   })
 
   describe('research', () => {
-    it('throws Not yet implemented (Task 2 replaces this stub)', async () => {
-      const provider = new AnthropicProvider('key')
-      await expect(provider.research('topic', brief, '2026-09-22')).rejects.toMatchObject({
-        message: 'Not yet implemented',
+    it('throws kind auth before any SDK call when no key is configured', async () => {
+      const provider = new AnthropicProvider('')
+      await expect(provider.research('topic', brief, '2026-09-22')).rejects.toMatchObject({ kind: 'auth' })
+      expect(createMock).not.toHaveBeenCalled()
+    })
+
+    it('sends the web_search_20260209 tool with max_uses 4 and maxRetries 0', async () => {
+      createMock.mockResolvedValueOnce({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: JSON.stringify({ sources: [validSource], findings: [validFinding], disagreements: [] }) }],
       })
-      expect(parseMock).not.toHaveBeenCalled()
+      const provider = new AnthropicProvider('key', { researchModel: 'claude-sonnet-5' })
+
+      await provider.research('topic', brief, '2026-09-22')
+
+      expect(createMock).toHaveBeenCalledTimes(1)
+      const params = createMock.mock.calls[0][0]
+      const options = createMock.mock.calls[0][1]
+      expect(params.model).toBe('claude-sonnet-5')
+      expect(params.tools).toEqual([{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }])
+      expect(options.maxRetries).toBe(0)
+    })
+
+    // The model's JSON can legitimately be split across a pause boundary: the
+    // first (paused) turn emits the opening of the object, the resumed turn
+    // emits the rest. Only concatenating both turns' text yields valid JSON
+    // here — a bug that dropped the first turn's text would fail this.
+    it('resumes once on pause_turn, merging both turns into a single parseEvidencePack call', async () => {
+      createMock
+        .mockResolvedValueOnce({
+          stop_reason: 'pause_turn',
+          content: [
+            { type: 'server_tool_use', id: 'tool1', name: 'web_search', input: {} },
+            { type: 'text', text: `{"sources":[${JSON.stringify(validSource)}],"findings":[` },
+          ],
+        })
+        .mockResolvedValueOnce({
+          stop_reason: 'end_turn',
+          content: [{ type: 'text', text: `${JSON.stringify(validFinding)}],"disagreements":[]}` }],
+        })
+      const provider = new AnthropicProvider('key')
+
+      const result = await provider.research('topic', brief, '2026-09-22')
+
+      expect(createMock).toHaveBeenCalledTimes(2)
+      expect(result.sources).toHaveLength(1)
+      expect(result.findings).toHaveLength(1)
+
+      // The second call's messages must include the first call's full
+      // assistant turn (content blocks and all) pushed back, not just its text.
+      const secondCallMessages = createMock.mock.calls[1][0].messages
+      const pushedAssistantTurn = secondCallMessages[secondCallMessages.length - 1]
+      expect(pushedAssistantTurn.role).toBe('assistant')
+      expect(pushedAssistantTurn.content.some((b: { type: string }) => b.type === 'server_tool_use')).toBe(true)
+    })
+
+    it('stops after the capped number of resumptions when still pause_turn', async () => {
+      createMock.mockResolvedValue({
+        stop_reason: 'pause_turn',
+        content: [{ type: 'text', text: 'still searching, no JSON yet' }],
+      })
+      const provider = new AnthropicProvider('key')
+
+      await expect(provider.research('topic', brief, '2026-09-22')).rejects.toMatchObject({ kind: 'response' })
+
+      // 1 initial call + 3 resumptions = 4 total, never more.
+      expect(createMock).toHaveBeenCalledTimes(4)
+    })
+
+    it('throws kind response when parseEvidencePack finds no usable evidence', async () => {
+      createMock.mockResolvedValueOnce({
+        stop_reason: 'end_turn',
+        content: [{ type: 'text', text: 'no JSON object anywhere in this reply' }],
+      })
+      const provider = new AnthropicProvider('key')
+
+      await expect(provider.research('topic', brief, '2026-09-22')).rejects.toMatchObject({ kind: 'response' })
+      expect(createMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('maps a research SDK error the same way as the other methods', async () => {
+      createMock.mockRejectedValueOnce(new RateLimitError(429, {}, 'rate limited', new Headers()))
+      const provider = new AnthropicProvider('key')
+
+      await expect(provider.research('topic', brief, '2026-09-22')).rejects.toMatchObject({ kind: 'capacity' })
     })
   })
 })

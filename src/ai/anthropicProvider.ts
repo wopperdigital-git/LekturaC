@@ -17,6 +17,7 @@ import {
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt } from './prompts'
 import { NARRATION_SYSTEM_PROMPT, buildNarrationUserPrompt, narrationMaxTokens } from './narrationPrompt'
 import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
+import { RESEARCH_SYSTEM_PROMPT, buildResearchUserPrompt, parseEvidencePack } from './researchPrompt'
 import { deckOutputSchema, generatedCardOutputSchema } from './deckOutputSchema'
 import type { ZodError } from 'zod'
 
@@ -59,6 +60,20 @@ interface AnthropicMessage {
  * the bundle. The actual class comes from the `import()` call in `getClient()`.
  */
 type AnthropicClient = InstanceType<(typeof import('@anthropic-ai/sdk'))['default']>
+
+/**
+ * Message shape for `research()`'s own `messages` array. Unlike
+ * `AnthropicMessage` (plain `content: string`, which is all every other
+ * method here ever needs), a `pause_turn` resumption has to push a real
+ * assistant turn straight back — search results, server-tool-use blocks,
+ * whatever Claude emitted, not just its text — so `content` needs the SDK's
+ * real `string | Array<ContentBlockParam>` shape. Extracted purely at the
+ * type level off `AnthropicClient` itself (the same "type query, not an
+ * import" trick as `AnthropicClient`'s own definition above), rather than
+ * imported from `@anthropic-ai/sdk`'s value exports, so nothing here adds to
+ * the module's runtime imports.
+ */
+type AnthropicResearchMessage = Parameters<AnthropicClient['messages']['create']>[0]['messages'][number]
 
 /**
  * `repairResponseSchema`'s own `card` field is `z.unknown()` — deliberately
@@ -241,17 +256,73 @@ export class AnthropicProvider implements AIProvider {
     })
   }
 
+  /**
+   * Caps `research()`'s `pause_turn` resumption loop: 3 resumptions (4 calls
+   * total including the first). A long web-search sequence can keep pausing
+   * indefinitely; this bounds it to a fixed number of extra calls rather than
+   * running unbounded searches against the research budget.
+   */
+  private static readonly MAX_RESEARCH_RESUMPTIONS = 3
+
   async research(
-    _topic: string,
-    _brief: GenerationBrief,
-    _today: string,
-    _signal?: AbortSignal,
+    topic: string,
+    brief: GenerationBrief,
+    today: string,
+    signal?: AbortSignal,
   ): Promise<EvidencePack> {
-    // Task 2 of the plan replaces this stub with the real implementation,
-    // which is what actually reads `this.researchModel`; referenced here as a
-    // no-op so the field isn't flagged unused in the meantime.
-    void this.researchModel
-    throw new AIProviderError('Not yet implemented', { kind: 'unknown' })
+    if (!this.apiKey.trim()) throw noKeyError()
+
+    const client = await this.getClient()
+
+    const messages: AnthropicResearchMessage[] = [
+      { role: 'system', content: RESEARCH_SYSTEM_PROMPT },
+      { role: 'user', content: buildResearchUserPrompt(topic, brief, today) },
+    ]
+
+    const baseParams = {
+      model: this.researchModel,
+      max_tokens: 4000,
+      tools: [{ type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: 4 }],
+      temperature: 0.3,
+    }
+
+    let response
+    try {
+      // Best effort, like Groq's research call: `maxRetries: 0` rather than
+      // the SDK's default retry policy — a research call is one the pipeline
+      // degrades gracefully around (see `generation/pipeline.ts`), so it's
+      // not worth waiting out backoff for.
+      response = await client.messages.create({ ...baseParams, messages }, { signal, maxRetries: 0 })
+    } catch (err) {
+      throw await this.mapError(err)
+    }
+
+    // `pause_turn` means Claude paused a long web-search sequence — not an
+    // error. Resume by pushing the paused assistant turn straight back onto
+    // `messages` (content blocks and all: search results, server-tool-use,
+    // whatever it emitted) and calling again. Each turn's own text is
+    // accumulated as it's seen — the model's final JSON can legitimately be
+    // split across a pause boundary — rather than keeping only the last
+    // turn's text, so a capped-out loop still has everything Claude wrote so
+    // far to hand to `parseEvidencePack`.
+    let combinedText = textOf(response)
+    let resumptions = 0
+    while (response.stop_reason === 'pause_turn' && resumptions < AnthropicProvider.MAX_RESEARCH_RESUMPTIONS) {
+      messages.push({ role: 'assistant', content: response.content })
+      resumptions++
+      try {
+        response = await client.messages.create({ ...baseParams, messages }, { signal, maxRetries: 0 })
+      } catch (err) {
+        throw await this.mapError(err)
+      }
+      combinedText += textOf(response)
+    }
+
+    const pack = parseEvidencePack(combinedText)
+    if (!pack) {
+      throw new AIProviderError('Research returned no usable evidence', { kind: 'response' })
+    }
+    return pack
   }
 
   async repairSlides(
