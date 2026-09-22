@@ -14,6 +14,12 @@ describe('kindForStatus', () => {
     expect(kindForStatus(413)).toBe('capacity')
   })
 
+  // 529 ("overloaded") is Anthropic's own capacity signal, added alongside
+  // AnthropicProvider — same failover reasoning as 429/503/413.
+  it('classifies 529 as capacity', () => {
+    expect(kindForStatus(529)).toBe('capacity')
+  })
+
   it.each([401, 403])('classifies %i as auth', (status) => {
     expect(kindForStatus(status)).toBe('auth')
   })

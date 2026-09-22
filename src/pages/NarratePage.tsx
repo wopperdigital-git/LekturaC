@@ -79,7 +79,9 @@ export function NarratePage() {
   async function runGeneration(targets: Set<number>) {
     if (targets.size === 0) return
     if (PROVIDER_CHAIN.length === 0) {
-      setError('No AI provider is configured. Add VITE_GROQ_API_KEY or VITE_GEMINI_API_KEY to your .env file.')
+      setError(
+        'No AI provider is configured. Add VITE_ANTHROPIC_API_KEY, VITE_GROQ_API_KEY, or VITE_GEMINI_API_KEY to your .env file.',
+      )
       return
     }
 

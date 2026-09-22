@@ -316,22 +316,23 @@ Drafts are the exception: they live in your browser only, namespaced per user.
 Requests run down a chain, and only a capacity failure (rate limit, overload,
 too-large) moves to the next link:
 
-1. **Groq `openai/gpt-oss-120b`** — the writer.
-2. **Groq `groq/compound`** — a second attempt on the same key.
-3. **Gemini `gemini-flash-latest`**.
+1. **Claude `claude-sonnet-5`** — the writer, and also where research runs
+   (Claude's own paid web search tool, not a free-tier one). Present only
+   when an Anthropic key is configured; billed per token, unlike the free
+   tiers below.
+2. **Groq `openai/gpt-oss-120b`** — the writer.
+3. **Groq `groq/compound`** — a second attempt on the same key.
+4. **Gemini `gemini-flash-latest`**.
 
-Research runs on **Groq `openai/gpt-oss-20b`** with a built-in web search tool.
-Cancelling never falls through to the next provider — pressing Cancel really does
-stop the work.
+If no Anthropic key is configured, the chain starts at Groq instead, and
+research runs on **Groq `openai/gpt-oss-20b`** with its own built-in web
+search tool. Cancelling never falls through to the next provider — pressing
+Cancel really does stop the work.
 
 Known limits on the free tiers: the writer has roughly an 8,000 token-per-minute
 window, and the research model has a 20,000 token-per-day cap. When research is
 out of quota, decks are still written — just without evidence, and their claims
 are flagged unverified.
-
-A plan exists to add **Claude Sonnet 5** as the writer (≈ $0.08 per deck, with
-research staying on Groq); see `.claude/plans/` for the details. It is not
-implemented.
 
 ---
 

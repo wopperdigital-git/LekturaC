@@ -136,8 +136,9 @@ export function kindForStatus(status: number): AIFailureKind {
   // prompt overflowed *this* provider's request-size window, which is exactly
   // what a different provider (a larger window, or none at all) can plausibly
   // serve — the same reasoning as 429/503, just on the size axis instead of
-  // the rate axis.
-  if (status === 429 || status === 503 || status === 413) return 'capacity'
+  // the rate axis. 529 ("overloaded") is Anthropic's own capacity signal —
+  // the service is temporarily over capacity, same shape as 429/503.
+  if (status === 429 || status === 503 || status === 413 || status === 529) return 'capacity'
   if (status === 401 || status === 403) return 'auth'
   if (status >= 400 && status < 500) return 'request'
   return 'unknown'
