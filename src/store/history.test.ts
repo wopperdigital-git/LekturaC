@@ -108,11 +108,14 @@ describe('universal undo/redo', () => {
   })
 
   /*
-    A type change rewrites the card's blocks and drops its marks and nudges —
-    the most destructive edit in the app that is not a deletion. Undo has to put
-    all three back, or a mistaken click through the modal is unrecoverable.
+    Adding content appends a block. It has to be undoable like every other edit,
+    and — the property that makes appending safe — it must leave the marks and
+    nudges already on the card exactly where they were, because both are keyed by
+    block index and an append shifts no index.
   */
-  it('undoes a card type change, restoring blocks, marks and nudges', () => {
+  it('undoes adding content, and leaves existing marks and nudges untouched', () => {
+    const marks = { '1:text': { marks: [{ type: 'bold' as const, start: 0, end: 8 }] } }
+    const adjusts = { '1': { dx: 0.1, dy: 0, rotation: 0 } }
     seed([
       {
         ...card('a', 0),
@@ -120,26 +123,29 @@ describe('universal undo/redo', () => {
           { type: 'heading', text: 'Card a' },
           { type: 'paragraph', text: 'Original prose' },
         ],
-        inline: { '1:text': { marks: [{ type: 'bold', start: 0, end: 8 }] } },
-        adjusts: { '1': { dx: 0.1, dy: 0, rotation: 0 } },
+        inline: marks,
+        adjusts,
       },
       card('b', 1),
     ])
 
-    state().setCardKind('a', 'quote')
-    const changed = state().cards.find((c) => c.id === 'a')!
-    expect(changed.blocks.some((b) => b.type === 'quote')).toBe(true)
-    expect(changed.inline).toBeUndefined()
-    expect(changed.adjusts).toBeUndefined()
+    expect(state().addBlock('a', 'h2')).toBe(2)
+    const added = state().cards.find((c) => c.id === 'a')!
+    expect(added.blocks).toHaveLength(3)
+    expect(added.blocks[2]).toMatchObject({ type: 'heading', size: 'h2' })
+    expect(added.inline).toEqual(marks)
+    expect(added.adjusts).toEqual(adjusts)
 
     state().undo()
-    const restored = state().cards.find((c) => c.id === 'a')!
-    expect(restored.blocks).toEqual([
-      { type: 'heading', text: 'Card a' },
-      { type: 'paragraph', text: 'Original prose' },
-    ])
-    expect(restored.inline).toEqual({ '1:text': { marks: [{ type: 'bold', start: 0, end: 8 }] } })
-    expect(restored.adjusts).toEqual({ '1': { dx: 0.1, dy: 0, rotation: 0 } })
+    expect(state().cards.find((c) => c.id === 'a')!.blocks).toHaveLength(2)
+
+    state().redo()
+    expect(state().cards.find((c) => c.id === 'a')!.blocks).toHaveLength(3)
+  })
+
+  it('refuses to add content to a card that does not exist', () => {
+    expect(state().addBlock('missing', 'body')).toBeNull()
+    expect(state().past).toHaveLength(0)
   })
 
   it('still undoes card deletion and reordering', () => {

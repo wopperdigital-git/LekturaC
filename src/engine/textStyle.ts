@@ -101,6 +101,26 @@ export function clampFontScale(scale: number): number {
   return Math.round(clamped * 100) / 100
 }
 
+/** A change to a `TextStyle`: a value sets a field, `null` clears it back to "whatever the theme says". */
+export type TextStylePatch = Partial<Record<keyof TextStyle, TextStyle[keyof TextStyle] | null>>
+
+/**
+ * `style` with `patch` applied, never mutating it.
+ *
+ * `null` (or `undefined`) removes the key rather than storing it: an absent key
+ * is what "inherit the theme" means on the wire, so a stored null would be a
+ * second encoding of the same state. Shared by the store's three write paths and
+ * by the font preview, so what a hover shows is exactly what a click would store.
+ */
+export function applyTextStylePatch(style: TextStyle, patch: TextStylePatch): TextStyle {
+  const next: TextStyle = { ...style }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null || value === undefined) delete next[key as keyof TextStyle]
+    else Object.assign(next, { [key]: value })
+  }
+  return next
+}
+
 /**
  * Resolves the style for one card: card-level fields win, field by field, over
  * the deck's.

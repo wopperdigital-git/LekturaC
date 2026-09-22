@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
 import { DEFAULT_THEME, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
-import { EMPTY_TEXT_STYLE, parseTextStyle, type TextStyle } from '@/engine/textStyle'
+import { EMPTY_TEXT_STYLE, applyTextStylePatch, parseTextStyle, type TextStyle } from '@/engine/textStyle'
 import {
   applyMark,
   applyValueMark,
@@ -20,16 +20,12 @@ import { applyEmphasis } from '@/engine/emphasis'
 import { roleLayoutHint } from '@/engine/roleLayout'
 import { sequenceFor, sequenceMismatch, type BlueprintId } from '@/ai/slideBlueprints'
 import { isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
-import {
-  convertBlocks,
-  layoutForKind,
-  starterBlocks,
-  type CreatableKind,
-} from '@/engine/cardTemplates'
+import { layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { buildGenerationMeta } from '@/generation/meta'
 import type { PipelineResult } from '@/generation/pipeline'
 import { inOrder, withCardAfter, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
+import { withBlockAppended, type ContentType } from '@/engine/newContent'
 import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
 
 export interface DeckSummary {
@@ -143,6 +139,16 @@ interface PresentationState {
    */
   addListItem: (cardId: string, blockIndex: number) => number | null
   /**
+   * Appends one new element of `type` (a heading, body text, a list…) to the end
+   * of a card, and returns the index it landed at so the editor can select it and
+   * open it for typing — `null` when the card is full.
+   *
+   * Only ever appended, for the reason `addListItem` is: a block's index is its
+   * address for marks, nudges and typography, so an insertion would slide every
+   * later element's formatting onto its neighbour.
+   */
+  addBlock: (cardId: string, type: ContentType) => number | null
+  /**
    * Removes one element from a card outright. Every later element's formatting
    * and nudges are renumbered to follow it. Returns false when there was nothing
    * to remove or it may not be — the card's last element stays.
@@ -187,16 +193,6 @@ interface PresentationState {
    * question.
    */
   addCard: (kind: CreatableKind, afterCardId: string | null) => string
-  /**
-   * Reshapes one card into another type, keeping its words.
-   *
-   * Drops the card's `inline` and `adjusts` outright, and that is deliberate
-   * rather than lazy: both are keyed by block index, and a reshape moves the
-   * text to different indices — so a mark would land on the wrong characters
-   * and a nudge on the wrong element. The alternative, remapping them, has no
-   * correct answer when three paragraphs become one bullet list.
-   */
-  setCardKind: (cardId: string, kind: CreatableKind) => void
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
 
@@ -872,17 +868,10 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   setTextStyle(patch) {
-    // `null` clears a field rather than storing null: an absent key is what
-    // "inherit the theme" means on the wire (see engine/textStyle.ts), so a
-    // stored null would be a second encoding of the same state.
     // Coalesced per field: holding the font-size stepper is one intent, but
     // bold-then-italic are two and must undo separately.
     pushHistory(set, get, `deckTextStyle:${Object.keys(patch).join(',')}`)
-    const next: TextStyle = { ...get().textStyle }
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null || value === undefined) delete next[key as keyof TextStyle]
-      else Object.assign(next, { [key]: value })
-    }
+    const next = applyTextStylePatch(get().textStyle, patch)
     set({ textStyle: next })
 
     const id = get().presentationId
@@ -898,11 +887,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     if (!card) return
 
     pushHistory(set, get, `cardTextStyle:${cardId}:${Object.keys(patch).join(',')}`)
-    const next: TextStyle = { ...(card.textStyle ?? {}) }
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null || value === undefined) delete next[key as keyof TextStyle]
-      else Object.assign(next, { [key]: value })
-    }
+    const next = applyTextStylePatch(card.textStyle ?? {}, patch)
 
     const cards = get().cards.map((c) => (c.id === cardId ? { ...c, textStyle: next } : c))
     set({ cards })
@@ -994,6 +979,27 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     return added.itemIndex
   },
 
+  addBlock(cardId, type) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return null
+    const added = withBlockAppended(card.blocks, type)
+    if (!added) return null
+
+    pushHistory(set, get)
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, blocks: added.blocks } : c)) })
+
+    const id = get().presentationId
+    if (id) {
+      // Immediate, with the pending text saves dropped first, for the reason
+      // `addListItem` gives: each of them captured `blocks` without this element
+      // and would take it back out if it landed afterwards.
+      clearScheduledSave(`blockText:${cardId}`)
+      clearScheduledSave(`inline:${cardId}`)
+      void runSave(set, () => persistCardPatch(cardId, { blocks: added.blocks, inline: card.inline ?? {} }))
+    }
+    return added.blockIndex
+  },
+
   removeBlock(cardId, blockIndex) {
     const card = get().cards.find((c) => c.id === cardId)
     if (!card) return false
@@ -1072,11 +1078,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
     pushHistory(set, get, `inlineStyle:${cardId}:${ref}:${Object.keys(patch).join(',')}`)
     const entry = card.inline?.[ref] ?? {}
-    const style: TextStyle = { ...(entry.style ?? {}) }
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null || value === undefined) delete style[key as keyof TextStyle]
-      else Object.assign(style, { [key]: value })
-    }
+    const style = applyTextStylePatch(entry.style ?? {}, patch)
     const inline = { ...card.inline, [ref]: { ...entry, style } }
 
     set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, inline } : c)) })
@@ -1172,39 +1174,6 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       void runSave(set, () => persistCardsSync(id, previous, get().cards))
     }
     return card.id
-  },
-
-  setCardKind(cardId, kind) {
-    const previous = get().cards
-    const card = previous.find((c) => c.id === cardId)
-    if (!card) return
-
-    pushHistory(set, get)
-    const blocks = convertBlocks(card.blocks, kind)
-    const layout = layoutForKind(kind)
-    /*
-      `inline` and `adjusts` go, rather than being carried across.
-
-      Both are keyed by block index. A reshape moves the text to different
-      indices — three paragraphs becoming one bullet list, a stat pair becoming
-      a quote — so a surviving mark would bold the wrong characters and a
-      surviving nudge would displace the wrong element, silently and
-      permanently. Undo puts them back if the conversion was a mistake.
-    */
-    const next: Card = { ...card, blocks, layout, inline: undefined, adjusts: undefined }
-    set({ cards: previous.map((c) => (c.id === cardId ? next : c)) })
-
-    const id = get().presentationId
-    if (id) {
-      // The debounced writes still pending for this card address the blocks it
-      // had a moment ago; letting one land after this would restore the old
-      // text or re-attach the marks just dropped.
-      clearScheduledSave(`inline:${cardId}`)
-      clearScheduledSave(`adjusts:${cardId}`)
-      void runSave(set, () =>
-        persistCardPatch(cardId, { blocks, layout, inline: {}, adjusts: {} }),
-      )
-    }
   },
 
   deleteCard(cardId) {

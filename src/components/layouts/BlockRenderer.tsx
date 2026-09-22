@@ -71,7 +71,7 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
   const itemProps = useItemProps()
   switch (block.type) {
     case 'heading':
-      return <Heading text={block.text} textRef={textRef(index, 'text')} />
+      return <Heading text={block.text} textRef={textRef(index, 'text')} size={block.size} />
     case 'paragraph':
       return (
         <p

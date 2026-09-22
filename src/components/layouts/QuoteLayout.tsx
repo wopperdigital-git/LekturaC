@@ -20,7 +20,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
     return (
       <div className="flex flex-col gap-6 py-8">
         {headings.map(({ block, index }) => (
-          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
+          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
         ))}
         {quote && (
           <Adjustable index={quote.index}>
@@ -64,7 +64,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
   return (
     <div className="flex flex-col items-center gap-6 py-8 text-center">
       {headings.map(({ block, index }) => (
-        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
       ))}
       {quote && (
         <Adjustable index={quote.index}>

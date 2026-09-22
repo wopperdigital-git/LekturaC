@@ -151,23 +151,6 @@ export function contrastRatio(a: string, b: string): number {
   return (light + 0.05) / (dark + 0.05)
 }
 
-/** The two inks `readableInk` chooses between: near-white and near-black, not pure, so text sits softly. */
-export const LIGHT_INK = '#f8f7fb'
-export const DARK_INK = '#14121a'
-
-/**
- * Whichever of a light or a dark ink reads better on `background`.
- *
- * Decided by contrast rather than by a lightness cut-off: a mid-tone background is
- * exactly where a fixed threshold picks the worse of the two, and the ratio picks
- * the better one however the palette is tuned. Text that has to sit directly on a
- * surface that changes with the theme — the theme picker's own labels, on the
- * deck's stage — uses this so it can never be the wrong colour for it.
- */
-export function readableInk(background: string): string {
-  return contrastRatio(LIGHT_INK, background) >= contrastRatio(DARK_INK, background) ? LIGHT_INK : DARK_INK
-}
-
 /**
  * Writes a ThemeTokens object onto `root` as --slide-* CSS custom properties,
  * scoped to that element (never document.documentElement) so it only affects

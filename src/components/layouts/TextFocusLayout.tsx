@@ -16,7 +16,7 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
   return (
     <div className="flex flex-col gap-5">
       {headings.map(({ block, index }) => (
-        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
       ))}
       <div className="flex max-w-prose flex-col gap-4">
         {paragraphs.map(({ block, index }, i) => (

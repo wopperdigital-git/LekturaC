@@ -80,6 +80,15 @@ export interface BlockAdjusting {
   selectItem: (blockIndex: number, itemIndex: number) => void
   /** `commit` marks the release of a gesture, which is persisted right away. */
   change: (index: number, adjust: BlockAdjust, commit?: boolean) => void
+  /**
+   * Removes what is selected — the picked-out item if there is one, otherwise the
+   * whole element. Behind the bin drawn at the selected element's corner.
+   */
+  remove?: () => void
+  /** Whether the list at this block index can take one more item (it is a list, and not full). */
+  canAddItem?: (blockIndex: number) => boolean
+  /** Appends an item to the list at this block index. Behind the plus under a selected list. */
+  addItem?: (blockIndex: number) => void
 }
 
 export const BlockAdjustContext = createContext<BlockAdjusting | null>(null)

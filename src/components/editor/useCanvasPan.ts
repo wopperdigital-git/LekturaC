@@ -16,13 +16,11 @@ export const PANNING_ATTR = 'data-panning'
  * listener on this node, so stopping the press here means none of them ever hears
  * about it: panning never changes what is selected or starts a drag of its own.
  *
- * Three things follow from taking over a press:
+ * Two things follow from taking over a press:
  * - The `click` the release produces is swallowed, or panning would end with the
  *   card underneath being selected — the very thing a pan must not do.
  * - Ctrl+click is a context-menu gesture on a Mac, so that is suppressed too
  *   while it is a pan.
- * - The formatting toolbar lives inside this scroller and must stay clickable, so
- *   a press that starts on it is left alone.
  *
  * The cursor is CSS, keyed off two attributes set here (`index.css`), so holding
  * Ctrl shows a grab hand over the whole canvas without a render per key.
@@ -52,8 +50,6 @@ export function useCanvasPan(ref: RefObject<HTMLElement | null>, enabled: boolea
 
     function onPointerDown(e: PointerEvent) {
       if (e.button !== 0 || !e.ctrlKey) return
-      const target = e.target as Element | null
-      if (target?.closest('[role="toolbar"]')) return
 
       e.preventDefault()
       e.stopPropagation()

@@ -20,7 +20,7 @@ Describe a topic once, get a finished deck, then refine and present it.
   creation flow, and nothing afterwards asks a model to rewrite them. To get
   different content on a topic, you start a new project.
 - **You edit everything by hand afterwards.** Text is editable in place, slides
-  can be added, deleted, reordered or converted to another type, and any element
+  can be added, deleted or reordered, individual elements can be added to a slide, and any element
   can be dragged, resized or rotated. None of that calls a model.
 - **The AI decides *what* a slide says; the layout engine decides *how* it
   looks.** That split is the core design rule of the app.
@@ -231,8 +231,19 @@ contrast.
 - **Move, resize and rotate elements** directly on the slide. An adjustment is a
   *delta from* the layout, not a replacement for it, so everything else keeps
   flowing and switching layouts keeps your nudges.
-- **Add, delete, reorder or convert slides.** A conversion preserves your words
-  even when it cannot preserve the structure.
+- **Add, delete or reorder slides.** A slide's type is chosen when you add it and
+  does not change afterwards.
+- **Add content to a slide.** *Add content* in the tools panel asks what to add
+  (Heading 1/2/3, body text, bullet list, stat, quote, timeline step, comparison
+  group) and puts it at the end of the slide, ready to type into. A selected list
+  shows a **+** under it that grows it by one and leaves the list highlighted, and
+  every selected element shows a **bin** at its corner to delete it.
+- **Tools live in a panel on the right, laid out like Figma's Design tab.** The
+  header holds undo/redo, Present and the zoom; below it the sections follow what
+  you have selected — Layout and Content once a slide is selected, then
+  Typography (font, size, style, alignment), Fill (text colour) and Theme.
+  Hovering a font previews it on the slide before you commit; font size and zoom
+  take a typed value; layouts and themes are rows of small pictures.
 - **Undo/redo** across the whole deck (⌘Z / ⌘⇧Z), in memory for the session.
 - **Present** full-screen, and **narrate**.
 
@@ -345,7 +356,7 @@ If you change one thing in this codebase, know these first:
    Research and repair run *before* the deck is saved; narration is a separate
    field that no slide renders.
 2. **The AI writes; the engine lays out.** No model picks a layout.
-3. **Never drop a word.** Fitting shrinks text; conversions preserve wording;
+3. **Never drop a word.** Fitting shrinks text;
    every block must reach the screen, the export and the script.
 4. **Research and repair are best effort.** Neither may ever cost the user a deck.
 5. **Cancel means cancel.** An abort stops the work and never fails over.

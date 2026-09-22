@@ -3,9 +3,6 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
-/** The editor docks one panel at a time on the right; `null` means none is open. */
-export type RightPanel = 'theme' | null
-
 export function TopBar({
   title,
   onTitleChange,

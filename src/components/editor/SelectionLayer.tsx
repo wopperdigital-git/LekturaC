@@ -6,6 +6,7 @@ import { clampFrame } from '@/engine/frameGeometry'
 import { BlockAdjustContext, BlockDataContext } from '@/components/layouts/adjustContext'
 import { currentFrame, measureAt, measureBlock, toAdjust, type Measured } from './measureBlock'
 import { SelectionOverlay, type GestureKind } from './SelectionOverlay'
+import { ElementActions } from './ElementActions'
 
 /*
   Draws the selection box over whichever element is selected, and turns the
@@ -20,13 +21,15 @@ import { SelectionOverlay, type GestureKind } from './SelectionOverlay'
 export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement | null> }) {
   const adjusting = useContext(BlockAdjustContext)
   const data = useContext(BlockDataContext)
+  const selected = adjusting?.selected ?? null
   /*
     No box while an item is picked out. The box belongs to the whole element and
     its handles would move or resize the list; with one item lit up that reads as
     the item being what you are holding. The list is still selected underneath,
-    and Escape steps back out to it.
+    and Escape steps back out to it. The element is still *measured* though — the
+    bin and the plus hang off its frame whether or not the box is drawn.
   */
-  const selected = adjusting?.selectedItem != null ? null : (adjusting?.selected ?? null)
+  const itemPicked = adjusting?.selectedItem != null
   const adjust = selected === null ? undefined : data?.adjusts?.[String(selected)]
 
   const [measured, setMeasured] = useState<Measured | null>(null)
@@ -105,11 +108,20 @@ export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement 
 
   if (!measured || selected === null) return null
 
+  const frame = currentFrame(measured.natural, adjust, measured.card)
   return (
-    <SelectionOverlay
-      frame={currentFrame(measured.natural, adjust, measured.card)}
-      onChange={onChange}
-      onCommit={onCommit}
-    />
+    <>
+      {!itemPicked && <SelectionOverlay frame={frame} onChange={onChange} onCommit={onCommit} />}
+      <ElementActions
+        frame={frame}
+        removeLabel={itemPicked ? 'Remove item' : 'Remove element'}
+        onRemove={adjusting?.remove}
+        onAddItem={
+          adjusting?.canAddItem?.(selected) && adjusting.addItem
+            ? () => adjusting.addItem?.(selected)
+            : undefined
+        }
+      />
+    </>
   )
 }

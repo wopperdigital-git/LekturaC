@@ -19,7 +19,7 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
         {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
         <div className="flex flex-col gap-3 text-center sm:text-left">
           {headings.map(({ block, index }) => (
-            <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
+            <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
           ))}
           {paragraphs.map(({ block, index }) => (
             <Adjustable key={index} index={index}>
@@ -37,7 +37,7 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">
       {headings.map(({ block, index }) => (
-        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
       ))}
       {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
       {paragraphs.map(({ block, index }) => (

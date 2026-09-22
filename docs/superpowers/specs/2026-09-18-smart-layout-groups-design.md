@@ -45,7 +45,7 @@ key (`"4"`), still the `data-block-index` attribute, still `selectedBlockIndex`.
 The store, persistence, the PPTX export, narration and the emphasis pass are all
 untouched. A block's index is fixed for the card's whole life, because nothing
 in the app inserts, deletes or reorders a single block within a card — blocks
-are only ever written wholesale (created, converted by `setCardKind`, or
+are only ever written wholesale (created, appended to by Add content, or
 text-edited in place).
 
 ### Which runs become groups

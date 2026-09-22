@@ -1,106 +1,53 @@
 import type { ReactNode } from 'react'
 import { Modal } from '@/components/ui/Modal'
-import { cardKindLabel, type CardKind } from '@/engine/layoutEngine'
-import {
-  CREATABLE_KINDS,
-  KIND_DESCRIPTIONS,
-  isCreatableKind,
-  type CreatableKind,
-} from '@/engine/cardTemplates'
+import { cardKindLabel } from '@/engine/layoutEngine'
+import { CREATABLE_KINDS, KIND_DESCRIPTIONS, type CreatableKind } from '@/engine/cardTemplates'
 
 /**
- * The card type picker, in both of its jobs.
- *
- * Adding a slide and changing an existing slide's type are the same question —
- * "what kind of slide is this?" — so they are the same grid rather than two
- * dialogs that drift apart. What differs is the verb and the warning: adding is
- * free, while converting rewrites a card that already has content on it.
+ * The picker for adding a slide: what kind of slide is this?
  *
  * Each type is drawn as a schematic slide rather than named alone. "Comparison"
  * and "Timeline" are not words that tell you what you are about to get, and a
  * six-line diagram does.
+ *
+ * This is the only place a slide's type is chosen. It is not offered for a slide
+ * that already exists — to put more on one, the toolbar's Add content adds a
+ * single element to it.
  */
 export function CardTypeModal({
-  mode,
-  currentKind,
   onPick,
   onClose,
 }: {
-  mode: 'add' | 'change'
-  /** The type the card is now — marked in the grid, and named in the note above it. */
-  currentKind?: CardKind
   onPick: (kind: CreatableKind) => void
   onClose: () => void
 }) {
-  const changing = mode === 'change'
-
   return (
-    <Modal title={changing ? 'Change slide type' : 'Add a slide'} onClose={onClose}>
+    <Modal title="Add a slide" onClose={onClose}>
       <p className="text-sm text-app-muted">
-        {changing ? (
-          <>
-            {/*
-              Said plainly and up front. The conversion keeps the words and
-              throws away everything addressed by position — see `setCardKind`
-              — and a user who finds their bold gone afterwards has no way to
-              know why. Undo is named because it is the answer.
-            */}
-            This keeps the slide's text and moves it into the new shape. Bold, italics and any
-            elements you have moved are reset — undo puts them back.
-          </>
-        ) : (
-          'Pick what kind of slide this is. Every type starts with placeholder text you edit on the slide.'
-        )}
+        Pick what kind of slide this is. Every type starts with placeholder text you edit on the
+        slide.
       </p>
-
-      {currentKind && !isCreatableKind(currentKind) && (
-        // The one type that can be converted *away* from but never to: an image
-        // block needs a url, and nothing in the app can supply one.
-        <p className="mt-2 text-sm text-app-muted">
-          This slide is a {cardKindLabel(currentKind).toLowerCase()} slide. Changing its type drops
-          its images.
-        </p>
-      )}
 
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {CREATABLE_KINDS.map((kind) => (
-          <CardTypeOption
-            key={kind}
-            kind={kind}
-            current={kind === currentKind}
-            onClick={() => onPick(kind)}
-          />
+          <CardTypeOption key={kind} kind={kind} onClick={() => onPick(kind)} />
         ))}
       </div>
     </Modal>
   )
 }
 
-function CardTypeOption({
-  kind,
-  current,
-  onClick,
-}: {
-  kind: CreatableKind
-  current: boolean
-  onClick: () => void
-}) {
+function CardTypeOption({ kind, onClick }: { kind: CreatableKind; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-current={current ? 'true' : undefined}
-      className={`flex cursor-pointer items-start gap-3 rounded-app-sm border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
-        current
-          ? 'border-app-accent bg-app-accent/10'
-          : 'border-app-border hover:border-app-accent/50 hover:bg-app-surface'
-      }`}
+      className="flex cursor-pointer items-start gap-3 rounded-app-sm border border-app-border p-3 text-left transition-colors hover:border-app-accent/50 hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
     >
       <CardTypeDiagram kind={kind} />
       <span className="min-w-0">
         <span className="block text-sm font-medium text-app-foreground">
           {cardKindLabel(kind)}
-          {current && <span className="ml-1.5 text-xs font-normal text-app-muted">· current</span>}
         </span>
         <span className="mt-0.5 block text-xs leading-snug text-app-muted">
           {KIND_DESCRIPTIONS[kind]}

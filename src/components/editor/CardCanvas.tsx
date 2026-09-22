@@ -7,6 +7,7 @@ import { BlockAdjustContext } from '@/components/layouts/adjustContext'
 import { SlideSurface } from '@/components/theme/SlideSurface'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
+import { listTarget } from '@/engine/listItems'
 import { TextEditingContext, type TextEditing } from '@/components/layouts/textEditingContext'
 import { ZoomFrame } from './ZoomFrame'
 
@@ -39,6 +40,8 @@ export function CardCanvas({
   onSelectElement,
   onSelectItem,
   onChangeAdjust,
+  onRemoveSelected,
+  onAddItem,
   zoom = 1,
 }: {
   cards: Card[]
@@ -57,6 +60,10 @@ export function CardCanvas({
   /** Reports a press on one item of a list; decided the same way. */
   onSelectItem: (cardId: string, blockIndex: number, itemIndex: number) => void
   onChangeAdjust: (cardId: string, index: number, adjust: BlockAdjust, commit?: boolean) => void
+  /** The bin on the selected element: removes the picked item, else the element. */
+  onRemoveSelected: () => void
+  /** The plus under a selected list: appends an item to the list at this block index. */
+  onAddItem: (blockIndex: number) => void
   /** How large the cards are drawn, as a multiple of natural size. */
   zoom?: number
 }) {
@@ -84,6 +91,13 @@ export function CardCanvas({
           <div className="flex flex-col gap-10">
             {sorted.map((card, index) => {
               const isSelected = card.id === selectedCardId
+              /*
+                The card's own outline says "the card is what is selected", so it is
+                only drawn while nothing inside it is. Once an element is picked out
+                its own selection box takes over — both at once was two purple frames
+                around the same click.
+              */
+              const showCardRing = isSelected && selectedBlockIndex === null
               const body = <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
 
               return (
@@ -99,7 +113,7 @@ export function CardCanvas({
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onSelectCard(card.id)}
                   className={`rounded-slide transition-shadow ${
-                    isSelected ? 'ring-2 ring-app-accent ring-offset-4 ring-offset-transparent' : ''
+                    showCardRing ? 'ring-2 ring-app-accent ring-offset-4 ring-offset-transparent' : ''
                   }`}
                 >
                   {/*
@@ -129,6 +143,9 @@ export function CardCanvas({
                           selectItem: (blockIndex, itemIndex) => onSelectItem(card.id, blockIndex, itemIndex),
                           change: (blockIndex, adjust, commit) =>
                             onChangeAdjust(card.id, blockIndex, adjust, commit),
+                          remove: onRemoveSelected,
+                          canAddItem: (blockIndex) => listTarget(card.blocks, blockIndex) === blockIndex,
+                          addItem: onAddItem,
                         }}
                       >
                         {isSelected ? (

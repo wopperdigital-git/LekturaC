@@ -1098,7 +1098,10 @@ function renderAdjustedBlock(
       const own = runStyle(ref)
       const face = headingFace(theme, own)
       const bold = own.bold ?? true
-      const preferredPt = fittedPointSize(theme.typography.scale[H2], own.fontScale, fit)
+      // A heading added by hand carries the size it was given (H1/H2/H3), the same
+      // theme step the screen draws it at; everything the AI wrote is unset → H2.
+      const headingStep = block.size === 'h1' ? H1 : block.size === 'h3' ? H3 : H2
+      const preferredPt = fittedPointSize(theme.typography.scale[headingStep], own.fontScale, fit)
       const { sizePt, spacing } = fitSize(
         [{ text: block.text, bold: markBold(card, ref), scale: markScale(card, ref) }],
         box,

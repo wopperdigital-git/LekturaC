@@ -56,6 +56,10 @@ const KITCHEN_SINK: ContentBlock[] = [
   { type: 'comparisonGroup', heading: 'MARKCMPHB', items: ['MARKCMPIB'] },
   { type: 'image', url: 'https://example.test/MARKIMGA.png', alt: 'a' },
   { type: 'image', url: 'https://example.test/MARKIMGB.png', alt: 'b' },
+  // Headings added by hand (Add content) arrive after everything else and carry a
+  // size; every layout still has to draw each of them, once.
+  { type: 'heading', text: 'MARKSIZEH1', size: 'h1' },
+  { type: 'heading', text: 'MARKSIZEH3', size: 'h3' },
 ]
 
 /**

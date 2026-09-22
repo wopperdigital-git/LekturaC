@@ -55,8 +55,8 @@ Write narration for these slides only: ${wanted.join(', ')}.`
  *
  * Every slide is included — the model needs the whole talk to write transitions
  * — but only those in `targets` are requested. `contentLines` is reused rather
- * than reimplemented so the narration sees exactly the words a card conversion
- * would preserve.
+ * than reimplemented so the narration reads the same words in the same order
+ * everywhere a card's text is flattened.
  *
  * `targets` holds 0-based array positions and comes from what the user actually
  * picked: the one slide behind "Generate for this slide", or the ticked boxes

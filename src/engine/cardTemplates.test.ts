@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   CREATABLE_KINDS,
   contentLines,
-  convertBlocks,
   layoutForKind,
   starterBlocks,
   type CreatableKind,
@@ -11,13 +10,13 @@ import { cardKind, layoutVarieties, resolveLayout } from './layoutEngine'
 import type { ContentBlock } from './contentBlocks'
 
 /*
-  The one promise both features make: the type you pick is the type you get.
+  The one promise the picker makes: the type you pick is the type you get.
 
   A user choosing "Timeline" from the modal and landing on a card the classifier
   reads as a bullet list would be the whole feature broken, and nothing else in
   the app would notice — the card would render, save and export perfectly well
   as the wrong kind of slide. So the round trip is pinned here rather than left
-  to the two starter tables agreeing by eye.
+  to the starter table agreeing by eye.
 */
 
 /** The context a card of this kind sits in — `title` only classifies as one at the front. */
@@ -68,109 +67,6 @@ describe('starterBlocks', () => {
 })
 
 const HEADING: ContentBlock = { type: 'heading', text: 'The heading' }
-
-describe('convertBlocks', () => {
-  it.each(CREATABLE_KINDS)('converting a text card to %s produces that type', (kind) => {
-    const source: ContentBlock[] = [
-      HEADING,
-      { type: 'paragraph', text: 'First thought' },
-      { type: 'paragraph', text: 'Second thought' },
-    ]
-    const converted = convertBlocks(source, kind)
-    expect(cardKind(converted, contextFor(kind))).toBe(kind)
-  })
-
-  /*
-    Removing a card's last element leaves it blank, and "change slide type" is
-    how a blank card gets content again — so converting nothing has to produce a
-    real card of the chosen type, not an empty one.
-  */
-  it.each(CREATABLE_KINDS)('turns a blank card into a real %s card', (kind) => {
-    const converted = convertBlocks([], kind)
-    expect(converted.length).toBeGreaterThan(0)
-    expect(cardKind(converted, contextFor(kind))).toBe(kind)
-  })
-
-  it.each(CREATABLE_KINDS)('keeps the heading when converting to %s', (kind) => {
-    const converted = convertBlocks([HEADING, { type: 'paragraph', text: 'Body' }], kind)
-    expect(converted[0]).toEqual({ type: 'heading', text: 'The heading' })
-  })
-
-  /*
-    Content is generated once and never regenerated, so a conversion that
-    quietly drops a line has destroyed the only copy of it. Structure cannot
-    always survive a reshape; the words have to.
-  */
-  it('carries every line of the source into the target', () => {
-    const source: ContentBlock[] = [
-      HEADING,
-      { type: 'bulletList', items: ['Alpha', 'Beta', 'Gamma', 'Delta'] },
-    ]
-    for (const kind of ['text', 'list', 'timeline', 'comparison'] as const) {
-      const text = JSON.stringify(convertBlocks(source, kind))
-      for (const item of ['Alpha', 'Beta', 'Gamma', 'Delta']) {
-        expect(text).toContain(item)
-      }
-    }
-  })
-
-  it('pads a thin card with the target type placeholders rather than under-filling it', () => {
-    // One line, but a timeline needs two steps before the classifier will
-    // render it as one.
-    const converted = convertBlocks([HEADING, { type: 'paragraph', text: 'Only line' }], 'timeline')
-    expect(converted.filter((b) => b.type === 'timelineStep')).toHaveLength(2)
-  })
-
-  /*
-    Numbers cannot be derived from prose. Turning a paragraph into a stat has to
-    leave the value as an obvious placeholder — inventing a plausible figure
-    would put a statistic on the slide that nobody wrote, which is the exact
-    failure `ai/prompts.ts` treats numbers as opt-in to avoid.
-  */
-  it('never invents a number when converting prose to stats', () => {
-    const converted = convertBlocks(
-      [HEADING, { type: 'paragraph', text: 'Adoption grew' }, { type: 'paragraph', text: 'Churn fell' }],
-      'stats',
-    )
-    const stats = converted.filter((b) => b.type === 'stat')
-    expect(stats.map((s) => s.value)).toEqual(['00', '00'])
-    expect(stats.map((s) => s.label)).toEqual(['Adoption grew', 'Churn fell'])
-  })
-
-  it('keeps existing stats intact rather than folding each value into its label', () => {
-    const source: ContentBlock[] = [
-      HEADING,
-      { type: 'stat', value: '87%', label: 'Retention' },
-      { type: 'stat', value: '2.4x', label: 'Growth' },
-    ]
-    expect(convertBlocks(source, 'stats')).toEqual(source)
-  })
-
-  it('keeps existing comparison groups intact', () => {
-    const source: ContentBlock[] = [
-      HEADING,
-      { type: 'comparisonGroup', heading: 'Before', items: ['Slow'] },
-      { type: 'comparisonGroup', heading: 'After', items: ['Fast'] },
-    ]
-    expect(convertBlocks(source, 'comparison')).toEqual(source)
-  })
-
-  it('splits a list down the middle into two comparison groups', () => {
-    const converted = convertBlocks(
-      [HEADING, { type: 'bulletList', items: ['A', 'B', 'C'] }],
-      'comparison',
-    )
-    const groups = converted.filter((b) => b.type === 'comparisonGroup')
-    expect(groups.map((g) => g.items)).toEqual([['A', 'B'], ['C']])
-  })
-
-  it('survives a card with nothing but a heading', () => {
-    for (const kind of CREATABLE_KINDS) {
-      const converted = convertBlocks([HEADING], kind)
-      expect(cardKind(converted, contextFor(kind))).toBe(kind)
-    }
-  })
-})
 
 describe('contentLines', () => {
   it('skips the heading and keeps everything else in reading order', () => {

@@ -4,9 +4,21 @@ import { markSchema } from './marks'
 import { adjustsSchema } from './blockAdjust'
 import { narrationSchema } from './narration'
 
+/**
+ * Which of the theme's three heading sizes a heading is drawn at.
+ *
+ * Optional, and absent on everything the AI generates: an unset size means "the
+ * size the layout gives its heading", which is `h2` everywhere but the opening
+ * hero. It exists so a heading added by hand can be a big H1 or a small H3.
+ */
+export const headingSizeSchema = z.enum(['h1', 'h2', 'h3'])
+
+export type HeadingSize = z.infer<typeof headingSizeSchema>
+
 export const headingBlockSchema = z.object({
   type: z.literal('heading'),
   text: z.string().min(1),
+  size: headingSizeSchema.optional(),
 })
 
 export const paragraphBlockSchema = z.object({
@@ -159,7 +171,7 @@ export type Card = z.infer<typeof cardSchema>
 /**
  * The heading text a card's first block carries, or a `Slide N` fallback when
  * it doesn't have one (a card is supposed to always start with a heading, but
- * a converted or hand-added card can momentarily not).
+ * a card whose heading was removed by hand has none).
  *
  * Shared by `ai/narrationPrompt.ts` (the label the model sees for each slide)
  * and `components/narrate/ScriptPanel.tsx` (the label the slide list shows) —

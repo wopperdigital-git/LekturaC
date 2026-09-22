@@ -18,7 +18,7 @@ export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[
   const text = (
     <div className="flex flex-col gap-4">
       {headings.map(({ block, index }) => (
-        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} />
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
       ))}
       {rest.map(({ block, index }) => (
         <BlockRenderer key={index} block={block} index={index} />

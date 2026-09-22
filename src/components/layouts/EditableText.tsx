@@ -1,6 +1,6 @@
 import { useContext, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { textSegments, type FlagMarkType, type Mark, type TextSegment } from '@/engine/marks'
-import { NEW_ITEM_TEXT } from '@/engine/listItems'
+import { isPlaceholderText } from '@/engine/newContent'
 import { parseTextRef } from '@/engine/blockText'
 import { useTextEditing } from './textEditingContext'
 import { BlockDataContext, blockIndexOf, useBlockAdjusting } from './adjustContext'
@@ -110,9 +110,9 @@ export function EditableText({
     paintRun(node, value, marks)
     painted.current = { value, marks: marksKey }
     node.focus()
-    // A just-added list item is still its placeholder: select it so the first
+    // A just-added element is still its placeholder: select it so the first
     // keystroke replaces it instead of appending to "New item".
-    if (value === NEW_ITEM_TEXT) selectWholeRun(node)
+    if (isPlaceholderText(value)) selectWholeRun(node)
     else placeCaretAtEnd(node)
     // `value` and `marks` are deliberately not dependencies: repainting on every
     // keystroke is exactly what this effect exists to avoid. The one case that
@@ -130,6 +130,13 @@ export function EditableText({
     The two are told apart by the text: typing changes `value`, formatting does
     not. So a change in the marks *while the text stands still* is the only
     thing that repaints, and typing leaves the node entirely alone.
+
+    The third case is the store moving the text *underneath* the node — an undo
+    or redo. Typing always leaves the node and `value` agreeing (`onInput` writes
+    the node's own text to the store in the same tick), so a node whose text
+    differs from `value` was changed from outside and has to be repainted, or it
+    would keep showing text the deck no longer holds and the next keystroke would
+    write that stale text straight back.
   */
   useLayoutEffect(() => {
     const node = ref.current
@@ -137,8 +144,9 @@ export function EditableText({
 
     const typing = painted.current.value !== value
     const reformatted = painted.current.marks !== marksKey
+    const movedUnderneath = (node.textContent ?? '') !== value
     painted.current = { value, marks: marksKey }
-    if (typing || !reformatted) return
+    if (!movedUnderneath && (typing || !reformatted)) return
 
     const at = readOffsets(node)
     paintRun(node, value, marks)

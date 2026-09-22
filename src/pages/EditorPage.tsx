@@ -1,19 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
-import { ThemePanel } from '@/components/theme/ThemePanel'
-import { TopBar, type RightPanel } from '@/components/editor/TopBar'
+import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
 import { CardCanvas } from '@/components/editor/CardCanvas'
 import { SlideStage } from '@/components/theme/SlideStage'
-import { EditorToolbar } from '@/components/editor/EditorToolbar'
+import { ToolsPanel } from '@/components/editor/ToolsPanel'
+import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
-import { listTarget } from '@/engine/listItems'
+import { firstEditableField, type ContentType } from '@/engine/newContent'
 import {
   selectionAfterCardPress,
   selectionAfterElementPress,
@@ -30,7 +30,7 @@ import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } 
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
 
 const SIDEBAR_WIDTH_PX = 160
-const RIGHT_PANEL_WIDTH_PX = 256
+const RIGHT_PANEL_WIDTH_PX = 280
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -39,7 +39,14 @@ export function EditorPage() {
 
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const [outlineOpen, setOutlineOpen] = useState(true)
-  const [rightPanel, setRightPanel] = useState<RightPanel>(null)
+  // The tools panel on the right; collapsible, open by default.
+  const [toolsOpen, setToolsOpen] = useState(true)
+  /*
+    The font the pointer is currently over in the panel, shown on the slide but
+    never stored. `undefined` is "nothing hovered"; `null` previews the theme's own
+    font. See `previewFont`.
+  */
+  const [fontPreview, setFontPreview] = useState<string | null | undefined>(undefined)
   // Distinct from `activeCardId`, which merely tracks what the outline rail
   // highlights and defaults to the first card. Selection is a deliberate act
   // and starts empty, because it is what decides the toolbar's level.
@@ -56,9 +63,8 @@ export function EditorPage() {
   // element rather than in place of it: the list stays the selected element and
   // the item is a refinement of it.
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
-  // Open, and in which of its two jobs — adding a slide, or changing the type
-  // of the one that is selected.
-  const [typePicker, setTypePicker] = useState<'add' | 'change' | null>(null)
+  // Whether the add-a-slide type picker is open.
+  const [addSlideOpen, setAddSlideOpen] = useState(false)
   // A card added from the picker does not exist in the DOM until the next
   // render, so the scroll has to wait for its ref rather than run inline.
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
@@ -243,19 +249,16 @@ export function EditorPage() {
         return
       }
       /*
-        A live run of slide text owns them too, and that is not a nicety.
+        No exception for a live run of text, and that is deliberate.
 
-        `EditableText` hands its node to contentEditable and then stops
-        rendering into it — React must not touch the DOM under a caret. So a
-        deck-level undo fired from inside a run reverted the *store* while the
-        node on screen kept the typed text, and the next keystroke's `onInput`
-        wrote that stale text straight back: the undo looked inert and was then
-        erased. The browser's own undo stack is the right one here — it moves
-        the text and the caret together, and the `input` event it emits carries
-        the result back into the store the same way typing does.
+        The browser's own undo stack only knows about typing, so with a run
+        focused ⌘Z did nothing at all for everything else the deck had done — a
+        nudge, a resize, bold, a font, an added element — and an element that is
+        highlighted very often has its run focused. The store's history covers all
+        of it, typing included. What used to make that unsafe was the run's node
+        keeping the old text after a store undo; `EditableText` now repaints when
+        the store moves the text underneath it, so the two cannot disagree.
       */
-      if (target?.isContentEditable) return
-
       const mod = e.metaKey || e.ctrlKey
       if (!mod && !e.altKey && (e.key === 'Backspace' || e.key === 'Delete')) {
         if (selectionKeys.current.remove()) e.preventDefault()
@@ -285,14 +288,22 @@ export function EditorPage() {
 
   /*
     Removes whatever is highlighted: the item if one is picked out, otherwise the
-    element. Does nothing while text is being edited (Backspace is then a
-    keystroke for that text) or while a dialog is open, and reports whether it
-    removed anything so the key is only swallowed when it did.
+    element. From the keyboard it does nothing while text is being edited
+    (Backspace is then a keystroke for that text) or while a dialog is open. The
+    bin on the element is an explicit request, so it goes ahead either way — and
+    ends the edit, since the run being typed in may be the thing removed.
+
+    Reports whether it removed anything so the key is only swallowed when it did.
   */
-  function removeSelected(): boolean {
-    if (activeTextRef || typePicker) return false
+  function removeSelected(fromButton = false): boolean {
+    if (!fromButton && (activeTextRef || addSlideOpen)) return false
     const card = cards.find((c) => c.id === selectedCardId)
     if (!card || selectedBlockIndex === null) return false
+
+    if (fromButton) {
+      setActiveTextRef(null)
+      setTextRange(null)
+    }
 
     if (selectedItemIndex !== null) {
       const result = store.removeListItem(card.id, selectedBlockIndex, selectedItemIndex)
@@ -311,7 +322,7 @@ export function EditorPage() {
 
   // One step back out: item to list, list to card.
   function stepOut() {
-    if (activeTextRef || typePicker) return
+    if (activeTextRef || addSlideOpen) return
     apply(selectionAfterEscape({ cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }))
   }
 
@@ -352,6 +363,18 @@ export function EditorPage() {
   }, selectedBlockIndex)
   const level: 1 | 2 | 3 = activeTextRef ? 3 : selectedCard ? 2 : 1
   const hasTextSelection = Boolean(textRange && textRange.end > textRange.start)
+  // The scope the text tools are writing to, in words — narrowest first, the same
+  // order `typographyScope` and the character-range routing use.
+  const scopeLabel =
+    level === 3 && hasTextSelection
+      ? 'selected text'
+      : scope.kind === 'element'
+        ? selectedItemIndex !== null
+          ? 'selected item'
+          : 'selected element'
+        : scope.kind === 'card'
+          ? 'this slide'
+          : 'whole deck'
   const markState = {
     bold: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'bold'),
     italic: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'italic'),
@@ -368,6 +391,30 @@ export function EditorPage() {
     : undefined
 
   /*
+    What the canvas draws: the real cards, or — while the pointer is over a font in
+    the panel — a derived copy with that font applied where a click would write it.
+    Nothing is stored and no history entry is made; moving off the row stops
+    deriving. Only the canvas reads this. Everything that acts on the deck (the
+    toolbar's own state, the outline, saving) keeps reading `cards`.
+  */
+  const previewed = useMemo(() => {
+    if (fontPreview === undefined) return { cards, textStyle: store.textStyle }
+    return previewFont(
+      cards,
+      store.textStyle,
+      {
+        scope,
+        typographyRef,
+        run:
+          selectedCardId && activeTextRef && hasTextSelection
+            ? { cardId: selectedCardId, ref: activeTextRef, range: textRange! }
+            : null,
+      },
+      fontPreview,
+    )
+  }, [fontPreview, cards, store.textStyle, scope, typographyRef, selectedCardId, activeTextRef, hasTextSelection, textRange])
+
+  /*
     The card's type, and the layout it is actually rendering as.
 
     `cardKindOf` rather than `cardKind`: a title slide added anywhere but the
@@ -382,30 +429,65 @@ export function EditorPage() {
     ? resolveLayout(selectedCard.layout, selectedCard.blocks, { isFirstCard: selectedIndex === 0 })
     : undefined
 
-  /*
-    The list an "Add item" would grow. While a run is being edited that is the
-    list the run belongs to; otherwise it is the selected element. With neither,
-    `listTarget` falls back to the card's only list, and to nothing at all when
-    the card has two — see `engine/listItems.ts`.
-  */
-  const listIndex = selectedCard
-    ? listTarget(
-        selectedCard.blocks,
-        activeTextRef ? blockIndexOf(activeTextRef) : selectedBlockIndex,
-      )
-    : null
-
-  function addListItem() {
-    if (!selectedCard || listIndex === null) return
-    const itemIndex = store.addListItem(selectedCard.id, listIndex)
+  // The plus under a selected list names its own block; nothing else calls this.
+  function addListItem(blockIndex: number) {
+    if (!selectedCard) return
+    const itemIndex = store.addListItem(selectedCard.id, blockIndex)
     if (itemIndex === null) return
-    // Open the new item for typing straight away: adding one and then having to
-    // find it and click into it is the slow half of the job.
-    setSelectedBlockIndex(listIndex)
-    setSelectedItemIndex(itemIndex)
-    setActiveTextRef(textRef(listIndex, 'items', itemIndex))
+    /*
+      Leaves the *list* highlighted, not the new item. Adding an item is an act on
+      the list as a whole, so the whole group is what lights up — with an item
+      selected instead, the list's own box is hidden and the group the user just
+      grew never shows as picked. The new item is one press away from there, the
+      same drill-in every other list item takes.
+    */
+    apply({ cardId: selectedCard.id, blockIndex, itemIndex: null })
+    setActiveTextRef(null)
     setTextRange(null)
   }
+
+  /*
+    Adds a new element to the selected card and opens it for typing.
+
+    It goes at the end of the card (see `withBlockAppended`), so no existing
+    element changes address. The new element is selected — which is what lights up
+    its box — and its first run opened, with the placeholder selected so the first
+    keystroke replaces it.
+  */
+  function addContent(type: ContentType) {
+    if (!selectedCard) return
+    const blockIndex = store.addBlock(selectedCard.id, type)
+    if (blockIndex === null) return
+    // Read back from the store rather than rebuilt here: the block was just
+    // written, and this is the one place that knows what it holds.
+    const block = usePresentationStore.getState().cards.find((c) => c.id === selectedCard.id)?.blocks[blockIndex]
+    apply({ cardId: selectedCard.id, blockIndex, itemIndex: null })
+    if (!block) return
+    const { field, item } = firstEditableField(block)
+    setActiveTextRef(textRef(blockIndex, field, item))
+    setTextRange(null)
+  }
+
+  /*
+    Undo and redo can remove the very thing that is selected — undoing an "Add
+    content" takes the new element back out — and the selection is held by index,
+    so it would be left pointing past the end of the card, or at a different
+    element. When what it names no longer exists, fall back to the card.
+  */
+  useEffect(() => {
+    if (!selectedCard) return
+    const blocks = selectedCard.blocks
+    const editedIndex = activeTextRef ? blockIndexOf(activeTextRef) : null
+    if (selectedBlockIndex !== null && selectedBlockIndex >= blocks.length) {
+      apply(selectionAfterCardPress(selectedCard.id))
+    }
+    if (editedIndex !== null && editedIndex >= blocks.length) {
+      setActiveTextRef(null)
+      setTextRange(null)
+    }
+    // `apply` only sets state; the inputs below are everything this reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCard, selectedBlockIndex, activeTextRef])
 
   function addCardOfKind(kind: CreatableKind) {
     // After the card the user is looking at — the selected one if there is one,
@@ -501,7 +583,7 @@ export function EditorPage() {
                 onSelect={scrollToCard}
                 onReorder={store.reorderCards}
                 onDelete={store.deleteCard}
-                onAddCard={() => setTypePicker('add')}
+                onAddCard={() => setAddSlideOpen(true)}
               />
             </div>
           </aside>
@@ -517,88 +599,6 @@ export function EditorPage() {
 
         {/* Transparent: the stage layer above is the background now. */}
         <main ref={canvasRef} className="scrollbar-subtle relative flex-1 overflow-auto">
-          {/*
-            Floats over the canvas rather than scrolling with it: `sticky top-0`
-            with `h-0` means the bar reserves no height, so the first card sits
-            exactly where it did before the toolbar existed. The wrapper is
-            click-through (`pointer-events-none`) so the strip either side of the
-            bar doesn't swallow clicks meant for the cards underneath.
-          */}
-          {cards.length > 0 && (
-            <div className="pointer-events-none sticky left-0 top-0 z-20 flex h-0 justify-center">
-              <div className="pt-3">
-                <EditorToolbar
-                  level={level}
-                  canUndo={store.past.length > 0}
-                  canRedo={store.future.length > 0}
-                  onUndo={undo}
-                  onRedo={redo}
-                  presentHref={`/deck/${id}/present`}
-                  // Read from the same scope it writes to, or the bar reports a
-                  // state it is not editing.
-                  textStyle={
-                    scope.kind === 'element'
-                      ? (elementStyle ?? {})
-                      : scope.kind === 'card'
-                        ? (selectedCard?.textStyle ?? {})
-                        : store.textStyle
-                  }
-                  onTextStyleChange={(patch) => {
-                    if (scope.kind === 'element' && typographyRef) {
-                      // The selected element, not the whole card. `inline` keyed
-                      // by a bare block index addresses the element; the same
-                      // store action serves both because a run's key only
-                      // differs by carrying a field. See `blockStyleKey`.
-                      store.setInlineStyle(scope.cardId, typographyRef, patch)
-                    } else if (scope.kind === 'card') {
-                      store.setCardTextStyle(scope.cardId, patch)
-                    } else {
-                      store.setTextStyle(patch)
-                    }
-                  }}
-                  markState={markState}
-                  hasTextSelection={hasTextSelection}
-                  // Only at element scope: the card and deck scopes have no one
-                  // element to read, and fall back to their stored value. Null
-                  // whenever no element is selected, which is what says so.
-                  activeAlign={renderedAlign}
-                  onToggleMark={(type) => {
-                    if (selectedCard && activeTextRef && textRange) {
-                      store.toggleTextMark(selectedCard.id, activeTextRef, textRange, type)
-                    }
-                  }}
-                  runValues={runValues}
-                  onRunValue={(type, value) => {
-                    if (selectedCard && activeTextRef && textRange) {
-                      store.setTextMarkValue(selectedCard.id, activeTextRef, textRange, type, value)
-                    }
-                  }}
-                  themeName={store.theme.name}
-                  onOpenThemes={() => setRightPanel((current) => (current === 'theme' ? null : 'theme'))}
-                  themesOpen={rightPanel === 'theme'}
-                  layoutOptions={selectedCardKind ? layoutVarieties(selectedCard!.blocks, selectedCardKind) : undefined}
-                  activeLayout={selectedCard?.layout}
-                  activeVisualStyle={selectedCard?.visualStyle}
-                  onLayoutChange={
-                    selectedCard
-                      ? (layout, visualStyle) =>
-                          store.setCardVariety(selectedCard.id, layout, visualStyle)
-                      : undefined
-                  }
-                  cardKind={selectedCardKind}
-                  resolvedLayout={selectedResolvedLayout}
-                  onChangeCardType={selectedCard ? () => setTypePicker('change') : undefined}
-                  zoom={zoom}
-                  onZoomChange={(next, direction) =>
-                    setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
-                  }
-                  onAddItem={listIndex !== null ? addListItem : undefined}
-                  onRemove={selectedCard && selectedBlockIndex !== null ? () => void removeSelected() : undefined}
-                  removeLabel={selectedItemIndex !== null ? 'Remove item' : 'Remove element'}
-                />
-              </div>
-            </div>
-          )}
           {cards.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-app-muted">
               <p>No slides yet.</p>
@@ -607,16 +607,16 @@ export function EditorPage() {
                   slide at a time — generation is still the way to get a whole
                   deck at once, not the only way to get a slide. */}
               <p className="text-sm">Add one by hand, or start a new project to generate a deck.</p>
-              <Button variant="primary" onClick={() => setTypePicker('add')}>
+              <Button variant="primary" onClick={() => setAddSlideOpen(true)}>
                 Add a slide
               </Button>
             </div>
           ) : (
             <ThemeProvider theme={store.theme}>
               <CardCanvas
-                cards={cards}
+                cards={previewed.cards}
                 cardRefs={cardRefs}
-                deckTextStyle={store.textStyle}
+                deckTextStyle={previewed.textStyle}
                 selectedCardId={selectedCardId}
                 onSelectCard={(cardId) => {
                   // Clicking the card body (not a run of text) leaves Level 3,
@@ -649,45 +649,122 @@ export function EditorPage() {
                 onSelectElement={selectElement}
                 onSelectItem={selectItem}
                 onChangeAdjust={store.setBlockAdjust}
+                onRemoveSelected={() => void removeSelected(true)}
+                onAddItem={addListItem}
                 zoom={zoom}
               />
             </ThemeProvider>
           )}
         </main>
 
-        {/* Floats on the stage like the outline rail — no surface, no divider.
-            `relative` is required, not cosmetic: the stage layer is absolutely
-            positioned, so without it this panel's static content paints
-            *underneath* the deck's backdrop and disappears. */}
-        <aside
-          className="relative shrink-0 overflow-hidden transition-[width] duration-200"
-          style={{ width: rightPanel ? RIGHT_PANEL_WIDTH_PX : 0 }}
-        >
-          <div className="h-full" style={{ width: RIGHT_PANEL_WIDTH_PX }}>
-            <ThemePanel theme={store.theme} onSelect={store.setTheme} />
-          </div>
-        </aside>
+        {/* The tools dock. Mirrors the outline rail on the other side: floats on
+            the stage, animates its width to 0 when collapsed, and is toggled by
+            an arrow pinned to the vertical centre of its inner edge. Unlike the
+            rail it has a surface of its own (inside `ToolsPanel`), since it is
+            full of controls rather than pictures. `relative` is required: the
+            stage layer is absolutely positioned, so without it this panel's
+            static content paints *underneath* the deck's backdrop. */}
+        <div className="relative flex shrink-0 items-stretch py-3">
+          <button
+            onClick={() => setToolsOpen((v) => !v)}
+            aria-label={toolsOpen ? 'Collapse tools' : 'Expand tools'}
+            // Straddling the gap while open; tucked inside the window edge when
+            // collapsed, where the dock has no width to hang it on and a centred
+            // arrow would be half off-screen.
+            className={`absolute top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 cursor-pointer ${
+              toolsOpen ? 'left-0 -translate-x-1/2' : 'right-1'
+            } items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent`}
+          >
+            {toolsOpen ? '›' : '‹'}
+          </button>
+          <aside
+            className="h-full overflow-hidden transition-all duration-200"
+            style={{ width: toolsOpen ? RIGHT_PANEL_WIDTH_PX : 0, marginRight: toolsOpen ? 12 : 0, marginLeft: toolsOpen ? 12 : 0 }}
+          >
+            <div className="h-full" style={{ width: RIGHT_PANEL_WIDTH_PX }}>
+              <ToolsPanel
+                level={level}
+                scopeLabel={scopeLabel}
+                canUndo={store.past.length > 0}
+                canRedo={store.future.length > 0}
+                onUndo={undo}
+                onRedo={redo}
+                presentHref={`/deck/${id}/present`}
+                // Read from the same scope it writes to, or the panel reports a
+                // state it is not editing.
+                textStyle={
+                  scope.kind === 'element'
+                    ? (elementStyle ?? {})
+                    : scope.kind === 'card'
+                      ? (selectedCard?.textStyle ?? {})
+                      : store.textStyle
+                }
+                onTextStyleChange={(patch) => {
+                  if (scope.kind === 'element' && typographyRef) {
+                    // The selected element, not the whole card. `inline` keyed by a
+                    // bare block index addresses the element; the same store action
+                    // serves both because a run's key only differs by carrying a
+                    // field. See `blockStyleKey`.
+                    store.setInlineStyle(scope.cardId, typographyRef, patch)
+                  } else if (scope.kind === 'card') {
+                    store.setCardTextStyle(scope.cardId, patch)
+                  } else {
+                    store.setTextStyle(patch)
+                  }
+                }}
+                onFontPreview={setFontPreview}
+                markState={markState}
+                hasTextSelection={hasTextSelection}
+                // Only at element scope: the card and deck scopes have no one
+                // element to read, and fall back to their stored value. Null
+                // whenever no element is selected, which is what says so.
+                activeAlign={renderedAlign}
+                onToggleMark={(type) => {
+                  if (selectedCard && activeTextRef && textRange) {
+                    store.toggleTextMark(selectedCard.id, activeTextRef, textRange, type)
+                  }
+                }}
+                runValues={runValues}
+                onRunValue={(type, value) => {
+                  if (selectedCard && activeTextRef && textRange) {
+                    store.setTextMarkValue(selectedCard.id, activeTextRef, textRange, type, value)
+                  }
+                }}
+                layout={
+                  selectedCard && selectedCardKind
+                    ? {
+                        options: layoutVarieties(selectedCard.blocks, selectedCardKind),
+                        active: selectedCard.layout,
+                        activeVisualStyle: selectedCard.visualStyle,
+                        onChange: (layout, visualStyle) =>
+                          store.setCardVariety(selectedCard.id, layout, visualStyle),
+                        kind: selectedCardKind,
+                        resolved: selectedResolvedLayout,
+                        card: selectedCard,
+                        isFirstCard: selectedIndex === 0,
+                      }
+                    : undefined
+                }
+                onAddContent={selectedCard ? addContent : undefined}
+                theme={store.theme}
+                deckTextStyle={store.textStyle}
+                onThemeChange={store.setTheme}
+                zoom={zoom}
+                onZoomChange={(next, direction) =>
+                  setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
+                }
+              />
+            </div>
+          </aside>
+        </div>
       </div>
 
-      {typePicker && (
+      {addSlideOpen && (
         <CardTypeModal
-          mode={typePicker}
-          currentKind={typePicker === 'change' ? selectedCardKind : undefined}
-          onClose={() => setTypePicker(null)}
+          onClose={() => setAddSlideOpen(false)}
           onPick={(kind) => {
-            if (typePicker === 'change') {
-              if (selectedCard) {
-                store.setCardKind(selectedCard.id, kind)
-                // The reshape renumbers the blocks, so a selection box pinned to
-                // block 3 would now be measuring a different element — or one
-                // that no longer exists.
-                setSelectedBlockIndex(null)
-                setSelectedItemIndex(null)
-              }
-            } else {
-              addCardOfKind(kind)
-            }
-            setTypePicker(null)
+            addCardOfKind(kind)
+            setAddSlideOpen(false)
           }}
         />
       )}
