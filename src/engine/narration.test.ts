@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  capScriptLength,
   isRegenerable,
   isResettable,
   mergeNarration,
@@ -89,6 +90,41 @@ describe('parseNarration', () => {
     expect(parseNarration(null)).toBeUndefined()
     expect(parseNarration('a script')).toBeUndefined()
     expect(parseNarration({ text: 42 })).toBeUndefined()
+  })
+})
+
+describe('capScriptLength', () => {
+  it('leaves a script under the limit untouched', () => {
+    expect(capScriptLength('Short and sweet.', 20)).toBe('Short and sweet.')
+  })
+
+  it('leaves a script exactly at the limit untouched', () => {
+    expect(capScriptLength('12345', 5)).toBe('12345')
+  })
+
+  it('cuts at the last sentence end within budget, dropping the rest', () => {
+    const text = 'This is one idea. This is a second idea that runs on past the limit.'
+    // Budget lands inside the second sentence — only the first should survive.
+    expect(capScriptLength(text, 30)).toBe('This is one idea.')
+  })
+
+  it('falls back to the last whole word, with an ellipsis, when no sentence end fits', () => {
+    const text = 'This sentence never actually ends because it just keeps going and going'
+    const result = capScriptLength(text, 20)
+    expect(result.length).toBeLessThanOrEqual(20)
+    expect(result.endsWith('…')).toBe(true)
+    expect(result).not.toMatch(/ …$/) // no dangling space before the ellipsis
+  })
+
+  it('hard-cuts a single run with no spaces or sentence-ending punctuation', () => {
+    const result = capScriptLength('supercalifragilisticexpialidocious', 10)
+    expect(result.length).toBeLessThanOrEqual(10)
+    expect(result.endsWith('…')).toBe(true)
+  })
+
+  it('defaults to the 600-character budget', () => {
+    const text = 'a'.repeat(700)
+    expect(capScriptLength(text).length).toBeLessThanOrEqual(600)
   })
 })
 

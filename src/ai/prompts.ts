@@ -1,4 +1,6 @@
 import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor, type BlueprintId } from './slideBlueprints'
+import { NARRATION_STYLE_RULES } from './narrationPrompt'
+import { DEFAULT_SLIDE_COUNT, MAX_SLIDES } from '@/lib/slideCount'
 import {
   CLAIM_TYPES,
   PRESENTATION_TYPES,
@@ -126,8 +128,9 @@ NO FILLER SLIDES
 - The final slide must resolve the deck's objective: a summary, conclusion, recommendation, or call to action — never a bare sign-off.
 
 SPEAKER NOTES
-- 40-90 words per slide, in "speakerNotes".
-- Add what is not on the slide: context, definitions, how a number was measured, the transition into and out of the slide, caveats. Never copy or lightly reword the visible text.
+Write "speakerNotes" as the actual words a presenter would say out loud for this slide — not a summary of it.
+${NARRATION_STYLE_RULES}
+- Add context that is not on the slide: definitions, how a number was measured, caveats, and a transition into and out of the slide. Never copy or lightly reword the visible text.
 
 EVIDENCE
 - Every number, date, named statistic, or quotation must come from the EVIDENCE PACK when the user prompt includes one, and must be listed in that card's "claims" with the pack's own source ids in "sourceIds". Never invent a source id, a source, a citation, or a quotation.
@@ -168,7 +171,13 @@ Every card also needs a "visualStyle": "structured" or "expressive" — this pic
 
 Set "blueprint" to the id of the structure you chose in the STRUCTURE section below.`
 
-const AUTO_COUNTS = [5, 6, 7, 8, 9, 10] as const
+// Kept in step with `slideCount.ts`'s `MAX_SLIDES`/`DEFAULT_SLIDE_COUNT`
+// (imported values, not duplicated numbers) — 'auto' must never be able to
+// pick a count the UI itself would refuse to accept typed in directly.
+const AUTO_COUNTS = Array.from(
+  { length: MAX_SLIDES - DEFAULT_SLIDE_COUNT + 1 },
+  (_, i) => DEFAULT_SLIDE_COUNT + i,
+)
 
 function renderSequence(id: BlueprintId, count: number): string {
   return sequenceFor(id, count)
@@ -208,7 +217,7 @@ export function buildBlueprintSection(slideCount: number | 'auto'): string {
 
   const instruction =
     slideCount === 'auto'
-      ? "Pick the ONE blueprint whose arc fits this deck's goal, then choose a slide count between 5 and 10 that suits the topic's depth. Once chosen, the slide count is exact."
+      ? `Pick the ONE blueprint whose arc fits this deck's goal, then choose a slide count between ${DEFAULT_SLIDE_COUNT} and ${MAX_SLIDES} that suits the topic's depth. Once chosen, the slide count is exact.`
       : "Pick the ONE blueprint whose arc fits this deck's goal. The slide count above is exact."
 
   return `STRUCTURE — choose a blueprint and use its sequence as the narrative arc
@@ -290,7 +299,7 @@ export function buildDeckUserPrompt(topic: string, brief: GenerationBrief, conte
 ${todaySection}
 Slide count: ${
     brief.slideCount === 'auto'
-      ? "choose between 5 and 10 cards (never more than 10), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close."
+      ? `choose between ${DEFAULT_SLIDE_COUNT} and ${MAX_SLIDES} cards (never more than ${MAX_SLIDES}), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close.`
       : `exactly ${brief.slideCount} cards. Not approximately — exactly this many.`
   }
 Audience: ${audience}

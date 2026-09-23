@@ -2,13 +2,16 @@
  * The deck length the creation brief asks for.
  *
  * `MAX_SLIDES` is a product decision, not a token one: a deck this tool writes
- * is meant to be presented, and ten slides is about as long as a single
- * generated talk stays coherent. It used to be 30, chosen purely as the point
- * where `maxOutputTokens` (clamped at 8192) truncates the JSON mid-deck — a
- * ceiling that answered "what will the model survive" rather than "what should
- * we offer". The new limit sits well inside that budget, which also retires
- * the narration gap: narration stops fitting somewhere around 20-25 slides, so
- * the old cap let a user create a deck that could never be narrated.
+ * is meant to be presented, and a shorter deck stays coherent and easy to
+ * review end to end. It used to be 30, chosen purely as the point where
+ * `maxOutputTokens` (clamped at 8192) truncates the JSON mid-deck — a ceiling
+ * that answered "what will the model survive" rather than "what should we
+ * offer" — then 10, still inside that budget. It is 7 now, a deliberate
+ * further tightening (2026-09-23), explicitly "for now" — nothing downstream
+ * assumes it stays here, so raising it back is a one-line change, but doing
+ * so should still revisit the Groq deck token budget (`deckMaxTokens`,
+ * `ai/prompts.ts`) and the narration budget (`narrationMaxTokens`,
+ * `ai/narrationPrompt.ts`) the way raising it always has.
  *
  * `DEFAULT_SLIDE_COUNT` is what the field opens on and what "let AI decide"
  * aims at. Below it the user is trusted: deliberately typing 3 gets 3, because
@@ -19,7 +22,7 @@
  * six-step flow — this is the one piece of that page with an off-by-one to get
  * wrong.
  */
-export const MAX_SLIDES = 10
+export const MAX_SLIDES = 7
 export const DEFAULT_SLIDE_COUNT = 5
 
 /** A sentence to show under the field, or `null` when the value is usable. */

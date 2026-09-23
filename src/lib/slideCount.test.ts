@@ -23,7 +23,7 @@ describe('slideCountProblem', () => {
   })
 
   it('refuses more than the ceiling', () => {
-    expect(slideCountProblem(String(MAX_SLIDES + 1))).toMatch(/10/)
+    expect(slideCountProblem(String(MAX_SLIDES + 1))).toMatch(String(MAX_SLIDES))
     expect(slideCountProblem('30')).not.toBeNull()
   })
 

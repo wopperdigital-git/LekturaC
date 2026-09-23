@@ -19,7 +19,7 @@ import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
 import { roleLayoutHint } from '@/engine/roleLayout'
 import { sequenceFor, sequenceMismatch, type BlueprintId } from '@/ai/slideBlueprints'
-import { isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
+import { capScriptLength, isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
 import { layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { buildGenerationMeta } from '@/generation/meta'
 import type { PipelineResult } from '@/generation/pipeline'
@@ -707,7 +707,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       // (`narrationStatus` === 'generated') rather than hand-edited, and Reset
       // has something to go back to. A blank note (a card the pipeline had no
       // script for) leaves narration unset rather than storing an empty pair.
-      const notes = c.speakerNotes ?? ''
+      const notes = capScriptLength(c.speakerNotes ?? '')
       const narration = notes.trim() !== '' ? { text: notes, generated: notes } : undefined
       return {
         id: newId(),
@@ -1246,7 +1246,11 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       guaranteed to be sorted, so it is sorted here and mapped back by id.
     */
     const sorted = [...previous].sort((a, b) => a.orderIndex - b.orderIndex)
-    const merged = mergeNarration(sorted, scripts, allowed)
+    // The prompt asks for a short script; this is the guarantee, the same way
+    // mergeNarration's own selection guard is the guarantee behind "the prompt
+    // asks the model to leave unselected slides alone."
+    const capped = scripts.map((s) => ({ ...s, text: capScriptLength(s.text) }))
+    const merged = mergeNarration(sorted, capped, allowed)
 
     /*
       `mergeNarration` returns the SAME object reference for any card it did

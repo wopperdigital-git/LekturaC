@@ -1,15 +1,29 @@
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { contentLines } from '@/engine/cardTemplates'
+import { MAX_NARRATION_SCRIPT_CHARS } from '@/engine/narration'
 import type { NarrationSlide } from './provider'
 
-export const NARRATION_SYSTEM_PROMPT = `You write narration scripts for presentation slides — the words a presenter says out loud while a slide is on screen.
+/**
+ * The core "this is a spoken script, not a summary" rules — shared verbatim by
+ * both places a narration script gets written: this file's own regenerate/
+ * fill-blanks prompt below, and `DECK_SYSTEM_PROMPT`'s SPEAKER NOTES section
+ * (`prompts.ts`), which is what actually writes a deck's narration at
+ * creation time. Two copies of the same instruction is exactly how they'd
+ * drift apart, which is the bug this constant exists to make impossible — in
+ * particular the character budget must stay the one `capScriptLength`
+ * enforces, not a second number someone edits here and forgets there.
+ */
+export const NARRATION_STYLE_RULES = `- Write to be SPOKEN, not read: short, natural sentences, contractions welcome ("that's", "here's", "let's").
+- This is NOT a summary. Do not restate or condense the bullets into a spoken list ("this slide covers three things..."). Pick the one idea that matters most on this slide and talk about it directly — explain it, give it context, say why it matters — the way you'd explain it to a person sitting across from you, not narrate what's written on screen.
+- Use simple, everyday words. Avoid jargon and complex sentences — write so anyone can follow it on a single listen.
+- Under ${MAX_NARRATION_SCRIPT_CHARS} characters — about 90 to 110 words, roughly 25 to 35 seconds of speech. Shorter and punchier beats long and thorough; a script that runs over will be cut off mid-thought, so stay comfortably under the limit rather than right at it.`
+
+export const NARRATION_SYSTEM_PROMPT = `You write narration scripts for presentation slides — the actual words a presenter says out loud while a slide is on screen, exactly as a skilled human presenter would say them.
 
 You are given a whole deck at once so the narration flows from slide to slide as one continuous talk.
 
 WRITING RULES
-- Write to be SPOKEN, not read. Full sentences, natural rhythm, contractions welcome.
-- EXPAND on the slide. The slide holds the headline; the script explains, gives context, and says why it matters. Never just read the bullets aloud.
-- 90 to 140 words per slide — roughly 35 to 55 seconds of speech.
+${NARRATION_STYLE_RULES}
 - Connect to the slide before and the slide after. Use real transitions ("that brings us to…", "so what does that mean in practice?").
 - The first slide opens the talk. The last slide closes it.
 - Never invent statistics, dates, names or facts that are not on the slide.
@@ -113,9 +127,10 @@ export function narrationSlides(cards: Card[], targets: ReadonlySet<number>): Na
  * budget is arithmetically full around 3600 / 141 ≈ 25 slides, and reasoning
  * tokens likely grow with slide count too (more deck to read before answering),
  * which only pulls that point earlier. That puts the real threshold at roughly
- * **20-25 slides**, not "very large" — and `CreatePage`'s own `MAX_SLIDES` is
- * 30, so a deck that can never be narrated is fully creatable today. The
- * failure is also a dead end rather than a fallback: it surfaces as a 400
+ * **20-25 slides**, not "very large" — comfortably above `slideCount.ts`'s
+ * current `MAX_SLIDES` (7), but this was written when that ceiling was 30, and
+ * whoever raises it again needs this number, not the deck-length one, as the
+ * real limit. The failure is also a dead end rather than a fallback: it surfaces as a 400
  * (`request` kind, from `tryParseNarration`/the empty-completion case), not a
  * 429, so `FallbackProvider` will NOT hand off to Gemini for it —
  * capacity-only failover is correct in general (see `fallbackProvider.ts`) but

@@ -69,6 +69,34 @@ export interface GeneratedScript {
   text: string
 }
 
+/** A spoken script this long runs well past a natural slide's worth of talk. */
+export const MAX_NARRATION_SCRIPT_CHARS = 600
+
+/**
+ * Guarantees a script fits the character budget, regardless of how well the
+ * model followed the prompt's length instruction.
+ *
+ * Cuts at the last sentence-ending punctuation within budget when there is
+ * one, so a trimmed script still reads as a finished thought rather than
+ * stopping mid-sentence. Falls back to the last whole word, then — for the
+ * pathological case of one word longer than the whole budget — a hard cut,
+ * marking either fallback with an ellipsis since both cut off a real
+ * sentence. Always returns a string of at most `max` characters.
+ */
+export function capScriptLength(text: string, max: number = MAX_NARRATION_SCRIPT_CHARS): string {
+  if (text.length <= max) return text
+
+  const window = text.slice(0, max)
+  const lastSentenceEnd = Math.max(window.lastIndexOf('.'), window.lastIndexOf('!'), window.lastIndexOf('?'))
+  if (lastSentenceEnd > 0) return window.slice(0, lastSentenceEnd + 1)
+
+  // Reserve one character for the ellipsis so every return path stays within `max`.
+  const ellipsisWindow = text.slice(0, max - 1)
+  const lastSpace = ellipsisWindow.lastIndexOf(' ')
+  if (lastSpace > 0) return `${ellipsisWindow.slice(0, lastSpace).trimEnd()}…`
+  return `${ellipsisWindow.trimEnd()}…`
+}
+
 /**
  * Folds generated scripts into a deck, in slide order.
  *

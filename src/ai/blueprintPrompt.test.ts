@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildBlueprintSection, DECK_SYSTEM_PROMPT } from './prompts'
 import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor } from './slideBlueprints'
+import { DEFAULT_SLIDE_COUNT, MAX_SLIDES } from '@/lib/slideCount'
 
 /**
  * The prompt is a string, so these are the only checks worth making: that the
@@ -51,9 +52,9 @@ describe('buildBlueprintSection at auto', () => {
     expect(section).toContain('choose a slide count')
   })
 
-  it('carries every column from 5 to 10 for every blueprint', () => {
+  it('carries every column from the default count to the max for every blueprint', () => {
     for (const id of ['inform', 'persuade', 'story'] as const) {
-      for (let count = 5; count <= 10; count++) {
+      for (let count = DEFAULT_SLIDE_COUNT; count <= MAX_SLIDES; count++) {
         for (const spec of sequenceFor(id, count)) {
           expect(section).toContain(spec.role)
         }
