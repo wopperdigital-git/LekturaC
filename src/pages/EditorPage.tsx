@@ -238,12 +238,13 @@ export function EditorPage() {
     as dependencies instead would tear the listener down and re-add it on every
     selection change.
   */
-  const selectionKeys = useRef<{ remove: () => boolean; escape: () => void }>({
+  const selectionKeys = useRef<{ remove: () => boolean; escape: () => void; dialogOpen: boolean }>({
     remove: () => false,
     escape: () => {},
+    dialogOpen: false,
   })
   useEffect(() => {
-    selectionKeys.current = { remove: removeSelected, escape: stepOut }
+    selectionKeys.current = { remove: removeSelected, escape: stepOut, dialogOpen: addSlideOpen || quizOpen }
   })
 
   useEffect(() => {
@@ -273,6 +274,10 @@ export function EditorPage() {
       // to step the selection back.
       if (e.key === 'Escape') {
         if (!e.defaultPrevented) selectionKeys.current.escape()
+        return
+      }
+      // Behind an open dialog an undo would silently change the deck out of sight.
+      if (selectionKeys.current.dialogOpen && mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
         return
       }
       if (mod && e.key.toLowerCase() === 'z') {
