@@ -8,17 +8,22 @@ import {
   type NarrationResponse,
   type NarrationSlide,
   type QualityFlag,
+  type QuizProvider,
   type RepairResponse,
 } from './provider'
 import { GroqProvider, COMPOUND_DECK_MODEL } from './groqProvider'
 import { GeminiProvider } from './geminiProvider'
 import { AnthropicProvider } from './anthropicProvider'
+import type { QuizRequest } from '@/quiz/types'
+import type { QuizResponse } from '@/quiz/schema'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
-export interface NamedProvider {
+export interface Named<P> {
   name: string
-  provider: AIProvider
+  provider: P
 }
+export type NamedProvider = Named<AIProvider>
+export type NamedQuizProvider = Named<QuizProvider>
 
 const ANTHROPIC_API_KEY = (import.meta.env.VITE_ANTHROPIC_API_KEY ?? '').trim()
 const GROQ_API_KEY = (import.meta.env.VITE_GROQ_API_KEY ?? '').trim()
@@ -83,6 +88,34 @@ export const PROVIDER_CHAIN: NamedProvider[] = [
 ]
 
 /**
+ * Quizzes use the FREE model only, so this chain is the two Groq links and
+ * nothing else — never Anthropic (billed per token) or Gemini. Empty without
+ * `VITE_GROQ_API_KEY`; the editor disables the Quiz button in that case.
+ */
+export const QUIZ_CHAIN: NamedQuizProvider[] = GROQ_API_KEY
+  ? [
+      { name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) },
+      {
+        name: 'Groq compound',
+        provider: new GroqProvider(GROQ_API_KEY, { deckModel: COMPOUND_DECK_MODEL, supportsResearch: false }),
+      },
+    ]
+  : []
+
+export function generateQuizWithFallback(
+  chain: NamedQuizProvider[],
+  request: QuizRequest,
+  signal?: AbortSignal,
+): Promise<QuizResponse> {
+  if (chain.length === 0) {
+    return Promise.reject(
+      new AIProviderError('Quiz generation needs VITE_GROQ_API_KEY in your .env file.', { kind: 'auth' }),
+    )
+  }
+  return runWithFailover(chain, 'quiz', (provider) => provider.generateQuiz(request, signal), signal)
+}
+
+/**
  * Was this failure the provider saying "not right now", as opposed to
  * "your request is wrong"?
  *
@@ -100,6 +133,38 @@ function isFailoverable(err: unknown): boolean {
 function isAbort(err: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return true
   return err instanceof DOMException && err.name === 'AbortError'
+}
+
+/**
+ * The one failover loop: try links in order, move on only when the current one
+ * is out of capacity, never after a cancel. `label` is used only for the
+ * console breadcrumb; `'deck'` is omitted from the breadcrumb to keep its
+ * original wording, since it was the only method before this helper existed.
+ * Shared by `FallbackProvider` and the quiz chain, so the two cannot drift.
+ */
+export async function runWithFailover<P, T>(
+  chain: Named<P>[],
+  label: string,
+  call: (provider: P) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  for (let i = 0; i < chain.length; i++) {
+    const { name, provider } = chain[i]
+    const isLast = i === chain.length - 1
+    try {
+      return await call(provider)
+    } catch (err) {
+      if (isLast || isAbort(err, signal) || !isFailoverable(err)) throw err
+      // Worth a breadcrumb: the user sees a normal (if slower) generation, so
+      // without this there's nothing to explain where the result came from or
+      // why the primary is being leaned on less than expected.
+      console.warn(
+        `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${chain[i + 1].name}${label === 'deck' ? '' : ` for ${label}`}`,
+      )
+    }
+  }
+  // Unreachable for a non-empty chain: the loop either returns or rethrows on the last link.
+  throw new AIProviderError(`No AI provider was able to complete ${label}.`)
 }
 
 /**
@@ -125,35 +190,13 @@ export class FallbackProvider implements AIProvider {
     this.chain = chain
   }
 
-  /**
-   * The one failover loop, shared by every `AIProvider` method. `label` is
-   * used only for the console breadcrumb and the (unreachable — the
-   * constructor guarantees at least one link) exhausted-chain error; `'deck'`
-   * is omitted from the breadcrumb to keep its existing wording, since it was
-   * the only method before this generic helper existed.
-   */
-  private async run<T>(
+  /** Delegates to the shared `runWithFailover` loop; every `AIProvider` method goes through it. */
+  private run<T>(
     label: string,
     call: (provider: AIProvider) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
-    for (let i = 0; i < this.chain.length; i++) {
-      const { name, provider } = this.chain[i]
-      const isLast = i === this.chain.length - 1
-      try {
-        return await call(provider)
-      } catch (err) {
-        if (isLast || isAbort(err, signal) || !isFailoverable(err)) throw err
-        // Worth a breadcrumb: the user sees a normal (if slower) generation, so
-        // without this there's nothing to explain where the result came from or
-        // why the primary is being leaned on less than expected.
-        console.warn(
-          `[ai] ${name} is out of capacity (${err instanceof AIProviderError ? err.status : '?'}); falling back to ${this.chain[i + 1].name}${label === 'deck' ? '' : ` for ${label}`}`,
-        )
-      }
-    }
-    // Unreachable: the loop either returns or rethrows on the last provider.
-    throw new AIProviderError(`No AI provider was able to complete ${label}.`)
+    return runWithFailover(this.chain, label, call, signal)
   }
 
   async generateDeck(
