@@ -36,12 +36,23 @@ const STYLES: Record<PdfItemKind, Style> = {
 }
 
 const FONT = 'NotoSans'
+// The bundled Noto Sans (public/fonts) covers Latin, Greek and Cyrillic only: no CJK, no Arabic.
+// Anything else falls outside the font and may not render.
+
+/** TrueType (`00 01 00 00`, `true`) or OpenType/CFF (`OTTO`): a host that answers 200 with index.html is not a font. */
+function isFontFile(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false
+  const [a, b, c, d] = bytes
+  const tag = String.fromCharCode(a, b, c, d)
+  return (a === 0 && b === 1 && c === 0 && d === 0) || tag === 'true' || tag === 'OTTO'
+}
 
 async function loadFont(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
     if (!res.ok) return null
     const bytes = new Uint8Array(await res.arrayBuffer())
+    if (!isFontFile(bytes)) return null
     let binary = ''
     for (let i = 0; i < bytes.length; i += 0x8000) {
       binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
@@ -59,18 +70,23 @@ export interface ExportQuizPdfResult {
 
 export async function exportQuizPdf(quiz: OwnerQuiz): Promise<ExportQuizPdfResult> {
   const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true })
 
   const [regular, bold] = await Promise.all([
     loadFont('/fonts/NotoSans-Regular.ttf'),
     loadFont('/fonts/NotoSans-Bold.ttf'),
   ])
-  const unicodeFont = regular !== null && bold !== null
+  let unicodeFont = false
   if (regular && bold) {
-    doc.addFileToVFS('NotoSans-Regular.ttf', regular)
-    doc.addFont('NotoSans-Regular.ttf', FONT, 'normal')
-    doc.addFileToVFS('NotoSans-Bold.ttf', bold)
-    doc.addFont('NotoSans-Bold.ttf', FONT, 'bold')
+    try {
+      doc.addFileToVFS('NotoSans-Regular.ttf', regular)
+      doc.addFont('NotoSans-Regular.ttf', FONT, 'normal')
+      doc.addFileToVFS('NotoSans-Bold.ttf', bold)
+      doc.addFont('NotoSans-Bold.ttf', FONT, 'bold')
+      unicodeFont = true
+    } catch {
+      // A font jsPDF can't register: fall back to Helvetica rather than fail the export.
+    }
   }
   const family = unicodeFont ? FONT : 'helvetica'
 
@@ -79,6 +95,8 @@ export async function exportQuizPdf(quiz: OwnerQuiz): Promise<ExportQuizPdfResul
     style: Style
     height: number
     keepWithNext?: boolean
+    /** Part of the word box, which is drawn inside a border. */
+    boxed: boolean
   }
 
   function toLines(items: PdfItem[]): Line[] {
@@ -87,7 +105,9 @@ export async function exportQuizPdf(quiz: OwnerQuiz): Promise<ExportQuizPdfResul
       const style = STYLES[item.kind]
       doc.setFont(family, style.bold ? 'bold' : 'normal')
       doc.setFontSize(style.size)
-      const wrapped = wrapText(item.text, CONTENT_W - style.indent, (s) => doc.getTextWidth(s))
+      // The word box has padding on both sides; everything else only its left indent.
+      const sides = item.kind === 'wordBox' ? 2 : 1
+      const wrapped = wrapText(item.text, CONTENT_W - style.indent * sides, (s) => doc.getTextWidth(s))
       wrapped.forEach((text, i) => {
         const last = i === wrapped.length - 1
         lines.push({
@@ -96,6 +116,7 @@ export async function exportQuizPdf(quiz: OwnerQuiz): Promise<ExportQuizPdfResul
           height: style.size * 1.35 + (last ? style.gapAfter : 0),
           // Only the last wrapped line of a heading/question binds to what follows.
           keepWithNext: last ? style.keepWithNext : true,
+          boxed: item.kind === 'wordBox',
         })
       })
     }
@@ -107,11 +128,31 @@ export async function exportQuizPdf(quiz: OwnerQuiz): Promise<ExportQuizPdfResul
     let currentPage = 0
     let y = MARGIN
     if (!firstPage) doc.addPage()
+
+    // The word box may wrap over several lines, or across a page break: one
+    // rectangle per page segment, drawn when the segment ends.
+    const BOX_PAD = 4
+    let box: { top: number; bottom: number } | null = null
+    const flushBox = () => {
+      if (!box) return
+      doc.setDrawColor(120)
+      doc.setLineWidth(0.75)
+      doc.rect(MARGIN, box.top - BOX_PAD, CONTENT_W, box.bottom - box.top + BOX_PAD * 2)
+      box = null
+    }
+
     lines.forEach((line, i) => {
       while (currentPage < pages[i]) {
+        flushBox()
         doc.addPage()
         currentPage++
         y = MARGIN
+      }
+      if (line.boxed) {
+        const bottom = y + line.style.size * 1.35
+        box = box ? { top: box.top, bottom } : { top: y, bottom }
+      } else {
+        flushBox()
       }
       doc.setFont(family, line.style.bold ? 'bold' : 'normal')
       doc.setFontSize(line.style.size)
@@ -120,6 +161,7 @@ export async function exportQuizPdf(quiz: OwnerQuiz): Promise<ExportQuizPdfResul
       }
       y += line.height
     })
+    flushBox()
   }
 
   const { sheet, key } = buildQuizItems(quiz)

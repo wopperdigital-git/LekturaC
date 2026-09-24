@@ -61,6 +61,8 @@ export function buildQuizItems(quiz: OwnerQuiz): { sheet: PdfItem[]; key: PdfIte
 
   quiz.questions.forEach((q, i) => {
     const n = i + 1
+    // A spacer BETWEEN questions only: a trailing one could open an empty page before the key.
+    if (i > 0) sheet.push({ kind: 'blank', text: '' })
     sheet.push({ kind: 'question', text: `${n}. ${q.prompt}` })
 
     if (config.type === 'multiple_choice') {
@@ -78,7 +80,6 @@ export function buildQuizItems(quiz: OwnerQuiz): { sheet: PdfItem[]; key: PdfIte
         text: `${n}. ${config.notation === 'letter' ? (value ? 'T' : 'F') : value ? 'TRUE' : 'FALSE'}`,
       })
     }
-    sheet.push({ kind: 'blank', text: '' })
   })
 
   return { sheet, key }

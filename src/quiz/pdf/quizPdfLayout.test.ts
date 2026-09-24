@@ -99,4 +99,14 @@ describe('buildQuizItems', () => {
     expect(letter.sheet.find((i) => i.kind === 'answerLine')?.text).toBe('T / F')
     expect(letter.key.map((i) => i.text)).toContain('1. T')
   })
+
+  /* A trailing spacer could land on a fresh page and leave an empty sheet before the key. */
+  it('never ends the sheet with a spacer, and separates questions with exactly one', () => {
+    const questions = [1, 2, 3].map((n) => ({
+      id: String(n), slideNumber: 1, slideHeading: 'H', prompt: `P${n}`, choices: [], answer: true,
+    }))
+    const { sheet } = buildQuizItems(quiz({ config: { type: 'true_false', notation: 'word' }, questions }))
+    expect(sheet[sheet.length - 1].kind).not.toBe('blank')
+    expect(sheet.filter((i) => i.kind === 'blank')).toHaveLength(questions.length - 1)
+  })
 })
