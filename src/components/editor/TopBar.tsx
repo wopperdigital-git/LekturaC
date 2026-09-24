@@ -11,6 +11,8 @@ export function TopBar({
   onExport,
   exporting,
   canExport,
+  onQuiz,
+  quizDisabledReason,
 }: {
   title: string
   onTitleChange: (title: string) => void
@@ -19,6 +21,8 @@ export function TopBar({
   onExport: () => void
   exporting: boolean
   canExport: boolean
+  onQuiz: () => void
+  quizDisabledReason: string | null
 }) {
   return (
     /*
@@ -114,6 +118,14 @@ export function TopBar({
               <path d="M10 3.5v9M6 8.75l4 4 4-4M4 16.5h12" />
             </svg>
           )}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={onQuiz}
+          disabled={quizDisabledReason !== null}
+          title={quizDisabledReason ?? 'Generate a quiz from this deck'}
+        >
+          Quiz
         </Button>
         <ThemeToggle />
         <Link to={`/deck/${presentationId}/narrate`}>

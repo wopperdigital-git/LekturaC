@@ -28,6 +28,9 @@ import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
 import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
+import { QuizModal } from '@/components/quiz/QuizModal'
+import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
+import { hasQuizContent } from '@/ai/quizPrompt'
 
 const SIDEBAR_WIDTH_PX = 160
 const RIGHT_PANEL_WIDTH_PX = 280
@@ -65,6 +68,8 @@ export function EditorPage() {
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   // Whether the add-a-slide type picker is open.
   const [addSlideOpen, setAddSlideOpen] = useState(false)
+  // Whether the quiz generation dialog is open. Guarded like `addSlideOpen`.
+  const [quizOpen, setQuizOpen] = useState(false)
   // A card added from the picker does not exist in the DOM until the next
   // render, so the scroll has to wait for its ref rather than run inline.
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
@@ -296,7 +301,7 @@ export function EditorPage() {
     Reports whether it removed anything so the key is only swallowed when it did.
   */
   function removeSelected(fromButton = false): boolean {
-    if (!fromButton && (activeTextRef || addSlideOpen)) return false
+    if (!fromButton && (activeTextRef || addSlideOpen || quizOpen)) return false
     const card = cards.find((c) => c.id === selectedCardId)
     if (!card || selectedBlockIndex === null) return false
 
@@ -322,11 +327,17 @@ export function EditorPage() {
 
   // One step back out: item to list, list to card.
   function stepOut() {
-    if (activeTextRef || addSlideOpen) return
+    if (activeTextRef || addSlideOpen || quizOpen) return
     apply(selectionAfterEscape({ cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }))
   }
 
-  const sortedCards = [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
+  const sortedCards = useMemo(() => [...cards].sort((a, b) => a.orderIndex - b.orderIndex), [cards])
+  const quizDisabledReason =
+    QUIZ_CHAIN.length === 0
+      ? 'Quiz generation needs VITE_GROQ_API_KEY'
+      : !hasQuizContent(sortedCards)
+        ? 'Add some slide content first'
+        : null
   const selectedIndex = sortedCards.findIndex((c) => c.id === selectedCardId)
   const selectedCard = selectedIndex >= 0 ? sortedCards[selectedIndex] : null
   // The picker offers varieties of this type only, so the type is resolved once
@@ -511,6 +522,8 @@ export function EditorPage() {
         presentationId={id}
         saveStatus={store.status}
         canExport={cards.length > 0}
+        onQuiz={() => setQuizOpen(true)}
+        quizDisabledReason={quizDisabledReason}
         exporting={exportStatus === 'working'}
         onExport={() =>
           void exportDeck({
@@ -767,6 +780,9 @@ export function EditorPage() {
             setAddSlideOpen(false)
           }}
         />
+      )}
+      {quizOpen && (
+        <QuizModal presentationId={id} title={store.title} cards={sortedCards} onClose={() => setQuizOpen(false)} />
       )}
     </div>
   )
