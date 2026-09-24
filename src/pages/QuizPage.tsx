@@ -16,9 +16,18 @@ const CHOICE_LETTERS = 'ABCD'
 const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent'
 
+/**
+ * Keyed on the code: `useAsync` keeps the previous data on screen while a new
+ * key loads, so without a remount quiz A's answers could be submitted against
+ * code B, and A would stay interactive while B loads.
+ */
 export function QuizPage() {
-  const { code: rawCode = '' } = useParams()
-  const code = normalizeQuizCode(rawCode)
+  const { code = '' } = useParams()
+  const normalized = normalizeQuizCode(code)
+  return <QuizPageInner key={normalized} code={normalized} />
+}
+
+function QuizPageInner({ code }: { code: string }) {
   const navigate = useNavigate()
   const { state, reload } = useAsync(() => getQuizForTaking(code), code)
   const [query, setQuery] = useState('')
