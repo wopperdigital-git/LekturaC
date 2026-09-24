@@ -86,6 +86,8 @@ export function QuizzesPage() {
                   key={quiz.id}
                   quiz={quiz}
                   postedIn={state.data.classes.filter((c) => postedClassIds.has(c.id))}
+                  allClasses={state.data.classes}
+                  onChanged={reload}
                 />
               )
             })}

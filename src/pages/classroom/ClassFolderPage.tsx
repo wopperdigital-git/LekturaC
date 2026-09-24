@@ -182,7 +182,13 @@ export function ClassFolderPage() {
                 {quizzes.map((quiz) => {
                   const postedClassIds = new Set(data.postings.filter((p) => p.quizId === quiz.id).map((p) => p.classId))
                   return (
-                    <QuizRow key={quiz.id} quiz={quiz} postedIn={data.classes.filter((c) => postedClassIds.has(c.id))} />
+                    <QuizRow
+                      key={quiz.id}
+                      quiz={quiz}
+                      postedIn={data.classes.filter((c) => postedClassIds.has(c.id))}
+                      allClasses={data.classes}
+                      onChanged={reload}
+                    />
                   )
                 })}
               </div>
