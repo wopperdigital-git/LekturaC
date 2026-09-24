@@ -6,6 +6,7 @@ import { DraftsPage } from '@/pages/DraftsPage'
 import { EditorPage } from '@/pages/EditorPage'
 import { PresentPage } from '@/pages/PresentPage'
 import { NarratePage } from '@/pages/NarratePage'
+import { QuizPage } from '@/pages/QuizPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
@@ -97,6 +98,14 @@ function App() {
           element={
             <RequireAuth>
               <NarratePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/quiz/:code"
+          element={
+            <RequireAuth>
+              <QuizPage />
             </RequireAuth>
           }
         />

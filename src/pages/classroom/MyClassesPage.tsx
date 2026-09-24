@@ -7,6 +7,7 @@ import { matchesQuery, personLabel, plural } from '@/classroom/format'
 import { JOIN_CODE_LENGTH, joinCodeProblem, normalizeJoinCode } from '@/classroom/joinCode'
 import { useAsync } from '@/classroom/useAsync'
 import { invalidateMyClasses } from '@/classroom/useMyClasses'
+import { QUIZ_CODE_LENGTH, normalizeQuizCode, quizCodeProblem } from '@/quiz/quizCode'
 import { DashboardShell } from '@/components/home/DashboardShell'
 import { relativePostedAt } from '@/components/home/relativeTime'
 import { LoadError, Panel, PanelMessage, RowsSkeleton } from '@/components/classroom/Panel'
@@ -23,6 +24,18 @@ export function MyClassesPage() {
   const [code, setCode] = useState('')
   const [codeError, setCodeError] = useState<string | null>(null)
   const [joining, setJoining] = useState(false)
+  const [quizCode, setQuizCode] = useState('')
+  const [quizCodeError, setQuizCodeError] = useState<string | null>(null)
+
+  function openQuiz(e: FormEvent) {
+    e.preventDefault()
+    const problem = quizCodeProblem(quizCode)
+    if (problem) {
+      setQuizCodeError(problem)
+      return
+    }
+    void navigate(`/quiz/${normalizeQuizCode(quizCode)}`)
+  }
 
   async function join(e: FormEvent) {
     e.preventDefault()
@@ -87,6 +100,36 @@ export function MyClassesPage() {
           </div>
           <Button type="submit" variant="primary" loading={joining} className="sm:mt-5">
             {joining ? 'Joining…' : 'Join class'}
+          </Button>
+        </form>
+      </div>
+
+      <div className="mb-6 rounded-app border border-app-border bg-app-background p-4 shadow-sm sm:p-5">
+        <h2 className="mb-3 text-sm font-semibold text-app-foreground">Have a quiz code?</h2>
+        <form onSubmit={openQuiz} noValidate className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div className="sm:w-60">
+            <Field
+              label="Quiz code"
+              error={quizCodeError}
+              render={(fieldProps) => (
+                <Input
+                  {...fieldProps}
+                  value={quizCode}
+                  onChange={(e) => {
+                    setQuizCode(normalizeQuizCode(e.target.value).slice(0, QUIZ_CODE_LENGTH))
+                    if (quizCodeError) setQuizCodeError(null)
+                  }}
+                  placeholder="e.g. K7M2QX9P"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  className="font-mono tracking-[0.2em]"
+                />
+              )}
+            />
+          </div>
+          <Button type="submit" variant="primary" className="sm:mt-5">
+            Open quiz
           </Button>
         </form>
       </div>
