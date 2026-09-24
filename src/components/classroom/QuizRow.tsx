@@ -11,6 +11,7 @@ const SMALL_BUTTON =
   'cursor-pointer rounded-app-sm border border-app-border bg-app-surface px-2 py-1 text-xs text-app-foreground transition-colors hover:bg-app-border/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-60'
 
 type Copied = 'code' | 'link' | null
+type CopyState = Copied | 'failed-code' | 'failed-link'
 
 /**
  * Which slides a quiz came from, its share code, where it is posted, and when it
@@ -29,7 +30,8 @@ export function QuizRow({
   onChanged: () => void
 }) {
   const slides = formatSlideRange(quiz.slideNumbers)
-  const [copied, setCopied] = useState<Copied>(null)
+  const [copied, setCopied] = useState<CopyState>(null)
+  const [selectedClassId, setSelectedClassId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,13 +44,14 @@ export function QuizRow({
   const postedIds = new Set(postedIn.map((c) => c.id))
   const available = allClasses.filter((c) => !postedIds.has(c.id))
 
-  async function copy(kind: Exclude<Copied, null>) {
+  async function copy(kind: 'code' | 'link') {
     const text = kind === 'code' ? quiz.code : `${window.location.origin}/quiz/${quiz.code}`
     try {
       await navigator.clipboard.writeText(text)
       setCopied(kind)
     } catch {
-      // Blocked clipboard: nothing to do — the code is visible.
+      // Blocked clipboard: say so briefly — the code is still visible.
+      setCopied(kind === 'code' ? 'failed-code' : 'failed-link')
     }
   }
 
@@ -115,34 +118,46 @@ export function QuizRow({
             {quiz.code}
           </span>
           <button type="button" onClick={() => void copy('code')} className={SMALL_BUTTON}>
-            {copied === 'code' ? 'Copied' : 'Copy code'}
+            {copied === 'code' ? 'Copied' : copied === 'failed-code' ? 'Copy failed' : 'Copy code'}
           </button>
           <button type="button" onClick={() => void copy('link')} className={SMALL_BUTTON}>
-            {copied === 'link' ? 'Copied' : 'Copy link'}
+            {copied === 'link' ? 'Copied' : copied === 'failed-link' ? 'Copy failed' : 'Copy link'}
           </button>
           <span className="sr-only" aria-live="polite">
-            {copied ? 'Copied' : ''}
+            {copied === 'code' || copied === 'link' ? 'Copied' : copied ? 'Copy failed' : ''}
           </span>
         </div>
 
         {available.length > 0 ? (
-          <select
-            value=""
-            disabled={busy}
-            onChange={(e) => {
-              const classId = e.target.value
-              if (classId) void change(() => postQuiz(quiz.id, classId))
-            }}
-            aria-label={`Post ${quiz.title} to class`}
-            className="rounded-app-sm border border-app-border bg-app-background px-2.5 py-1 text-xs text-app-foreground outline-none focus:border-app-accent focus:ring-2 focus:ring-app-accent/25 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <option value="">Post to class…</option>
-            {available.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={selectedClassId}
+              disabled={busy}
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              aria-label={`Class to post ${quiz.title} to`}
+              className="rounded-app-sm border border-app-border bg-app-background px-2.5 py-1 text-xs text-app-foreground outline-none focus:border-app-accent focus:ring-2 focus:ring-app-accent/25 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">Post to class…</option>
+              {available.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={busy || !selectedClassId || !available.some((c) => c.id === selectedClassId)}
+              onClick={() =>
+                void change(async () => {
+                  await postQuiz(quiz.id, selectedClassId)
+                  setSelectedClassId('')
+                })
+              }
+              className={SMALL_BUTTON}
+            >
+              Post
+            </button>
+          </div>
         ) : (
           <span className="text-xs text-app-muted">
             {allClasses.length === 0 ? 'Create a class to post this quiz.' : 'Posted to every class.'}
