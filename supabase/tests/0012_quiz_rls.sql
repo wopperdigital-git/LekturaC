@@ -41,7 +41,7 @@ values ('00000000-0000-4000-b000-000000000101', '00000000-0000-4000-a000-0000000
 -- as postgres); the quiz create_quiz makes below gets a generated one.
 insert into quizzes (id, teacher_id, title, deck_title, quiz_type, settings, code) values
   ('00000000-0000-4000-d000-000000000101', '00000000-0000-4000-a000-000000000101', 'Fixture MC',    'Cells', 'multiple_choice', '{}',              'FXMCQ222'),
-  ('00000000-0000-4000-d000-000000000102', '00000000-0000-4000-a000-000000000101', 'Fixture blanks', 'Cells', 'fill_blank',      '{"wordBox":true}', 'FXBLNK22'),
+  ('00000000-0000-4000-d000-000000000102', '00000000-0000-4000-a000-000000000101', 'Fixture blanks', 'Cells', 'fill_blank',      '{"wordBox":true}', 'FXBKNK22'),
   ('00000000-0000-4000-d000-000000000103', '00000000-0000-4000-a000-000000000101', 'Fixture T/F',   'Cells', 'true_false',      '{}',              'FXTRFA22');
 
 insert into quiz_questions (id, quiz_id, order_index, slide_number, prompt, choices, answer) values
@@ -227,6 +227,38 @@ begin
   end if;
 end $$;
 
+-- 2b. choices only survive on multiple-choice quizzes: a fill-in-the-blank
+--     question sent WITH choices stores '[]', so they can never be served
+do $$
+declare
+  res jsonb;
+  fb jsonb := '{"slide_number":3,"slide_heading":"Energy","prompt":"The ___ makes ATP.","choices":["leak","leak two","leak three"],"answer":{"text":"mitochondrion","accepted":[]}}';
+begin
+  res := create_quiz('00000000-0000-4000-e000-000000000101', 'Blank choices quiz', 'Cells', 'fill_blank', '{}', jsonb_build_array(fb));
+  if (select count(*) from quiz_questions where quiz_id = (res->>'id')::uuid) <> 1 then
+    raise exception 'teacher: expected one fill-blank question';
+  end if;
+  if (select choices from quiz_questions where quiz_id = (res->>'id')::uuid) <> '[]'::jsonb then
+    raise exception 'teacher: a fill-blank question kept the choices it was sent';
+  end if;
+end $$;
+
+-- 2c. normalize_answer never strips letters, whatever their script
+do $$ begin
+  if normalize_answer('Café!') is distinct from 'café' then
+    raise exception 'normalize_answer: accented letters must survive, got %', normalize_answer('Café!');
+  end if;
+  if normalize_answer('東京') is distinct from '東京' then
+    raise exception 'normalize_answer: non-Latin letters must survive, got %', normalize_answer('東京');
+  end if;
+  if normalize_answer('?!.,;') is distinct from '' then
+    raise exception 'normalize_answer: punctuation-only input should normalise to an empty string';
+  end if;
+  if normalize_answer('  The   Mitochondria. ') is distinct from 'the mitochondria' then
+    raise exception 'normalize_answer: case, punctuation and whitespace not normalised';
+  end if;
+end $$;
+
 -- 3. the teacher posts the quiz to their class
 do $$ begin
   insert into quiz_classes (quiz_id, class_id)
@@ -403,7 +435,7 @@ declare
   res jsonb;
 begin
   -- the word box is on for this quiz: it lists the answers
-  res := get_quiz_for_taking('FXBLNK22');
+  res := get_quiz_for_taking('FXBKNK22');
   if jsonb_typeof(res->'word_box') <> 'array' or not (res->'word_box' @> '["Mitochondria"]'::jsonb) then
     raise exception 'blank quiz: word_box should list "Mitochondria", got %', res->'word_box';
   end if;
@@ -411,7 +443,7 @@ begin
     raise exception 'blank quiz: an answer leaked into the payload';
   end if;
 
-  res := submit_quiz_attempt('FXBLNK22', '00000000-0000-4000-b000-000000000101',
+  res := submit_quiz_attempt('FXBKNK22', '00000000-0000-4000-b000-000000000101',
     '{"00000000-0000-4000-f000-000000000111":"  the MITOCHONDRIA. ",
       "00000000-0000-4000-f000-000000000112":"mitochondria!",
       "00000000-0000-4000-f000-000000000113":"Mitochondrion",

@@ -49,16 +49,24 @@ create unique index if not exists quizzes_code_key on quizzes (code);
 
 -- Blank answers compare after lower-casing, dropping punctuation and collapsing
 -- whitespace, so "The Mitochondria." matches "mitochondria".
+-- Only punctuation is removed ([[:punct:]]), never "everything that is not
+-- alphanumeric": under an ASCII-only database ctype [:alnum:] would not match a
+-- non-Latin letter, so "東京" would normalise to '' and every such blank would
+-- score wrong. Note lower() case folding of non-ASCII letters is also
+-- locale-dependent.
 create or replace function normalize_answer(t text)
 returns text
 language sql
 immutable
 as $$
-  select trim(regexp_replace(regexp_replace(lower(coalesce(t, '')), '[^[:alnum:][:space:]]', '', 'g'), '\s+', ' ', 'g'));
+  select trim(regexp_replace(regexp_replace(lower(coalesce(t, '')), '[[:punct:]]', '', 'g'), '\s+', ' ', 'g'));
 $$;
 
--- Refuses a question whose shape doesn't match the quiz type, so a tampered
--- client cannot store garbage that would break taking or scoring.
+-- Refuses a question whose shape doesn't match the quiz type on the create_quiz
+-- path, so a tampered client cannot use that function to store garbage that
+-- would break taking or scoring. It guards create_quiz ONLY: the 0009
+-- quiz_questions_owner_all policy lets a deck's owner write their own questions
+-- directly, bypassing it (an owner-only effect; no answer is ever exposed).
 create or replace function assert_quiz_question(p_type text, q jsonb)
 returns void
 language plpgsql
@@ -161,7 +169,7 @@ begin
     (t.elem->>'slide_number')::int,
     coalesce(t.elem->>'slide_heading', ''),
     trim(t.elem->>'prompt'),
-    coalesce(t.elem->'choices', '[]'::jsonb),
+    case when p_quiz_type = 'multiple_choice' then coalesce(t.elem->'choices', '[]'::jsonb) else '[]'::jsonb end,
     t.elem->'answer'
   from jsonb_array_elements(p_questions) with ordinality as t(elem, ord);
 
