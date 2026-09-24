@@ -11,8 +11,12 @@ import {
   type NarrationResponse,
   type NarrationSlide,
   type QualityFlag,
+  type QuizProvider,
   type RepairResponse,
 } from './provider'
+import { quizResponseSchema, type QuizResponse } from '@/quiz/schema'
+import type { QuizRequest } from '@/quiz/types'
+import { QUIZ_SYSTEM_PROMPT, buildQuizUserPrompt, quizMaxTokens } from './quizPrompt'
 import { DECK_SYSTEM_PROMPT, buildDeckUserPrompt, deckMaxTokens } from './prompts'
 import {
   NARRATION_SYSTEM_PROMPT,
@@ -218,13 +222,27 @@ function tryParseNarration(raw: string): { data: NarrationResponse } | { error: 
   return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
 }
 
+function tryParseQuiz(raw: string): { data: QuizResponse } | { error: string } {
+  const extracted = extractJsonObject(raw)
+  if (extracted === null) return { error: 'Invalid JSON: no JSON object found in the response' }
+  let json: unknown
+  try {
+    json = JSON.parse(extracted)
+  } catch (err) {
+    return { error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  const result = quizResponseSchema.safeParse(json)
+  if (result.success) return { data: result.data }
+  return { error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }
+}
+
 function noKeyError(): AIProviderError {
   return new AIProviderError('No Groq API key configured. Add VITE_GROQ_API_KEY to your .env file.', {
     kind: 'auth',
   })
 }
 
-export class GroqProvider implements AIProvider {
+export class GroqProvider implements AIProvider, QuizProvider {
   private apiKey: string
   private deckModel: string
   private researchModel: string
@@ -419,6 +437,43 @@ export class GroqProvider implements AIProvider {
     if ('data' in secondResult) return secondResult.data
 
     throw new AIProviderError('The AI returned narration that could not be parsed. Try again.', {
+      kind: 'response',
+    })
+  }
+
+  async generateQuiz(request: QuizRequest, signal?: AbortSignal): Promise<QuizResponse> {
+    if (!this.apiKey.trim()) throw noKeyError()
+
+    const messages: GroqMessage[] = [
+      { role: 'system', content: QUIZ_SYSTEM_PROMPT },
+      { role: 'user', content: buildQuizUserPrompt(request) },
+    ]
+    // Full retry policy (like deck and narration): there is no quiz without this call.
+    const options: CallGroqOptions = {
+      model: this.deckModel,
+      maxTokens: quizMaxTokens(request.count),
+      jsonMode: true,
+      temperature: 0.7,
+    }
+
+    const first = await callGroq(this.apiKey, messages, options, signal)
+    const firstResult = tryParseQuiz(first)
+    if ('data' in firstResult) return firstResult.data
+
+    // One retry with the exact validation errors, as the deck path does.
+    const retryMessages: GroqMessage[] = [
+      ...messages,
+      { role: 'assistant', content: first },
+      {
+        role: 'user',
+        content: `That response failed schema validation with these errors: ${firstResult.error}. Reply again with ONLY the corrected JSON object, no other text.`,
+      },
+    ]
+    const second = await callGroq(this.apiKey, retryMessages, options, signal)
+    const secondResult = tryParseQuiz(second)
+    if ('data' in secondResult) return secondResult.data
+
+    throw new AIProviderError('The AI returned a quiz that could not be read. Try again.', {
       kind: 'response',
     })
   }

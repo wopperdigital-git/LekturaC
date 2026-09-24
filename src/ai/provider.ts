@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { DeckContext, GenerationBrief } from './prompts'
 import type { EvidencePack, GeneratedDeck, QualityFlag, RepairResponse } from '@/generation/schemas'
+import type { QuizRequest } from '@/quiz/types'
+import type { QuizResponse } from '@/quiz/schema'
 
 export type { GenerationBrief, DeckContext }
 
@@ -112,6 +114,16 @@ export interface AIProvider {
     slides: NarrationSlide[],
     signal?: AbortSignal,
   ): Promise<NarrationResponse>
+}
+
+/**
+ * Quiz generation is a separate, narrower contract than `AIProvider` on
+ * purpose: only Groq (the free model) writes quizzes, and forcing stubs onto
+ * the Anthropic and Gemini providers would only add code that must never run.
+ * The quiz never touches a deck's cards — it is not a second deck generation.
+ */
+export interface QuizProvider {
+  generateQuiz(request: QuizRequest, signal?: AbortSignal): Promise<QuizResponse>
 }
 
 /**
