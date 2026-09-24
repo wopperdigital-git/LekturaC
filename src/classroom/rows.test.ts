@@ -27,14 +27,16 @@ describe('row mapping', () => {
         deck_title: 'Cells',
         presentation_id: null,
         created_at: '2026-09-02T00:00:00+00:00',
+        code: 'ABCD23XY',
+        quiz_type: 'fill_blank',
         quiz_questions: [{ slide_number: 2 }, { slide_number: 3 }],
       }),
-    ).toEqual({ id: 'q1', title: 'Cells quiz', deckTitle: 'Cells', presentationId: null, createdAt: '2026-09-02T00:00:00+00:00', slideNumbers: [2, 3] })
+    ).toEqual({ id: 'q1', title: 'Cells quiz', deckTitle: 'Cells', presentationId: null, createdAt: '2026-09-02T00:00:00+00:00', slideNumbers: [2, 3], code: 'ABCD23XY', quizType: 'fill_blank' })
   })
 
   it('treats absent embedded questions as no slides', () => {
     expect(
-      quizFromRow({ id: 'q1', title: 't', deck_title: 'd', presentation_id: 'p1', created_at: 'x', quiz_questions: null }).slideNumbers,
+      quizFromRow({ id: 'q1', title: 't', deck_title: 'd', presentation_id: 'p1', created_at: 'x', code: 'C', quiz_type: 'multiple_choice', quiz_questions: null }).slideNumbers,
     ).toEqual([])
   })
 

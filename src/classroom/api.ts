@@ -43,13 +43,13 @@ import type {
 
 type Result = { data: unknown; error: unknown }
 
-async function db() {
+export async function db() {
   if (!supabaseConfigured || !supabase) throw new Error('Supabase is not configured.')
   await ensureSession()
   return supabase
 }
 
-function many<T>(result: Result): T[] {
+export function many<T>(result: Result): T[] {
   if (result.error) throw result.error
   return (result.data ?? []) as T[]
 }
@@ -58,14 +58,14 @@ function many<T>(result: Result): T[] {
  * For an update or delete: RLS turns a write the caller may not make into
  * "0 rows affected" rather than an error, which would otherwise read as success.
  */
-function changed(result: Result): void {
+export function changed(result: Result): void {
   if (result.error) throw result.error
   if (!Array.isArray(result.data) || result.data.length === 0) {
     throw new Error("That change wasn't saved — it may already be gone. Reload and try again.")
   }
 }
 
-function rpcValue<T>(result: Result): T {
+export function rpcValue<T>(result: Result): T {
   if (result.error) {
     const message = (result.error as { message?: unknown }).message
     throw new Error(typeof message === 'string' && message ? message : 'Something went wrong.')

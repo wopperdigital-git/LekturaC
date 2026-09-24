@@ -9,6 +9,8 @@ const quiz = (id: string, title: string, createdAt: string): QuizSummary => ({
   presentationId: null,
   createdAt,
   slideNumbers: [],
+  code: `CODE-${id}`,
+  quizType: 'multiple_choice',
 })
 
 const quizzes = [

@@ -1,3 +1,4 @@
+import { fromDbConfig } from '@/quiz/types'
 import type { Announcement, Attempt, ClassRoom, Member, Person, Posting, QuizSummary } from './types'
 
 /*
@@ -10,7 +11,7 @@ export const PERSON_COLUMNS = 'id, display_name, email'
 export const CLASS_COLUMNS = 'id, teacher_id, name, description, join_code, created_at'
 export const MEMBER_COLUMNS = 'class_id, student_id, joined_at'
 export const ANNOUNCEMENT_COLUMNS = 'id, class_id, title, body, created_at, updated_at'
-export const QUIZ_COLUMNS = 'id, title, deck_title, presentation_id, created_at, quiz_questions(slide_number)'
+export const QUIZ_COLUMNS = 'id, title, deck_title, presentation_id, created_at, code, quiz_type, quiz_questions(slide_number)'
 export const POSTING_COLUMNS = 'quiz_id, class_id, posted_at'
 export const ATTEMPT_COLUMNS = 'quiz_id, class_id, student_id, score, submitted_at'
 
@@ -50,6 +51,8 @@ export interface QuizRow {
   deck_title: string
   presentation_id: string | null
   created_at: string
+  code: string
+  quiz_type: string
   quiz_questions?: { slide_number: number }[] | null
 }
 
@@ -106,6 +109,8 @@ export function quizFromRow(row: QuizRow): QuizSummary {
     presentationId: row.presentation_id,
     createdAt: row.created_at,
     slideNumbers: (row.quiz_questions ?? []).map((q) => q.slide_number),
+    code: row.code,
+    quizType: fromDbConfig(row.quiz_type, {}).type,
   }
 }
 
