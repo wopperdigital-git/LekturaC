@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { generateQuizWithFallback, type NamedQuizProvider } from './fallbackProvider'
+import { generateQuizWithFallback, quizChainFor, type NamedQuizProvider } from './fallbackProvider'
+import { GroqProvider } from './groqProvider'
 import { AIProviderError, type QuizProvider } from './provider'
 import type { QuizResponse } from '@/quiz/schema'
 import type { QuizRequest } from '@/quiz/types'
@@ -95,5 +96,19 @@ describe('generateQuizWithFallback', () => {
 
   it('reports a missing key when the chain is empty', async () => {
     await expect(generateQuizWithFallback([], REQUEST)).rejects.toMatchObject({ kind: 'auth' })
+  })
+})
+
+/* The quiz chain is free-tier only: two Groq links, never Anthropic or Gemini. */
+describe('quizChainFor', () => {
+  it('is exactly two Groq links for a key', () => {
+    const chain = quizChainFor('k')
+    expect(chain).toHaveLength(2)
+    for (const link of chain) expect(link.provider).toBeInstanceOf(GroqProvider)
+  })
+
+  it('is empty for a blank or whitespace key', () => {
+    expect(quizChainFor('')).toEqual([])
+    expect(quizChainFor('  ')).toEqual([])
   })
 })

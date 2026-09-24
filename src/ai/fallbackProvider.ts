@@ -92,15 +92,19 @@ export const PROVIDER_CHAIN: NamedProvider[] = [
  * nothing else — never Anthropic (billed per token) or Gemini. Empty without
  * `VITE_GROQ_API_KEY`; the editor disables the Quiz button in that case.
  */
-export const QUIZ_CHAIN: NamedQuizProvider[] = GROQ_API_KEY
-  ? [
-      { name: 'Groq', provider: new GroqProvider(GROQ_API_KEY) },
-      {
-        name: 'Groq compound',
-        provider: new GroqProvider(GROQ_API_KEY, { deckModel: COMPOUND_DECK_MODEL, supportsResearch: false }),
-      },
-    ]
-  : []
+export function quizChainFor(groqKey: string): NamedQuizProvider[] {
+  const key = groqKey.trim()
+  if (!key) return []
+  return [
+    { name: 'Groq', provider: new GroqProvider(key) },
+    {
+      name: 'Groq compound',
+      provider: new GroqProvider(key, { deckModel: COMPOUND_DECK_MODEL, supportsResearch: false }),
+    },
+  ]
+}
+
+export const QUIZ_CHAIN: NamedQuizProvider[] = quizChainFor(GROQ_API_KEY)
 
 export function generateQuizWithFallback(
   chain: NamedQuizProvider[],

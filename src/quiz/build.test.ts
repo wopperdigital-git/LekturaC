@@ -88,6 +88,27 @@ describe('buildQuestions — fill in the blank', () => {
   })
 })
 
+describe('buildQuestions — unscorable blanks', () => {
+  it('drops a question whose answer has no letter or digit, and skips such alternates', () => {
+    const res = run(
+      {
+        questions: [
+          { slide: 2, prompt: 'Punctuation ___ only.', answer: '!!!' },
+          { slide: 2, prompt: 'Alternate ___ noise.', answer: 'Yes', accepted: ['?!', 'yep', '...'] },
+          { slide: 2, prompt: 'The capital of Japan is ___.', answer: '東京', accepted: ['とうきょう'] },
+          { slide: 2, prompt: 'The year ___.', answer: '1999' },
+        ],
+      },
+      FILL,
+    )
+    expect(res.questions.map((q) => q.answer)).toEqual([
+      { text: 'Yes', accepted: ['yep'] },
+      { text: '東京', accepted: ['とうきょう'] },
+      { text: '1999', accepted: [] },
+    ])
+  })
+})
+
 describe('buildQuestions — true/false', () => {
   it('accepts booleans and true/false/T/F strings, drops anything else', () => {
     const res = run(

@@ -35,7 +35,7 @@ export interface AttemptResult {
 export type SubmittedAnswers = Record<string, number | string | boolean>
 
 /** One `quiz_questions` row in the shape `create_quiz` reads. */
-function questionJson(q: QuizQuestionDraft) {
+export function questionJson(q: QuizQuestionDraft) {
   return {
     slide_number: q.slideNumber,
     slide_heading: q.slideHeading,

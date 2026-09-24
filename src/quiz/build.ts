@@ -59,6 +59,8 @@ export interface BuildResult {
 type ModelQuestion = QuizResponse['questions'][number]
 
 const BLANK = /_{3,}/
+/** An answer with no letter or digit ("!!!") can never match: the database strips punctuation first. */
+const SCORABLE = /[\p{L}\p{N}]/u
 
 function parseBoolean(value: unknown): boolean | null {
   if (typeof value === 'boolean') return value
@@ -103,12 +105,12 @@ function buildOne(
       if (!BLANK.test(prompt)) return null
       if (typeof q.answer !== 'string') return null
       const text = q.answer.trim()
-      if (!text) return null
+      if (!SCORABLE.test(text)) return null
       const seen = new Set([text.toLowerCase()])
       const accepted: string[] = []
       for (const raw of q.accepted ?? []) {
         const alt = raw.trim()
-        if (!alt || seen.has(alt.toLowerCase())) continue
+        if (!SCORABLE.test(alt) || seen.has(alt.toLowerCase())) continue
         seen.add(alt.toLowerCase())
         accepted.push(alt)
         if (accepted.length === 3) break
