@@ -194,6 +194,8 @@ export function QuizModal({
   const [result, setResult] = useState<Result | null>(null)
   const [previous, setPrevious] = useState<DeckQuizSummary[] | null>(null)
   const [pdfNotice, setPdfNotice] = useState<string | null>(null)
+  /** A failed PDF build (shown as an alert), apart from the muted font notice above. */
+  const [pdfError, setPdfError] = useState<string | null>(null)
   /** Which PDF is being built: 'result' for the one just made, else a quiz id. */
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
 
@@ -278,6 +280,7 @@ export function QuizModal({
 
     setError(null)
     setPdfNotice(null)
+    setPdfError(null)
     setPending(null)
     setPhase('generating')
 
@@ -324,13 +327,14 @@ export function QuizModal({
   async function downloadPdf(key: string, load: () => Promise<OwnerQuiz>) {
     setPdfBusy(key)
     setPdfNotice(null)
+    setPdfError(null)
     try {
       const { unicodeFont } = await exportQuizPdf(await load())
       if (!unicodeFont) {
         setPdfNotice("The accent-safe font couldn't be loaded, so accented characters may not appear.")
       }
     } catch (err) {
-      setPdfNotice(`Couldn't build the PDF: ${describeError(err)}`)
+      setPdfError(`Couldn't build the PDF: ${describeError(err)}`)
     } finally {
       setPdfBusy(null)
     }
@@ -340,6 +344,7 @@ export function QuizModal({
     setResult(null)
     setError(null)
     setPdfNotice(null)
+    setPdfError(null)
     setPhase('form')
   }
 
@@ -384,6 +389,12 @@ export function QuizModal({
           </p>
         )}
 
+        {pdfError && (
+          <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+            {pdfError}
+          </p>
+        )}
+
         <div className="mt-6 flex items-center justify-end gap-2">
           <Button variant="secondary" onClick={makeAnother}>
             Make another
@@ -406,7 +417,9 @@ export function QuizModal({
       {pending ? (
         <div>
           <p className="text-sm text-app-muted">
-            {pending.questions.length} questions are written. They just haven't been saved yet.
+            {pending.savedId !== null
+              ? `Your quiz was saved, but it couldn't be loaded just now.`
+              : `${pending.questions.length} questions are written. They just haven't been saved yet.`}
           </p>
           {error && (
             <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -414,11 +427,19 @@ export function QuizModal({
             </p>
           )}
           <div className="mt-6 flex items-center justify-end gap-2">
-            <Button variant="secondary" onClick={() => setPending(null)}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                // A quiz that did save should show up in the list even if we can't open it now.
+                if (pending.savedId !== null) void refreshPrevious()
+                setError(null)
+                setPending(null)
+              }}
+            >
               Discard
             </Button>
             <Button variant="primary" onClick={() => void save(pending)}>
-              Save again
+              {pending.savedId !== null ? 'Try loading again' : 'Save again'}
             </Button>
           </div>
         </div>
@@ -516,6 +537,11 @@ export function QuizModal({
           {pdfNotice && (
             <p role="status" className="mt-3 text-xs text-app-muted">
               {pdfNotice}
+            </p>
+          )}
+          {pdfError && (
+            <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+              {pdfError}
             </p>
           )}
 
