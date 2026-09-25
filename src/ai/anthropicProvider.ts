@@ -151,6 +151,13 @@ function textOf(response: { content: unknown }): string {
     .join('')
 }
 
+/** One turn's web search results, split into how many worked and what broke. */
+interface SearchResultStats {
+  succeeded: number
+  /** One entry per failed `web_search_tool_result`, e.g. `'max_uses_exceeded'`. */
+  errors: string[]
+}
+
 /**
  * Server-tool (web search) errors don't raise an exception — they come back
  * as a normal 200 response with a `web_search_tool_result` content block
@@ -158,22 +165,36 @@ function textOf(response: { content: unknown }): string {
  * 'max_uses_exceeded'}`) instead of the usual list of `web_search_result`s.
  * `textOf()` only reads `text` blocks, so a turn where every search failed
  * looks identical (no findings) to one that succeeded and genuinely found
- * nothing — both end up as `parseEvidencePack` returning `null`. This is
- * diagnostic only: it logs the error so a live run's console tells the two
- * apart, and never changes control flow or throws.
+ * nothing — both end up as `parseEvidencePack` returning `null`.
+ *
+ * Pure and per-turn on purpose: `research()` accumulates this across every
+ * turn (initial call plus resumptions) and logs ONE summary at the end,
+ * rather than one opaque `console.warn` per failed block — a live run's
+ * console should say "5 succeeded, 1 failed (max_uses_exceeded)", not six
+ * unreadable `Object` references with no totals to compare them against.
  */
-function warnOnFailedSearches(response: { content: unknown }): void {
+function searchResultStats(response: { content: unknown }): SearchResultStats {
   const blocks = response.content
-  if (!Array.isArray(blocks)) return
+  if (!Array.isArray(blocks)) return { succeeded: 0, errors: [] }
+
+  let succeeded = 0
+  const errors: string[] = []
   for (const block of blocks) {
     if (typeof block !== 'object' || block === null) continue
     const b = block as { type?: unknown; content?: unknown }
     if (b.type !== 'web_search_tool_result') continue
     // Success shape is a list of results; the error shape is a single object.
-    if (!Array.isArray(b.content) && b.content !== undefined) {
-      console.warn('[ai] Anthropic web_search_tool_result returned an error', b.content)
+    if (Array.isArray(b.content)) {
+      succeeded++
+    } else if (b.content !== undefined) {
+      const code =
+        typeof b.content === 'object' && b.content !== null && 'error_code' in b.content
+          ? String((b.content as { error_code: unknown }).error_code)
+          : JSON.stringify(b.content)
+      errors.push(code)
     }
   }
+  return { succeeded, errors }
 }
 
 export class AnthropicProvider implements AIProvider {
@@ -337,12 +358,31 @@ export class AnthropicProvider implements AIProvider {
       model: this.researchModel,
       max_tokens: 4000,
       system: RESEARCH_SYSTEM_PROMPT,
-      tools: [{ type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: 4 }],
+      // `RESEARCH_SYSTEM_PROMPT` asks for "the 4-8 facts this presentation
+      // most needs" — 4 was measured (2026-09-23 live check) to run out
+      // mid-task: the model kept trying to search after exhausting its
+      // budget, each attempt returning a `max_uses_exceeded`
+      // `web_search_tool_result` error (see `searchResultStats` below) and
+      // costing tokens for nothing. 8 matches the prompt's own stated upper
+      // bound.
+      tools: [{ type: 'web_search_20260209' as const, name: 'web_search' as const, max_uses: 8 }],
       // No `temperature`: models released after Claude Opus 4.6 (including
       // `claude-sonnet-5`) reject any value other than 1.0 with a 400 — see
       // the SDK's own JSDoc on `temperature` in
       // `resources/messages/messages.d.ts`. Sonnet 5's decoding defaults are
       // correct without it.
+      //
+      // `effort: 'low'` — this was the actual gap: research doesn't set
+      // `output_config` at all, so it silently ran at the *default* effort,
+      // which is `'high'` (the most expensive tier) — backwards for a
+      // best-effort, degrade-gracefully step that `repairSlides` and
+      // `generateNarration` (this file's other two best-effort calls) both
+      // already run at `'low'`. Research is fact lookup via tool calls, not
+      // creative writing; it doesn't need deep reasoning, and lower effort
+      // also means fewer, more-consolidated tool calls per the model's own
+      // documented behavior — which should also mean fewer `pause_turn`
+      // resumptions, not just cheaper thinking tokens.
+      output_config: { effort: 'low' as const },
     }
 
     let response
@@ -364,7 +404,9 @@ export class AnthropicProvider implements AIProvider {
     // split across a pause boundary — rather than keeping only the last
     // turn's text, so a capped-out loop still has everything Claude wrote so
     // far to hand to `parseEvidencePack`.
-    warnOnFailedSearches(response)
+    let stats = searchResultStats(response)
+    let searchSucceeded = stats.succeeded
+    const searchErrors = [...stats.errors]
     let combinedText = textOf(response)
     let resumptions = 0
     while (response.stop_reason === 'pause_turn' && resumptions < AnthropicProvider.MAX_RESEARCH_RESUMPTIONS) {
@@ -375,8 +417,20 @@ export class AnthropicProvider implements AIProvider {
       } catch (err) {
         throw await this.mapError(err)
       }
-      warnOnFailedSearches(response)
+      stats = searchResultStats(response)
+      searchSucceeded += stats.succeeded
+      searchErrors.push(...stats.errors)
       combinedText += textOf(response)
+    }
+
+    // Diagnostic only — never changes control flow or throws. One summary
+    // for the whole research call (not one line per block) so a live run's
+    // console says how many searches actually worked against how many
+    // didn't, and what broke, in one readable line.
+    if (searchErrors.length > 0) {
+      console.warn(
+        `[ai] Anthropic web search: ${searchSucceeded} succeeded, ${searchErrors.length} failed (${searchErrors.join(', ')})`,
+      )
     }
 
     const pack = parseEvidencePack(combinedText)

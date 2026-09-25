@@ -360,7 +360,7 @@ describe('AnthropicProvider', () => {
       expect(createMock).not.toHaveBeenCalled()
     })
 
-    it('sends the web_search_20260209 tool with max_uses 4 and maxRetries 0', async () => {
+    it('sends the web_search_20260209 tool at max_uses 8, effort low, and maxRetries 0', async () => {
       createMock.mockResolvedValueOnce({
         stop_reason: 'end_turn',
         content: [{ type: 'text', text: JSON.stringify({ sources: [validSource], findings: [validFinding], disagreements: [] }) }],
@@ -373,8 +373,14 @@ describe('AnthropicProvider', () => {
       const params = createMock.mock.calls[0][0]
       const options = createMock.mock.calls[0][1]
       expect(params.model).toBe('claude-sonnet-5')
-      expect(params.tools).toEqual([{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }])
+      // 8, not 4: RESEARCH_SYSTEM_PROMPT asks for "the 4-8 facts this
+      // presentation most needs" — 4 was measured running out mid-task.
+      expect(params.tools).toEqual([{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }])
       expect(options.maxRetries).toBe(0)
+      // The actual bug: research never set `output_config` at all, so it
+      // silently ran at the default effort ('high', the most expensive tier)
+      // instead of 'low' like this file's other two best-effort calls.
+      expect(params.output_config).toEqual({ effort: 'low' })
       // C1: system prompt as a top-level param, no `{ role: 'system' }` message.
       expect(params.system).toBe(RESEARCH_SYSTEM_PROMPT)
       expect(hasNoSystemRoleMessage(params.messages)).toBe(true)
@@ -383,18 +389,19 @@ describe('AnthropicProvider', () => {
       expect('temperature' in params).toBe(false)
     })
 
-    // M4: a server-tool (web search) error comes back as a normal 200 with a
-    // `web_search_tool_result` block whose `.content` is a single error
-    // object, not the usual list of results — `textOf()` can't see it, so
-    // this is surfaced as a console warning instead (diagnostic only; control
-    // flow is unaffected and `parseEvidencePack` still runs on whatever text
-    // came back).
-    it('warns on a web_search_tool_result error shape without throwing or changing the result', async () => {
+    // M4 (revised): a server-tool (web search) error comes back as a normal
+    // 200 with a `web_search_tool_result` block whose `.content` is a single
+    // error object, not the usual list of results — `textOf()` can't see it,
+    // so this is surfaced as one end-of-research console summary instead of
+    // a warning per block (diagnostic only; control flow is unaffected and
+    // `parseEvidencePack` still runs on whatever text came back).
+    it('summarizes search successes and failures in one warning, not one per block', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       createMock.mockResolvedValueOnce({
         stop_reason: 'end_turn',
         content: [
-          { type: 'web_search_tool_result', tool_use_id: 'tool1', content: { error_code: 'max_uses_exceeded' } },
+          { type: 'web_search_tool_result', tool_use_id: 'tool1', content: [{ type: 'web_search_result', url: 'https://example.com', title: 't' }] },
+          { type: 'web_search_tool_result', tool_use_id: 'tool2', content: { error_code: 'max_uses_exceeded' } },
           { type: 'text', text: JSON.stringify({ sources: [validSource], findings: [validFinding], disagreements: [] }) },
         ],
       })
@@ -403,14 +410,12 @@ describe('AnthropicProvider', () => {
       const result = await provider.research('topic', brief, '2026-09-22')
 
       expect(result.findings).toHaveLength(1)
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('web_search_tool_result'),
-        { error_code: 'max_uses_exceeded' },
-      )
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('1 succeeded, 1 failed (max_uses_exceeded)'))
       warnSpy.mockRestore()
     })
 
-    it('does not warn when web_search_tool_result carries the normal list-of-results success shape', async () => {
+    it('does not warn when every web_search_tool_result carries the normal list-of-results success shape', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       createMock.mockResolvedValueOnce({
         stop_reason: 'end_turn',
@@ -458,6 +463,37 @@ describe('AnthropicProvider', () => {
       const pushedAssistantTurn = secondCallMessages[secondCallMessages.length - 1]
       expect(pushedAssistantTurn.role).toBe('assistant')
       expect(pushedAssistantTurn.content.some((b: { type: string }) => b.type === 'server_tool_use')).toBe(true)
+    })
+
+    it('accumulates search successes and failures across a resumption, not just the last turn', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      createMock
+        .mockResolvedValueOnce({
+          stop_reason: 'pause_turn',
+          content: [
+            { type: 'web_search_tool_result', tool_use_id: 't1', content: [{ type: 'web_search_result', url: 'https://a.com', title: 'a' }] },
+            { type: 'web_search_tool_result', tool_use_id: 't2', content: { error_code: 'max_uses_exceeded' } },
+            { type: 'text', text: `{"sources":[${JSON.stringify(validSource)}],"findings":[` },
+          ],
+        })
+        .mockResolvedValueOnce({
+          stop_reason: 'end_turn',
+          content: [
+            { type: 'web_search_tool_result', tool_use_id: 't3', content: { error_code: 'max_uses_exceeded' } },
+            { type: 'text', text: `${JSON.stringify(validFinding)}],"disagreements":[]}` },
+          ],
+        })
+      const provider = new AnthropicProvider('key')
+
+      await provider.research('topic', brief, '2026-09-22')
+
+      // 1 success (first turn) + 2 failures (one per turn) — the second
+      // turn's failure must not overwrite the first's in the summary.
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('1 succeeded, 2 failed (max_uses_exceeded, max_uses_exceeded)'),
+      )
+      warnSpy.mockRestore()
     })
 
     it('stops after the capped number of resumptions when still pause_turn', async () => {
