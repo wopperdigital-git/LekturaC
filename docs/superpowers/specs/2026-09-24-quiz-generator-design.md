@@ -20,7 +20,7 @@ This fills in the piece `2026-09-14-teacher-classroom-design.md` deferred ("quiz
 
 ## Non-goals
 
-Retakes (one attempt per student per class, already enforced), due dates, timers, showing correct answers to students after submitting, editing a generated quiz's questions, regenerating a quiz in place (generate a new one), a student-side list of posted quizzes, anonymous taking, mixed-type quizzes.
+Retakes (one attempt per student per class, already enforced), due dates, timers, showing correct answers to students after submitting, editing a generated quiz's questions, regenerating a quiz in place (generate a new one), anonymous taking, mixed-type quizzes. (A student-side list of posted quizzes was first listed here as a non-goal and was added afterwards, once it was clear students expect to see a posted quiz in their class — see §5.)
 
 The **generate-once rule** in CLAUDE.md is about a deck's cards. A quiz is a separate artifact that never touches `cards`; it is not precedent for a "regenerate this slide" button, same as narration.
 
@@ -128,7 +128,7 @@ No RLS policy selects from another RLS table (the classroom invariant), so nothi
 
 ## 5. Taking a quiz
 
-- Route `/quiz/:code` under `RequireAuth` (`QuizPage`). Students arrive by link, or by typing a code into a small **Have a quiz code?** field on `MyClassesPage` (the existing joiner page), which navigates to `/quiz/:code`.
+- Route `/quiz/:code` under `RequireAuth` (`QuizPage`). Students arrive by link, by typing a code into a small **Have a quiz code?** field on `MyClassesPage` (the existing joiner page), or from a **Quizzes panel on the class page** (`StudentClassPage`): every quiz posted to that class, newest posting first, each with **Take quiz**, or "Submitted · score" once the student has an attempt for that class. The panel reads only what RLS already allows a member (`quizzes`, `quiz_classes`, their own `quiz_attempts`) and shows no question count, because `quiz_questions` is owner-only and a student's embed of it is empty. No SQL change.
 - The page calls `getQuizForTaking`. A refusal shows the RPC's sentence with a link to `/classes` (where the class code is entered). A student in several eligible classes picks which one (default: the first not yet attempted).
 - Renders by type: radios labelled A–C/A–D; a text input per blank, with the word box above when on; TRUE/FALSE or T/F buttons. Submit is disabled until every question is answered; a second confirm is not needed (one attempt is stated up front).
 - After submitting: the score and a per-question right/wrong list. No correct answers are shown.

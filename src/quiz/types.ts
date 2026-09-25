@@ -79,3 +79,10 @@ export interface QuizQuestionDraft {
   choices: string[]
   answer: QuizAnswer
 }
+
+/** How a quiz type reads to a person. */
+export const QUIZ_TYPE_LABELS: Record<QuizType, string> = {
+  multiple_choice: 'Multiple choice',
+  fill_blank: 'Fill in the blank',
+  true_false: 'True or false',
+}

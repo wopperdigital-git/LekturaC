@@ -88,9 +88,28 @@ export interface TeacherClassroom {
   attempts: Attempt[]
 }
 
+/**
+ * A quiz as a student sees it: enough to list it and open it. No question count
+ * and no answers — `quiz_questions` is owner-only, so a student's read of it
+ * (or an embed of it) is empty by design.
+ */
+export interface StudentQuiz {
+  id: string
+  title: string
+  /** The share code, i.e. the `/quiz/:code` they open. */
+  code: string
+  quizType: QuizType
+  createdAt: string
+}
+
 /** Everything a student's class pages read. */
 export interface StudentClassroom {
   classes: ClassRoom[]
   teachers: Person[]
   announcements: Announcement[]
+  /** Only quizzes posted to a class the student is in (RLS: `quizzes_select`). */
+  quizzes: StudentQuiz[]
+  postings: Posting[]
+  /** The student's own attempts (RLS: `quiz_attempts_select` = own rows). */
+  attempts: Attempt[]
 }

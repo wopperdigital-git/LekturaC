@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { announcementFromRow, attemptFromRow, classFromRow, memberFromRow, personFromRow, postingFromRow, quizFromRow } from './rows'
+import {
+  STUDENT_QUIZ_COLUMNS,
+  announcementFromRow,
+  attemptFromRow,
+  classFromRow,
+  memberFromRow,
+  personFromRow,
+  postingFromRow,
+  quizFromRow,
+  studentQuizFromRow,
+} from './rows'
 
 describe('row mapping', () => {
   it('maps a class, defaulting a null description to empty', () => {
@@ -52,5 +62,17 @@ describe('row mapping', () => {
     expect(
       announcementFromRow({ id: 'a1', class_id: 'c1', title: 'Hi', body: null, created_at: 'c', updated_at: 'u' }),
     ).toEqual({ id: 'a1', classId: 'c1', title: 'Hi', body: '', createdAt: 'c', updatedAt: 'u' })
+  })
+
+  it('maps a student-visible quiz, reading only what a student may select', () => {
+    const row = { id: 'q1', title: 'Cells', code: 'ABCD23XY', quiz_type: 'fill_blank', created_at: 'c' }
+    expect(studentQuizFromRow(row)).toEqual({ id: 'q1', title: 'Cells', code: 'ABCD23XY', quizType: 'fill_blank', createdAt: 'c' })
+    expect(STUDENT_QUIZ_COLUMNS.split(',').map((c) => c.trim())).toEqual(['id', 'title', 'code', 'quiz_type', 'created_at'])
+    // No question embed: `quiz_questions` is owner-only, so a student's embed is always empty.
+    expect(STUDENT_QUIZ_COLUMNS).not.toContain('quiz_questions')
+  })
+
+  it('falls back to multiple choice for an unknown quiz type', () => {
+    expect(studentQuizFromRow({ id: 'q', title: 'T', code: 'C', quiz_type: 'essay', created_at: 'c' }).quizType).toBe('multiple_choice')
   })
 })

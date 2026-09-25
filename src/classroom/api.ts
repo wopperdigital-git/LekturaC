@@ -8,6 +8,7 @@ import {
   PERSON_COLUMNS,
   POSTING_COLUMNS,
   QUIZ_COLUMNS,
+  STUDENT_QUIZ_COLUMNS,
   announcementFromRow,
   attemptFromRow,
   classFromRow,
@@ -15,6 +16,7 @@ import {
   personFromRow,
   postingFromRow,
   quizFromRow,
+  studentQuizFromRow,
   type AnnouncementRow,
   type AttemptRow,
   type ClassRow,
@@ -22,6 +24,7 @@ import {
   type PersonRow,
   type PostingRow,
   type QuizRow,
+  type StudentQuizRow,
 } from './rows'
 import type {
   AnnouncementDetails,
@@ -146,22 +149,34 @@ export async function loadTeacherClassroom(): Promise<TeacherClassroom> {
 export async function loadStudentClassroom(): Promise<StudentClassroom> {
   const client = await db()
   const classes = await listMyClasses()
-  if (classes.length === 0) return { classes, teachers: [], announcements: [] }
+  if (classes.length === 0) {
+    return { classes, teachers: [], announcements: [], quizzes: [], postings: [], attempts: [] }
+  }
 
   const teacherIds = [...new Set(classes.map((c) => c.teacherId))]
-  const [teacherResult, announcementResult] = await Promise.all([
+  const classIds = classes.map((c) => c.id)
+  const [teacherResult, announcementResult, quizResult, postingResult, attemptResult] = await Promise.all([
     client.from('profiles').select(PERSON_COLUMNS).in('id', teacherIds),
     client
       .from('announcements')
       .select(ANNOUNCEMENT_COLUMNS)
-      .in('class_id', classes.map((c) => c.id))
+      .in('class_id', classIds)
       .order('created_at', { ascending: false }),
+    // RLS scopes these to what a class member may see: the quizzes posted to
+    // their classes, those postings, and their OWN attempts. No `.in` on the
+    // quizzes — there is no column to filter on, and RLS is the filter.
+    client.from('quizzes').select(STUDENT_QUIZ_COLUMNS),
+    client.from('quiz_classes').select(POSTING_COLUMNS).in('class_id', classIds),
+    client.from('quiz_attempts').select(ATTEMPT_COLUMNS).in('class_id', classIds),
   ])
 
   return {
     classes,
     teachers: many<PersonRow>(teacherResult).map(personFromRow),
     announcements: many<AnnouncementRow>(announcementResult).map(announcementFromRow),
+    quizzes: many<StudentQuizRow>(quizResult).map(studentQuizFromRow),
+    postings: many<PostingRow>(postingResult).map(postingFromRow),
+    attempts: many<AttemptRow>(attemptResult).map(attemptFromRow),
   }
 }
 

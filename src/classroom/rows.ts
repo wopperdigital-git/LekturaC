@@ -1,5 +1,5 @@
 import { fromDbConfig } from '@/quiz/types'
-import type { Announcement, Attempt, ClassRoom, Member, Person, Posting, QuizSummary } from './types'
+import type { Announcement, Attempt, ClassRoom, Member, Person, Posting, QuizSummary, StudentQuiz } from './types'
 
 /*
   Row shapes exactly as PostgREST returns them, the column lists that request
@@ -12,6 +12,8 @@ export const CLASS_COLUMNS = 'id, teacher_id, name, description, join_code, crea
 export const MEMBER_COLUMNS = 'class_id, student_id, joined_at'
 export const ANNOUNCEMENT_COLUMNS = 'id, class_id, title, body, created_at, updated_at'
 export const QUIZ_COLUMNS = 'id, title, deck_title, presentation_id, created_at, code, quiz_type, quiz_questions(slide_number)'
+/** No `quiz_questions(...)` embed: a student cannot read questions, so it would only ever be empty. */
+export const STUDENT_QUIZ_COLUMNS = 'id, title, code, quiz_type, created_at'
 export const POSTING_COLUMNS = 'quiz_id, class_id, posted_at'
 export const ATTEMPT_COLUMNS = 'quiz_id, class_id, student_id, score, submitted_at'
 
@@ -54,6 +56,14 @@ export interface QuizRow {
   code: string
   quiz_type: string
   quiz_questions?: { slide_number: number }[] | null
+}
+
+export interface StudentQuizRow {
+  id: string
+  title: string
+  code: string
+  quiz_type: string
+  created_at: string
 }
 
 export interface PostingRow {
@@ -111,6 +121,16 @@ export function quizFromRow(row: QuizRow): QuizSummary {
     slideNumbers: (row.quiz_questions ?? []).map((q) => q.slide_number),
     code: row.code,
     quizType: fromDbConfig(row.quiz_type, {}).type,
+  }
+}
+
+export function studentQuizFromRow(row: StudentQuizRow): StudentQuiz {
+  return {
+    id: row.id,
+    title: row.title,
+    code: row.code,
+    quizType: fromDbConfig(row.quiz_type, {}).type,
+    createdAt: row.created_at,
   }
 }
 
