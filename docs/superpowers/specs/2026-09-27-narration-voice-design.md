@@ -1,6 +1,6 @@
 # Narration tab: AI icon and Cartesia voice (clone voice modal)
 
-Date: 2026-09-27. Status: design approved in conversation; written spec awaiting review.
+Date: 2026-09-27. Status: approved; implemented on branch feat/narration-voice.
 Builds on `2026-09-26-narration-tab-design.md` (the tab this changes) and leaves the data rules in
 `2026-09-02-narration-page-design.md` untouched.
 
