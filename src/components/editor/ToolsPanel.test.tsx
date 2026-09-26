@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import type { Card } from '@/engine/contentBlocks'
@@ -32,6 +33,7 @@ function render(
   withCard: boolean,
   textStyle: TextStyle = {},
   grid: EditorGrid = DEFAULT_GRID,
+  extra: Partial<ComponentProps<typeof ToolsPanel>> = {},
 ) {
   const noop = () => {}
   return renderToStaticMarkup(
@@ -63,6 +65,7 @@ function render(
         onGridChange={noop}
         zoom={1}
         onZoomChange={noop}
+        {...extra}
       />
     </MemoryRouter>,
   )
@@ -159,5 +162,46 @@ describe('ToolsPanel', () => {
   // button back to the panel would put two ways to do one thing on screen.
   it('has no Add item button — that is the plus under the list now', () => {
     expect(render(2, true)).not.toContain('Add item')
+  })
+
+  /* The opening tag that carries `id`, so an assertion can look at its attributes
+     without depending on the order React prints them in. */
+  function tagWithId(html: string, id: string): string {
+    return html.match(new RegExp(`<[^>]*id="${id}"[^>]*>`))?.[0] ?? ''
+  }
+
+  it('offers only the Design tab when there is no narration slot', () => {
+    const html = render(1, false)
+    expect(tagWithId(html, 'tools-tab-design')).toContain('aria-selected="true"')
+    expect(html).not.toContain('tools-tab-narration')
+  })
+
+  it('offers Design and Narration, with Design selected by default', () => {
+    const html = render(1, false, {}, DEFAULT_GRID, { narrationTab: <p>SLOT</p> })
+    expect(tagWithId(html, 'tools-tab-design')).toContain('aria-selected="true"')
+    expect(tagWithId(html, 'tools-tab-narration')).toContain('aria-selected="false"')
+    expect(html).toContain('>Narration<')
+  })
+
+  // Unmounting the slot on a tab switch would run NarrationTab's cleanup and abort a
+  // generation the user only looked away from, so it is rendered and merely hidden.
+  it('keeps the narration slot mounted, but hidden, while Design is selected', () => {
+    const html = render(1, false, {}, DEFAULT_GRID, { narrationTab: <p>SLOT</p> })
+    expect(html).toContain('SLOT')
+    expect(tagWithId(html, 'tools-panel-narration')).toContain('hidden=""')
+    expect(tagWithId(html, 'tools-panel-design')).not.toContain('hidden=""')
+  })
+
+  it('hides the Design sections, not unmounts them, while Narration is selected', () => {
+    const html = render(1, false, {}, DEFAULT_GRID, { tab: 'narration', narrationTab: <p>SLOT</p> })
+    expect(tagWithId(html, 'tools-tab-narration')).toContain('aria-selected="true"')
+    expect(tagWithId(html, 'tools-panel-narration')).not.toContain('hidden=""')
+    expect(tagWithId(html, 'tools-panel-design')).toContain('hidden=""')
+    expect(html).toContain('>Typography<')
+  })
+
+  it('keeps the zoom in the header on the Narration tab too', () => {
+    const html = render(1, false, {}, DEFAULT_GRID, { tab: 'narration', narrationTab: <p>SLOT</p> })
+    expect(html.indexOf('aria-label="Zoom (50')).toBeLessThan(html.indexOf('SLOT'))
   })
 })

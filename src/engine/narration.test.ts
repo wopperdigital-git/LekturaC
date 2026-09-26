@@ -6,6 +6,7 @@ import {
   mergeNarration,
   narrationStatus,
   parseNarration,
+  sameSlides,
   type Narration,
 } from './narration'
 
@@ -217,5 +218,32 @@ describe('mergeNarration', () => {
     const input = cards()
     const out = mergeNarration(input, [{ slide: 1, text: 'Fresh.' }], all)
     expect(out[0]).not.toBe(input[0])
+  })
+})
+
+describe('sameSlides', () => {
+  it('is true for the same ids in the same order', () => {
+    expect(sameSlides(['a', 'b', 'c'], ['a', 'b', 'c'])).toBe(true)
+  })
+
+  it('is true for two empty decks', () => {
+    expect(sameSlides([], [])).toBe(true)
+  })
+
+  // A generation's targets are positions, so a deleted slide shifts every later script onto the wrong card.
+  it('is false when a slide was removed', () => {
+    expect(sameSlides(['a', 'b', 'c'], ['a', 'c'])).toBe(false)
+  })
+
+  it('is false when a slide was added', () => {
+    expect(sameSlides(['a', 'b'], ['a', 'b', 'c'])).toBe(false)
+  })
+
+  it('is false when slides were reordered', () => {
+    expect(sameSlides(['a', 'b', 'c'], ['a', 'c', 'b'])).toBe(false)
+  })
+
+  it('is false when one slide was swapped for another of the same count', () => {
+    expect(sameSlides(['a', 'b'], ['a', 'z'])).toBe(false)
   })
 })
