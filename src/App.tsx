@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react'
-import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-dom'
 import { HomePage } from '@/pages/HomePage'
 import { CreatePage } from '@/pages/CreatePage'
 import { DraftsPage } from '@/pages/DraftsPage'
 import { EditorPage } from '@/pages/EditorPage'
 import { PresentPage } from '@/pages/PresentPage'
-import { NarratePage } from '@/pages/NarratePage'
 import { QuizPage } from '@/pages/QuizPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
@@ -17,6 +16,12 @@ import { StudentsPage } from '@/pages/classroom/StudentsPage'
 import { QuizzesPage } from '@/pages/classroom/QuizzesPage'
 import { MyClassesPage } from '@/pages/classroom/MyClassesPage'
 import { StudentClassPage } from '@/pages/classroom/StudentClassPage'
+
+/** The narration page is gone; its script lives in the editor's Narration tab. Old links land on the deck. */
+function NarrateRedirect() {
+  const { id } = useParams<{ id: string }>()
+  return <Navigate to={id ? `/deck/${id}` : '/'} replace />
+}
 
 function teacherOnly(element: ReactNode) {
   return (
@@ -97,7 +102,7 @@ function App() {
           path="/deck/:id/narrate"
           element={
             <RequireAuth>
-              <NarratePage />
+              <NarrateRedirect />
             </RequireAuth>
           }
         />

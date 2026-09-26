@@ -1327,7 +1327,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       not rewrite (see its guard), so "nothing changed" is exactly "every
       element is identity-equal to the sorted input". This happens whenever
       every returned script landed outside the user's selection — which the
-      caller tries to prevent (see NarratePage's own guard) but which a model
+      caller tries to prevent (see NarrationTab's `runGeneration`) but which a model
       answering off-list still produces. Without
       this check, a no-op still pushed an undo step that visibly did nothing
       and rewrote the whole deck's rows for no reason.

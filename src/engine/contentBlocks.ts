@@ -185,7 +185,7 @@ export type Card = z.infer<typeof cardSchema>
  * a card whose heading was removed by hand has none).
  *
  * Shared by `ai/narrationPrompt.ts` (the label the model sees for each slide)
- * and `components/narrate/ScriptPanel.tsx` (the label the slide list shows) —
+ * and `components/narrate/GenerateScriptsModal.tsx` (the label the slide list shows) —
  * both used to reimplement this identically, which meant the two could read
  * the same card differently after a future edit to one copy and not the other.
  */

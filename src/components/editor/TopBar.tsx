@@ -6,7 +6,6 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 export function TopBar({
   title,
   onTitleChange,
-  presentationId,
   saveStatus,
   onExport,
   exporting,
@@ -16,7 +15,6 @@ export function TopBar({
 }: {
   title: string
   onTitleChange: (title: string) => void
-  presentationId: string
   saveStatus: 'idle' | 'loading' | 'saving' | 'error'
   onExport: () => void
   exporting: boolean
@@ -128,9 +126,6 @@ export function TopBar({
           Quiz
         </Button>
         <ThemeToggle />
-        <Link to={`/deck/${presentationId}/narrate`}>
-          <Button variant="primary">Narrate PPT</Button>
-        </Link>
       </div>
     </div>
   )
