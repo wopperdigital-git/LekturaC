@@ -103,3 +103,12 @@ export function rowFromSettings(s: VoiceSettings): VoiceSettingsRow {
     emotion: s.emotion,
   }
 }
+
+/**
+ * May Save voice be pressed? Only once the modal has loaded, the saved voice is actually
+ * known, and no save is in flight. If reading the saved voice failed, the defaults on screen
+ * are not what is stored, and saving them would silently overwrite it.
+ */
+export function canSaveVoice(s: { ready: boolean; savedVoiceKnown: boolean; saving: boolean }): boolean {
+  return s.ready && s.savedVoiceKnown && !s.saving
+}

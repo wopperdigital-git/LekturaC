@@ -1,3 +1,5 @@
+import type { VoiceLanguage } from './scripts'
+
 /*
   The rules about a recording that need no browser: how long, what format, when a clip
   is good enough to clone. Kept apart from `recorder.ts` (which touches the microphone)
@@ -32,4 +34,32 @@ export function canClone({ clipSeconds, name }: { clipSeconds: number; name: str
 /** Cartesia reads the format from the upload's extension, so name it after what it is. */
 export function clipFileName(mime: string): string {
   return mime.startsWith('audio/ogg') ? 'voice.ogg' : 'voice.webm'
+}
+
+export type RecState = 'idle' | 'starting' | 'recording' | 'recorded'
+
+/**
+ * Can a new recording be started right now?
+ *
+ * Not while a clone is in flight: finishing a clone clears the recording state, so a take
+ * started meanwhile would be left running with its Stop button gone and its microphone
+ * held. Not while one is already starting or running either.
+ */
+export function canRecord(s: {
+  ready: boolean
+  configured: boolean
+  supported: boolean
+  recState: RecState
+  cloning: boolean
+}): boolean {
+  return s.ready && s.configured && s.supported && !s.cloning && (s.recState === 'idle' || s.recState === 'recorded')
+}
+
+/**
+ * The language to tell Cartesia a clip is in: the one it was recorded in. The picker can be
+ * changed after recording (to browse other voices), and sending the clip under a different
+ * language than it was read in is the wrong-result case the language rules exist to prevent.
+ */
+export function languageForClone(recordedIn: VoiceLanguage | null, selected: VoiceLanguage): VoiceLanguage {
+  return recordedIn ?? selected
 }

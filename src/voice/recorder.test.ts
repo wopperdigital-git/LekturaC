@@ -12,6 +12,8 @@ class FakeRecorder {
   static instances: FakeRecorder[] = []
   // Annotated: inferred, it would be a type predicate and `() => false` could not replace it.
   static isTypeSupported: (mime: string) => boolean = (mime) => mime === 'audio/webm;codecs=opus'
+  static failOnConstruct = false
+  static failOnStart = false
   state: 'inactive' | 'recording' = 'inactive'
   ondataavailable: ((e: { data: Blob }) => void) | null = null
   onstop: (() => void) | null = null
@@ -20,11 +22,13 @@ class FakeRecorder {
   options: { mimeType: string }
   // No parameter properties: `erasableSyntaxOnly` forbids them.
   constructor(stream: unknown, options: { mimeType: string }) {
+    if (FakeRecorder.failOnConstruct) throw new DOMException('mime rejected', 'NotSupportedError')
     this.stream = stream
     this.options = options
     FakeRecorder.instances.push(this)
   }
   start() {
+    if (FakeRecorder.failOnStart) throw new DOMException('cannot start', 'InvalidStateError')
     this.state = 'recording'
   }
   stop() {
@@ -41,6 +45,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   FakeRecorder.instances = []
   FakeRecorder.isTypeSupported = (mime: string) => mime === 'audio/webm;codecs=opus'
+  FakeRecorder.failOnConstruct = false
+  FakeRecorder.failOnStart = false
   trackStops.mockReset()
   getUserMedia.mockReset()
   getUserMedia.mockResolvedValue({ getTracks: () => [{ stop: trackStops }, { stop: trackStops }] })
@@ -121,6 +127,20 @@ describe('startRecording', () => {
     const recorder = await startRecording(opts())
     FakeRecorder.instances[0].onerror?.()
     await expect(recorder.result).rejects.toBeInstanceOf(RecordingError)
+    expect(trackStops).toHaveBeenCalledTimes(2)
+  })
+
+  // The stream is live as soon as getUserMedia resolves, so a failure to build or start the
+  // recorder after that must still give the microphone back.
+  it('releases the microphone when the recorder cannot be created', async () => {
+    FakeRecorder.failOnConstruct = true
+    await expect(startRecording(opts())).rejects.toMatchObject({ reason: 'failed' })
+    expect(trackStops).toHaveBeenCalledTimes(2)
+  })
+
+  it('releases the microphone when the recorder cannot start', async () => {
+    FakeRecorder.failOnStart = true
+    await expect(startRecording(opts())).rejects.toMatchObject({ reason: 'failed' })
     expect(trackStops).toHaveBeenCalledTimes(2)
   })
 

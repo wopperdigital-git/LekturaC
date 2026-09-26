@@ -70,7 +70,16 @@ export async function startRecording(o: {
   }
 
   const release = () => stream.getTracks().forEach((track) => track.stop())
-  const recorder = new MediaRecorder(stream, { mimeType: o.mime })
+  // The stream is live from here, so anything that throws before recording is running (a
+  // format the constructor rejects although `isTypeSupported` said yes, a recorder that
+  // will not start) has to hand the microphone back itself: nothing else knows about it.
+  let recorder: MediaRecorder
+  try {
+    recorder = new MediaRecorder(stream, { mimeType: o.mime })
+  } catch {
+    release()
+    throw new RecordingError('The microphone could not be started.', 'failed')
+  }
   const chunks: Blob[] = []
   const startedAt = Date.now()
   let cancelled = false
@@ -97,7 +106,12 @@ export async function startRecording(o: {
     if (recorder.state !== 'inactive') recorder.stop()
   }
 
-  recorder.start()
+  try {
+    recorder.start()
+  } catch {
+    release()
+    throw new RecordingError('The microphone could not be started.', 'failed')
+  }
   timer = setInterval(() => {
     const seconds = (Date.now() - startedAt) / 1000
     o.onTick(seconds)

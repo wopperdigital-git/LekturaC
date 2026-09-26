@@ -3,8 +3,10 @@ import {
   MAX_NAME_LENGTH,
   MIN_CLIP_SECONDS,
   canClone,
+  canRecord,
   clipFileName,
   formatClock,
+  languageForClone,
   pickRecordingMime,
 } from './recording'
 
@@ -57,5 +59,42 @@ describe('clipFileName', () => {
     expect(clipFileName('audio/webm;codecs=opus')).toBe('voice.webm')
     expect(clipFileName('audio/ogg;codecs=opus')).toBe('voice.ogg')
     expect(clipFileName('')).toBe('voice.webm')
+  })
+})
+
+describe('canRecord', () => {
+  const ok = { ready: true, configured: true, supported: true, recState: 'idle' as const, cloning: false }
+
+  it('is true when everything is in order, and for a second take after a recording', () => {
+    expect(canRecord(ok)).toBe(true)
+    expect(canRecord({ ...ok, recState: 'recorded' })).toBe(true)
+  })
+
+  // A new recording started while a clone is in flight is orphaned when the clone finishes:
+  // the clone clears the recording state, the recorder keeps holding the microphone.
+  it('is false while a clone is in flight', () => {
+    expect(canRecord({ ...ok, cloning: true })).toBe(false)
+  })
+
+  it('is false while a recording is starting or running', () => {
+    expect(canRecord({ ...ok, recState: 'starting' })).toBe(false)
+    expect(canRecord({ ...ok, recState: 'recording' })).toBe(false)
+  })
+
+  it('is false before the voice has loaded, without a key, or where recording is unsupported', () => {
+    expect(canRecord({ ...ok, ready: false })).toBe(false)
+    expect(canRecord({ ...ok, configured: false })).toBe(false)
+    expect(canRecord({ ...ok, supported: false })).toBe(false)
+  })
+})
+
+describe('languageForClone', () => {
+  // The clip is in the language it was read in, whatever the language picker says now.
+  it('uses the language the clip was recorded in, not the one selected since', () => {
+    expect(languageForClone('en', 'es')).toBe('en')
+  })
+
+  it('falls back to the selected language when there is no record of one', () => {
+    expect(languageForClone(null, 'fr')).toBe('fr')
   })
 })

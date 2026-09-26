@@ -20,19 +20,29 @@ import {
   MIN_VOLUME,
   SPEED_STEP,
   VOLUME_STEP,
+  canSaveVoice,
   clampSpeed,
   clampVolume,
   isEmotion,
   type VoiceSettings,
   type VoiceSource,
 } from '@/voice/settingsRow'
-import { READING_SCRIPTS, VOICE_LANGUAGES, isVoiceLanguage, previewTranscript } from '@/voice/scripts'
+import {
+  READING_SCRIPTS,
+  VOICE_LANGUAGES,
+  isVoiceLanguage,
+  previewTranscript,
+  type VoiceLanguage,
+} from '@/voice/scripts'
 import {
   MAX_CLIP_SECONDS,
   MAX_NAME_LENGTH,
   MIN_CLIP_SECONDS,
   canClone,
+  canRecord,
   formatClock,
+  languageForClone,
+  type RecState,
 } from '@/voice/recording'
 import { RecordingError, recordingSupport, startRecording, type Recorder, type Recording } from '@/voice/recorder'
 
@@ -74,6 +84,9 @@ const SELECT =
 
 export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
   const warning = useVoiceStore((s) => s.warning)
+  // False after a failed read of the saved voice: what is on screen is then the defaults, not
+  // what is stored, and Save is off (see `canSaveVoice`). Reopening the modal tries the read again.
+  const savedVoiceKnown = useVoiceStore((s) => s.loaded)
   const saveError = useVoiceStore((s) => s.error)
   const saving = useVoiceStore((s) => s.status === 'saving')
   const configured = isCartesiaConfigured()
@@ -127,9 +140,11 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
 
   /* ---- recording ---- */
   const support = useMemo(() => recordingSupport(), [])
-  const [recState, setRecState] = useState<'idle' | 'starting' | 'recording' | 'recorded'>('idle')
+  const [recState, setRecState] = useState<RecState>('idle')
   const [seconds, setSeconds] = useState(0)
   const [clip, setClip] = useState<Recording | null>(null)
+  // The language the passage was read in, kept with the clip: the picker can move on afterwards.
+  const [clipLanguage, setClipLanguage] = useState<VoiceLanguage | null>(null)
   const [clipUrl, setClipUrl] = useState<string | null>(null)
   const [recError, setRecError] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -145,12 +160,14 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
     clipUrlRef.current = null
     setClipUrl(null)
     setClip(null)
+    setClipLanguage(null)
     setSeconds(0)
     setRecState('idle')
   }
 
   async function startRecord() {
-    if (!support.supported || recState === 'starting' || recState === 'recording') return
+    if (!support.supported || !canRecord({ ready, configured, supported: true, recState, cloning })) return
+    const startedIn = draft.language
     discardClip()
     setRecError(null)
     setRecState('starting')
@@ -170,6 +187,7 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
       clipUrlRef.current = url
       setClipUrl(url)
       setClip(recording)
+      setClipLanguage(startedIn)
       setSeconds(recording.seconds)
       setRecState('recorded')
     } catch (err) {
@@ -187,7 +205,12 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
     setCloning(true)
     setCloneError(null)
     try {
-      const voice = await cloneVoice({ clip: clip.blob, name, language: draft.language, signal: controller.signal })
+      const voice = await cloneVoice({
+        clip: clip.blob,
+        name,
+        language: languageForClone(clipLanguage, draft.language),
+        signal: controller.signal,
+      })
       if (controller.signal.aborted) return
       pick(voice, 'cloned')
       setRefresh((n) => n + 1)
@@ -365,7 +388,7 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
               <Button
                 variant="secondary"
                 onClick={() => void startRecord()}
-                disabled={disabledAll || !support.supported || recState === 'starting'}
+                disabled={!canRecord({ ready, configured, supported: support.supported, recState, cloning })}
                 aria-label="Record voice"
               >
                 {recState === 'recorded' ? 'Record again' : 'Record voice'}
@@ -378,6 +401,12 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
           </div>
           {!support.supported && <p className="text-xs text-app-muted">{support.message}</p>}
           {recError && <p className="text-xs text-red-600 dark:text-red-400">{recError}</p>}
+          {clip && clipLanguage !== null && clipLanguage !== draft.language && (
+            <p className="text-xs text-app-muted">
+              Recorded in {VOICE_LANGUAGES.find((l) => l.code === clipLanguage)?.label}; this clip will be cloned as{' '}
+              {VOICE_LANGUAGES.find((l) => l.code === clipLanguage)?.label}.
+            </p>
+          )}
           {clip && clip.seconds < MIN_CLIP_SECONDS && (
             <p className="text-xs text-app-highlight-text">
               That was too short: record at least {MIN_CLIP_SECONDS} seconds.
@@ -488,12 +517,21 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
           {previewError && <p className="text-xs text-red-600 dark:text-red-400">{previewError}</p>}
         </section>
 
+        {ready && !savedVoiceKnown && (
+          <p className="text-xs text-app-highlight-text">
+            Your saved voice could not be read, so saving is turned off. Close this and open it again to retry.
+          </p>
+        )}
         {saveError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{saveError}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => void saveAndClose()} disabled={disabledAll || saving}>
+          <Button
+            variant="primary"
+            onClick={() => void saveAndClose()}
+            disabled={!configured || !canSaveVoice({ ready, savedVoiceKnown, saving })}
+          >
             {saving ? <Spinner /> : null}
             Save voice
           </Button>

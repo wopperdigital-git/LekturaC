@@ -6,6 +6,7 @@ import {
   MAX_VOLUME,
   MIN_SPEED,
   MIN_VOLUME,
+  canSaveVoice,
   clampSpeed,
   clampVolume,
   rowFromSettings,
@@ -93,5 +94,21 @@ describe('settingsFromRow', () => {
   it('round-trips through rowFromSettings', () => {
     const settings = { ...DEFAULT_SETTINGS, voiceId: 'v9', voiceName: 'Me', voiceSource: 'cloned' as const, speed: 1.1 }
     expect(settingsFromRow(rowFromSettings(settings))).toEqual(settings)
+  })
+})
+
+describe('canSaveVoice', () => {
+  it('needs the modal ready and the saved voice known', () => {
+    expect(canSaveVoice({ ready: true, savedVoiceKnown: true, saving: false })).toBe(true)
+    expect(canSaveVoice({ ready: false, savedVoiceKnown: true, saving: false })).toBe(false)
+  })
+
+  it('refuses while a save is in flight', () => {
+    expect(canSaveVoice({ ready: true, savedVoiceKnown: true, saving: true })).toBe(false)
+  })
+
+  // A failed read leaves the defaults on screen; saving them would overwrite the stored voice.
+  it('refuses when the saved voice could not be read', () => {
+    expect(canSaveVoice({ ready: true, savedVoiceKnown: false, saving: false })).toBe(false)
   })
 })
