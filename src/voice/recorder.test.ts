@@ -10,7 +10,8 @@ import { RecordingError, recordingSupport, startRecording } from './recorder'
 
 class FakeRecorder {
   static instances: FakeRecorder[] = []
-  static isTypeSupported = (mime: string) => mime === 'audio/webm;codecs=opus'
+  // Annotated: inferred, it would be a type predicate and `() => false` could not replace it.
+  static isTypeSupported: (mime: string) => boolean = (mime) => mime === 'audio/webm;codecs=opus'
   state: 'inactive' | 'recording' = 'inactive'
   ondataavailable: ((e: { data: Blob }) => void) | null = null
   onstop: (() => void) | null = null
