@@ -27,11 +27,17 @@ describe('clampZoom', () => {
 
 describe('stepZoom', () => {
   it('moves by ten percent and does not drift over repeated steps', () => {
-    let zoom = DEFAULT_ZOOM
+    let zoom = 1
     for (let i = 0; i < 5; i++) zoom = stepZoom(zoom, 1)
     expect(zoom).toBe(1.5)
     for (let i = 0; i < 5; i++) zoom = stepZoom(zoom, -1)
     expect(zoom).toBe(1)
+  })
+
+  it('opens slightly zoomed out, and one step in reaches exactly 100%', () => {
+    expect(DEFAULT_ZOOM).toBeLessThan(1)
+    expect(DEFAULT_ZOOM).toBeGreaterThan(MIN_ZOOM)
+    expect(stepZoom(DEFAULT_ZOOM, 1)).toBe(1)
   })
 
   it('stops at either end', () => {

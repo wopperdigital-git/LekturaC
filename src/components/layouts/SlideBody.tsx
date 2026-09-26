@@ -1,12 +1,21 @@
 import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Card } from '@/engine/contentBlocks'
+import type { OverlayItem, Shape } from '@/engine/overlay'
 import { SelectionLayer } from '@/components/editor/SelectionLayer'
+import { GridOverlay } from '@/components/editor/GridOverlay'
+import { OverlayLayer } from '@/components/editor/OverlayLayer'
+import { DrawingSurface } from '@/components/editor/DrawingSurface'
+import { ShapeSelectionLayer } from '@/components/editor/ShapeSelectionLayer'
+import { DrawingContext } from '@/components/editor/drawingContext'
+import { useEditorGrid } from '@/components/editor/gridContext'
 import {
   BlockAdjustContext,
   BlockDataContext,
   CardBoxContext,
   SLIDE_BODY_ATTR,
 } from './adjustContext'
+
+const NO_FADING: ReadonlySet<string> = new Set()
 
 /**
  * The positioning context and coordinate space for one card's elements.
@@ -37,12 +46,29 @@ export function SlideBody({
    * editor, which is why this is a prop here rather than something the canvas
    * provides on its own.
    */
-  card: Pick<Card, 'adjusts' | 'inline'>
+  card: Pick<Card, 'adjusts' | 'inline' | 'overlay'>
   children: ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const adjusting = useContext(BlockAdjustContext)
+  const grid = useEditorGrid()
+  const drawing = useContext(DrawingContext)
+  // Which strokes the eraser is over right now; both ink layers draw them faded.
+  const [fading, setFading] = useState<ReadonlySet<string>>(NO_FADING)
+  // The selected shape mid-drag: drawn in place of its stored self so it tracks the pointer.
+  const [liveShape, setLiveShape] = useState<Shape | null>(null)
+  const withLive = (items: readonly OverlayItem[] | undefined) =>
+    liveShape && items ? items.map((item) => (item.id === liveShape.id ? liveShape : item)) : items
+
+  // The selected shape, looked up in whichever layer holds it. Only while shapes can be selected.
+  const selected = drawing?.selectable ? drawing.selectedShape : null
+  const selectedItem = selected
+    ? (selected.keep === 'slide' ? card.overlay : drawing?.temporaryOverlay)?.find(
+        (item) => item.id === selected.id,
+      )
+    : undefined
+  const selectedShape = selectedItem?.kind === 'shape' ? selectedItem : null
 
   useLayoutEffect(() => {
     const node = ref.current
@@ -59,6 +85,41 @@ export function SlideBody({
       <CardBoxContext.Provider value={{ width }}>
         <BlockDataContext.Provider value={{ adjusts: card.adjusts, inline: card.inline }}>
           {children}
+          {/* The editor's graph paper, in this same content-box space. Gated on
+              the interaction context so no other surface can ever show it. */}
+          {adjusting && grid.show && <GridOverlay contentWidth={width} />}
+          {/* Ink. What is part of the slide draws on every surface (it is on the
+              card); temporary ink only where the editor provides it. */}
+          <OverlayLayer
+            items={withLive(card.overlay)}
+            width={width}
+            fading={fading}
+            onPressItem={drawing?.selectable ? (id) => drawing.selectShape(id, 'slide') : undefined}
+          />
+          {drawing && (
+            <OverlayLayer
+              temporary
+              items={withLive(drawing.temporaryOverlay)}
+              width={width}
+              fading={fading}
+              onPressItem={drawing.selectable ? (id) => drawing.selectShape(id, 'temporary') : undefined}
+            />
+          )}
+          {/* Captures the drags of the pen, the eraser and the shape tool; only while one is active. */}
+          {(drawing?.settings || drawing?.shapeTool) && (
+            <DrawingSurface boxRef={ref} width={width} onFading={setFading} />
+          )}
+          {/* The box on the selected shape. */}
+          {drawing && selected && selectedShape && (
+            <ShapeSelectionLayer
+              shape={liveShape?.id === selectedShape.id ? liveShape : selectedShape}
+              width={width}
+              boxRef={ref}
+              onLive={setLiveShape}
+              onCommit={(next) => drawing.changeShape(next, selected.keep)}
+              onRemove={() => drawing.removeShape(selectedShape.id, selected.keep)}
+            />
+          )}
           {/* Only where something can be selected. The presenter view and the
               thumbnails render adjusted elements but draw no box around them. */}
           {adjusting && <SelectionLayer cardRef={ref} />}

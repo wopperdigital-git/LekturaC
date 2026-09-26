@@ -9,7 +9,11 @@
 
 export const MIN_ZOOM = 0.5
 export const MAX_ZOOM = 2
-export const DEFAULT_ZOOM = 1
+/**
+ * Opens a little zoomed out, so a card sits with breathing room on the canvas
+ * instead of filling it edge to edge. 100% is one step in, not the default.
+ */
+export const DEFAULT_ZOOM = 0.9
 
 /** What the toolbar's − and + move by. */
 export const ZOOM_STEP = 0.1

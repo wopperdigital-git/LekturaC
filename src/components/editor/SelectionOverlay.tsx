@@ -42,6 +42,7 @@ export function SelectionOverlay({
   frame,
   onChange,
   onCommit,
+  rotatable = true,
 }: {
   frame: Frame
   /*
@@ -50,13 +51,15 @@ export function SelectionOverlay({
     drag still undoes as one action — and the element tracks the cursor instead
     of jumping when the button is released.
   */
-  onChange: (next: Frame, kind: GestureKind) => void
+  onChange: (next: Frame, kind: GestureKind, handle?: Handle) => void
   /*
     Fired once when the pointer is released, so the value the gesture settled on
     can be persisted immediately instead of waiting out a debounce that exists
     only to absorb the moves.
   */
   onCommit: () => void
+  /** Whether to offer the rotate handle. Off for shapes, which do not rotate. */
+  rotatable?: boolean
 }) {
   const root = useRef<HTMLDivElement>(null)
   // The canvas may be zoomed. The pointer moves in screen pixels; the frame is in
@@ -81,7 +84,7 @@ export function SelectionOverlay({
 
   function beginResize(event: ReactPointerEvent, which: Handle) {
     const start = frame
-    begin(event, (dx, dy) => onChange(resizeFrame(start, which, dx, dy), 'resize'))
+    begin(event, (dx, dy) => onChange(resizeFrame(start, which, dx, dy), 'resize', which))
   }
 
   function beginRotate(event: ReactPointerEvent) {
@@ -163,6 +166,7 @@ export function SelectionOverlay({
       ))}
 
       {/* The stem joining the rotate handle to the box — decoration only. */}
+      {rotatable && (
       <div
         aria-hidden="true"
         className="absolute bg-app-accent"
@@ -173,6 +177,8 @@ export function SelectionOverlay({
           top: -ROTATE_ARM_PX,
         }}
       />
+      )}
+      {rotatable && (
       <div
         role="button"
         aria-label="Rotate element"
@@ -188,6 +194,7 @@ export function SelectionOverlay({
           cursor: 'grab',
         }}
       />
+      )}
 
       {HANDLES.map((which) => {
         const at = HANDLE_POSITION[which]

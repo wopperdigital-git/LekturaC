@@ -1,0 +1,16 @@
+-- Ink drawn over a slide with the pen and marker tools: a list of strokes,
+-- each a colour, a width and a path, in fractions of the card's content width
+-- (see src/engine/overlay.ts).
+--
+-- Defaults to '[]' so every existing row is valid immediately, and the app
+-- reads an empty list as "never drawn on".
+--
+-- Unlike `adjusts` (0006) and `narration` (0008), this column does NOT gate
+-- card writes: the app leaves it out of the upsert every card save goes
+-- through and writes it in its own update, best effort. A project that has not
+-- run this migration still saves and loads its decks normally; it only fails
+-- to store drawings, and says so.
+--
+-- RLS on `cards` already applies per row, so nothing new is needed. The
+-- 0007 trigger bumps the deck's updated_at on this update like any other.
+alter table cards add column if not exists overlay jsonb not null default '[]'::jsonb;

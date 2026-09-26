@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import { hasPanned, panScroll } from '@/lib/pan'
+import { isPanPress, type EditorTool } from '@/engine/editorTool'
 
 /** Set on the canvas while Ctrl is held (a drag would pan) and while one is under way. */
 export const PAN_READY_ATTR = 'data-pan-ready'
@@ -7,7 +8,9 @@ export const PANNING_ATTR = 'data-panning'
 
 /**
  * Ctrl + left-drag pans the canvas: grab the view and move it, which is how a
- * zoomed-in deck is got around without the scrollbars.
+ * zoomed-in deck is got around without the scrollbars. In the Move screen tool
+ * (`tool === 'pan'`) a plain left-drag pans too, and the grab cursor stays on
+ * whether or not Ctrl is held.
  *
  * Wired to the DOM directly, in the *capture* phase, and that is the point.
  * Everything inside the canvas listens for the same press — an element selects
@@ -25,7 +28,11 @@ export const PANNING_ATTR = 'data-panning'
  * The cursor is CSS, keyed off two attributes set here (`index.css`), so holding
  * Ctrl shows a grab hand over the whole canvas without a render per key.
  */
-export function useCanvasPan(ref: RefObject<HTMLElement | null>, enabled: boolean) {
+export function useCanvasPan(
+  ref: RefObject<HTMLElement | null>,
+  enabled: boolean,
+  tool: EditorTool = 'select',
+) {
   useEffect(() => {
     const node = ref.current
     if (!node || !enabled) return
@@ -35,8 +42,11 @@ export function useCanvasPan(ref: RefObject<HTMLElement | null>, enabled: boolea
     let moved = false
     let swallowClick = false
 
+    // Move screen keeps the hand showing; otherwise it is only there while Ctrl is.
+    const alwaysReady = tool === 'pan'
+
     function setReady(ready: boolean) {
-      canvas.toggleAttribute(PAN_READY_ATTR, ready)
+      canvas.toggleAttribute(PAN_READY_ATTR, ready || alwaysReady)
     }
 
     function onKey(e: KeyboardEvent) {
@@ -49,7 +59,7 @@ export function useCanvasPan(ref: RefObject<HTMLElement | null>, enabled: boolea
     }
 
     function onPointerDown(e: PointerEvent) {
-      if (e.button !== 0 || !e.ctrlKey) return
+      if (!isPanPress(e, tool)) return
 
       e.preventDefault()
       e.stopPropagation()
@@ -100,6 +110,7 @@ export function useCanvasPan(ref: RefObject<HTMLElement | null>, enabled: boolea
       if (start || e.ctrlKey) e.preventDefault()
     }
 
+    setReady(false)
     canvas.addEventListener('pointerdown', onPointerDown, true)
     canvas.addEventListener('click', onClick, true)
     canvas.addEventListener('contextmenu', onContextMenu, true)
@@ -116,8 +127,10 @@ export function useCanvasPan(ref: RefObject<HTMLElement | null>, enabled: boolea
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
-      setReady(false)
+      // Cleared outright (not via setReady): a tool change or unmount must not
+      // leave the hand cursor behind.
+      canvas.removeAttribute(PAN_READY_ATTR)
       canvas.removeAttribute(PANNING_ATTR)
     }
-  }, [ref, enabled])
+  }, [ref, enabled, tool])
 }

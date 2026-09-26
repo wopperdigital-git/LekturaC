@@ -1,10 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
+import { useAuthStore } from '@/store/authStore'
+import { appendItem, canAppendItem, eraseItems, replaceItem, type Shape, type Stroke } from '@/engine/overlay'
+import { DEFAULT_SHAPE_SETTINGS, type ShapeSettings } from '@/engine/shapes'
+import { DEFAULT_PEN_SETTINGS, type InkKeep, type PenSettings } from '@/engine/penSettings'
+import { browserStore, pruneTempInk, readTempInk, writeTempInk, type TempInk } from '@/lib/temporaryInk'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
 import { CardCanvas } from '@/components/editor/CardCanvas'
+import { EditorToolbar } from '@/components/editor/EditorToolbar'
+import { DEFAULT_TOOL, type EditorTool } from '@/engine/editorTool'
+import { DEFAULT_GRID, type EditorGrid } from '@/components/editor/gridContext'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { ToolsPanel } from '@/components/editor/ToolsPanel'
 import { previewFont } from '@/engine/fontPreview'
@@ -76,6 +84,39 @@ export function EditorPage() {
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   // How large the canvas is drawn. A view setting: not stored, not undoable.
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+  // The graph-paper grid: same kind of setting as zoom.
+  const [grid, setGrid] = useState<EditorGrid>(DEFAULT_GRID)
+  // The active tool: a view setting like zoom, not stored, not undoable.
+  const [tool, setTool] = useState<EditorTool>(DEFAULT_TOOL)
+  // What the pen draws with: view state like the tool, not stored, not undoable.
+  const [pen, setPen] = useState<PenSettings>(DEFAULT_PEN_SETTINGS)
+  // What the shape tool draws; its colour and destination are the pen's ("the ink").
+  const [shape, setShape] = useState<ShapeSettings>(DEFAULT_SHAPE_SETTINGS)
+  // A selected shape, kept apart from the element selection (a shape is not a block).
+  const [selectedShape, setSelectedShape] = useState<{ cardId: string; id: string; keep: InkKeep } | null>(null)
+  const userId = useAuthStore((state) => state.user?.id ?? null)
+  /*
+    Temporary ink for this deck, kept in this browser (see lib/temporaryInk.ts).
+    Loaded once the deck and the user are both known, by resetting state during
+    render when the (user, deck) scope changes — the documented alternative to an
+    effect that only copies external data into state. Never written to the
+    database, never in undo history.
+  */
+  const tempScope =
+    id && userId && store.presentationId === id && store.status !== 'loading' ? `${userId}:${id}` : null
+  const [temp, setTemp] = useState<{ scope: string | null; ink: TempInk }>({ scope: null, ink: {} })
+  if (temp.scope !== tempScope) {
+    setTemp({
+      scope: tempScope,
+      ink:
+        tempScope && id && userId
+          ? pruneTempInk(
+              readTempInk(browserStore(), userId, id),
+              cards.map((c) => c.id),
+            )
+          : {},
+    })
+  }
   const canvasRef = useRef<HTMLElement>(null)
   const previousZoom = useRef(DEFAULT_ZOOM)
   const { status: exportStatus, error: exportError, exportDeck } = useExportPptx()
@@ -101,8 +142,9 @@ export function EditorPage() {
     // The canvas only exists once the deck has loaded, hence the dependency.
   }, [store.status])
 
-  // Ctrl + drag grabs the canvas and moves it, for getting around once zoomed in.
-  useCanvasPan(canvasRef, store.status !== 'loading')
+  // Ctrl + drag grabs the canvas and moves it, for getting around once zoomed in;
+  // in the Move screen tool a plain drag does.
+  useCanvasPan(canvasRef, store.status !== 'loading', tool)
 
   // Keeps the middle of the view on the same content when the zoom changes; the
   // content grows or shrinks under a fixed scroll offset otherwise.
@@ -177,6 +219,7 @@ export function EditorPage() {
 
   /** Presses on a card's own surface, rather than on one of its elements. */
   function selectCard(cardId: string | null) {
+    setSelectedShape(null)
     apply(selectionAfterCardPress(cardId))
   }
 
@@ -187,6 +230,7 @@ export function EditorPage() {
     The rule itself lives in `engine/textScope.ts`; this only applies it.
   */
   function selectElement(cardId: string, index: number) {
+    setSelectedShape(null)
     const current: Selection = { cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }
     apply(selectionAfterElementPress(current, { cardId, blockIndex: index }))
     endEditOutside(index)
@@ -194,6 +238,7 @@ export function EditorPage() {
 
   // The same drill-in for one item of a list.
   function selectItem(cardId: string, blockIndex: number, itemIndex: number) {
+    setSelectedShape(null)
     const current: Selection = { cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }
     apply(selectionAfterItemPress(current, { cardId, blockIndex, itemIndex }))
     endEditOutside(blockIndex, itemIndex)
@@ -226,6 +271,108 @@ export function EditorPage() {
     setSelectedItemIndex(next.itemIndex)
   }
 
+  /*
+    Ink. A stroke or an erase arrives once, on release. "On slide" ink goes through
+    the store (one undo step, saved with the deck); temporary ink goes to this
+    browser's storage and nowhere else.
+  */
+  function changeTempInk(update: (ink: TempInk) => TempInk) {
+    if (!tempScope || !id || !userId) return
+    const next = update(temp.ink)
+    setTemp({ scope: tempScope, ink: next })
+    writeTempInk(browserStore(), userId, id, next)
+  }
+
+  function commitStroke(cardId: string, stroke: Stroke, keep: InkKeep) {
+    if (keep === 'slide') {
+      const card = usePresentationStore.getState().cards.find((c) => c.id === cardId)
+      if (card && canAppendItem(card.overlay)) store.setOverlay(cardId, appendItem(card.overlay, stroke))
+      return
+    }
+    changeTempInk((ink) =>
+      canAppendItem(ink[cardId]) ? { ...ink, [cardId]: appendItem(ink[cardId], stroke) } : ink,
+    )
+  }
+
+  function eraseInk(cardId: string, ids: string[], keep: InkKeep) {
+    if (keep === 'slide') {
+      const card = usePresentationStore.getState().cards.find((c) => c.id === cardId)
+      if (card) store.setOverlay(cardId, eraseItems(card.overlay, ids))
+      return
+    }
+    changeTempInk((ink) => {
+      const next = { ...ink }
+      const rest = eraseItems(ink[cardId], ids)
+      if (rest) next[cardId] = rest
+      else delete next[cardId]
+      return next
+    })
+  }
+
+  /*
+    Shapes. A drawn shape, or a moved or resized one, arrives once, on release. A
+    new shape hands the user back to Select elements with the shape picked, so it
+    can be nudged straight away.
+  */
+  function commitShape(cardId: string, shape: Shape, keep: InkKeep) {
+    if (keep === 'slide') {
+      const card = usePresentationStore.getState().cards.find((c) => c.id === cardId)
+      if (!card || !canAppendItem(card.overlay)) return
+      store.setOverlay(cardId, appendItem(card.overlay, shape))
+    } else {
+      changeTempInk((ink) =>
+        canAppendItem(ink[cardId]) ? { ...ink, [cardId]: appendItem(ink[cardId], shape) } : ink,
+      )
+    }
+    setTool('select')
+    apply(selectionAfterCardPress(cardId))
+    setSelectedShape({ cardId, id: shape.id, keep })
+  }
+
+  function changeShape(cardId: string, shape: Shape, keep: InkKeep) {
+    if (keep === 'slide') {
+      const card = usePresentationStore.getState().cards.find((c) => c.id === cardId)
+      if (card) store.setOverlay(cardId, replaceItem(card.overlay, shape))
+      return
+    }
+    changeTempInk((ink) => {
+      const replaced = replaceItem(ink[cardId], shape)
+      return replaced ? { ...ink, [cardId]: replaced } : ink
+    })
+  }
+
+  function removeShape(cardId: string, id: string, keep: InkKeep) {
+    eraseInk(cardId, [id], keep)
+    setSelectedShape(null)
+  }
+
+  // A press on a shape picks it (and its card, so the card-level tools follow it) and drops any element selection.
+  function selectShape(cardId: string, id: string, keep: InkKeep) {
+    apply(selectionAfterCardPress(cardId))
+    setActiveTextRef(null)
+    setTextRange(null)
+    setSelectedShape({ cardId, id, keep })
+  }
+
+  // A stale selection (the shape was undone away or erased) is treated as none, rather than cleared by an effect.
+  const activeShape =
+    selectedShape &&
+    (selectedShape.keep === 'slide'
+      ? cards.find((c) => c.id === selectedShape.cardId)?.overlay
+      : temp.ink[selectedShape.cardId]
+    )?.some((item) => item.id === selectedShape.id)
+      ? selectedShape
+      : null
+
+  // The slide the popover's "this slide" means: the one selected, else the one the outline is on.
+  const inkCardId = selectedCardId ?? activeCardId
+  const inkCard = cards.find((c) => c.id === inkCardId)
+  const inkFull = !canAppendItem(
+    pen.keep === 'slide' ? inkCard?.overlay : inkCardId ? temp.ink[inkCardId] : undefined,
+  )
+  // The pen's eraser can always erase; anything that adds ink is refused once the slide is full.
+  const inkAtLimit = pen.tool !== 'eraser' && inkFull
+
   function scrollToCard(cardId: string) {
     setActiveCardId(cardId)
     cardRefs.current.get(cardId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -244,7 +391,12 @@ export function EditorPage() {
     dialogOpen: false,
   })
   useEffect(() => {
-    selectionKeys.current = { remove: removeSelected, escape: stepOut, dialogOpen: addSlideOpen || quizOpen }
+    selectionKeys.current = {
+      remove: removeSelected,
+      // Escape leaves the pen before it steps the selection out.
+      escape: () => (tool === 'pen' || tool === 'shape' ? setTool('select') : stepOut()),
+      dialogOpen: addSlideOpen || quizOpen,
+    }
   })
 
   useEffect(() => {
@@ -307,6 +459,11 @@ export function EditorPage() {
   */
   function removeSelected(fromButton = false): boolean {
     if (!fromButton && (activeTextRef || addSlideOpen || quizOpen)) return false
+    // A selected shape is what Backspace removes while shapes are selectable.
+    if (activeShape && tool === 'select') {
+      removeShape(activeShape.cardId, activeShape.id, activeShape.keep)
+      return true
+    }
     const card = cards.find((c) => c.id === selectedCardId)
     if (!card || selectedBlockIndex === null) return false
 
@@ -333,6 +490,10 @@ export function EditorPage() {
   // One step back out: item to list, list to card.
   function stepOut() {
     if (activeTextRef || addSlideOpen || quizOpen) return
+    if (activeShape) {
+      setSelectedShape(null)
+      return
+    }
     apply(selectionAfterEscape({ cardId: selectedCardId, blockIndex: selectedBlockIndex, itemIndex: selectedItemIndex }))
   }
 
@@ -554,6 +715,13 @@ export function EditorPage() {
           server; reloading this page will lose them.
         </p>
       )}
+      {/* Ink is saved by its own best-effort update, so this is a warning, not the
+          "Not saved" error above: the deck itself is fine. */}
+      {store.overlayWarning && (
+        <p role="alert" className="bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          {store.overlayWarning}
+        </p>
+      )}
       {exportError && (
         <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           Export failed: {exportError}
@@ -615,8 +783,43 @@ export function EditorPage() {
           </button>
         </div>
 
+        {/* The canvas column. The floating toolbar is a sibling of the scroller,
+            not a child, so it neither scrolls away nor counts as the empty
+            canvas a press deselects on. `min-w-0` keeps a wide zoomed card from
+            stretching the flex row. */}
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          <EditorToolbar
+            canUndo={store.past.length > 0}
+            canRedo={store.future.length > 0}
+            onUndo={undo}
+            onRedo={redo}
+            tool={tool}
+            onToolChange={setTool}
+            onAddText={selectedCard ? addContent : undefined}
+            pen={{
+              settings: pen,
+              onChange: (patch) => setPen((current) => ({ ...current, ...patch })),
+              hasTemporaryHere: inkCardId !== null && (temp.ink[inkCardId]?.length ?? 0) > 0,
+              hasTemporary: Object.keys(temp.ink).length > 0,
+              onClearSlide: () =>
+                changeTempInk((ink) => {
+                  const next = { ...ink }
+                  if (inkCardId) delete next[inkCardId]
+                  return next
+                }),
+              onClearAll: () => changeTempInk(() => ({})),
+              atLimit: inkAtLimit,
+            }}
+            shapes={{
+              settings: shape,
+              onChange: (patch) => setShape((current) => ({ ...current, ...patch })),
+              ink: { color: pen.color, keep: pen.keep },
+              onInkChange: (patch) => setPen((current) => ({ ...current, ...patch })),
+              atLimit: inkFull,
+            }}
+          />
         {/* Transparent: the stage layer above is the background now. */}
-        <main ref={canvasRef} className="scrollbar-subtle relative flex-1 overflow-auto">
+        <main ref={canvasRef} className="scrollbar-subtle relative min-h-0 flex-1 overflow-auto">
           {cards.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-app-muted">
               <p>No slides yet.</p>
@@ -670,10 +873,26 @@ export function EditorPage() {
                 onRemoveSelected={() => void removeSelected(true)}
                 onAddItem={addListItem}
                 zoom={zoom}
+                grid={grid}
+                drawing={{
+                  settings: tool === 'pen' ? pen : null,
+                  shapeTool: tool === 'shape' ? { settings: shape, color: pen.color, keep: pen.keep } : null,
+                  temporary: temp.ink,
+                  // Shapes are only pressable while Select elements is the tool.
+                  selectable: tool === 'select',
+                  selectedShape: activeShape,
+                  onCommitStroke: commitStroke,
+                  onEraseItems: eraseInk,
+                  onSelectShape: selectShape,
+                  onCommitShape: commitShape,
+                  onChangeShape: changeShape,
+                  onRemoveShape: removeShape,
+                }}
               />
             </ThemeProvider>
           )}
         </main>
+        </div>
 
         {/* The tools dock. Mirrors the outline rail on the other side: floats on
             the stage, animates its width to 0 when collapsed, and is toggled by
@@ -703,10 +922,6 @@ export function EditorPage() {
               <ToolsPanel
                 level={level}
                 scopeLabel={scopeLabel}
-                canUndo={store.past.length > 0}
-                canRedo={store.future.length > 0}
-                onUndo={undo}
-                onRedo={redo}
                 presentHref={`/deck/${id}/present`}
                 // Read from the same scope it writes to, or the panel reports a
                 // state it is not editing.
@@ -767,6 +982,8 @@ export function EditorPage() {
                 theme={store.theme}
                 deckTextStyle={store.textStyle}
                 onThemeChange={store.setTheme}
+                grid={grid}
+                onGridChange={setGrid}
                 zoom={zoom}
                 onZoomChange={(next, direction) =>
                   setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))

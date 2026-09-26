@@ -1,8 +1,10 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { NO_ADJUST, type BlockAdjust } from '@/engine/blockAdjust'
-import type { Frame } from '@/engine/frame'
+import type { Frame, Handle } from '@/engine/frame'
 import { clampFrame } from '@/engine/frameGeometry'
+import { gridCell, snapMove, snapResize } from '@/engine/gridSnap'
+import { useEditorGrid } from './gridContext'
 import { BlockAdjustContext, BlockDataContext } from '@/components/layouts/adjustContext'
 import { currentFrame, measureAt, measureBlock, toAdjust, type Measured } from './measureBlock'
 import { SelectionOverlay, type GestureKind } from './SelectionOverlay'
@@ -57,15 +59,17 @@ export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement 
   }, [cardRef, selected])
 
   // Read inside the gesture callbacks, which outlive the render that made them.
-  const live = useRef({ measured, adjust, selected, adjusting })
-  live.current = { measured, adjust, selected, adjusting }
+  const grid = useEditorGrid()
+  const snapToGrid = grid.snap
+  const live = useRef({ measured, adjust, selected, adjusting, snapToGrid })
+  live.current = { measured, adjust, selected, adjusting, snapToGrid }
 
   // The last value a gesture produced, re-sent on release so the store can
   // persist it immediately. Cleared after, so releasing without having moved
   // writes nothing.
   const pending = useRef<BlockAdjust | null>(null)
 
-  const onChange = useCallback((next: Frame, kind: GestureKind) => {
+  const onChange = useCallback((next: Frame, kind: GestureKind, handle?: Handle) => {
     const state = live.current
     if (!state.measured || state.selected === null || !state.adjusting) return
     const { natural, card, node, cardNode } = state.measured
@@ -73,7 +77,15 @@ export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement 
     // Moves are held to the card so an element can hang off an edge but never
     // be dragged somewhere `overflow-hidden` makes it unreachable. A resize is
     // not clamped: that would move the anchor the user is holding fixed.
-    const placed = kind === 'move' ? clampFrame(next, card) : next
+    let placed = kind === 'move' ? clampFrame(next, card) : next
+
+    // Snap last, so what is stored is what the user sees on the grid. Rotation
+    // is never snapped here (shift already steps it).
+    if (state.snapToGrid) {
+      const cell = gridCell(card.w)
+      if (kind === 'move') placed = snapMove(placed, cell)
+      else if (kind === 'resize' && handle) placed = snapResize(placed, handle, cell)
+    }
 
     /*
       A resize has to ask the layout where it would put the element *at the new

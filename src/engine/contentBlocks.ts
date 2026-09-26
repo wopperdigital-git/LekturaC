@@ -3,6 +3,7 @@ import { textStyleSchema } from './textStyle'
 import { markSchema } from './marks'
 import { adjustsSchema } from './blockAdjust'
 import { narrationSchema } from './narration'
+import { overlaySchema } from './overlay'
 
 /**
  * Which of the theme's three heading sizes a heading is drawn at.
@@ -164,6 +165,16 @@ export const cardSchema = z.object({
     .pptx; it exists to be read aloud.
   */
   narration: narrationSchema.optional(),
+  /*
+    Ink drawn over the slide — see `engine/overlay.ts`.
+
+    Optional and absent by default. Unlike every field above it, this one is
+    deliberately **not** in `cardRow` (the upsert every card write goes through):
+    a missing column there breaks all card saves, as 0006 and 0008 did. It is
+    written by its own best-effort update instead, so an un-migrated project only
+    fails to save drawings.
+  */
+  overlay: overlaySchema.optional(),
 })
 
 export type Card = z.infer<typeof cardSchema>

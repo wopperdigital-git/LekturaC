@@ -17,6 +17,7 @@ import { setBlockFieldText, blockFieldText, parseTextRef } from '@/engine/blockT
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
+import { overlayChanged, parseOverlay, type OverlayItem } from '@/engine/overlay'
 import { roleLayoutHint } from '@/engine/roleLayout'
 import { sequenceFor, sequenceMismatch, type BlueprintId } from '@/ai/slideBlueprints'
 import { capScriptLength, isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
@@ -56,6 +57,13 @@ interface PresentationState {
   cards: Card[]
   status: 'idle' | 'loading' | 'saving' | 'error'
   errorMessage: string | null
+  /**
+   * Set when ink could not be saved, and only then. Kept apart from `status` /
+   * `errorMessage` on purpose: drawings are written by their own best-effort
+   * update (see `persistOverlay`), so failing to store them — say, on a project
+   * that has not run migration 0013 — must not read as "the deck did not save".
+   */
+  overlayWarning: string | null
   persisted: boolean
   past: DeckSnapshot[]
   future: DeckSnapshot[]
@@ -129,6 +137,12 @@ interface PresentationState {
     adjust: BlockAdjust,
     commit?: boolean,
   ) => void
+
+  /**
+   * Replaces a card's ink (`undefined` or an empty list clears it). One undo step
+   * per call, written immediately: a stroke is committed once, on release.
+   */
+  setOverlay: (cardId: string, overlay: OverlayItem[] | undefined) => void
 
   /** Level 3: replaces one run of a card's text, keeping its marks on the same characters. */
   setBlockText: (cardId: string, ref: string, nextText: string) => void
@@ -401,6 +415,48 @@ async function persistCardsSync(presentationId: string, previous: Card[], next: 
   }
 }
 
+/*
+  Ink is written on its own, never through `cardRow`.
+
+  `cardRow` is the upsert every card save goes through, so a column named there
+  must exist for *any* card to save — which is how 0006 and 0008 each broke every
+  save on a project that had not run them. Ink gets its own update instead, so a
+  missing `overlay` column costs drawings and nothing else. `overlayRow.test.ts`
+  pins that `cardRow` never names it.
+*/
+async function persistOverlay(cardId: string, overlay: OverlayItem[] | undefined) {
+  if (!supabaseConfigured || !supabase) return
+  await ensureSession()
+  const { error } = await supabase
+    .from('cards')
+    .update({ overlay: overlay ?? [] })
+    .eq('id', cardId)
+  if (error) throw error
+}
+
+/**
+ * The cards whose ink differs between two card lists — what has to be written
+ * after a snapshot restore. Undoing a card's deletion re-inserts its row through
+ * the plain upsert, which has no overlay column, so a card that *reappears* with
+ * ink is on this list too.
+ */
+export function overlaysToWrite(previous: Card[], next: Card[]): Card[] {
+  const before = new Map(previous.map((c) => [c.id, c]))
+  return next.filter((c) => overlayChanged(before.get(c.id)?.overlay, c.overlay))
+}
+
+/** Writes ink best-effort: a failure raises `overlayWarning`, never `status: 'error'`. */
+async function writeOverlays(set: StatusSetter, cards: Card[]) {
+  try {
+    for (const card of cards) await persistOverlay(card.id, card.overlay)
+    if (cards.length > 0) set({ overlayWarning: null })
+  } catch (err) {
+    set({
+      overlayWarning: `Drawings weren't saved — ${describeError(err)}. If it mentions the "overlay" column, run migration 0013 in Supabase.`,
+    })
+  }
+}
+
 /** A deck's content, with no store state attached. */
 export interface DeckContent {
   title: string
@@ -459,6 +515,7 @@ function cardFromRow(row: CardRow): Card {
     inline: converted.inline,
     adjusts: parseAdjusts(row.adjusts),
     narration: parseNarration(row.narration),
+    overlay: parseOverlay(row.overlay),
   }
 }
 
@@ -594,6 +651,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   cards: [],
   status: 'idle',
   errorMessage: null,
+  overlayWarning: null,
   persisted: supabaseConfigured,
   past: [],
   future: [],
@@ -815,7 +873,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     // one being left. Let it land before its cards are replaced.
     await flushScheduledSaves()
 
-    set({ status: 'loading', errorMessage: null })
+    set({ status: 'loading', errorMessage: null, overlayWarning: null })
     try {
       const deck = await fetchDeck(id)
       if (!deck) {
@@ -1111,6 +1169,18 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     )
   },
 
+  setOverlay(cardId, overlay) {
+    const card = get().cards.find((c) => c.id === cardId)
+    const next = overlay && overlay.length > 0 ? overlay : undefined
+    if (!card || !overlayChanged(card.overlay, next)) return
+
+    // No coalescing key: a stroke (or one sweep of the eraser) is committed once,
+    // on release, and is exactly one undo step.
+    pushHistory(set, get)
+    set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, overlay: next } : c)) })
+    if (get().presentationId) void writeOverlays(set, [{ ...card, overlay: next }])
+  },
+
   setBlockAdjust(cardId, blockIndex, adjust, commit) {
     const card = get().cards.find((c) => c.id === cardId)
     if (!card) return
@@ -1290,6 +1360,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     set({ ...restored, past: past.slice(0, -1), future: [current, ...future].slice(0, MAX_HISTORY) })
     if (presentationId) {
       void runSave(set, () => persistSnapshot(presentationId, cards, restored))
+      void writeOverlays(set, overlaysToWrite(cards, restored.cards))
     }
   },
 
@@ -1303,6 +1374,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     set({ ...restored, past: [...past, current].slice(-MAX_HISTORY), future: future.slice(1) })
     if (presentationId) {
       void runSave(set, () => persistSnapshot(presentationId, cards, restored))
+      void writeOverlays(set, overlaysToWrite(cards, restored.cards))
     }
   },
 

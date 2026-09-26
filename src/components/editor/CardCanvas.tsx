@@ -10,6 +10,8 @@ import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { listTarget } from '@/engine/listItems'
 import { TextEditingContext, type TextEditing } from '@/components/layouts/textEditingContext'
 import { ZoomFrame } from './ZoomFrame'
+import { EditorGridContext, DEFAULT_GRID, type EditorGrid } from './gridContext'
+import { DrawingContext, NO_DRAWING, type CanvasDrawing } from './drawingContext'
 
 /** The column's natural width: `max-w-5xl` (1024px) less the 24px of padding either side. */
 const COLUMN_MAX_WIDTH_PX = 976
@@ -43,6 +45,8 @@ export function CardCanvas({
   onRemoveSelected,
   onAddItem,
   zoom = 1,
+  grid = DEFAULT_GRID,
+  drawing = NO_DRAWING,
 }: {
   cards: Card[]
   cardRefs: RefObject<Map<string, HTMLDivElement>>
@@ -66,6 +70,10 @@ export function CardCanvas({
   onAddItem: (blockIndex: number) => void
   /** How large the cards are drawn, as a multiple of natural size. */
   zoom?: number
+  /** The graph-paper grid: whether it is drawn and whether dragging snaps to it. */
+  grid?: EditorGrid
+  /** Ink: the pen's settings, the temporary ink, and what a finished stroke or erase does. */
+  drawing?: CanvasDrawing
 }) {
   const sorted = [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
@@ -86,9 +94,10 @@ export function CardCanvas({
         of editing in the middle of making a selection.
     */
     <div className="min-h-full" onMouseDown={() => onSelectCard(null)}>
-      <div className="px-6 py-10">
+      <EditorGridContext.Provider value={grid}>
+      <div className="px-12 py-14">
         <ZoomFrame zoom={zoom} maxWidth={COLUMN_MAX_WIDTH_PX}>
-          <div className="flex flex-col gap-10">
+          <div className="flex flex-col gap-14">
             {sorted.map((card, index) => {
               const isSelected = card.id === selectedCardId
               /*
@@ -97,7 +106,9 @@ export function CardCanvas({
                 its own selection box takes over — both at once was two purple frames
                 around the same click.
               */
-              const showCardRing = isSelected && selectedBlockIndex === null
+              // Nor while a shape on it is picked: the shape's own box takes over, the same way.
+              const shapePicked = drawing.selectable && drawing.selectedShape?.cardId === card.id
+              const showCardRing = isSelected && selectedBlockIndex === null && !shapePicked
               const body = <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
 
               return (
@@ -129,6 +140,25 @@ export function CardCanvas({
                         lines up with element selection, which also needs the card
                         selected first — see `selectElement` in EditorPage.
                       */}
+                      <DrawingContext.Provider
+                        value={{
+                          settings: drawing.settings,
+                          shapeTool: drawing.shapeTool,
+                          storedOverlay: card.overlay,
+                          temporaryOverlay: drawing.temporary[card.id],
+                          commitStroke: (stroke, keep) => drawing.onCommitStroke(card.id, stroke, keep),
+                          eraseItems: (ids, keep) => drawing.onEraseItems(card.id, ids, keep),
+                          selectable: drawing.selectable,
+                          selectedShape:
+                            drawing.selectedShape?.cardId === card.id
+                              ? { id: drawing.selectedShape.id, keep: drawing.selectedShape.keep }
+                              : null,
+                          selectShape: (id, keep) => drawing.onSelectShape(card.id, id, keep),
+                          commitShape: (shape, keep) => drawing.onCommitShape(card.id, shape, keep),
+                          changeShape: (shape, keep) => drawing.onChangeShape(card.id, shape, keep),
+                          removeShape: (id, keep) => drawing.onRemoveShape(card.id, id, keep),
+                        }}
+                      >
                       <BlockAdjustContext.Provider
                         value={{
                           // Only the selected card can be showing a selection box.
@@ -156,6 +186,7 @@ export function CardCanvas({
                           <SlideBody card={card}>{body}</SlideBody>
                         )}
                       </BlockAdjustContext.Provider>
+                      </DrawingContext.Provider>
                     </SlideSurface>
                   </TextStyleScope>
                 </div>
@@ -164,6 +195,7 @@ export function CardCanvas({
           </div>
         </ZoomFrame>
       </div>
+      </EditorGridContext.Provider>
     </div>
   )
 }

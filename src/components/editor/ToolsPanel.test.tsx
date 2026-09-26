@@ -6,6 +6,7 @@ import type { TextStyle } from '@/engine/textStyle'
 import { layoutVarieties } from '@/engine/layoutEngine'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { ToolsPanel, type ToolbarLevel } from './ToolsPanel'
+import { DEFAULT_GRID, type EditorGrid } from './gridContext'
 
 /**
  * A render smoke test, and a deliberate exception to "pure logic only" for the
@@ -26,17 +27,18 @@ const card: Card = {
   visualStyle: 'structured',
 }
 
-function render(level: ToolbarLevel, withCard: boolean, textStyle: TextStyle = {}) {
+function render(
+  level: ToolbarLevel,
+  withCard: boolean,
+  textStyle: TextStyle = {},
+  grid: EditorGrid = DEFAULT_GRID,
+) {
   const noop = () => {}
   return renderToStaticMarkup(
     <MemoryRouter>
       <ToolsPanel
         level={level}
         scopeLabel="this slide"
-        canUndo
-        canRedo={false}
-        onUndo={noop}
-        onRedo={noop}
         presentHref="/deck/x/present"
         textStyle={textStyle}
         onTextStyleChange={noop}
@@ -57,6 +59,8 @@ function render(level: ToolbarLevel, withCard: boolean, textStyle: TextStyle = {
         theme={DEFAULT_THEME}
         deckTextStyle={{}}
         onThemeChange={noop}
+        grid={grid}
+        onGridChange={noop}
         zoom={1}
         onZoomChange={noop}
       />
@@ -68,11 +72,19 @@ describe('ToolsPanel', () => {
   // Modelled on Figma's Design tab: what is always there, and what depends on the
   // selection. Typography and Fill write to the narrowest thing selected, so they
   // are never absent; the theme is ambient.
-  it('always offers history, typography, fill and theme', () => {
+  it('always offers present, typography, fill and theme', () => {
     const html = render(1, false)
-    for (const text of ['Undo', 'Redo', 'Present', '>Design<', '>Typography<', '>Fill<', 'Theme']) {
+    for (const text of ['Present', '>Design<', '>Typography<', '>Fill<', 'Theme']) {
       expect(html).toContain(text)
     }
+  })
+
+  // History lives in the floating toolbar now; two places for it would be two
+  // ways to do one thing.
+  it('no longer carries undo and redo — the floating toolbar does', () => {
+    const html = render(1, false)
+    expect(html).not.toContain('aria-label="Undo"')
+    expect(html).not.toContain('aria-label="Redo"')
   })
 
   it('offers a specific size and a specific zoom, not only steppers', () => {
@@ -104,7 +116,8 @@ describe('ToolsPanel', () => {
     expect(at('>Layout<')).toBeLessThan(at('>Content<'))
     expect(at('>Content<')).toBeLessThan(at('>Typography<'))
     expect(at('>Typography<')).toBeLessThan(at('>Fill<'))
-    expect(at('>Fill<')).toBeLessThan(at('Theme</h3>'))
+    expect(at('>Fill<')).toBeLessThan(at('>Grid<'))
+    expect(at('>Grid<')).toBeLessThan(at('Theme</h3>'))
   })
 
   it('draws a picture of every layout the card can wear, plus Automatic', () => {
@@ -120,6 +133,26 @@ describe('ToolsPanel', () => {
   it('offers Remove fill only when a colour is set', () => {
     expect(render(1, false)).not.toContain('Remove fill')
     expect(render(1, false, { color: '#ef4444' })).toContain('Remove fill')
+  })
+
+  // The grid is a view setting like zoom, so it is offered whatever is selected.
+  // Snap is on by default and independent of Show: it works with the grid hidden.
+  it('always offers the grid, with snap on and the grid hidden by default', () => {
+    const html = render(1, false)
+    expect(html).toContain('>Grid<')
+    expect(html).toMatch(/aria-checked="false"[^>]*aria-label="Show grid"/)
+    expect(html).toMatch(/aria-checked="true"[^>]*aria-label="Snap to grid"/)
+    expect(render(2, true)).toContain('>Grid<')
+  })
+
+  it('lets snap be switched on or off whether or not the grid is shown', () => {
+    // `disabled=""` is the attribute; a bare `disabled` would also match the `disabled:` utility classes.
+    const disabled = /<button[^>]*aria-label="Snap to grid"[^>]*disabled=""/
+    expect(render(1, false, {}, { show: false, snap: true })).not.toMatch(disabled)
+    expect(render(1, false, {}, { show: false, snap: false })).not.toMatch(disabled)
+    expect(render(1, false, {}, { show: true, snap: false })).toMatch(
+      /aria-checked="false"[^>]*aria-label="Snap to grid"/,
+    )
   })
 
   // Adding an item moved onto the slide, as a plus under the list. Bringing the

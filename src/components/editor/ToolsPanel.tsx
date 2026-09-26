@@ -28,6 +28,7 @@ import { CONTENT_OPTIONS, type ContentType } from '@/engine/newContent'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeStrip } from '@/components/theme/ThemeStrip'
 import { SlidePreview } from './SlidePreview'
+import type { EditorGrid } from './gridContext'
 
 /*
   The editing tools, docked at the right of the canvas.
@@ -118,10 +119,6 @@ const FOCUS_RING =
 export function ToolsPanel({
   level,
   scopeLabel,
-  canUndo,
-  canRedo,
-  onUndo,
-  onRedo,
   presentHref,
   textStyle,
   onTextStyleChange,
@@ -137,16 +134,14 @@ export function ToolsPanel({
   theme,
   deckTextStyle,
   onThemeChange,
+  grid,
+  onGridChange,
   zoom,
   onZoomChange,
 }: {
   level: ToolbarLevel
   /** Plain words for what the text tools are writing to right now. */
   scopeLabel: string
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
   presentHref?: string
   textStyle: TextStyle
   onTextStyleChange: (patch: TextStylePatch) => void
@@ -173,6 +168,8 @@ export function ToolsPanel({
   theme: ThemeTokens
   deckTextStyle: TextStyle
   onThemeChange: (theme: ThemeTokens) => void
+  grid: EditorGrid
+  onGridChange: (grid: EditorGrid) => void
   zoom: number
   /** The requested zoom, or `null` with a direction to step it; the page clamps. */
   onZoomChange: (zoom: number | null, direction?: 1 | -1) => void
@@ -224,27 +221,22 @@ export function ToolsPanel({
       className="flex h-full flex-col overflow-hidden rounded-app border border-app-border bg-app-background shadow-app"
     >
       {/* What is not a property lives above the sections and never scrolls away:
-          history and Present, then the tab row with the zoom on its right. */}
+          Present, then the tab row with the zoom on its right. (History lives in
+          the floating toolbar over the canvas.) */}
       <div className="shrink-0">
-        <div className="flex items-center gap-0.5 px-2 pt-2">
-          <IconButton label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={onUndo}>
-            <UndoIcon />
-          </IconButton>
-          <IconButton label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={onRedo}>
-            <UndoIcon flip />
-          </IconButton>
-          {presentHref && (
-            // A link, not a button, because it navigates.
+        {presentHref && (
+          <div className="flex items-center justify-end px-2 pt-2">
+            {/* A link, not a button, because it navigates. */}
             <Link
               to={presentHref}
               title="Present this deck"
-              className={`ml-auto flex h-7 items-center gap-1.5 rounded-[5px] bg-app-accent px-2.5 text-[11px] font-semibold text-white transition-colors hover:brightness-110 ${FOCUS_RING}`}
+              className={`flex h-7 items-center gap-1.5 rounded-[5px] bg-app-accent px-2.5 text-[11px] font-semibold text-white transition-colors hover:brightness-110 ${FOCUS_RING}`}
             >
               <PlayIcon />
               Present
             </Link>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between border-b border-app-border px-3">
           {/* The one tab. Styled as the selected tab so the panel reads the way
@@ -416,6 +408,23 @@ export function ToolsPanel({
           <FillPicker value={activeColor} onChange={setColor} />
         </Section>
 
+        {/* A view setting like zoom: never stored, never in undo. Snap is on by
+            default and works with the lines hidden; Show only draws them. */}
+        <Section title="Grid">
+          <div className="flex flex-col gap-1.5">
+            <ToggleRow
+              label="Show grid"
+              pressed={grid.show}
+              onToggle={() => onGridChange({ ...grid, show: !grid.show })}
+            />
+            <ToggleRow
+              label="Snap to grid"
+              pressed={grid.snap}
+              onToggle={() => onGridChange({ ...grid, snap: !grid.snap })}
+            />
+          </div>
+        </Section>
+
         <Section title="Theme" icon={<BrushIcon />}>
           <ThemeStrip theme={theme} onSelect={onThemeChange} />
         </Section>
@@ -460,6 +469,45 @@ function Section({
       </div>
       {children && <div className="mt-1.5">{children}</div>}
     </section>
+  )
+}
+
+/**
+ * A labelled on/off switch, drawn as a filled row like the panel's fields. Refuses
+ * focus on mousedown like every other button here, so a run's caret survives.
+ */
+function ToggleRow({
+  label,
+  pressed,
+  disabled,
+  onToggle,
+}: {
+  label: string
+  pressed: boolean
+  disabled?: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={pressed}
+      aria-label={label}
+      disabled={disabled}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onToggle}
+      className={`${FIELD} w-full justify-between px-2 disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING}`}
+    >
+      <span>{label}</span>
+      <span
+        aria-hidden="true"
+        className={`relative h-3.5 w-6 rounded-full transition-colors ${pressed ? 'bg-app-accent' : 'bg-app-foreground/25'}`}
+      >
+        <span
+          className={`absolute top-0.5 size-2.5 rounded-full bg-white transition-[left] ${pressed ? 'left-3' : 'left-0.5'}`}
+        />
+      </span>
+    </button>
   )
 }
 
@@ -968,7 +1016,7 @@ function ContentSection({ onPick }: { onPick: (type: ContentType) => void }) {
 /* ---------------------------------------------------------------- atoms --- */
 
 /**
- * One icon button: the header's history and zoom steppers and a section's action.
+ * One icon button: the header's zoom steppers and a section's action.
  *
  * Icons sit at 90% of the foreground colour, which is the token that already
  * flips with the light/dark toggle — so they are always the near-opposite of the
@@ -1034,17 +1082,6 @@ function PlayIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-3">
       <path d="M6 4.2v11.6a.6.6 0 0 0 .92.5l9-5.8a.6.6 0 0 0 0-1l-9-5.8A.6.6 0 0 0 6 4.2Z" />
-    </svg>
-  )
-}
-
-/* One glyph for both directions — redo is the same arrow mirrored, which is how
-   every editor draws the pair and keeps them unmistakably a pair. */
-function UndoIcon({ flip }: { flip?: boolean }) {
-  return (
-    <svg {...strokeProps} style={flip ? { transform: 'scaleX(-1)' } : undefined}>
-      <path d="M4 9h8.5a3.5 3.5 0 0 1 0 7H8" />
-      <path d="M7 5.5 3.5 9 7 12.5" />
     </svg>
   )
 }
