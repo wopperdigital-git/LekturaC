@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { describeError, usePresentationStore } from '@/store/presentationStore'
 import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { narrationSlides } from '@/ai/narrationPrompt'
@@ -12,7 +12,8 @@ import {
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
 import { Button } from '@/components/ui/Button'
 import { GenerateScriptsModal } from '@/components/narrate/GenerateScriptsModal'
-import { ConfirmReplaceModal } from '@/components/narrate/ConfirmReplaceModal'
+import { CloneVoiceModal } from '@/components/voice/CloneVoiceModal'
+import { isCartesiaConfigured } from '@/voice/cartesia'
 import type { Card } from '@/engine/contentBlocks'
 
 const STATUS_LABEL: Record<NarrationStatus, string> = {
@@ -35,15 +36,16 @@ function currentSlideIds(): string[] {
 }
 
 /**
- * The Narration tab of the editor's right panel: one slide's spoken script, and the
- * two ways to generate. It writes for the slide the editor is on (`cardId`), so there
- * is no slide stepper here — the canvas beside it is the viewer.
+ * The Narration tab of the editor's right panel: one slide's spoken script, an AI icon
+ * that opens the slide picker, and a Clone voice button. It writes for the slide the
+ * editor is on (`cardId`), so there is no slide stepper here — the canvas beside it is
+ * the viewer.
  *
  * It owns everything the old narration page owned: the generation request and its
- * `AbortController`, the choose-slides dialog and the confirm-replace dialog. It
- * must stay mounted while the panel shows another tab (`ToolsPanel` keeps it
- * mounted, hidden), or switching tabs would abort a request the user only looked
- * away from.
+ * `AbortController`, and the choose-slides dialog (which asks before overwriting a
+ * hand-edited script). It must stay mounted while the panel shows another tab
+ * (`ToolsPanel` keeps it mounted, hidden), or switching tabs would abort a request the
+ * user only looked away from.
  *
  * `cards` must already be sorted by `orderIndex`.
  */
@@ -58,9 +60,7 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [choosing, setChoosing] = useState(false)
-  // The slide the confirm dialog was opened for, by id: a boolean would leave the dialog
-  // queued for whichever slide is selected next if that slide is deleted while it is open.
-  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [voiceOpen, setVoiceOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   // Cancelling has to stop the request, not just stop listening to it —
@@ -71,12 +71,11 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
 
   const index = cardId === null ? -1 : cards.findIndex((c) => c.id === cardId)
   const card = index >= 0 ? cards[index] : undefined
-  // Where the confirm dialog's slide is now; -1 once it is gone, which closes the dialog.
-  const confirmingIndex = confirmingId === null ? -1 : cards.findIndex((c) => c.id === confirmingId)
   const narration = card?.narration
   const text = narration?.text ?? ''
   const words = wordCount(text)
   const scriptStatus = narrationStatus(narration)
+  const voiceReady = isCartesiaConfigured()
 
   /**
    * Runs one generation over an explicit set of 0-based slide positions.
@@ -144,51 +143,26 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-app-border px-3 py-2.5">
-        {generating ? (
-          <>
-            <Button variant="secondary" onClick={() => abortRef.current?.abort()} className="w-full">
-              Cancel
-            </Button>
-            <p className="mt-2 text-xs text-app-muted">Writing narration…</p>
-          </>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="secondary"
-              // One slide is just a one-element target set — same path, same
-              // guarantees. The confirm is the same one the dialog uses: a
-              // narrower action must not be the one that destroys hand-written
-              // words silently.
-              onClick={() => {
-                if (!card) return
-                if (narrationStatus(card.narration) === 'edited') setConfirmingId(card.id)
-                else void runGeneration(new Set([index]))
-              }}
-              disabled={!card}
-              className="w-full"
-              title="Write a script for the selected slide"
-            >
-              Generate script for this slide only
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => setChoosing(true)}
-              disabled={cards.length === 0}
-              className="w-full"
-              title="Choose which slides to write"
-            >
-              Generate scripts for all slides
-            </Button>
-          </div>
-        )}
-        {shownError && (
-          <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{shownError}</p>
-        )}
-      </div>
+      {(generating || shownError) && (
+        <div className="border-b border-app-border px-3 py-2.5">
+          {generating && (
+            <>
+              <Button variant="secondary" onClick={() => abortRef.current?.abort()} className="w-full">
+                Cancel
+              </Button>
+              <p className="mt-2 text-xs text-app-muted">Writing narration…</p>
+            </>
+          )}
+          {shownError && (
+            <p className={`text-xs font-medium text-red-600 dark:text-red-400 ${generating ? 'mt-2' : ''}`}>
+              {shownError}
+            </p>
+          )}
+        </div>
+      )}
 
       {card ? (
-        <div className="flex min-h-0 flex-1 flex-col px-3 py-2.5">
+        <div className="flex min-h-0 flex-1 flex-col px-3 pt-2.5">
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
             <h2 className="text-[11px] font-semibold text-app-foreground">Slide {index + 1} script</h2>
             {isResettable(narration) && (
@@ -218,22 +192,34 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
           </p>
         </div>
       ) : (
-        <p className="px-3 py-4 text-xs text-app-muted">
+        <p className="min-h-0 flex-1 px-3 py-4 text-xs text-app-muted">
           {cards.length === 0 ? 'This deck has no slides yet.' : 'Select a slide to write its script.'}
         </p>
       )}
 
-      {confirmingIndex >= 0 && (
-        <ConfirmReplaceModal
-          slides={[confirmingIndex + 1]}
-          onBack={() => setConfirmingId(null)}
-          onClose={() => setConfirmingId(null)}
-          onConfirm={() => {
-            setConfirmingId(null)
-            void runGeneration(new Set([confirmingIndex]))
-          }}
-        />
-      )}
+      {/* The AI icon on the left and Clone voice on the right, under the script box. Neither
+          depends on the selected slide: the icon opens a picker over the whole deck, and the
+          voice belongs to the user. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-app-border px-3 py-2">
+        <FooterButton
+          label="Generate scripts with AI"
+          title="Write scripts with AI"
+          disabled={generating || cards.length === 0}
+          onClick={() => setChoosing(true)}
+          icon
+        >
+          <SparkleIcon />
+        </FooterButton>
+        <FooterButton
+          label="Clone voice"
+          title={voiceReady ? 'Set up a narration voice' : 'Add VITE_CARTESIA_API_KEY to enable voice cloning'}
+          disabled={!voiceReady}
+          onClick={() => setVoiceOpen(true)}
+        >
+          <MicIcon />
+          Clone voice
+        </FooterButton>
+      </div>
 
       {choosing && (
         <GenerateScriptsModal
@@ -245,6 +231,59 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
           }}
         />
       )}
+
+      {voiceOpen && <CloneVoiceModal onClose={() => setVoiceOpen(false)} />}
     </div>
+  )
+}
+
+/** A footer button in the panel's own style. Refuses focus on mousedown, like every button in the panel. */
+function FooterButton({
+  label,
+  title,
+  disabled,
+  onClick,
+  icon = false,
+  children,
+}: {
+  label: string
+  title: string
+  disabled: boolean
+  onClick: () => void
+  icon?: boolean
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      disabled={disabled}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className={`flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-[5px] bg-app-foreground/[0.06] text-[11px] font-semibold text-app-foreground transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-40 ${
+        icon ? 'size-7' : 'px-2.5'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M6.5 1.5 7.6 5a2 2 0 0 0 1.4 1.4l3.5 1.1-3.5 1.1A2 2 0 0 0 7.6 10L6.5 13.5 5.4 10a2 2 0 0 0-1.4-1.4L.5 7.5 4 6.4A2 2 0 0 0 5.4 5l1.1-3.5Z" />
+      <path d="M12.5 1 13 2.5a1 1 0 0 0 .5.5l1.5.5-1.5.5a1 1 0 0 0-.5.5L12.5 6 12 4.5a1 1 0 0 0-.5-.5L10 3.5l1.5-.5a1 1 0 0 0 .5-.5L12.5 1Z" />
+    </svg>
+  )
+}
+
+function MicIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <rect x="5.5" y="1.5" width="5" height="8" rx="2.5" />
+      <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15" />
+    </svg>
   )
 }
