@@ -55,7 +55,7 @@ import type { EditorGrid } from './gridContext'
     caption above each field. Every icon-only control carries a tooltip naming
     it, with its shortcut where it has one.
   - **The header holds what is not a property:** undo/redo and Present, then a
-    "Design" tab row with the zoom on the right, where Figma keeps its zoom.
+    "Design / Narration" tab row with the zoom on the right, where Figma keeps its zoom.
 
   Deliberately app chrome, not deck theme: it follows the light/dark toggle and
   uses `app-*` tokens, because it is a tool sitting beside the deck rather than
@@ -71,6 +71,9 @@ import type { EditorGrid } from './gridContext'
 */
 
 export type ToolbarLevel = 1 | 2 | 3
+
+/** Which body of the panel is showing. View state: not stored, not undoable. */
+export type PanelTab = 'design' | 'narration'
 
 const LAYOUT_LABELS: Record<Exclude<LayoutType, 'auto'>, string> = {
   hero: 'Hero',
@@ -138,6 +141,9 @@ export function ToolsPanel({
   onGridChange,
   zoom,
   onZoomChange,
+  tab = 'design',
+  onTabChange,
+  narrationTab,
 }: {
   level: ToolbarLevel
   /** Plain words for what the text tools are writing to right now. */
@@ -173,6 +179,15 @@ export function ToolsPanel({
   zoom: number
   /** The requested zoom, or `null` with a direction to step it; the page clamps. */
   onZoomChange: (zoom: number | null, direction?: 1 | -1) => void
+  /** Which tab is showing. Defaults to Design. */
+  tab?: PanelTab
+  onTabChange?: (tab: PanelTab) => void
+  /**
+   * The Narration tab's body. Supplied by the page so this panel knows nothing about
+   * narration, and mounted even while hidden: unmounting it on a tab switch would
+   * abort a generation in flight. With none, there is no Narration tab.
+   */
+  narrationTab?: ReactNode
 }) {
   /*
     Font, size and colour act on the narrowest thing selected. With characters
@@ -217,7 +232,7 @@ export function ToolsPanel({
   return (
     <div
       role="region"
-      aria-label="Design"
+      aria-label="Tools"
       className="flex h-full flex-col overflow-hidden rounded-app border border-app-border bg-app-background shadow-app"
     >
       {/* What is not a property lives above the sections and never scrolls away:
@@ -239,11 +254,38 @@ export function ToolsPanel({
         )}
 
         <div className="flex items-center justify-between border-b border-app-border px-3">
-          {/* The one tab. Styled as the selected tab so the panel reads the way
-              Figma's does; there is no second tab to switch to. */}
-          <span className="-mb-px flex h-9 items-center border-b-2 border-app-foreground text-[11px] font-semibold text-app-foreground">
-            Design
-          </span>
+          <div
+            role="tablist"
+            aria-label="Panel"
+            className="flex items-center gap-3"
+            onKeyDown={(e) => {
+              // Two tabs, so either arrow just goes to the other one.
+              if (!narrationTab || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
+              e.preventDefault()
+              const next: PanelTab = tab === 'design' ? 'narration' : 'design'
+              onTabChange?.(next)
+              document.getElementById(`tools-tab-${next}`)?.focus()
+            }}
+          >
+            <TabButton
+              id="tools-tab-design"
+              panelId="tools-panel-design"
+              selected={tab === 'design'}
+              onSelect={() => onTabChange?.('design')}
+            >
+              Design
+            </TabButton>
+            {narrationTab && (
+              <TabButton
+                id="tools-tab-narration"
+                panelId="tools-panel-narration"
+                selected={tab === 'narration'}
+                onSelect={() => onTabChange?.('narration')}
+              >
+                Narration
+              </TabButton>
+            )}
+          </div>
           <div className="flex items-center gap-0.5">
             <IconButton
               small
@@ -275,7 +317,14 @@ export function ToolsPanel({
         </div>
       </div>
 
-      <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
+      {/* No `display` utility on this element: it would override `hidden`. */}
+      <div
+        role="tabpanel"
+        id="tools-panel-design"
+        aria-labelledby="tools-tab-design"
+        hidden={tab !== 'design'}
+        className="scrollbar-none min-h-0 flex-1 overflow-y-auto"
+      >
         {layout && (
           <Section title="Layout" meta={layout.kind ? cardKindLabel(layout.kind) : undefined}>
             <LayoutStrip layout={layout} theme={theme} deckTextStyle={deckTextStyle} />
@@ -429,7 +478,55 @@ export function ToolsPanel({
           <ThemeStrip theme={theme} onSelect={onThemeChange} />
         </Section>
       </div>
+
+      {narrationTab && (
+        <div
+          role="tabpanel"
+          id="tools-panel-narration"
+          aria-labelledby="tools-tab-narration"
+          hidden={tab !== 'narration'}
+          className="min-h-0 flex-1 overflow-hidden"
+        >
+          {narrationTab}
+        </div>
+      )}
     </div>
+  )
+}
+
+/** One tab in the header row: the selected one carries the underline. Never takes focus from a run. */
+function TabButton({
+  id,
+  panelId,
+  selected,
+  onSelect,
+  children,
+}: {
+  id: string
+  panelId: string
+  selected: boolean
+  onSelect: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      id={id}
+      aria-selected={selected}
+      aria-controls={panelId}
+      tabIndex={selected ? 0 : -1}
+      // Never take focus — see the note at the top of the file.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onSelect}
+      className={`-mb-px flex h-9 cursor-pointer items-center border-b-2 text-[11px] font-semibold transition-colors ${FOCUS_RING} ${
+        selected
+          ? 'border-app-foreground text-app-foreground'
+          : 'border-transparent text-app-muted hover:text-app-foreground'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

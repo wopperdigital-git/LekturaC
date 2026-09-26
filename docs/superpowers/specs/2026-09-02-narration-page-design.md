@@ -1,5 +1,7 @@
 # Narration page — design
 
+> **Superseded in part (2026-09-26):** the page and its slide viewer no longer exist; narration is a tab in the editor's right panel — see `2026-09-26-narration-tab-design.md`. The data rules below (script shape, statuses, merge, token budgets) still apply.
+
 **Date:** 2026-09-02
 **Status:** approved, not yet implemented
 

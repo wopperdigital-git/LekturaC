@@ -14,7 +14,9 @@ import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import { DEFAULT_TOOL, type EditorTool } from '@/engine/editorTool'
 import { DEFAULT_GRID, type EditorGrid } from '@/components/editor/gridContext'
 import { SlideStage } from '@/components/theme/SlideStage'
-import { ToolsPanel } from '@/components/editor/ToolsPanel'
+import { ToolsPanel, type PanelTab } from '@/components/editor/ToolsPanel'
+import { NarrationTab } from '@/components/editor/NarrationTab'
+import { modalIsOpen } from '@/lib/modalOpen'
 import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
@@ -86,6 +88,8 @@ export function EditorPage() {
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
   // The graph-paper grid: same kind of setting as zoom.
   const [grid, setGrid] = useState<EditorGrid>(DEFAULT_GRID)
+  // Which tab the right panel shows. View state like zoom and grid: not stored, not undoable.
+  const [panelTab, setPanelTab] = useState<PanelTab>('design')
   // The active tool: a view setting like zoom, not stored, not undoable.
   const [tool, setTool] = useState<EditorTool>(DEFAULT_TOOL)
   // What the pen draws with: view state like the tool, not stored, not undoable.
@@ -406,6 +410,10 @@ export function EditorPage() {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
         return
       }
+      // Any open dialog owns the keyboard — including the narration ones, which open from
+      // inside the panel and are not among this page's own dialog flags. The dialog closes
+      // itself on Escape with its own listener; nothing here should act behind it.
+      if (modalIsOpen()) return
       /*
         No exception for a live run of text, and that is deliberate.
 
@@ -685,7 +693,6 @@ export function EditorPage() {
       <TopBar
         title={store.title}
         onTitleChange={store.setTitle}
-        presentationId={id}
         saveStatus={store.status}
         canExport={cards.length > 0}
         onQuiz={() => setQuizOpen(true)}
@@ -988,6 +995,11 @@ export function EditorPage() {
                 onZoomChange={(next, direction) =>
                   setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
                 }
+                tab={panelTab}
+                onTabChange={setPanelTab}
+                // The slide the editor is on: the selected one, else the outline's active
+                // one (the same rule the pen uses). No stepper — the canvas is the viewer.
+                narrationTab={<NarrationTab cards={sortedCards} cardId={selectedCardId ?? activeCardId} />}
               />
             </div>
           </aside>

@@ -137,3 +137,29 @@ export function mergeNarration<T extends { narration?: Narration }>(
     return { ...card, narration: { text, generated: text } }
   })
 }
+
+/**
+ * Are these the same slides in the same order?
+ *
+ * A generation's targets are *positions* in the sorted deck, and the editor stays
+ * live while one runs. If a slide was added, deleted or moved in the meantime,
+ * position N is a different slide than the one the model was asked about, and
+ * applying the result would write a script onto a slide the user never selected.
+ * The caller compares the slide ids it started with against the ids now, and
+ * applies nothing if they differ.
+ */
+export function sameSlides(before: readonly string[], after: readonly string[]): boolean {
+  return before.length === after.length && before.every((id, i) => id === after[i])
+}
+
+/**
+ * Can a generation run for these positions in a deck of `count` slides?
+ *
+ * The set has to be non-empty and every position has to name a real slide. A position
+ * can go stale between the click and the run — an undo behind an open confirm dialog can
+ * remove the slide it was opened for — and a request for slide -1 is a provider call
+ * (billed on the Anthropic link) that could only ever write nothing.
+ */
+export function hasValidTargets(targets: ReadonlySet<number>, count: number): boolean {
+  return targets.size > 0 && [...targets].every((i) => Number.isInteger(i) && i >= 0 && i < count)
+}

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   capScriptLength,
+  hasValidTargets,
   isRegenerable,
   isResettable,
   mergeNarration,
   narrationStatus,
   parseNarration,
+  sameSlides,
   type Narration,
 } from './narration'
 
@@ -217,5 +219,55 @@ describe('mergeNarration', () => {
     const input = cards()
     const out = mergeNarration(input, [{ slide: 1, text: 'Fresh.' }], all)
     expect(out[0]).not.toBe(input[0])
+  })
+})
+
+describe('sameSlides', () => {
+  it('is true for the same ids in the same order', () => {
+    expect(sameSlides(['a', 'b', 'c'], ['a', 'b', 'c'])).toBe(true)
+  })
+
+  it('is true for two empty decks', () => {
+    expect(sameSlides([], [])).toBe(true)
+  })
+
+  // A generation's targets are positions, so a deleted slide shifts every later script onto the wrong card.
+  it('is false when a slide was removed', () => {
+    expect(sameSlides(['a', 'b', 'c'], ['a', 'c'])).toBe(false)
+  })
+
+  it('is false when a slide was added', () => {
+    expect(sameSlides(['a', 'b'], ['a', 'b', 'c'])).toBe(false)
+  })
+
+  it('is false when slides were reordered', () => {
+    expect(sameSlides(['a', 'b', 'c'], ['a', 'c', 'b'])).toBe(false)
+  })
+
+  it('is false when one slide was swapped for another of the same count', () => {
+    expect(sameSlides(['a', 'b'], ['a', 'z'])).toBe(false)
+  })
+})
+
+describe('hasValidTargets', () => {
+  it('accepts a non-empty set of positions inside the deck', () => {
+    expect(hasValidTargets(new Set([0, 2]), 3)).toBe(true)
+  })
+
+  it('rejects an empty set', () => {
+    expect(hasValidTargets(new Set(), 3)).toBe(false)
+  })
+
+  // An undo behind a confirm dialog can remove the slide it was opened for, leaving index -1.
+  it('rejects a position before the first slide', () => {
+    expect(hasValidTargets(new Set([-1]), 3)).toBe(false)
+  })
+
+  it('rejects a position past the last slide', () => {
+    expect(hasValidTargets(new Set([0, 3]), 3)).toBe(false)
+  })
+
+  it('rejects any position when the deck is empty', () => {
+    expect(hasValidTargets(new Set([0]), 0)).toBe(false)
   })
 })
