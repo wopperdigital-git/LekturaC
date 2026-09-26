@@ -16,6 +16,7 @@ import { DEFAULT_GRID, type EditorGrid } from '@/components/editor/gridContext'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { ToolsPanel, type PanelTab } from '@/components/editor/ToolsPanel'
 import { NarrationTab } from '@/components/editor/NarrationTab'
+import { modalIsOpen } from '@/lib/modalOpen'
 import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
@@ -409,6 +410,10 @@ export function EditorPage() {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
         return
       }
+      // Any open dialog owns the keyboard — including the narration ones, which open from
+      // inside the panel and are not among this page's own dialog flags. The dialog closes
+      // itself on Escape with its own listener; nothing here should act behind it.
+      if (modalIsOpen()) return
       /*
         No exception for a live run of text, and that is deliberate.
 

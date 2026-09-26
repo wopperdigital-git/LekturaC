@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { describeError, usePresentationStore } from '@/store/presentationStore'
 import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { narrationSlides } from '@/ai/narrationPrompt'
-import { isResettable, narrationStatus, sameSlides, type NarrationStatus } from '@/engine/narration'
+import {
+  hasValidTargets,
+  isResettable,
+  narrationStatus,
+  sameSlides,
+  type NarrationStatus,
+} from '@/engine/narration'
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
 import { Button } from '@/components/ui/Button'
 import { GenerateScriptsModal } from '@/components/narrate/GenerateScriptsModal'
@@ -52,7 +58,9 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [choosing, setChoosing] = useState(false)
-  const [confirmingOne, setConfirmingOne] = useState(false)
+  // The slide the confirm dialog was opened for, by id: a boolean would leave the dialog
+  // queued for whichever slide is selected next if that slide is deleted while it is open.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   // Cancelling has to stop the request, not just stop listening to it —
@@ -63,6 +71,8 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
 
   const index = cardId === null ? -1 : cards.findIndex((c) => c.id === cardId)
   const card = index >= 0 ? cards[index] : undefined
+  // Where the confirm dialog's slide is now; -1 once it is gone, which closes the dialog.
+  const confirmingIndex = confirmingId === null ? -1 : cards.findIndex((c) => c.id === confirmingId)
   const narration = card?.narration
   const text = narration?.text ?? ''
   const words = wordCount(text)
@@ -83,7 +93,8 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
    * slide the model was asked about, so nothing is applied (see `sameSlides`).
    */
   async function runGeneration(targets: Set<number>) {
-    if (targets.size === 0) return
+    // A position can go stale between the click and here (an undo behind an open dialog).
+    if (!hasValidTargets(targets, cards.length)) return
     if (PROVIDER_CHAIN.length === 0) {
       setError(
         'No AI provider is configured. Add VITE_ANTHROPIC_API_KEY, VITE_GROQ_API_KEY, or VITE_GEMINI_API_KEY to your .env file.',
@@ -151,7 +162,7 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
               // words silently.
               onClick={() => {
                 if (!card) return
-                if (narrationStatus(card.narration) === 'edited') setConfirmingOne(true)
+                if (narrationStatus(card.narration) === 'edited') setConfirmingId(card.id)
                 else void runGeneration(new Set([index]))
               }}
               disabled={!card}
@@ -212,14 +223,14 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
         </p>
       )}
 
-      {confirmingOne && (
+      {confirmingIndex >= 0 && (
         <ConfirmReplaceModal
-          slides={[index + 1]}
-          onBack={() => setConfirmingOne(false)}
-          onClose={() => setConfirmingOne(false)}
+          slides={[confirmingIndex + 1]}
+          onBack={() => setConfirmingId(null)}
+          onClose={() => setConfirmingId(null)}
           onConfirm={() => {
-            setConfirmingOne(false)
-            void runGeneration(new Set([index]))
+            setConfirmingId(null)
+            void runGeneration(new Set([confirmingIndex]))
           }}
         />
       )}

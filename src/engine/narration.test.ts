@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   capScriptLength,
+  hasValidTargets,
   isRegenerable,
   isResettable,
   mergeNarration,
@@ -245,5 +246,28 @@ describe('sameSlides', () => {
 
   it('is false when one slide was swapped for another of the same count', () => {
     expect(sameSlides(['a', 'b'], ['a', 'z'])).toBe(false)
+  })
+})
+
+describe('hasValidTargets', () => {
+  it('accepts a non-empty set of positions inside the deck', () => {
+    expect(hasValidTargets(new Set([0, 2]), 3)).toBe(true)
+  })
+
+  it('rejects an empty set', () => {
+    expect(hasValidTargets(new Set(), 3)).toBe(false)
+  })
+
+  // An undo behind a confirm dialog can remove the slide it was opened for, leaving index -1.
+  it('rejects a position before the first slide', () => {
+    expect(hasValidTargets(new Set([-1]), 3)).toBe(false)
+  })
+
+  it('rejects a position past the last slide', () => {
+    expect(hasValidTargets(new Set([0, 3]), 3)).toBe(false)
+  })
+
+  it('rejects any position when the deck is empty', () => {
+    expect(hasValidTargets(new Set([0]), 0)).toBe(false)
   })
 })
