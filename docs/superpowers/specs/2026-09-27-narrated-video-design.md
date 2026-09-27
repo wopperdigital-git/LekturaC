@@ -87,22 +87,33 @@ Pure modules first; the DOM and WebCodecs sit behind small interfaces so the pip
    `SlideBody` + `LayoutRenderer` (the `SlidePreview` composition, at a fixed 1280px width, no
    16:9 crop), measured, then scaled to fit the frame height when taller than 16:9 and centred.
    `await document.fonts.ready` first. Rasterized with `html-to-image` `toCanvas` into one canvas.
+   The app loads **no web fonts** (no `@font-face` or font `<link>` anywhere; the theme fonts are
+   system stacks), so `toCanvas` runs with `skipFonts: true`: nothing needs embedding and it avoids
+   re-scanning stylesheets for every slide. **Slides are drawn only while the tab is visible**:
+   the slide's own measuring (`SlideBody`'s `ResizeObserver`) is part of the browser's rendering
+   steps, which do not run in a background tab, so a slide drawn there would lose its element nudges
+   and ink. `renderFrame` waits for `visibilitychange` before each slide, and the modal tells the
+   user to keep the tab in the foreground.
 4. **Encode**: for each slide, add its `AudioBuffer` to the audio track and its frames (one per second
    of hold, same picture) to the video track. Audio buffers are appended in order, so timestamps
    accumulate; a silent slide is just a silent buffer. `finalize()`, then take the buffer.
 5. **Upload** to `deck-videos`, then write `presentations.video`.
 
-Container/codec are picked once up front from `mediabunny`'s `canEncode*` checks. If none works the
-button is disabled with an explanation (no attempt, no partial state).
+Container/codec are picked once at the start of a run from `mediabunny`'s `canEncode*` checks. The
+modal itself only checks synchronously that `VideoEncoder` and `AudioEncoder` exist (`hasWebCodecs`),
+so opening it does not load the encoder library: without them the button is disabled with an
+explanation. If the browser has WebCodecs but no usable codec pair, the run stops before doing any
+work (before any Cartesia call) with "This browser cannot encode video."
 
 ### Cancellation
 
 One `AbortController` for the whole run. `speak()` already honours a signal; the render loop and the
 encode loop check `signal.aborted` between slides/frames; on abort call `output.cancel()`. Abort
-surfaces as a quiet return to the modal (as with the voice calls), never as an error. **Open point to
-verify while building:** whether the Storage `upload` accepts an `AbortSignal` in the pinned
-`supabase-js`. If not, a cancel during upload waits for it and then removes the object instead of
-writing the record, so cancel never leaves a half-applied video.
+surfaces as a quiet return to the modal (as with the voice calls), never as an error.
+**Checked:** the pinned `@supabase/storage-js` 2.112.0 `upload` has no `signal` option, so the upload
+cannot be aborted. The start of the upload is therefore the **point of no return**: Cancel is disabled
+once the stage is "Saving video", and closing the modal from there lets the save finish (the video is
+recorded; nothing is left half-applied). Everything before it can be cancelled and writes nothing.
 
 ## Storage (migration `0015_deck_videos.sql`)
 
@@ -130,7 +141,7 @@ writing the record, so cancel never leaves a half-applied video.
 | Render | throws | "Could not draw slide n."; nothing written |
 | Encode | unsupported / encoder error | message; nothing written |
 | Upload | missing migration / storage error | message; previous video kept |
-| Record write | fails after upload | warn; the file exists but is not shown; reopening will not list it (the record is the pointer) |
+| Record write | fails after upload | error; a newly uploaded object at a *different* path is removed again (nothing points at it). At the *same* path the file was already overwritten in place and cannot be restored, and the old record's duration may be stale |
 | Cancel | abort | quiet; previous video kept |
 
 No retry: each run is a single user action with a button to press again.
@@ -148,10 +159,12 @@ No retry: each run is a single user action with a button to press again.
   Add to `everyBlockRenders` only if a new layout/block is added (none is).
 - **Not testable here (no jsdom, no WebCodecs, no key):** DOM-to-canvas fidelity, the real encode,
   real playback and upload. **Check by hand in Chrome and one other browser**, on a deck using each
-  theme, ink and a tall card. **Highest risk: web fonts.** `html-to-image` inlines fonts by fetching
-  stylesheets, and theme fonts loaded from another origin can be missed, producing a fallback font in the
-  video. If it shows, the fix is to pass `fontEmbedCSS`. `supabase/tests/0015_video_rls.sql` is
-  **hand-run and has not been run** (state this in CLAUDE.md as for 0012/0014).
+  theme, ink, nudged elements and a tall card. **Highest risks:** (1) an `image` block whose host does
+  not send CORS headers is missing from the frame (`html-to-image` must fetch it); (2) any web font
+  added to the app later is silently replaced by a fallback, because fonts are skipped (see Pipeline);
+  (3) a slide's nudges/ink looking un-nudged means it was drawn in a background tab.
+  `supabase/tests/0015_video_rls.sql` is **hand-run and has not been run** (state this in CLAUDE.md as
+  for 0012/0014).
 
 ## Dependencies
 
