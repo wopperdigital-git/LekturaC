@@ -62,6 +62,9 @@ do $$ begin
   end if;
 end $$;
 
+-- Storage blocks direct deletes unless this is set; RLS still decides what the delete may touch.
+select set_config('storage.allow_delete_query', 'true', true);
+
 delete from storage.objects
 where bucket_id = 'deck-videos' and name = '00000000-0000-4000-a300-000000000001/deck.mp4';
 
