@@ -24,6 +24,7 @@ import { capScriptLength, isResettable, mergeNarration, parseNarration, type Gen
 import { layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { buildGenerationMeta } from '@/generation/meta'
 import type { PipelineResult } from '@/generation/pipeline'
+import { removeDeckVideo, supabasePorts } from '@/video/storage'
 import { inOrder, withCardAfter, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
 import { withBlockAppended, type ContentType } from '@/engine/newContent'
@@ -899,6 +900,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   async deleteDeck(id: string) {
     if (!supabaseConfigured || !supabase) return
     await ensureSession()
+    // The video is a Storage object the row's deletion cannot reach, and afterwards nothing would
+    // point at it. Best effort and never throws (see `removeDeckVideo`): a video must not block a delete.
+    await removeDeckVideo(supabasePorts(supabase), id)
     const { error } = await supabase.from('presentations').delete().eq('id', id)
     if (error) throw error
   },
