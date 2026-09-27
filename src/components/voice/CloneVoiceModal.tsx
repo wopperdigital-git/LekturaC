@@ -340,6 +340,8 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
     setVideoError(null)
     // The video needs the voice, so the voice is saved first; if that fails, its own error shows.
     if (!(await useVoiceStore.getState().save(draft))) return
+    // Closing during the voice save must not start a run that nothing can abort (cleanup ran with no controller yet).
+    if (!mountedRef.current) return
 
     const controller = new AbortController()
     genAbortRef.current = controller
