@@ -90,6 +90,8 @@ export async function generateVideo<A extends Clip>(
 
   if (total === 0) throw new VideoError('narrating', 'This deck has no slides.')
 
+  // True from the moment the encoder is asked to start until its file is finished; while true, any
+  // exit (failure or cancel) calls `cancel()` so nothing it allocated is left behind.
   let encoderRunning = false
   try {
     /* ---- narrate ---- */
@@ -117,8 +119,9 @@ export async function generateVideo<A extends Clip>(
     const timeline = planTimeline(audio.map((c) => c.duration))
 
     /* ---- draw and encode ---- */
-    await step('encoding', 'Could not start the video', () => deps.encoder.start())
+    // Set before the call: a start that fails part-way may already hold an audio or video encoder.
     encoderRunning = true
+    await step('encoding', 'Could not start the video', () => deps.encoder.start())
     for (const slide of timeline.slides) {
       check()
       report('rendering', slide.index, total)
@@ -160,7 +163,7 @@ export async function generateVideo<A extends Clip>(
       try {
         await deps.encoder.cancel()
       } catch {
-        // Already stopped, or never fully started; nothing more to release.
+        // Already stopped, or a start that never got far enough to hold anything; nothing to release.
       }
     }
   }

@@ -164,6 +164,21 @@ describe('generateVideo: failures', () => {
     expect(log.some((l) => l.startsWith('save'))).toBe(false)
   })
 
+  // A start that fails part-way may already hold an encoder, so it is cancelled too.
+  it('cancels the encoder when start() itself fails', async () => {
+    const { deps, log, run } = setup()
+    deps.encoder.start = async () => {
+      throw new Error('boom')
+    }
+    const err = await run(['A']).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(VideoError)
+    expect((err as VideoError).stage).toBe('encoding')
+    expect((err as VideoError).message).toBe('Could not start the video: boom')
+    expect(log).toContain('cancel')
+    expect(log).not.toContain('finish')
+    expect(log.some((l) => l.startsWith('save'))).toBe(false)
+  })
+
   it('passes a save failure through unchanged, and does not cancel a finished encode', async () => {
     const { deps, log, run } = setup()
     deps.save = async () => {
@@ -230,6 +245,17 @@ describe('generateVideo: cancelling', () => {
     expect(log.some((l) => l.startsWith('save'))).toBe(false)
     // The file was already complete: there is no encoder left to cancel.
     expect(log).not.toContain('cancel')
+  })
+
+  it('cancels the encoder when the signal is aborted during start()', async () => {
+    const { deps, log, controller, run } = setup()
+    deps.encoder.start = async () => {
+      log.push('start')
+      controller.abort()
+    }
+    expect(await run(['A'])).toEqual({ status: 'cancelled' })
+    expect(log).toContain('cancel')
+    expect(log.some((l) => l.startsWith('save'))).toBe(false)
   })
 
   it('is already cancelled when the signal was aborted before the run', async () => {
