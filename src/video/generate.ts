@@ -53,14 +53,16 @@ export async function generateVideoForDeck(o: {
   if (!format) throw new VideoError('encoding', 'This browser cannot encode video. Try a recent Chrome, Edge or Safari.')
 
   const encoder = createEncoder(format)
+  const narrator = createNarrator({ ...o.voice, voiceId })
+  const ports = supabasePorts(supabase)
+  // Last before the `try`: this appends an off-screen host to the page and makes a React root, and
+  // only the `finally` below disposes them, so nothing that can throw may sit between the two.
   const renderer = await createSlideRenderer({
     cards: o.deck.cards,
     theme: o.deck.theme,
     textStyle: o.deck.textStyle,
     target: encoder.canvas,
   })
-  const narrator = createNarrator({ ...o.voice, voiceId })
-  const ports = supabasePorts(supabase)
 
   try {
     const result = await generateVideo(
