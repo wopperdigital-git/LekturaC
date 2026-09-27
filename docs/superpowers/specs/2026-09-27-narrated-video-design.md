@@ -1,6 +1,6 @@
 # Narrated video: "Generate Presentation" in the voice modal
 
-Date: 2026-09-27. Status: design approved in conversation; written spec awaiting review.
+Date: 2026-09-27. Status: approved; implemented on branch feat/narrated-video. Updated during planning: fonts and tab visibility (Pipeline), the codec check split (Format), upload not abortable (Cancellation), record-write rollback (Errors), and the risk list (Testing).
 Builds on `2026-09-27-narration-voice-design.md` (the modal this changes) and
 `2026-09-26-narration-tab-design.md`. Leaves the narration data rules untouched.
 
