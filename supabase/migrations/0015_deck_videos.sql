@@ -14,10 +14,14 @@
 alter table presentations add column if not exists video jsonb;
 
 -- 50 MB is Supabase's default per-file ceiling; a deck of at most MAX_SLIDES static slides is
--- a few MB.
+-- a few MB. On conflict the settings are forced rather than left alone: a `deck-videos` bucket that
+-- already exists as public would otherwise stay public and serve every video without RLS.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('deck-videos', 'deck-videos', false, 52428800, array['video/mp4', 'video/webm'])
-on conflict (id) do nothing;
+on conflict (id) do update set
+  public = false,
+  file_size_limit = 52428800,
+  allowed_mime_types = array['video/mp4', 'video/webm'];
 
 -- Owner-only: the first folder of the object's name must be the caller's user id. Upsert
 -- (replacing the deck's video) needs select + insert + update, so all four are defined.

@@ -17,6 +17,13 @@ do $$ begin
   if (select public from storage.buckets where id = 'deck-videos') is distinct from false then
     raise exception 'bucket: deck-videos must exist and be private';
   end if;
+  if (select allowed_mime_types from storage.buckets where id = 'deck-videos')
+     is distinct from array['video/mp4', 'video/webm']::text[] then
+    raise exception 'bucket: deck-videos must allow exactly video/mp4 and video/webm';
+  end if;
+  if (select file_size_limit from storage.buckets where id = 'deck-videos') is distinct from 52428800 then
+    raise exception 'bucket: deck-videos must be limited to 52428800 bytes (50 MB)';
+  end if;
 end $$;
 
 set local role authenticated;
@@ -70,7 +77,10 @@ where bucket_id = 'deck-videos' and name = '00000000-0000-4000-a300-000000000001
 
 reset role;
 do $$ begin
-  if (select count(*) from storage.objects where bucket_id = 'deck-videos') <> 1 then
+  -- Scoped to A's fixture object: as postgres this would otherwise count every video in the bucket.
+  if (select count(*) from storage.objects
+      where bucket_id = 'deck-videos'
+        and name = '00000000-0000-4000-a300-000000000001/deck.mp4') <> 1 then
     raise exception 'rls: user B deleted user A''s video';
   end if;
 end $$;
