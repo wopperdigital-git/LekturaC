@@ -6,7 +6,7 @@
 -- checks passed". Same shape as 0009_classroom_rls.sql: fixtures as postgres, then
 -- each check under `set local role authenticated` with a forged jwt claim.
 --
--- NOT YET RUN against a database.
+-- Run against the LekturaC project on 2026-09-27: all checks passed, no fixtures left behind.
 
 begin;
 

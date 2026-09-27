@@ -4,7 +4,7 @@
 -- transaction that rolls back, so no fixture survives. Any failed check raises and aborts
 -- with a message naming it; a clean run ends by printing "deck video checks passed".
 --
--- NOT YET RUN against a database.
+-- Run against the LekturaC project on 2026-09-27: all checks passed, no fixtures left behind.
 
 begin;
 
