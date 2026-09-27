@@ -25,15 +25,18 @@ import { FRAME_HEIGHT, FRAME_WIDTH, STAGE_PADDING, fitScale } from './timeline'
   its off-screen position into the picture.
 
   Two things about the browser matter here:
-  - A slide's element nudges and ink depend on `SlideBody` measuring its width with a
-    ResizeObserver, which is part of the browser's rendering steps and does not run in a background
-    tab. So drawing waits until the tab is visible (`whenVisible`).
+  - Slides are drawn only while the tab is visible (`whenVisible`), for two reasons. html-to-image's
+    `createImage` resolves inside `requestAnimationFrame`, which is paused in a background tab, so
+    the rasterising would simply never finish; and the `SETTLE_MS` wait is a `setTimeout`, which a
+    hidden tab throttles. (It is not `SlideBody`: that measures `clientWidth` synchronously in a
+    `useLayoutEffect`, and forced layout works in a background tab, so nudges and ink do not
+    depend on its ResizeObserver for the first render.)
   - The app loads no web fonts, so `skipFonts` is on: nothing needs embedding, and it saves scanning
     every stylesheet for every slide. If a web font is ever added, the video will silently use a
     fallback until this is revisited (spec: "Pipeline").
 */
 
-/** Long enough for `SlideBody`'s ResizeObserver to run and React to redraw with the measured width. */
+/** Lets layout settle after the synchronous render, and any late resize callback run, before the capture. */
 const SETTLE_MS = 100
 
 function delay(ms: number): Promise<void> {

@@ -90,10 +90,12 @@ Pure modules first; the DOM and WebCodecs sit behind small interfaces so the pip
    The app loads **no web fonts** (no `@font-face` or font `<link>` anywhere; the theme fonts are
    system stacks), so `toCanvas` runs with `skipFonts: true`: nothing needs embedding and it avoids
    re-scanning stylesheets for every slide. **Slides are drawn only while the tab is visible**:
-   the slide's own measuring (`SlideBody`'s `ResizeObserver`) is part of the browser's rendering
-   steps, which do not run in a background tab, so a slide drawn there would lose its element nudges
-   and ink. `renderFrame` waits for `visibilitychange` before each slide, and the modal tells the
-   user to keep the tab in the foreground.
+   html-to-image's `createImage` resolves inside `requestAnimationFrame`, which is paused in a
+   background tab, and the settle wait is a `setTimeout`, which a hidden tab throttles. (`SlideBody`
+   is not the reason: it measures `clientWidth` synchronously in a `useLayoutEffect`, and forced
+   layout works in a background tab, so nudges and ink do not depend on its `ResizeObserver` for the
+   first render.) `renderFrame` waits for `visibilitychange` before each slide, and the modal tells
+   the user to keep the tab in the foreground.
 4. **Encode**: for each slide, add its `AudioBuffer` to the audio track and its frames (one per second
    of hold, same picture) to the video track. Audio buffers are appended in order, so timestamps
    accumulate; a silent slide is just a silent buffer. `finalize()`, then take the buffer.
