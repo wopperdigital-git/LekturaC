@@ -50,6 +50,9 @@ function currentSlideIds(): string[] {
  * `cards` must already be sorted by `orderIndex`.
  */
 export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string | null }) {
+  const presentationId = usePresentationStore((s) => s.presentationId)
+  const theme = usePresentationStore((s) => s.theme)
+  const textStyle = usePresentationStore((s) => s.textStyle)
   const title = usePresentationStore((s) => s.title)
   const status = usePresentationStore((s) => s.status)
   const errorMessage = usePresentationStore((s) => s.errorMessage)
@@ -232,7 +235,12 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
         />
       )}
 
-      {voiceOpen && <CloneVoiceModal onClose={() => setVoiceOpen(false)} />}
+      {voiceOpen && (
+        <CloneVoiceModal
+          deck={{ presentationId, title, cards, theme, textStyle }}
+          onClose={() => setVoiceOpen(false)}
+        />
+      )}
     </div>
   )
 }
