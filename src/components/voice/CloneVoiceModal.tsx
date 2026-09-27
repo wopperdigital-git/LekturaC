@@ -45,16 +45,26 @@ import {
   type RecState,
 } from '@/voice/recording'
 import { RecordingError, recordingSupport, startRecording, type Recorder, type Recording } from '@/voice/recorder'
+import { formatDuration } from '@/lib/speakingTime'
+import { supabase } from '@/lib/supabaseClient'
+import { VideoError } from '@/video/errors'
+import { hasWebCodecs } from '@/video/format'
+import type { Progress } from '@/video/pipeline'
+import { loadVideo, supabasePorts, type VideoView } from '@/video/storage'
+import { canCancelVideo, generateBlocker, stageRows } from '@/video/ui'
+import type { VideoDeck } from '@/video/generate'
 
 /*
   Sets up the narration voice: pick a premade voice or record and clone your own, tune
   how it speaks, and hear two fixed sentences in it. It works on a draft; nothing is
-  saved until Save voice.
+  saved until Generate Presentation, which saves the voice and then makes the narrated video.
 
   Three things are cleaned up when it closes, because closing is done by Escape, the
   backdrop or Cancel and none of them run any code of ours first: the microphone
   (`recorderRef.cancel()`, which stops every track), the preview audio, and every
-  request still in flight (their AbortControllers). The cleanup effect below is that.
+  request still in flight (their AbortControllers), and the video run (`genAbortRef`,
+  which cancels narration, drawing and encoding; a save already under way finishes).
+  The cleanup effect below is that.
 */
 
 function describe(err: unknown): string {
@@ -82,7 +92,7 @@ interface VoiceLists {
 const SELECT =
   'h-8 w-full rounded-app-sm border border-app-border bg-app-background px-2 text-sm text-app-foreground outline-none focus:border-app-accent disabled:cursor-not-allowed disabled:opacity-50'
 
-export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
+export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: () => void }) {
   const warning = useVoiceStore((s) => s.warning)
   // False after a failed read of the saved voice: what is on screen is then the defaults, not
   // what is stored, and Save is off (see `canSaveVoice`). Reopening the modal tries the read again.
@@ -94,6 +104,27 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<VoiceSettings>(() => useVoiceStore.getState().settings)
   // An initial value, not something to subscribe to: read once, from the store as it is now.
   const [ready, setReady] = useState(() => useVoiceStore.getState().loaded)
+
+  /* ---- the video ---- */
+  const [existing, setExisting] = useState<VideoView | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [progress, setProgress] = useState<Progress | null>(null)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const genAbortRef = useRef<AbortController | null>(null)
+  const webCodecs = useMemo(() => hasWebCodecs(), [])
+
+  // The deck's saved video, if it has one. Nothing to show is not an error: a project without
+  // migration 0015 says so when you generate.
+  useEffect(() => {
+    if (!supabase || !deck.presentationId) return
+    let cancelled = false
+    void loadVideo(supabasePorts(supabase), deck.presentationId, deck.title || 'presentation').then((view) => {
+      if (!cancelled) setExisting(view)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [deck.presentationId, deck.title])
 
   // Reads the saved voice once, on open. The draft only replaces itself here, before
   // anything can have been changed, because the controls are disabled until `ready`.
@@ -284,6 +315,7 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
       mountedRef.current = false
       recorderRef.current?.cancel()
       cloneAbortRef.current?.abort()
+      genAbortRef.current?.abort()
       const p = previewRef.current
       if (p) {
         p.controller.abort()
@@ -294,14 +326,55 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
-  async function saveAndClose() {
-    if (await useVoiceStore.getState().save(draft)) onClose()
+  const blocker = generateBlocker({
+    webCodecs,
+    hasDeck: deck.presentationId !== null,
+    slideCount: deck.cards.length,
+    voiceChosen: draft.voiceId !== null,
+  })
+  const canGenerate =
+    configured && blocker === null && canSaveVoice({ ready, savedVoiceKnown, saving: saving || generating })
+
+  async function generate() {
+    if (!canGenerate) return
+    setVideoError(null)
+    // The video needs the voice, so the voice is saved first; if that fails, its own error shows.
+    if (!(await useVoiceStore.getState().save(draft))) return
+
+    const controller = new AbortController()
+    genAbortRef.current = controller
+    setGenerating(true)
+    setProgress(null)
+    try {
+      const { generateVideoForDeck } = await import('@/video/generate')
+      const result = await generateVideoForDeck({
+        deck,
+        voice: draft,
+        previous: existing?.record ?? null,
+        signal: controller.signal,
+        onProgress: (p) => {
+          if (mountedRef.current) setProgress(p)
+        },
+      })
+      if (!mountedRef.current) return
+      if (result.status === 'done') setExisting(result.view)
+    } catch (err) {
+      // A cancel is a return to the modal, not a failure to report.
+      if (!mountedRef.current || controller.signal.aborted) return
+      setVideoError(err instanceof VideoError ? err.message : 'Something went wrong. Try again.')
+    } finally {
+      if (genAbortRef.current === controller) genAbortRef.current = null
+      if (mountedRef.current) {
+        setGenerating(false)
+        setProgress(null)
+      }
+    }
   }
 
   const recording = recState === 'recording'
   const cloneReady = clip !== null && canClone({ clipSeconds: clip.seconds, name })
   const emotionOff = draft.language !== 'en'
-  const disabledAll = !ready || !configured
+  const disabledAll = !ready || !configured || generating
 
   return (
     <Modal title="Narration voice" onClose={onClose}>
@@ -388,7 +461,7 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
               <Button
                 variant="secondary"
                 onClick={() => void startRecord()}
-                disabled={!canRecord({ ready, configured, supported: support.supported, recState, cloning })}
+                disabled={!canRecord({ ready, configured, supported: support.supported, recState, cloning: cloning || generating })}
                 aria-label="Record voice"
               >
                 {recState === 'recorded' ? 'Record again' : 'Record voice'}
@@ -517,24 +590,86 @@ export function CloneVoiceModal({ onClose }: { onClose: () => void }) {
           {previewError && <p className="text-xs text-red-600 dark:text-red-400">{previewError}</p>}
         </section>
 
+        {/* ---- The video ---- */}
+        <section aria-labelledby="voice-video" className="flex flex-col gap-2">
+          <h3 id="voice-video" className="text-sm font-semibold text-app-foreground">
+            Presentation video
+          </h3>
+          {existing ? (
+            <div className="flex flex-col gap-2">
+              {existing.url ? (
+                <video controls src={existing.url} aria-label="Presentation video" className="w-full rounded-app-sm bg-black" />
+              ) : (
+                <p className="text-xs text-app-highlight-text">The video is saved, but a link to play it could not be made. Reopen this.</p>
+              )}
+              <p className="text-xs text-app-muted">
+                {formatDuration(Math.round(existing.record.durationSeconds))} · made {new Date(existing.record.generatedAt).toLocaleString()}
+                {existing.downloadUrl && (
+                  <>
+                    {' · '}
+                    <a href={existing.downloadUrl} className="text-app-accent-text underline">
+                      Download
+                    </a>
+                  </>
+                )}
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-app-muted">No video yet.</p>
+          )}
+
+          {generating && (
+            <ol aria-live="polite" className="flex flex-col gap-1 text-xs">
+              {stageRows(progress).map((row) => (
+                <li
+                  key={row.stage}
+                  className={row.state === 'active' ? 'font-medium text-app-foreground' : row.state === 'done' ? 'text-app-muted' : 'text-app-muted opacity-60'}
+                >
+                  {row.state === 'done' ? '✓ ' : row.state === 'active' ? '… ' : '· '}
+                  {row.label}
+                  {row.detail ? ` ${row.detail}` : ''}
+                </li>
+              ))}
+            </ol>
+          )}
+          {videoError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{videoError}</p>}
+        </section>
+
         {ready && !savedVoiceKnown && (
           <p className="text-xs text-app-highlight-text">
-            Your saved voice could not be read, so saving is turned off. Close this and open it again to retry.
+            Your saved voice could not be read, so generating is turned off. Close this and open it again to retry.
           </p>
         )}
         {saveError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{saveError}</p>}
+        {blocker && configured && <p className="text-xs text-app-muted">{blocker}</p>}
+        <p className="text-xs text-app-muted">
+          Generating narrates every slide with Cartesia, which uses credits
+          {existing ? ' and replaces the current video' : ''}. Keep this tab in the foreground while the slides are drawn.
+        </p>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            Close
           </Button>
-          <Button
-            variant="primary"
-            onClick={() => void saveAndClose()}
-            disabled={!configured || !canSaveVoice({ ready, savedVoiceKnown, saving })}
-          >
-            {saving ? <Spinner /> : null}
-            Save voice
-          </Button>
+          {generating ? (
+            <Button
+              variant="secondary"
+              onClick={() => genAbortRef.current?.abort()}
+              disabled={!canCancelVideo(progress)}
+              aria-label="Cancel video"
+            >
+              Cancel video
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => void generate()}
+              disabled={!canGenerate}
+              aria-label="Generate Presentation"
+            >
+              {saving ? <Spinner /> : null}
+              Generate Presentation
+            </Button>
+          )}
         </div>
       </div>
     </Modal>

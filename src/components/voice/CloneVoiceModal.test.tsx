@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { DEFAULT_THEME } from '@/lib/theme-tokens'
+import { EMPTY_TEXT_STYLE } from '@/engine/textStyle'
+import type { Card } from '@/engine/contentBlocks'
+import type { VideoDeck } from '@/video/generate'
 import { DEFAULT_SETTINGS } from '@/voice/settingsRow'
 import { READING_SCRIPTS } from '@/voice/scripts'
 import { useVoiceStore } from '@/voice/voiceStore'
@@ -23,9 +27,33 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+  Object.assign(useVoiceStore.getInitialState(), { loaded: false })
 })
 
-const render = () => renderToStaticMarkup(<CloneVoiceModal onClose={() => {}} />)
+// The modal only counts the slides here; drawing them is the browser-only code in src/video.
+const DECK: VideoDeck = {
+  presentationId: 'p1',
+  title: 'Deck',
+  cards: [{ id: 'c1' }] as unknown as Card[],
+  theme: DEFAULT_THEME,
+  textStyle: EMPTY_TEXT_STYLE,
+}
+
+const render = (deck: VideoDeck = DECK) => renderToStaticMarkup(<CloneVoiceModal deck={deck} onClose={() => {}} />)
+
+const stubEncoders = () => {
+  vi.stubGlobal('VideoEncoder', class {})
+  vi.stubGlobal('AudioEncoder', class {})
+}
+
+// A chosen voice that is also the saved one. The modal reads `loaded` through a hook, which server rendering
+// takes from the store's *initial* state (false, and out of reach of setState), so that object is edited here
+// and put back in afterEach; without it Generate stays off for "the saved voice could not be read".
+const withVoice = () => {
+  useVoiceStore.setState({ settings: { ...DEFAULT_SETTINGS, voiceId: 'v1', voiceName: 'Skylar', voiceSource: 'premade' } })
+  Object.assign(useVoiceStore.getInitialState(), { loaded: true })
+}
 
 /** The opening tag of the element with this `aria-label`; fails loudly if there is none, so a
     `.not.toContain` on it can never pass because the element was missing. */
@@ -87,5 +115,50 @@ describe('CloneVoiceModal', () => {
   it('explains itself when no Cartesia key is configured', () => {
     vi.stubEnv('VITE_CARTESIA_API_KEY', '')
     expect(render()).toContain('VITE_CARTESIA_API_KEY')
+  })
+
+  it('offers Generate Presentation, not Save voice', () => {
+    const html = render()
+    expect(html).toContain('Generate Presentation')
+    expect(html).not.toContain('Save voice')
+  })
+
+  it('cannot generate until a voice is chosen', () => {
+    stubEncoders()
+    const html = render()
+    expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
+    expect(html).toContain('Choose a voice first.')
+  })
+
+  it('can generate once a voice is chosen, the browser can encode and the deck has slides', () => {
+    stubEncoders()
+    withVoice()
+    expect(tagLabelled(render(), 'Generate Presentation')).not.toContain('disabled=""')
+  })
+
+  it('cannot generate in a browser without WebCodecs, and says so', () => {
+    withVoice()
+    const html = render()
+    expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
+    expect(html).toContain('cannot encode video')
+  })
+
+  it('cannot generate for a deck with no slides', () => {
+    stubEncoders()
+    withVoice()
+    const html = render({ ...DECK, cards: [] })
+    expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
+    expect(html).toContain('no slides')
+  })
+
+  it('warns that generating uses credits and asks for the tab to stay in front', () => {
+    const html = render()
+    expect(html).toContain('Cartesia')
+    expect(html).toContain('credits')
+    expect(html).toContain('foreground')
+  })
+
+  it('says there is no video yet before one is generated', () => {
+    expect(render()).toContain('No video yet')
   })
 })
