@@ -85,6 +85,28 @@ export interface VideoView {
 }
 
 /**
+ * The deck title as a file name. It ends up in a signed URL's `download` query, which storage-js encodes
+ * twice, so anything special in a URL or illegal in a file name (`\ / : * ? " < > | & % #`, control
+ * characters) becomes `_`, a run at a time. Letters of any script stay. Nothing left but `_` and
+ * spaces (an empty or all-forbidden title) falls back to "presentation".
+ */
+function downloadBaseName(title: string): string {
+  let out = ''
+  let inRun = false
+  for (const ch of title) {
+    const forbidden = ch.charCodeAt(0) < 0x20 || '\\/:*?"<>|&%#'.includes(ch)
+    if (forbidden) {
+      if (!inRun) out += '_'
+    } else {
+      out += ch
+    }
+    inRun = forbidden
+  }
+  const trimmed = out.trim()
+  return /^[_\s]*$/.test(trimmed) ? 'presentation' : trimmed
+}
+
+/**
  * The deck's existing video, ready to show. Never throws: no video (or a read that failed, a project
  * without migration 0015) is simply nothing to show; the migration message appears when generating.
  */
@@ -99,7 +121,7 @@ export async function loadVideo(
     const record = parseVideo(data)
     if (!record) return null
     // The extension comes from the stored file, not from what this browser would make today.
-    const downloadName = `${baseName}.${record.contentType === 'video/webm' ? 'webm' : 'mp4'}`
+    const downloadName = `${downloadBaseName(baseName)}.${record.contentType === 'video/webm' ? 'webm' : 'mp4'}`
     const [play, download] = await Promise.all([
       ports.signedUrl(record.path),
       ports.signedUrl(record.path, downloadName),

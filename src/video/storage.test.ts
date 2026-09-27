@@ -157,6 +157,39 @@ describe('loadVideo', () => {
     expect((await loadVideo(ports, 'p1', 'Deck'))?.downloadUrl).toBe('https://signed/u1/p1.webm?download=Deck.webm')
   })
 
+  // The name goes into a signed URL that storage-js encodes twice, so characters that are special in a URL
+  // or illegal in a file name become `_`. Letters of any script stay as they are.
+  describe('the download name', () => {
+    const downloadFor = async (title: string) => {
+      const { ports } = fakePorts({ readRecord: async () => ({ data: stored, error: null }) })
+      return (await loadVideo(ports, 'p1', title))?.downloadUrl
+    }
+
+    it('replaces characters that are special in a URL or a file name', async () => {
+      expect(await downloadFor('Q3 / Plan: A&B 100%')).toBe('https://signed/u1/p1.mp4?download=Q3 _ Plan_ A_B 100_.mp4')
+    })
+
+    it('leaves non-Latin titles alone', async () => {
+      expect(await downloadFor('Квартальный план')).toBe('https://signed/u1/p1.mp4?download=Квартальный план.mp4')
+      expect(await downloadFor('季度计划')).toBe('https://signed/u1/p1.mp4?download=季度计划.mp4')
+    })
+
+    it('replaces a backslash', async () => {
+      expect(await downloadFor('a\\b')).toBe('https://signed/u1/p1.mp4?download=a_b.mp4')
+    })
+
+    it('replaces control characters and trims', async () => {
+      expect(await downloadFor('  a\tb\nc  ')).toBe('https://signed/u1/p1.mp4?download=a_b_c.mp4')
+    })
+
+    it('falls back to "presentation" for an empty or all-forbidden title', async () => {
+      const fallback = 'https://signed/u1/p1.mp4?download=presentation.mp4'
+      expect(await downloadFor('')).toBe(fallback)
+      expect(await downloadFor('   ')).toBe(fallback)
+      expect(await downloadFor('///:*?')).toBe(fallback)
+    })
+  })
+
   it('is null when there is no video, a malformed one, or the read failed', async () => {
     expect(await loadVideo(fakePorts().ports, 'p1', 'x')).toBeNull()
     expect(await loadVideo(fakePorts({ readRecord: async () => ({ data: { path: 1 }, error: null }) }).ports, 'p1', 'x')).toBeNull()
