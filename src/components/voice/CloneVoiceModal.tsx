@@ -20,7 +20,6 @@ import {
   MIN_VOLUME,
   SPEED_STEP,
   VOLUME_STEP,
-  canSaveVoice,
   clampSpeed,
   clampVolume,
   isEmotion,
@@ -51,7 +50,7 @@ import { VideoError } from '@/video/errors'
 import { hasWebCodecs } from '@/video/format'
 import type { Progress } from '@/video/pipeline'
 import { loadVideo, supabasePorts, type VideoView } from '@/video/storage'
-import { canCancelVideo, generateBlocker, stageRows } from '@/video/ui'
+import { canCancelVideo, canStartGenerate, generateBlocker, stageRows } from '@/video/ui'
 import type { VideoDeck } from '@/video/generate'
 
 /*
@@ -332,8 +331,16 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
     slideCount: deck.cards.length,
     voiceChosen: draft.voiceId !== null,
   })
-  const canGenerate =
-    configured && blocker === null && canSaveVoice({ ready, savedVoiceKnown, saving: saving || generating })
+  const canGenerate = canStartGenerate({
+    configured,
+    blocker,
+    ready,
+    savedVoiceKnown,
+    saving,
+    generating,
+    cloning,
+    recording: recState === 'recording',
+  })
 
   async function generate() {
     if (!canGenerate) return
@@ -363,6 +370,9 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
     } catch (err) {
       // A cancel is a return to the modal, not a failure to report.
       if (!mountedRef.current || controller.signal.aborted) return
+      // A VideoError already carries its own words; anything else (a failed chunk import, no 2d context, a
+      // missing OfflineAudioContext) would otherwise leave nothing in the console to find it by.
+      if (!(err instanceof VideoError)) console.error('[video]', err)
       setVideoError(err instanceof VideoError ? err.message : 'Something went wrong. Try again.')
     } finally {
       if (genAbortRef.current === controller) genAbortRef.current = null

@@ -123,11 +123,14 @@ describe('CloneVoiceModal', () => {
     expect(html).not.toContain('Save voice')
   })
 
-  it('cannot generate until a voice is chosen', () => {
+  // The saved voice is marked as known here, so `canSaveVoice` is satisfied and the missing voice is the
+  // only thing left to stop the button. The footer's blocker is a <p>; the Preview row's copy is a <span>.
+  it('cannot generate until a voice is chosen, and the footer says why', () => {
     stubEncoders()
+    Object.assign(useVoiceStore.getInitialState(), { loaded: true })
     const html = render()
     expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
-    expect(html).toContain('Choose a voice first.')
+    expect(html).toContain('<p class="text-xs text-app-muted">Choose a voice first.</p>')
   })
 
   it('can generate once a voice is chosen, the browser can encode and the deck has slides', () => {

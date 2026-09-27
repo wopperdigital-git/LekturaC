@@ -1,5 +1,6 @@
 import type { VideoStage } from './errors'
 import type { Progress } from './pipeline'
+import { canSaveVoice } from '@/voice/settingsRow'
 
 /*
   The rules the modal draws, kept out of the component so they are tested: what stops the button,
@@ -20,6 +21,33 @@ export function generateBlocker(i: BlockerInput): string | null {
   if (i.slideCount === 0) return 'This deck has no slides yet.'
   if (!i.voiceChosen) return 'Choose a voice first.'
   return null
+}
+
+export interface StartInput {
+  configured: boolean
+  blocker: string | null
+  ready: boolean
+  savedVoiceKnown: boolean
+  saving: boolean
+  generating: boolean
+  cloning: boolean
+  recording: boolean
+}
+
+/**
+ * Whether Generate Presentation may be pressed. A clone that finishes mid-run calls `pick`, changing the
+ * draft under a run that is already using the old voice, so a clone or a recording in progress stops it
+ * too, on top of `canSaveVoice`'s own rules (the saved voice is read and known, no save under way).
+ */
+export function canStartGenerate(s: StartInput): boolean {
+  return (
+    s.configured &&
+    s.blocker === null &&
+    canSaveVoice({ ready: s.ready, savedVoiceKnown: s.savedVoiceKnown, saving: s.saving }) &&
+    !s.generating &&
+    !s.cloning &&
+    !s.recording
+  )
 }
 
 const ORDER: VideoStage[] = ['narrating', 'rendering', 'encoding', 'uploading']

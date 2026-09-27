@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canCancelVideo, generateBlocker, stageRows } from './ui'
+import { canCancelVideo, canStartGenerate, generateBlocker, stageRows } from './ui'
 
 const ok = { webCodecs: true, hasDeck: true, slideCount: 3, voiceChosen: true }
 
@@ -47,5 +47,37 @@ describe('canCancelVideo', () => {
     expect(canCancelVideo({ stage: 'narrating', done: 0, total: 3 })).toBe(true)
     expect(canCancelVideo({ stage: 'encoding', done: 0, total: 1 })).toBe(true)
     expect(canCancelVideo({ stage: 'uploading', done: 0, total: 1 })).toBe(false)
+  })
+})
+
+describe('canStartGenerate', () => {
+  const good = {
+    configured: true,
+    blocker: null,
+    ready: true,
+    savedVoiceKnown: true,
+    saving: false,
+    generating: false,
+    cloning: false,
+    recording: false,
+  }
+
+  it('is true when everything is in place', () => {
+    expect(canStartGenerate(good)).toBe(true)
+  })
+
+  // A clone finishing mid-run would re-pick the voice under a run already using the old one, so a clone
+  // or a recording in progress is as much a stop as the rest.
+  it.each([
+    ['configured', { configured: false }],
+    ['blocker', { blocker: 'Choose a voice first.' }],
+    ['ready', { ready: false }],
+    ['savedVoiceKnown', { savedVoiceKnown: false }],
+    ['saving', { saving: true }],
+    ['generating', { generating: true }],
+    ['cloning', { cloning: true }],
+    ['recording', { recording: true }],
+  ])('is false when %s stops it', (_name, patch) => {
+    expect(canStartGenerate({ ...good, ...patch })).toBe(false)
   })
 })
