@@ -101,12 +101,13 @@ describe('writeTempInk / readTempInk', () => {
 
   it('refuses to write more than the size cap, so one deck cannot fill the quota', () => {
     const { store, data } = memoryStore()
-    const big = Array.from({ length: 300 }, (_, i) => ({
+    // Within the per-card stroke and point bounds, yet over the cap. Kept just
+    // big enough: a far larger payload made this test slow enough to time out.
+    const big = Array.from({ length: 40 }, (_, i) => ({
       ...stroke(`s${i}`),
       points: Array.from({ length: 1500 }, (_, j) => [j / 1500, 0.123456] as [number, number]),
     }))
-    const ink: Record<string, Stroke[]> = {}
-    for (let i = 0; i < 5; i++) ink[`c${i}`] = big
+    const ink: Record<string, Stroke[]> = { c0: big }
     expect(JSON.stringify(ink).length).toBeGreaterThan(MAX_TEMP_INK_CHARS)
     expect(writeTempInk(store, 'u', 'd', ink)).toBe(false)
     expect(data.size).toBe(0)

@@ -1,32 +1,40 @@
-# React + TypeScript + Vite
+# LekturaC
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AI presentation builder: a short brief becomes an editable slide deck, with narration, a narrated video, quizzes and a teacher classroom. React + TypeScript + Vite, backed by Supabase.
 
-Currently, two official plugins are available:
+## Getting started
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. **Node 24** (see `.nvmrc`). With nvm: `nvm use`. Check with `node -v`.
+2. **Install exactly what's locked:**
+   ```
+   npm ci
+   ```
+   Use `npm ci`, not `npm install`: it installs the exact versions in `package-lock.json` and never rewrites it.
+3. **Environment:** copy `.env.example` to `.env`.
+   - The Supabase URL and anon key are already filled in (the shared project), so login works as is.
+   - Add at least one AI key (Anthropic, Groq or Gemini) to create decks. Groq is free and also enables quizzes. Cartesia is optional (voice and video).
+   - `.env` is gitignored. Don't commit keys. Get real ones from the project owner or your own accounts.
+4. **Run:**
+   ```
+   npm run dev       # http://localhost:5173
+   ```
 
-## React Compiler
+## Scripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+npm run dev       # Vite dev server
+npm run build     # type-check, then bundle
+npm run lint      # oxlint (type-aware)
+npm run test      # vitest
+npm run preview   # serve a production build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, test and build on every push and PR.
+
+## Database
+
+Schema changes live in `supabase/migrations/` (numbered, applied in order in the Supabase SQL editor). Everyone using `.env.example`'s Supabase values shares one database, so a migration only needs applying once. If you add one, apply it to the shared project and commit the file in the same change, so the database matches the code everyone pulls.
+
+## More
+
+`CLAUDE.md` is the detailed architecture guide (invariants, gotchas, and why things are the way they are). Design docs are in `docs/superpowers/specs/`.

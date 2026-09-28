@@ -1,0 +1,16 @@
+# Store every text file with LF endings, whatever each collaborator's OS or
+# core.autocrlf setting, so diffs never show whole-file line-ending churn.
+* text=auto eol=lf
+
+# Binary assets: never touch their bytes.
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.webm binary
