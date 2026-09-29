@@ -9,7 +9,7 @@ import type { ClassRoom } from '@/classroom/types'
 import { DashboardShell } from '@/components/home/DashboardShell'
 import { ViewTabs } from '@/components/home/ViewTabs'
 import type { DeckView } from '@/components/home/deckFilters'
-import { ClassCard } from '@/components/classroom/ClassCard'
+import { ClassCard, ClassListRow } from '@/components/classroom/ClassCard'
 import { ClassFormModal } from '@/components/classroom/ClassFormModal'
 import { ConfirmModal } from '@/components/classroom/ConfirmModal'
 import { LoadError, Panel, PanelMessage, RowsSkeleton } from '@/components/classroom/Panel'
@@ -71,8 +71,22 @@ export function ClassesPage() {
               </Button>
             }
           />
+        ) : view === 'list' ? (
+          <div className="flex flex-col gap-2">
+            {visible.map((c) => (
+              <ClassListRow
+                key={c.id}
+                classRoom={c}
+                studentCount={state.data.members.filter((m) => m.classId === c.id).length}
+                quizCount={state.data.postings.filter((p) => p.classId === c.id).length}
+                latestAnnouncementAt={state.data.announcements.find((a) => a.classId === c.id)?.createdAt ?? null}
+                onOpen={() => void navigate(`/classroom/classes/${c.id}`)}
+                onDelete={() => setPendingDelete(c)}
+              />
+            ))}
+          </div>
         ) : (
-          <div className={view === 'list' ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3'}>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {visible.map((c) => (
               <ClassCard
                 key={c.id}

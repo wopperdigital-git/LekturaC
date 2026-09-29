@@ -39,7 +39,22 @@ export function StudentsPage() {
 
   return (
     <DashboardShell title="Students" subtitle={subtitle} query={query} onQueryChange={setQuery}>
-      <Panel toolbar={data && data.classes.length > 0 ? <ClassFilter classes={data.classes} value={classId} onChange={setClassId} /> : undefined}>
+      <Panel
+        toolbar={
+          data && data.classes.length > 0 ? (
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+              <ClassFilter classes={data.classes} value={classId} onChange={setClassId} />
+              {everyone.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-app-border bg-app-surface/80 px-2.5 py-1 text-xs font-semibold tabular-nums text-app-muted">
+                    {roster.length} {roster.length === everyone.length ? 'enrolled' : `of ${everyone.length} enrolled`}
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : undefined
+        }
+      >
         {state.status === 'loading' ? (
           <RowsSkeleton />
         ) : state.status === 'error' ? (
@@ -75,7 +90,7 @@ export function StudentsPage() {
             }
           />
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {roster.map((entry) => (
               <StudentRow
                 key={entry.student.id}

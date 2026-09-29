@@ -3,10 +3,12 @@ import { useEffect, type ReactNode } from 'react'
 export function Modal({
   title,
   onClose,
+  maxWidth = 'max-w-lg',
   children,
 }: {
-  title: string
+  title: ReactNode
   onClose: () => void
+  maxWidth?: string
   children: ReactNode
 }) {
   // Escape closes. Without it, a confirm dialog is dismissible only by aiming at
@@ -19,26 +21,39 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  const ariaLabel = typeof title === 'string' ? title : 'Dialog'
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title}
-        className="scrollbar-subtle max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-app bg-app-background p-6 shadow-app"
+        aria-label={ariaLabel}
+        className={`scrollbar-subtle max-h-[88vh] w-full ${maxWidth} overflow-y-auto rounded-app bg-app-background p-6 shadow-app border border-app-border/70 transition-all`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-app-foreground">{title}</h2>
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">{typeof title === 'string' ? <h2 className="text-lg font-semibold tracking-tight text-app-foreground">{title}</h2> : title}</div>
           <button
+            type="button"
             onClick={onClose}
-            className="cursor-pointer rounded-full px-2 py-1 text-app-muted hover:bg-app-surface"
+            className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-app-muted transition-colors hover:bg-app-surface hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
             aria-label="Close"
           >
-            ✕
+            <svg
+              className="size-4"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
           </button>
         </div>
         {children}

@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/Button'
 /** The dashboard's bordered working surface, with an optional toolbar strip. */
 export function Panel({ toolbar, children }: { toolbar?: ReactNode; children: ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-app border border-app-border bg-app-background shadow-md">
+    <section className="relative rounded-app border border-app-border bg-app-background shadow-md">
       {toolbar && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-border px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[calc(var(--app-radius)-1px)] border-b border-app-border bg-app-surface/20 px-4 py-3 sm:px-5">
           {toolbar}
         </div>
       )}
@@ -17,12 +17,27 @@ export function Panel({ toolbar, children }: { toolbar?: ReactNode; children: Re
 }
 
 /** A centred empty/zero-result/error message inside a panel. */
-export function PanelMessage({ title, body, action }: { title: string; body?: ReactNode; action?: ReactNode }) {
+export function PanelMessage({
+  title,
+  body,
+  action,
+  icon,
+}: {
+  title: string
+  body?: ReactNode
+  action?: ReactNode
+  icon?: ReactNode
+}) {
   return (
-    <div className="flex flex-col items-center px-6 py-16 text-center">
-      <h2 className="text-lg font-semibold text-app-foreground">{title}</h2>
-      {body && <p className="mt-2 max-w-sm text-sm text-app-muted">{body}</p>}
-      {action && <div className="mt-6">{action}</div>}
+    <div className="flex flex-col items-center px-6 py-14 text-center">
+      {icon && (
+        <div className="mb-4 grid size-12 place-items-center rounded-full border border-app-border bg-app-surface/60 text-app-muted shadow-2xs">
+          {icon}
+        </div>
+      )}
+      <h2 className="text-base font-semibold text-app-foreground">{title}</h2>
+      {body && <p className="mt-1.5 max-w-sm text-sm text-app-muted leading-relaxed">{body}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }

@@ -9,18 +9,12 @@ import { ROLE_LABEL } from '@/classroom/roles'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 
 /**
- * The dashboard's dark rail.
- *
- * Like `AuthVisualPanel`, this is deliberately **always dark** and does not
- * follow the app light/dark toggle: the whole layout is built around a dark
- * rail sitting against light content, and flipping it in light mode would
- * collapse that contrast. The `app-*` tokens are therefore not used inside
- * here — white-alpha values are, so the rail reads the same in both modes.
+ * The dashboard navigation rail, adapting seamlessly to light and dark themes.
  *
  * Below `lg` it becomes an off-canvas drawer driven by `open`/`onClose`
  * rather than a second, duplicated mobile header.
  */
-const SIDEBAR_BG = '#0c0c0e'
+
 
 const isMac =
   typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent)
@@ -98,11 +92,20 @@ function JoinIcon() {
   )
 }
 
-function SettingsIcon() {
+export function SettingsIcon({ className = 'size-4' }: { className?: string }) {
   return (
-    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="8" cy="8" r="2.2" />
-      <path d="M8 1.6v1.7M8 12.7v1.7M2.6 8H1M15 8h-1.6M4.2 4.2L3 3M13 13l-1.2-1.2M11.8 4.2L13 3M3 13l1.2-1.2" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
     </svg>
   )
 }
@@ -117,7 +120,7 @@ const RAIL_CLASS_LIMIT = 5
 export function SidebarSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mt-7 first:mt-0">
-      <div className="px-3 pb-2 text-[11px] font-medium tracking-[0.14em] text-white/35 uppercase">
+      <div className="px-3 pb-2 text-[11px] font-semibold tracking-[0.14em] text-app-muted uppercase">
         {label}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
@@ -144,16 +147,30 @@ export function SidebarLink({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={`flex w-full cursor-pointer items-center gap-3 rounded-app-sm px-3 py-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 ${
+      className={`group flex w-full cursor-pointer items-center gap-3 rounded-app-sm px-3 py-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
         active
-          ? 'bg-app-accent font-medium text-app-accent-foreground'
-          : 'text-white/70 hover:bg-white/6 hover:text-white'
+          ? 'bg-app-accent font-medium text-app-accent-foreground shadow-2xs'
+          : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
       }`}
     >
-      {icon && <span className="grid size-4 shrink-0 place-items-center">{icon}</span>}
+      {icon && (
+        <span
+          className={`grid size-4 shrink-0 place-items-center transition-colors ${
+            active ? 'text-app-accent-foreground' : 'text-app-muted group-hover:text-app-foreground'
+          }`}
+        >
+          {icon}
+        </span>
+      )}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge !== undefined && (
-        <span className="grid min-w-5 shrink-0 place-items-center rounded bg-white/10 px-1 text-[11px] text-white/60">
+        <span
+          className={`grid min-w-5 shrink-0 place-items-center rounded px-1 text-[11px] font-medium tabular-nums ${
+            active
+              ? 'bg-app-accent-foreground/20 text-app-accent-foreground'
+              : 'border border-app-border bg-app-surface text-app-muted'
+          }`}
+        >
           {badge}
         </span>
       )}
@@ -224,19 +241,18 @@ export function AppSidebar({
       )}
 
       <aside
-        style={{ background: SIDEBAR_BG }}
-        className={`fixed inset-y-0 left-0 z-40 flex w-[264px] shrink-0 flex-col border-r border-white/8 transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[264px] shrink-0 flex-col border-r border-app-border bg-app-background transition-colors duration-200 lg:static lg:translate-x-0 ${
           // `invisible` while closed so the offscreen rail can't take tab focus
           open ? 'translate-x-0' : 'invisible -translate-x-full lg:visible'
         }`}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
-          <LogoSlot onDark />
+          <LogoSlot />
           <button
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="grid size-8 cursor-pointer place-items-center rounded-app-sm text-white/50 transition-colors hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50 lg:hidden"
+            className="grid size-8 cursor-pointer place-items-center rounded-app-sm text-app-muted transition-colors hover:bg-app-surface hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent lg:hidden"
           >
             <svg
               className="size-4"
@@ -255,7 +271,7 @@ export function AppSidebar({
         <div className="px-4">
           <div className="relative">
             <svg
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-app-muted"
               viewBox="0 0 16 16"
               fill="none"
               stroke="currentColor"
@@ -273,18 +289,18 @@ export function AppSidebar({
               onChange={(e) => onQueryChange(e.target.value)}
               placeholder="Search"
               aria-label="Search"
-              className="w-full rounded-app-sm border border-white/10 bg-white/5 py-2.5 pr-14 pl-9 text-sm text-white outline-none transition-colors duration-150 placeholder:text-white/35 focus:border-white/25 focus:bg-white/8 [&::-webkit-search-cancel-button]:hidden"
+              className="w-full rounded-app-sm border border-app-border bg-app-surface/60 py-2.5 pr-14 pl-9 text-sm text-app-foreground outline-none transition-colors duration-150 placeholder:text-app-muted focus:border-app-accent focus:bg-app-background focus:ring-2 focus:ring-app-accent/25 [&::-webkit-search-cancel-button]:hidden"
             />
             <kbd
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-white/12 bg-white/5 px-1.5 py-0.5 font-app text-[10px] font-medium text-white/40"
+              className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-app-border bg-app-surface px-1.5 py-0.5 font-app text-[10px] font-medium text-app-muted"
             >
               {isMac ? '⌘F' : 'Ctrl F'}
             </kbd>
           </div>
         </div>
 
-        <nav className="scrollbar-subtle-on-dark min-h-0 flex-1 overflow-y-auto px-4 py-6">
+        <nav className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto px-4 py-6">
           <SidebarSection label="Workspace">
             <SidebarLink
               label="Overview"
@@ -368,16 +384,16 @@ export function AppSidebar({
           )}
         </nav>
 
-        <div className="mt-auto border-t border-white/8 p-4">
+        <div className="mt-auto border-t border-app-border p-4">
           <div className="flex items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-app-highlight text-sm font-semibold text-app-highlight-foreground"
+              className="grid size-8 shrink-0 place-items-center rounded-full bg-app-highlight text-sm font-semibold text-app-highlight-foreground shadow-2xs"
             >
               {name?.charAt(0).toUpperCase() ?? '?'}
             </span>
             <div className="flex min-w-0 flex-1 flex-col text-xs">
-              {name && <span className="truncate text-white/80">{name}</span>}
+              {name && <span className="truncate font-medium text-app-foreground">{name}</span>}
               {/*
                 A transient profile read failure must not read as "General" in
                 the one place that's always on screen — `ProfileSection`
@@ -385,7 +401,7 @@ export function AppSidebar({
                 the rail defaulting `role` to General for rendering safety
                 shouldn't also mean *labeling* a teacher General.
               */}
-              <span className="text-white/45">{profileDegraded ? '—' : ROLE_LABEL[role]}</span>
+              <span className="text-app-muted">{profileDegraded ? '—' : ROLE_LABEL[role]}</span>
             </div>
             {/*
               One control instead of three (Account type, Log out, light/dark).
@@ -398,9 +414,9 @@ export function AppSidebar({
               onClick={() => setSettingsOpen(true)}
               aria-label="Settings"
               title="Settings"
-              className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border border-white/12 bg-white/5 text-white/70 transition-colors hover:bg-white/12 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/50"
+              className="group grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border border-app-border bg-app-surface/60 text-app-muted transition-all duration-200 hover:border-app-border/80 hover:bg-app-surface hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
             >
-              <SettingsIcon />
+              <SettingsIcon className="size-4 transition-transform duration-300 group-hover:rotate-45" />
             </button>
           </div>
         </div>

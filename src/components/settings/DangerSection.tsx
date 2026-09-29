@@ -7,14 +7,7 @@ import { Field, Input } from '@/components/ui/Input'
 const CONFIRM_WORD = 'delete'
 
 /**
- * Deletes the account for good.
- *
- * Two-step, and the second step is typed rather than clicked: nothing here is
- * recoverable — there is no trash table and no server copy of a deck — so the
- * cost of an accidental click is the user's entire library. The consequences
- * are spelled out before the field appears, including the ones that reach
- * other people: deleting a teacher takes their classes with it, which removes
- * every student's access to the announcements and quizzes posted in them.
+ * Executive Danger Zone section for permanent account removal.
  */
 export function DangerSection() {
   const role = useAuthStore((s) => s.profile?.role ?? 'general')
@@ -34,21 +27,35 @@ export function DangerSection() {
       setDeleting(false)
       return
     }
-    // On success the sign-out inside deleteAccount flips auth state, and
-    // RequireAuth takes it from here — this component is about to unmount, so
-    // `deleting` is deliberately left set rather than flickering back.
   }
 
   if (!armed) {
     return (
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-app-muted">
-          Deleting your account removes it permanently, along with every deck and slide you've made.
-          This cannot be undone.
-        </p>
-        <div className="flex justify-start">
-          <Button variant="secondary" onClick={() => setArmed(true)}>
-            Delete account
+      <div className="rounded-app-sm border border-red-500/25 bg-red-500/5 p-4 flex flex-col gap-3">
+        <div className="flex items-start gap-3">
+          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+            <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <path d="M8 2.5l6 10.5H2L8 2.5z" />
+              <path d="M8 6.5v3M8 11.5h.01" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
+              Delete Account
+            </h4>
+            <p className="mt-0.5 text-xs text-app-muted">
+              Permanently delete your account along with all presentations, saved drafts, and associated classroom data. This action is irreversible.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <Button
+            variant="danger"
+            onClick={() => setArmed(true)}
+            className="text-xs"
+          >
+            Initiate account deletion
           </Button>
         </div>
       </div>
@@ -56,16 +63,23 @@ export function DangerSection() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="rounded-app-sm border border-red-500/40 bg-red-500/8 p-4 flex flex-col gap-4">
       <Alert tone="error">
-        <span className="font-medium">This is permanent.</span> Your account, every deck and every
-        slide will be deleted and cannot be recovered.
-        {role === 'teacher' && ' The classes you own will also be deleted, along with their announcements and quizzes, and your students will lose access to them.'}
-        {role === 'student' && ' You will be removed from the classes you joined.'}
+        <span className="font-semibold">Irreversible action.</span> Deleting your account will immediately wipe your credentials, presentation library, and slide history.
+        {role === 'teacher' && (
+          <span className="block mt-1 font-medium">
+            Classes you own will be removed, and enrolled students will lose access to associated announcements and quizzes.
+          </span>
+        )}
+        {role === 'student' && (
+          <span className="block mt-1 font-medium">
+            You will be automatically removed from all classrooms you have joined.
+          </span>
+        )}
       </Alert>
 
       <Field
-        label={`Type "${CONFIRM_WORD}" to confirm`}
+        label={`Type "${CONFIRM_WORD}" to confirm permanent deletion`}
         error={error}
         render={(fieldProps) => (
           <Input
@@ -75,6 +89,7 @@ export function DangerSection() {
             autoFocus
             placeholder={CONFIRM_WORD}
             value={typed}
+            className="font-mono text-sm"
             onChange={(e) => {
               setTyped(e.target.value)
               if (error) setError(null)
@@ -83,7 +98,7 @@ export function DangerSection() {
         )}
       />
 
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
         <Button
           variant="ghost"
           onClick={() => {
@@ -101,7 +116,7 @@ export function DangerSection() {
           loading={deleting}
           disabled={deleting || typed.trim().toLowerCase() !== CONFIRM_WORD}
         >
-          {deleting ? 'Deleting…' : 'Delete my account'}
+          {deleting ? 'Deleting account…' : 'Permanently delete account'}
         </Button>
       </div>
     </div>
