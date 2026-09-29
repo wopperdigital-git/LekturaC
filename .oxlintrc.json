@@ -4,6 +4,7 @@
   "options": {
     "typeAware": true
   },
+  "ignorePatterns": [".agents/**", "scratch/**", "dist/**"],
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
