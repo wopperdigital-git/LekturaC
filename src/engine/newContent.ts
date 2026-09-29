@@ -31,7 +31,7 @@ export const CONTENT_TYPES = [
 export type ContentType = (typeof CONTENT_TYPES)[number]
 
 /**
- * What the "Add content" menu shows for each type, in the order it shows them.
+ * What the toolbar's Insert menu shows for each type, in the order it shows them.
  * `image` is deliberately absent for the reason it is absent from the slide-type
  * picker: an image block needs a `url` and nothing in the app can supply one.
  */
@@ -46,6 +46,31 @@ export const CONTENT_OPTIONS: readonly { type: ContentType; label: string; descr
   { type: 'step', label: 'Timeline step', description: 'A labelled stage in a sequence' },
   { type: 'group', label: 'Comparison group', description: 'A titled set of points' },
 ]
+
+const CONTENT_TYPE_OF: Record<Exclude<ContentBlock['type'], 'heading' | 'image'>, ContentType> = {
+  paragraph: 'body',
+  bulletList: 'list',
+  stat: 'stat',
+  quote: 'quote',
+  timelineStep: 'step',
+  comparisonGroup: 'group',
+}
+
+/**
+ * What a selected element is called in the tools panel, in the Insert menu's own
+ * words so the two never name one thing differently. A heading the AI wrote has
+ * no `size` (the layout picks it) and is plain "Heading"; `itemIndex` names one
+ * item of a list or comparison group instead of the whole element.
+ */
+export function elementLabel(block: ContentBlock, itemIndex: number | null = null): string {
+  if (itemIndex !== null && (block.type === 'bulletList' || block.type === 'comparisonGroup')) {
+    return block.type === 'bulletList' ? 'List item' : 'Group item'
+  }
+  if (block.type === 'image') return 'Image'
+  const type = block.type === 'heading' ? block.size : CONTENT_TYPE_OF[block.type]
+  if (!type) return 'Heading'
+  return CONTENT_OPTIONS.find((option) => option.type === type)?.label ?? 'Element'
+}
 
 /**
  * The most blocks a card can be grown to by hand. Like `MAX_LIST_ITEMS`, a cap

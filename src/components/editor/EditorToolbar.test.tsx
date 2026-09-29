@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { EditorTool } from '@/engine/editorTool'
 import { DEFAULT_PEN_SETTINGS } from '@/engine/penSettings'
 import { DEFAULT_SHAPE_SETTINGS } from '@/engine/shapes'
+import { layoutVarieties } from '@/engine/layoutEngine'
 import { EditorToolbar } from './EditorToolbar'
+import { DEFAULT_GRID, type EditorGrid } from './gridContext'
 
 /**
  * A render smoke test, a deliberate exception to "pure logic only" like
@@ -14,25 +17,22 @@ import { EditorToolbar } from './EditorToolbar'
 
 function render(
   overrides: Partial<{
-    canUndo: boolean
-    canRedo: boolean
     tool: EditorTool
-    withSlide: boolean
     withPen: boolean
     withShapes: boolean
+    slide: ComponentProps<typeof EditorToolbar>['slide']
+    grid: EditorGrid
   }> = {},
 ) {
-  const { canUndo = true, canRedo = true, tool = 'select', withSlide = true, withPen = true, withShapes = true } = overrides
+  const { tool = 'select', withPen = true, withShapes = true, slide, grid = DEFAULT_GRID } = overrides
   const noop = () => {}
   return renderToStaticMarkup(
     <EditorToolbar
-      canUndo={canUndo}
-      canRedo={canRedo}
-      onUndo={noop}
-      onRedo={noop}
       tool={tool}
+      slide={slide}
       onToolChange={noop}
-      onAddText={withSlide ? noop : undefined}
+      grid={grid}
+      onGridChange={noop}
       pen={
         withPen
           ? {
@@ -69,31 +69,44 @@ function button(html: string, label: string): string {
 }
 
 describe('EditorToolbar', () => {
-  it('offers undo, redo, the arrow tool and the text tool', () => {
+  it('offers select, move, pen, shapes, show grid and snap, in that order', () => {
     const html = render()
-    for (const label of ['Undo', 'Redo', 'Text', 'Tool: Select elements']) {
-      expect(() => button(html, label), label).not.toThrow()
+    const labels = ['Select', 'Move', 'Pen', 'Shapes', 'Show grid', 'Snap to grid']
+    const at = labels.map((label) => html.indexOf(`aria-label="${label}"`))
+    expect(at.every((i) => i >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+  })
+
+  // Icons only: each name is in a hover tooltip, not a native title.
+  it('names every button in a tooltip, and in no native title', () => {
+    const html = render({
+      slide: { number: 1, total: 1, layout: undefined, onAddContent: () => {} },
+    })
+    for (const label of ['Select', 'Move', 'Insert', 'Pen', 'Shapes', 'Show grid', 'Snap to grid']) {
+      expect(html).toMatch(new RegExp(`role="tooltip"[^>]*>${label}<`))
+      expect(button(html, label)).not.toMatch(/title="[^"]+"/)
     }
   })
 
-  it('disables undo and redo when there is nothing to undo or redo', () => {
-    expect(button(render({ canUndo: false }), 'Undo')).toContain('disabled=""')
-    expect(button(render({ canRedo: false }), 'Redo')).toContain('disabled=""')
-    expect(button(render(), 'Undo')).not.toContain('disabled=""')
-    expect(button(render(), 'Redo')).not.toContain('disabled=""')
+  it('shows the grid and snap settings as they are', () => {
+    const html = render({ grid: { show: false, snap: true } })
+    expect(button(html, 'Show grid')).toContain('aria-pressed="false"')
+    expect(button(html, 'Snap to grid')).toContain('aria-pressed="true"')
   })
 
-  it('shows the active tool on the arrow button', () => {
-    expect(() => button(render({ tool: 'select' }), 'Tool: Select elements')).not.toThrow()
-    expect(() => button(render({ tool: 'pan' }), 'Tool: Move screen')).not.toThrow()
+  // History moved to the top bar; two places for it would be two ways to do one thing.
+  it('no longer carries undo and redo — the top bar does', () => {
+    expect(() => button(render(), 'Undo')).toThrow()
+    expect(() => button(render(), 'Redo')).toThrow()
   })
 
-  // Adding text appends to the selected slide, so with none selected the button
-  // has nothing to act on.
-  it('disables the text tool until a slide is selected', () => {
-    expect(button(render({ withSlide: false }), 'Text')).toContain('disabled=""')
-    expect(button(render({ withSlide: true }), 'Text')).not.toContain('disabled=""')
+  it('marks Select or Move as the active tool', () => {
+    expect(button(render({ tool: 'select' }), 'Select')).toContain('aria-pressed="true"')
+    expect(button(render({ tool: 'select' }), 'Move')).toContain('aria-pressed="false"')
+    expect(button(render({ tool: 'pan' }), 'Move')).toContain('aria-pressed="true"')
+    expect(button(render({ tool: 'pen' }), 'Select')).toContain('aria-pressed="false"')
   })
+
 
   it('has every menu closed until it is opened', () => {
     expect(render()).not.toContain('role="menu"')
@@ -119,5 +132,73 @@ describe('EditorToolbar', () => {
 
   it('has no shapes button when the page gives it no shape state', () => {
     expect(() => button(render({ withShapes: false }), 'Shapes')).toThrow()
+  })
+
+  describe('with no element picked (the slide set)', () => {
+    const layout = {
+      options: layoutVarieties([{ type: 'heading', text: 'T' }, { type: 'bulletList', items: ['a', 'b'] }], 'list'),
+      active: 'auto' as const,
+      onChange: () => {},
+      kind: 'list' as const,
+    }
+    const slide = { number: 3, total: 7, layout, onAddContent: () => {} }
+
+    it('with a slide clicked: slide number, select, move, layout, insert, pen, shapes, grid, snap', () => {
+      const html = render({ slide })
+      const at = (needle: string) => html.indexOf(needle)
+      expect(html).toContain('3 / 7')
+      expect(at('3 / 7')).toBeLessThan(at('aria-label="Select"'))
+      expect(at('aria-label="Select"')).toBeLessThan(at('aria-label="Move"'))
+      expect(at('aria-label="Move"')).toBeLessThan(at('aria-label="Layout"'))
+      expect(at('aria-label="Layout"')).toBeLessThan(at('aria-label="Insert"'))
+      expect(at('aria-label="Insert"')).toBeLessThan(at('aria-label="Pen"'))
+      expect(() => button(html, 'New slide')).toThrow()
+      expect(at('aria-label="Pen"')).toBeLessThan(at('aria-label="Shapes"'))
+      expect(at('aria-label="Shapes"')).toBeLessThan(at('aria-label="Show grid"'))
+      expect(at('aria-label="Show grid"')).toBeLessThan(at('aria-label="Snap to grid"'))
+    })
+
+    // Headings and body text are in Insert; a separate Text button would be a
+    // second way to add the same four things.
+    it('has no separate Text button — Insert holds the text levels', () => {
+      expect(() => button(render({ slide }), 'Text')).toThrow()
+    })
+
+    // With nothing clicked there is no slide to arrange or add to: the default set.
+    it('has no Layout or Insert until a slide is clicked', () => {
+      const html = render({ slide: { number: 3, total: 7 } })
+      expect(() => button(html, 'Layout')).toThrow()
+      expect(() => button(html, 'Insert')).toThrow()
+      expect(html).toContain('3 / 7')
+    })
+
+    // The picker offers only layouts of the slide's own type, so it names that type.
+    it('names the slide type above the layout options', async () => {
+      const { LayoutMenu } = await import('./LayoutPicker')
+      const html = renderToStaticMarkup(<LayoutMenu layout={layout} />)
+      expect(html).toContain('aria-label="Slide type: List"')
+      expect(html.indexOf('>List<')).toBeLessThan(html.indexOf('<svg'))
+      const title = renderToStaticMarkup(<LayoutMenu layout={{ ...layout, kind: 'title' }} />)
+      expect(title).toContain('>Title<')
+    })
+
+    // Every element is a small wireframe with its name, not a text-only list.
+    it('offers every kind of content as a picture, text levels first', async () => {
+      const { CONTENT_OPTIONS } = await import('@/engine/newContent')
+      const { ContentGrid } = await import('./ContentPicker')
+      const html = renderToStaticMarkup(<ContentGrid onPick={() => {}} />)
+      expect(html.match(/<svg/g)?.length).toBe(CONTENT_OPTIONS.length)
+      for (const option of CONTENT_OPTIONS) expect(html).toContain(`>${option.label}<`)
+      const at = (label: string) => html.indexOf(`>${label}<`)
+      for (const text of ['Heading 1', 'Heading 2', 'Heading 3', 'Body text']) {
+        expect(at(text)).toBeLessThan(at('Bullet list'))
+      }
+    })
+  })
+
+  it('shows the element set, with no slide number, layout or insert, while an element is picked', () => {
+    const html = render()
+    expect(() => button(html, 'Layout')).toThrow()
+    expect(() => button(html, 'Insert')).toThrow()
   })
 })

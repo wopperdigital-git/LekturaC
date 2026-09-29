@@ -4,6 +4,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   clampZoom,
+  fitZoom,
   scrollTopAfterZoom,
   stepZoom,
   zoomFromWheel,
@@ -80,5 +81,23 @@ describe('scrollTopAfterZoom', () => {
 
   it('never scrolls above the top', () => {
     expect(scrollTopAfterZoom(0, 400, 2, 0.5)).toBe(0)
+  })
+})
+
+describe('fitZoom', () => {
+  it('scales the column up to fill a wide view', () => {
+    expect(fitZoom(1000 * 1.5 + 100, 1000, 100)).toBe(1.5)
+  })
+
+  it('is 100% when the view is narrower than the column', () => {
+    expect(fitZoom(700, 1000, 100)).toBe(1)
+  })
+
+  it('stays within the zoom range', () => {
+    expect(fitZoom(10000, 1000, 100)).toBe(MAX_ZOOM)
+  })
+
+  it('falls back to the default for a view with no room', () => {
+    expect(fitZoom(50, 1000, 100)).toBe(DEFAULT_ZOOM)
   })
 })

@@ -10,11 +10,15 @@ import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { listTarget } from '@/engine/listItems'
 import { TextEditingContext, type TextEditing } from '@/components/layouts/textEditingContext'
 import { ZoomFrame } from './ZoomFrame'
+import { CardActions } from './CardActions'
 import { EditorGridContext, DEFAULT_GRID, type EditorGrid } from './gridContext'
 import { DrawingContext, NO_DRAWING, type CanvasDrawing } from './drawingContext'
 
 /** The column's natural width: `max-w-5xl` (1024px) less the 24px of padding either side. */
-const COLUMN_MAX_WIDTH_PX = 976
+export const COLUMN_MAX_WIDTH_PX = 976
+
+/** The canvas padding either side of the column (`px-12`), in total. */
+export const CANVAS_GUTTER_PX = 96
 
 /**
  * Renders the deck.
@@ -44,6 +48,8 @@ export function CardCanvas({
   onChangeAdjust,
   onRemoveSelected,
   onAddItem,
+  onDuplicateCard,
+  onDeleteCard,
   zoom = 1,
   grid = DEFAULT_GRID,
   drawing = NO_DRAWING,
@@ -68,6 +74,9 @@ export function CardCanvas({
   onRemoveSelected: () => void
   /** The plus under a selected list: appends an item to the list at this block index. */
   onAddItem: (blockIndex: number) => void
+  /** The buttons above the selected slide's top-right corner. */
+  onDuplicateCard: (cardId: string) => void
+  onDeleteCard: (cardId: string) => void
   /** How large the cards are drawn, as a multiple of natural size. */
   zoom?: number
   /** The graph-paper grid: whether it is drawn and whether dragging snaps to it. */
@@ -123,10 +132,16 @@ export function CardCanvas({
                   // fraction before this click made it.
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => onSelectCard(card.id)}
-                  className={`rounded-slide transition-shadow ${
+                  className={`relative rounded-slide transition-shadow ${
                     showCardRing ? 'ring-2 ring-app-accent ring-offset-4 ring-offset-transparent' : ''
                   }`}
                 >
+                  {isSelected && (
+                    <CardActions
+                      onDuplicate={() => onDuplicateCard(card.id)}
+                      onDelete={() => onDeleteCard(card.id)}
+                    />
+                  )}
                   {/*
                     The style is merged here rather than nested as deck-scope +
                     card-scope, because a card turning bold *off* while the deck has

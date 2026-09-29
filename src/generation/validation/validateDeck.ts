@@ -46,6 +46,7 @@ export const REPAIRABLE: ReadonlySet<QualityFlagType> = new Set<QualityFlagType>
   'CONFLICTING_CLAIM',
   'VISUAL_MISMATCH',
   'LIST_DOMINANT',
+  'OPENING_NOT_TITLE',
 ])
 
 /** At most one repair call per generation targets at most this many slides. */

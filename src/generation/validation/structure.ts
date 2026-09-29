@@ -1,4 +1,5 @@
 import { resolveLayout } from '@/engine/layoutEngine'
+import { isTitleShaped } from '@/engine/roleLayout'
 import type { GeneratedDeck, QualityFlag } from '../schemas'
 import { headingOf, normalize, visibleLines, wordCount } from './text'
 
@@ -224,6 +225,22 @@ function listDominantFlags(deck: GeneratedDeck): QualityFlag[] {
     }))
 }
 
+/** Slide 1 is always drawn as a title slide, so anything past a heading and one line is crammed in as leftovers. */
+function openingNotTitleFlags(deck: GeneratedDeck): QualityFlag[] {
+  const first = deck.cards[0]
+  if (!first || isTitleShaped(first.blocks)) return []
+  return [
+    {
+      type: 'OPENING_NOT_TITLE',
+      severity: 'medium',
+      slideIndex: 0,
+      message: `${slideLabel(0)} is the title slide but carries more than a heading and one short line.`,
+      suggestedAction:
+        'Make it a title slide: exactly one heading (the deck title) and at most one short paragraph subtitle, no other blocks.',
+    },
+  ]
+}
+
 function textOnlyDeckFlags(deck: GeneratedDeck): QualityFlag[] {
   if (deck.cards.length < 4) return []
   const hasRichBlock = deck.cards.some((card) => card.blocks.some((block) => RICH_BLOCK_TYPES.has(block.type)))
@@ -427,6 +444,7 @@ export function structureFlags(deck: GeneratedDeck): QualityFlag[] {
     ...tooManyBulletsFlags(deck),
     ...layoutRepetitionFlags(deck),
     ...listDominantFlags(deck),
+    ...openingNotTitleFlags(deck),
     ...textOnlyDeckFlags(deck),
     ...weakConclusionFlags(deck),
     ...fillerSlideFlags(deck),

@@ -123,8 +123,12 @@ ONE MAIN IDEA PER SLIDE
 - Visible text — everything except the heading — is 20-40 words, 55 at most. Timelines and quotes are exempt from this ceiling.
 - Bullet lists run 3-5 items, each 8 words or fewer.
 
+TITLE SLIDE
+- The first card is ALWAYS the title slide: exactly one "heading" (the deck's title) followed by at most one short "paragraph" subtitle of 20 words or fewer. No other blocks on it — no list, stat, quote, timeline or comparison. Its plan.visualType is "text".
+- It still counts toward the slide count, and it opens the blueprint's first row (a hook or an opening line works as the subtitle).
+
 NO FILLER SLIDES
-- Do not add an agenda, "objectives", "what you will learn", introduction, or "thank you" slide by default. Only include one when presentationType is "educational" or "tutorial" and this is a formal lesson, or the user explicitly asked for it.
+- The title slide above is required and is not filler. Do not add an agenda, "objectives", "what you will learn", introduction, or "thank you" slide by default. Only include one when presentationType is "educational" or "tutorial" and this is a formal lesson, or the user explicitly asked for it.
 - The final slide must resolve the deck's objective: a summary, conclusion, recommendation, or call to action — never a bare sign-off.
 
 SPEAKER NOTES

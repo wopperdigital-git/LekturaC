@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { useParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { useAuthStore } from '@/store/authStore'
@@ -9,12 +9,17 @@ import { browserStore, pruneTempInk, readTempInk, writeTempInk, type TempInk } f
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
-import { CardCanvas } from '@/components/editor/CardCanvas'
+import { CANVAS_GUTTER_PX, COLUMN_MAX_WIDTH_PX, CardCanvas } from '@/components/editor/CardCanvas'
+import { DeleteSlideModal } from '@/components/editor/DeleteSlideModal'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
+import type { PenPopover } from '@/components/editor/PenPopover'
+import type { ShapePopover } from '@/components/editor/ShapePopover'
 import { DEFAULT_TOOL, type EditorTool } from '@/engine/editorTool'
 import { DEFAULT_GRID, type EditorGrid } from '@/components/editor/gridContext'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { ToolsPanel, type PanelTab } from '@/components/editor/ToolsPanel'
+import type { LayoutTools } from '@/components/editor/LayoutPicker'
+import type { Card } from '@/engine/contentBlocks'
 import { NarrationTab } from '@/components/editor/NarrationTab'
 import { modalIsOpen } from '@/lib/modalOpen'
 import { previewFont } from '@/engine/fontPreview'
@@ -23,7 +28,7 @@ import { CardTypeModal } from '@/components/editor/CardTypeModal'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
-import { firstEditableField, type ContentType } from '@/engine/newContent'
+import { elementLabel, firstEditableField, type ContentType } from '@/engine/newContent'
 import {
   selectionAfterCardPress,
   selectionAfterElementPress,
@@ -36,7 +41,7 @@ import { parseTextRef } from '@/engine/blockText'
 import { SLIDE_BODY_ATTR, blockIndexOf, blockStyleKey } from '@/components/layouts/adjustContext'
 import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
-import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
+import { DEFAULT_ZOOM, clampZoom, fitZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
 import { QuizModal } from '@/components/quiz/QuizModal'
 import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
@@ -80,6 +85,8 @@ export function EditorPage() {
   const [addSlideOpen, setAddSlideOpen] = useState(false)
   // Whether the quiz generation dialog is open. Guarded like `addSlideOpen`.
   const [quizOpen, setQuizOpen] = useState(false)
+  // The slide a delete button asked to remove, waiting on the confirmation dialog.
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   // A card added from the picker does not exist in the DOM until the next
   // render, so the scroll has to wait for its ref rather than run inline.
   const [pendingScrollId, setPendingScrollId] = useState<string | null>(null)
@@ -399,7 +406,7 @@ export function EditorPage() {
       remove: removeSelected,
       // Escape leaves the pen before it steps the selection out.
       escape: () => (tool === 'pen' || tool === 'shape' ? setTool('select') : stepOut()),
-      dialogOpen: addSlideOpen || quizOpen,
+      dialogOpen: addSlideOpen || quizOpen || pendingDeleteId !== null,
     }
   })
 
@@ -550,12 +557,13 @@ export function EditorPage() {
   const hasTextSelection = Boolean(textRange && textRange.end > textRange.start)
   // The scope the text tools are writing to, in words — narrowest first, the same
   // order `typographyScope` and the character-range routing use.
+  const selectedBlock = selectedBlockIndex !== null ? selectedCard?.blocks[selectedBlockIndex] : undefined
   const scopeLabel =
     level === 3 && hasTextSelection
       ? 'selected text'
       : scope.kind === 'element'
-        ? selectedItemIndex !== null
-          ? 'selected item'
+        ? selectedBlock
+          ? elementLabel(selectedBlock, selectedItemIndex)
           : 'selected element'
         : scope.kind === 'card'
           ? 'this slide'
@@ -607,12 +615,20 @@ export function EditorPage() {
     would not award it, and reading the blocks alone would report that card as
     a text slide — so the toolbar would name a type the slide plainly is not.
   */
-  const selectedCardKind = selectedCard
-    ? cardKindOf(selectedCard, { isFirstCard: selectedIndex === 0 })
-    : undefined
-  const selectedResolvedLayout = selectedCard
-    ? resolveLayout(selectedCard.layout, selectedCard.blocks, { isFirstCard: selectedIndex === 0 })
-    : undefined
+  /** The layout picker for one slide: varieties of its own type, with 'auto' resolved to what it draws as. */
+  function layoutToolsFor(card: Card, index: number): LayoutTools {
+    const kind = cardKindOf(card, { isFirstCard: index === 0 })
+    return {
+      options: layoutVarieties(card.blocks, kind),
+      active: card.layout,
+      activeVisualStyle: card.visualStyle,
+      onChange: (layout, visualStyle) => store.setCardVariety(card.id, layout, visualStyle),
+      kind,
+      resolved: resolveLayout(card.layout, card.blocks, { isFirstCard: index === 0 }),
+    }
+  }
+  // The slide the floating toolbar speaks for: the selected one, else the one in view.
+  const toolbarIndex = sortedCards.findIndex((c) => c.id === (selectedCardId ?? activeCardId))
 
   // The plus under a selected list names its own block; nothing else calls this.
   function addListItem(blockIndex: number) {
@@ -683,6 +699,57 @@ export function EditorPage() {
     setPendingScrollId(newCardId)
   }
 
+  function duplicateCard(cardId: string) {
+    const copyId = store.duplicateCard(cardId)
+    if (!copyId) return
+    setActiveCardId(copyId)
+    selectCard(copyId)
+    setPendingScrollId(copyId)
+  }
+
+  /*
+    The one way a slide is deleted, from the bin above the selected slide and from
+    the outline alike. Deleting the slide that holds the selection drops it (and
+    any edit in it); deleting another one from the outline leaves it alone.
+  */
+  function deleteCard(cardId: string) {
+    if (cardId === selectedCardId) {
+      setActiveTextRef(null)
+      setTextRange(null)
+      selectCard(null)
+    }
+    // The outline falls back to the first slide rather than highlighting one that is gone.
+    if (cardId === activeCardId) setActiveCardId(null)
+    store.deleteCard(cardId)
+  }
+
+  function changeZoom(next: number | null, direction?: 1 | -1) {
+    setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
+  }
+
+  // The pen's and shapes' popover state, for the floating toolbar.
+  const penTools: ComponentProps<typeof PenPopover> = {
+    settings: pen,
+    onChange: (patch) => setPen((current) => ({ ...current, ...patch })),
+    hasTemporaryHere: inkCardId !== null && (temp.ink[inkCardId]?.length ?? 0) > 0,
+    hasTemporary: Object.keys(temp.ink).length > 0,
+    onClearSlide: () =>
+      changeTempInk((ink) => {
+        const next = { ...ink }
+        if (inkCardId) delete next[inkCardId]
+        return next
+      }),
+    onClearAll: () => changeTempInk(() => ({})),
+    atLimit: inkAtLimit,
+  }
+  const shapeTools: ComponentProps<typeof ShapePopover> = {
+    settings: shape,
+    onChange: (patch) => setShape((current) => ({ ...current, ...patch })),
+    ink: { color: pen.color, keep: pen.keep },
+    onInkChange: (patch) => setPen((current) => ({ ...current, ...patch })),
+    atLimit: inkFull,
+  }
+
   if (!id) return null
   if (store.status === 'loading') {
     return <div className="p-8 text-app-muted">Loading…</div>
@@ -694,10 +761,22 @@ export function EditorPage() {
         title={store.title}
         onTitleChange={store.setTitle}
         saveStatus={store.status}
-        canExport={cards.length > 0}
-        onQuiz={() => setQuizOpen(true)}
-        quizDisabledReason={quizDisabledReason}
-        exporting={exportStatus === 'working'}
+        tab={panelTab}
+        onTabChange={(next) => {
+          setPanelTab(next)
+          // The modes are the panel's tabs; picking one with the panel tucked away shows it.
+          setToolsOpen(true)
+        }}
+        canUndo={store.past.length > 0}
+        canRedo={store.future.length > 0}
+        onUndo={undo}
+        onRedo={redo}
+        zoom={zoom}
+        onZoomChange={changeZoom}
+        onFit={() => {
+          const width = canvasRef.current?.clientWidth
+          if (width) setZoom(fitZoom(width, COLUMN_MAX_WIDTH_PX, CANVAS_GUTTER_PX))
+        }}
         onExport={() =>
           void exportDeck({
             title: store.title,
@@ -706,6 +785,11 @@ export function EditorPage() {
             cards,
           })
         }
+        exporting={exportStatus === 'working'}
+        canExport={cards.length > 0}
+        presentHref={`/deck/${id}/present`}
+        onQuiz={() => setQuizOpen(true)}
+        quizDisabledReason={quizDisabledReason}
       />
       {/*
         A failed write used to say "Save failed" in grey, 11px, in the corner of
@@ -775,7 +859,7 @@ export function EditorPage() {
                 activeCardId={activeCardId}
                 onSelect={scrollToCard}
                 onReorder={store.reorderCards}
-                onDelete={store.deleteCard}
+                onDelete={setPendingDeleteId}
                 onAddCard={() => setAddSlideOpen(true)}
               />
             </div>
@@ -796,34 +880,23 @@ export function EditorPage() {
             stretching the flex row. */}
         <div className="relative flex min-w-0 flex-1 flex-col">
           <EditorToolbar
-            canUndo={store.past.length > 0}
-            canRedo={store.future.length > 0}
-            onUndo={undo}
-            onRedo={redo}
+            slide={
+              selectedBlockIndex === null && activeShape === null
+                ? {
+                    number: toolbarIndex >= 0 ? toolbarIndex + 1 : undefined,
+                    total: sortedCards.length,
+                    // Only for a slide the user has actually clicked, not merely the one in view.
+                    layout: selectedCard ? layoutToolsFor(selectedCard, selectedIndex) : undefined,
+                    onAddContent: selectedCard ? addContent : undefined,
+                  }
+                : undefined
+            }
             tool={tool}
             onToolChange={setTool}
-            onAddText={selectedCard ? addContent : undefined}
-            pen={{
-              settings: pen,
-              onChange: (patch) => setPen((current) => ({ ...current, ...patch })),
-              hasTemporaryHere: inkCardId !== null && (temp.ink[inkCardId]?.length ?? 0) > 0,
-              hasTemporary: Object.keys(temp.ink).length > 0,
-              onClearSlide: () =>
-                changeTempInk((ink) => {
-                  const next = { ...ink }
-                  if (inkCardId) delete next[inkCardId]
-                  return next
-                }),
-              onClearAll: () => changeTempInk(() => ({})),
-              atLimit: inkAtLimit,
-            }}
-            shapes={{
-              settings: shape,
-              onChange: (patch) => setShape((current) => ({ ...current, ...patch })),
-              ink: { color: pen.color, keep: pen.keep },
-              onInkChange: (patch) => setPen((current) => ({ ...current, ...patch })),
-              atLimit: inkFull,
-            }}
+            grid={grid}
+            onGridChange={setGrid}
+            pen={penTools}
+            shapes={shapeTools}
           />
         {/* Transparent: the stage layer above is the background now. */}
         <main ref={canvasRef} className="scrollbar-subtle relative min-h-0 flex-1 overflow-auto">
@@ -879,6 +952,8 @@ export function EditorPage() {
                 onChangeAdjust={store.setBlockAdjust}
                 onRemoveSelected={() => void removeSelected(true)}
                 onAddItem={addListItem}
+                onDuplicateCard={duplicateCard}
+                onDeleteCard={setPendingDeleteId}
                 zoom={zoom}
                 grid={grid}
                 drawing={{
@@ -929,7 +1004,6 @@ export function EditorPage() {
               <ToolsPanel
                 level={level}
                 scopeLabel={scopeLabel}
-                presentHref={`/deck/${id}/present`}
                 // Read from the same scope it writes to, or the panel reports a
                 // state it is not editing.
                 textStyle={
@@ -970,33 +1044,9 @@ export function EditorPage() {
                     store.setTextMarkValue(selectedCard.id, activeTextRef, textRange, type, value)
                   }
                 }}
-                layout={
-                  selectedCard && selectedCardKind
-                    ? {
-                        options: layoutVarieties(selectedCard.blocks, selectedCardKind),
-                        active: selectedCard.layout,
-                        activeVisualStyle: selectedCard.visualStyle,
-                        onChange: (layout, visualStyle) =>
-                          store.setCardVariety(selectedCard.id, layout, visualStyle),
-                        kind: selectedCardKind,
-                        resolved: selectedResolvedLayout,
-                        card: selectedCard,
-                        isFirstCard: selectedIndex === 0,
-                      }
-                    : undefined
-                }
-                onAddContent={selectedCard ? addContent : undefined}
                 theme={store.theme}
-                deckTextStyle={store.textStyle}
                 onThemeChange={store.setTheme}
-                grid={grid}
-                onGridChange={setGrid}
-                zoom={zoom}
-                onZoomChange={(next, direction) =>
-                  setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
-                }
                 tab={panelTab}
-                onTabChange={setPanelTab}
                 // The slide the editor is on: the selected one, else the outline's active
                 // one (the same rule the pen uses). No stepper — the canvas is the viewer.
                 narrationTab={<NarrationTab cards={sortedCards} cardId={selectedCardId ?? activeCardId} />}
@@ -1015,6 +1065,23 @@ export function EditorPage() {
           }}
         />
       )}
+      {pendingDeleteId !== null &&
+        (() => {
+          const index = sortedCards.findIndex((c) => c.id === pendingDeleteId)
+          // Gone already (an undo raced the dialog): nothing left to confirm.
+          if (index < 0) return null
+          return (
+            <DeleteSlideModal
+              card={sortedCards[index]}
+              number={index + 1}
+              onCancel={() => setPendingDeleteId(null)}
+              onConfirm={() => {
+                deleteCard(pendingDeleteId)
+                setPendingDeleteId(null)
+              }}
+            />
+          )
+        })()}
       {quizOpen && (
         <QuizModal presentationId={id} title={store.title} cards={sortedCards} onClose={() => setQuizOpen(false)} />
       )}

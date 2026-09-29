@@ -18,14 +18,14 @@ import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/conte
 import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
 import { overlayChanged, parseOverlay, type OverlayItem } from '@/engine/overlay'
-import { roleLayoutHint } from '@/engine/roleLayout'
+import { generatedLayout } from '@/engine/roleLayout'
 import { sequenceFor, sequenceMismatch, type BlueprintId } from '@/ai/slideBlueprints'
 import { capScriptLength, isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
 import { layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { buildGenerationMeta } from '@/generation/meta'
 import type { PipelineResult } from '@/generation/pipeline'
 import { removeDeckVideo, supabasePorts } from '@/video/storage'
-import { inOrder, withCardAfter, withoutCard } from './cardMutations'
+import { inOrder, withCardAfter, withDuplicate, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
 import { withBlockAppended, type ContentType } from '@/engine/newContent'
 import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
@@ -208,6 +208,8 @@ interface PresentationState {
    * question.
    */
   addCard: (kind: CreatableKind, afterCardId: string | null) => string
+  /** Copies a slide in full and puts the copy right after it. Returns the copy's id, or `null` if there was no such card. */
+  duplicateCard: (cardId: string) => string | null
   deleteCard: (cardId: string) => void
   reorderCards: (orderedIds: string[]) => void
 
@@ -772,9 +774,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         id: newId(),
         orderIndex: i,
         blocks,
-        // The role's last act before it is discarded: a layout the classifier
-        // could not have reached, and only where the blocks support it.
-        layout: roleLayoutHint(c.role, blocks) ?? 'auto',
+        layout: generatedLayout(i, c.role, blocks),
         visualStyle: c.visualStyle,
         inline,
         narration,
@@ -1248,6 +1248,25 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       void runSave(set, () => persistCardsSync(id, previous, get().cards))
     }
     return card.id
+  },
+
+  duplicateCard(cardId) {
+    const previous = get().cards
+    if (!previous.some((c) => c.id === cardId)) return null
+    pushHistory(set, get)
+    const copyId = newId()
+    set({ cards: withDuplicate(previous, cardId, copyId) })
+
+    const id = get().presentationId
+    if (id) {
+      void runSave(set, async () => {
+        await persistCardsSync(id, previous, get().cards)
+        // `cardRow` never names `overlay`, so the copy's ink needs its own write.
+        const copy = get().cards.find((c) => c.id === copyId)
+        if (copy?.overlay?.length) await writeOverlays(set, [copy])
+      })
+    }
+    return copyId
   },
 
   deleteCard(cardId) {

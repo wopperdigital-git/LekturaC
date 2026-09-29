@@ -123,7 +123,7 @@ const stroke = {
   className: 'size-3.5',
 }
 
-function BinIcon() {
+export function BinIcon() {
   return (
     <svg {...stroke}>
       <path d="M4 6h12M8 6V4.2h4V6M5.5 6l.7 10a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9l.7-10M8.5 9.5v4.5M11.5 9.5v4.5" />

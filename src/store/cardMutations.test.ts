@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Card } from '@/engine/contentBlocks'
-import { inOrder, withCardAfter, withoutCard } from './cardMutations'
+import { inOrder, withCardAfter, withDuplicate, withoutCard } from './cardMutations'
 
 function card(id: string, orderIndex: number): Card {
   return {
@@ -71,6 +71,28 @@ describe('withCardAfter', () => {
   it('leaves the original array untouched', () => {
     withCardAfter(deck, 'a', fresh)
     expect(deck.map((c) => c.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('withDuplicate', () => {
+  it('puts a copy with the new id straight after the original and renumbers', () => {
+    const result = withDuplicate(deck, 'b', 'b2')
+    expect(result.map((c) => c.id)).toEqual(['a', 'b', 'b2', 'c', 'd'])
+    expect(result.map((c) => c.orderIndex)).toEqual([0, 1, 2, 3, 4])
+    expect(result[2].blocks).toEqual(result[1].blocks)
+  })
+
+  it('shares nothing with the original, so editing one never edits the other', () => {
+    const source: Card = { ...card('x', 0), adjusts: { '0': { dx: 0.1, dy: 0, rotation: 0 } } }
+    const [original, copy] = withDuplicate([source], 'x', 'y')
+    expect(copy.blocks).not.toBe(original.blocks)
+    expect(copy.blocks[0]).not.toBe(original.blocks[0])
+    expect(copy.adjusts).toEqual(original.adjusts)
+    expect(copy.adjusts).not.toBe(original.adjusts)
+  })
+
+  it('leaves the deck alone when the id is unknown', () => {
+    expect(withDuplicate(deck, 'nope', 'z')).toBe(deck)
   })
 })
 

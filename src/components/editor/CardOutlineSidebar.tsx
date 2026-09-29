@@ -11,6 +11,7 @@ import { SlideSurface } from '@/components/theme/SlideSurface'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
+import { BinIcon } from './ElementActions'
 
 // Live-scaled preview: the real layout is rendered at full slide width inside an
 // offscreen box, then shrunk with a CSS transform — always in sync with the
@@ -169,10 +170,11 @@ function SortableRow({
           e.stopPropagation()
           onDelete()
         }}
-        className="absolute right-1 top-1 cursor-pointer rounded bg-black/60 px-1.5 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-        aria-label="Delete card"
+        className="absolute right-1 top-1 flex size-6 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        aria-label="Delete slide"
+        title="Delete slide"
       >
-        ✕
+        <BinIcon />
       </button>
     </div>
   )

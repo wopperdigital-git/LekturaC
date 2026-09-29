@@ -421,6 +421,42 @@ describe('structureFlags', () => {
     )
   })
 
+  describe('OPENING_NOT_TITLE', () => {
+    const openingFlags = (d: GeneratedDeck) => structureFlags(d).filter((f) => f.type === 'OPENING_NOT_TITLE')
+
+    it('accepts a heading alone or a heading with one paragraph', () => {
+      expect(openingFlags(deck([card({ blocks: [{ type: 'heading', text: 'Title' }] })]))).toEqual([])
+      expect(openingFlags(deck([card()]))).toEqual([])
+    })
+
+    it('flags slide 1 carrying anything else, as a repairable medium', () => {
+      const d = deck([
+        card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'bulletList', items: ['a', 'b', 'c'] }] }),
+      ])
+      const flags = openingFlags(d)
+      expect(flags).toHaveLength(1)
+      expect(flags[0]).toMatchObject({ severity: 'medium', slideIndex: 0 })
+    })
+
+    it('flags two paragraphs', () => {
+      const d = deck([
+        card({
+          blocks: [
+            { type: 'heading', text: 'Title' },
+            { type: 'paragraph', text: 'One.' },
+            { type: 'paragraph', text: 'Two.' },
+          ],
+        }),
+      ])
+      expect(openingFlags(d)).toHaveLength(1)
+    })
+
+    it('ignores every slide after the first', () => {
+      const d = deck([card(), card({ blocks: [{ type: 'heading', text: 'Next' }, { type: 'stat', value: '1', label: 'x' }] })])
+      expect(openingFlags(d)).toEqual([])
+    })
+  })
+
   describe('VISUAL_MISMATCH', () => {
     it('flags a timeline visualType with no timelineStep block', () => {
       const d = deck([card({ plan: { visualType: 'timeline' } })])
