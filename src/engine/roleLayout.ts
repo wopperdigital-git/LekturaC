@@ -24,16 +24,29 @@ const HERO_ROLES = new Set([
 
 const RECAP_ROLES = new Set(['recap', 'recap-next-steps'])
 
+/** What every hero layout is built for: one heading, optionally one paragraph beneath it — nothing else. */
+export function isTitleShaped(blocks: ContentBlock[]): boolean {
+  const headings = blocks.filter((b) => b.type === 'heading').length
+  const rest = blocks.filter((b) => b.type !== 'heading')
+  const restIsBareParagraph = rest.length === 0 || (rest.length === 1 && rest[0].type === 'paragraph')
+  return headings === 1 && restIsBareParagraph
+}
+
+/**
+ * A generated deck always opens on a title slide, named outright so it stays
+ * one wherever it is later moved. Content that isn't title-shaped still shows:
+ * the hero frame draws its extra blocks as leftovers.
+ */
+export function generatedLayout(index: number, role: string | undefined, blocks: ContentBlock[]): LayoutType {
+  if (index === 0) return 'hero'
+  return roleLayoutHint(role, blocks) ?? 'auto'
+}
+
 export function roleLayoutHint(role: string | undefined, blocks: ContentBlock[]): LayoutType | null {
   if (!role) return null
 
   if (HERO_ROLES.has(role)) {
-    // What every hero layout is built for: one heading, optionally one
-    // paragraph beneath it — never a stat, a list or anything else.
-    const headings = blocks.filter((b) => b.type === 'heading').length
-    const rest = blocks.filter((b) => b.type !== 'heading')
-    const restIsBareParagraph = rest.length === 0 || (rest.length === 1 && rest[0].type === 'paragraph')
-    return headings === 1 && restIsBareParagraph ? 'hero' : null
+    return isTitleShaped(blocks) ? 'hero' : null
   }
 
   if (RECAP_ROLES.has(role)) {

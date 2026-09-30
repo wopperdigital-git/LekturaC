@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   COLOR_CHOICES,
   FONT_CHOICES,
@@ -12,7 +12,6 @@ import {
   type TextStyle,
   type TextStylePatch,
 } from '@/engine/textStyle'
-import type { Card, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import {
   MAX_RUN_SCALE,
   MIN_RUN_SCALE,
@@ -22,13 +21,9 @@ import {
   type MarkValue,
   type ValueMarkType,
 } from '@/engine/marks'
-import { MAX_ZOOM, MIN_ZOOM } from '@/lib/zoom'
-import { cardKindLabel, type CardKind, type LayoutVariety } from '@/engine/layoutEngine'
-import { CONTENT_OPTIONS, type ContentType } from '@/engine/newContent'
+import { FIELD, PercentField } from './PercentField'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeStrip } from '@/components/theme/ThemeStrip'
-import { SlidePreview } from './SlidePreview'
-import type { EditorGrid } from './gridContext'
 
 /*
   The editing tools, docked at the right of the canvas.
@@ -38,15 +33,14 @@ import type { EditorGrid } from './gridContext'
 
   - **Sections follow the selection.** Figma shows the properties of whatever
     kind of layer is selected and page-level settings when nothing is. Here the
-    same three scopes (deck, slide, element) decide which sections appear: Layout
-    and Content only exist once a slide is selected; Typography and Fill are
-    always there and write to the narrowest thing selected.
-  - **A fixed order, top to bottom:** Layout → Content → Typography → Fill →
-    Theme. Figma's own is Alignment → Layout → Text → Fill → Stroke → Effects →
-    Export; structure first, then type, then colour, then the ambient settings.
+    same three scopes (deck, slide, element) decide what the sections write to:
+    Typography and Fill write to the narrowest thing selected. Layout and adding
+    content live in the floating toolbar, not here.
+  - **A fixed order, top to bottom:** Typography → Fill → Theme. Figma's own
+    is Alignment → Layout → Text → Fill → Stroke → Effects → Export; structure first, then type, then colour, then the ambient settings.
   - **Section chrome:** a short sentence-case title on the left, and on the right
-    either muted context ("Selected element") or a small action button (the "+"
-    on Content), separated from the next section by a hairline.
+    either muted context ("Selected element") or a small action button (the "−"
+    on Fill), separated from the next section by a hairline.
   - **Typography in Figma's order:** font (full width), then size, then the
     style and alignment icon groups; Figma's "Fill" is where a text layer's colour
     lives, so it is called Fill here too.
@@ -54,8 +48,8 @@ import type { EditorGrid } from './gridContext'
     segmented groups where the selected option is a raised chip, and a short
     caption above each field. Every icon-only control carries a tooltip naming
     it, with its shortcut where it has one.
-  - **The header holds what is not a property:** undo/redo and Present, then a
-    "Design / Narration" tab row with the zoom on the right, where Figma keeps its zoom.
+  - **What is not a property lives in the editor's top bar:** history, zoom,
+    Present, and the Edit / Narrate modes that pick this panel's tab.
 
   Deliberately app chrome, not deck theme: it follows the light/dark toggle and
   uses `app-*` tokens, because it is a tool sitting beside the deck rather than
@@ -75,54 +69,12 @@ export type ToolbarLevel = 1 | 2 | 3
 /** Which body of the panel is showing. View state: not stored, not undoable. */
 export type PanelTab = 'design' | 'narration'
 
-const LAYOUT_LABELS: Record<Exclude<LayoutType, 'auto'>, string> = {
-  hero: 'Hero',
-  statHero: 'Single stat',
-  statGrid: 'Stat grid',
-  comparison: 'Comparison',
-  timeline: 'Timeline',
-  quote: 'Quote',
-  iconGrid: 'Icon grid',
-  numberedList: 'Numbered list',
-  checklist: 'Checklist',
-  splitList: 'Two-column list',
-  statList: 'Stat rows',
-  timelineRow: 'Horizontal timeline',
-  comparisonTable: 'Comparison table',
-  textFocus: 'Text focus',
-  gallery: 'Gallery',
-  standardSplit: 'Split',
-  standard: 'Standard',
-}
-
-/** What the layout picker needs, present only while a slide is selected. */
-export interface LayoutTools {
-  /** Varieties of the card's *own* type — never another type. */
-  options: LayoutVariety[]
-  active: LayoutType
-  activeVisualStyle?: VisualStyle
-  onChange: (layout: LayoutType, visualStyle?: VisualStyle) => void
-  kind?: CardKind
-  /** What the card is *actually* rendering as, with `'auto'` already resolved. */
-  resolved?: Exclude<LayoutType, 'auto'>
-  /** The card the previews are drawn from, and whether it opens the deck. */
-  card: Card
-  isFirstCard: boolean
-}
-
-/* The one place the panel's field chrome is defined. Filled, no border until it is
-   hovered or focused — which is how Figma's inputs read as part of the panel rather
-   than as boxes dropped into it. */
-const FIELD =
-  'flex h-7 items-center rounded-[5px] bg-app-foreground/[0.06] text-[11px] text-app-foreground transition-colors hover:bg-app-foreground/10 focus-within:bg-app-background focus-within:ring-1 focus-within:ring-app-accent'
-
 const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent'
 
 export function ToolsPanel({
   level,
   scopeLabel,
-  presentHref,
   textStyle,
   onTextStyleChange,
   onFontPreview,
@@ -132,23 +84,14 @@ export function ToolsPanel({
   onRunValue,
   hasTextSelection,
   activeAlign,
-  layout,
-  onAddContent,
   theme,
-  deckTextStyle,
   onThemeChange,
-  grid,
-  onGridChange,
-  zoom,
-  onZoomChange,
   tab = 'design',
-  onTabChange,
   narrationTab,
 }: {
   level: ToolbarLevel
   /** Plain words for what the text tools are writing to right now. */
   scopeLabel: string
-  presentHref?: string
   textStyle: TextStyle
   onTextStyleChange: (patch: TextStylePatch) => void
   /**
@@ -167,21 +110,10 @@ export function ToolsPanel({
   hasTextSelection?: boolean
   /** The alignment the selected element is *rendering* with, whatever set it. */
   activeAlign?: TextAlign | null
-  /** Present while a slide is selected. */
-  layout?: LayoutTools
-  /** Present while a slide is selected: appends one element of the chosen type to it. */
-  onAddContent?: (type: ContentType) => void
   theme: ThemeTokens
-  deckTextStyle: TextStyle
   onThemeChange: (theme: ThemeTokens) => void
-  grid: EditorGrid
-  onGridChange: (grid: EditorGrid) => void
-  zoom: number
-  /** The requested zoom, or `null` with a direction to step it; the page clamps. */
-  onZoomChange: (zoom: number | null, direction?: 1 | -1) => void
-  /** Which tab is showing. Defaults to Design. */
+  /** Which tab is showing, picked by the top bar's Edit / Narrate. Defaults to Design. */
   tab?: PanelTab
-  onTabChange?: (tab: PanelTab) => void
   /**
    * The Narration tab's body. Supplied by the page so this panel knows nothing about
    * narration, and mounted even while hidden: unmounting it on a tab switch would
@@ -235,88 +167,6 @@ export function ToolsPanel({
       aria-label="Tools"
       className="flex h-full flex-col overflow-hidden rounded-app border border-app-border bg-app-background shadow-app"
     >
-      {/* What is not a property lives above the sections and never scrolls away:
-          Present, then the tab row with the zoom on its right. (History lives in
-          the floating toolbar over the canvas.) */}
-      <div className="shrink-0">
-        {presentHref && (
-          <div className="flex items-center justify-end px-2 pt-2">
-            {/* A link, not a button, because it navigates. */}
-            <Link
-              to={presentHref}
-              title="Present this deck"
-              className={`flex h-7 items-center gap-1.5 rounded-[5px] bg-app-accent px-2.5 text-[11px] font-semibold text-white transition-colors hover:brightness-110 ${FOCUS_RING}`}
-            >
-              <PlayIcon />
-              Present
-            </Link>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between border-b border-app-border px-3">
-          <div
-            role="tablist"
-            aria-label="Panel"
-            className="flex items-center gap-3"
-            onKeyDown={(e) => {
-              // Two tabs, so either arrow just goes to the other one.
-              if (!narrationTab || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
-              e.preventDefault()
-              const next: PanelTab = tab === 'design' ? 'narration' : 'design'
-              onTabChange?.(next)
-              document.getElementById(`tools-tab-${next}`)?.focus()
-            }}
-          >
-            <TabButton
-              id="tools-tab-design"
-              panelId="tools-panel-design"
-              selected={tab === 'design'}
-              onSelect={() => onTabChange?.('design')}
-            >
-              Design
-            </TabButton>
-            {narrationTab && (
-              <TabButton
-                id="tools-tab-narration"
-                panelId="tools-panel-narration"
-                selected={tab === 'narration'}
-                onSelect={() => onTabChange?.('narration')}
-              >
-                Narration
-              </TabButton>
-            )}
-          </div>
-          <div className="flex items-center gap-0.5">
-            <IconButton
-              small
-              label="Zoom out"
-              title="Zoom out (Ctrl+scroll down)"
-              disabled={zoom <= MIN_ZOOM}
-              onClick={() => onZoomChange(null, -1)}
-            >
-              <MinusIcon />
-            </IconButton>
-            <PercentField
-              compact
-              label="Zoom"
-              value={zoom}
-              min={MIN_ZOOM}
-              max={MAX_ZOOM}
-              onCommit={(next) => onZoomChange(next)}
-            />
-            <IconButton
-              small
-              label="Zoom in"
-              title="Zoom in (Ctrl+scroll up)"
-              disabled={zoom >= MAX_ZOOM}
-              onClick={() => onZoomChange(null, 1)}
-            >
-              <PlusIcon />
-            </IconButton>
-          </div>
-        </div>
-      </div>
-
       {/* No `display` utility on this element: it would override `hidden`. */}
       <div
         role="tabpanel"
@@ -325,14 +175,6 @@ export function ToolsPanel({
         hidden={tab !== 'design'}
         className="scrollbar-none min-h-0 flex-1 overflow-y-auto"
       >
-        {layout && (
-          <Section title="Layout" meta={layout.kind ? cardKindLabel(layout.kind) : undefined}>
-            <LayoutStrip layout={layout} theme={theme} deckTextStyle={deckTextStyle} />
-          </Section>
-        )}
-
-        {onAddContent && <ContentSection onPick={onAddContent} />}
-
         <Section title="Typography" meta={scope}>
           <Caption>{onRun ? 'Font · selected text' : 'Font'}</Caption>
           <FontPicker value={activeFont} onChange={setFont} onPreview={onFontPreview} />
@@ -457,23 +299,6 @@ export function ToolsPanel({
           <FillPicker value={activeColor} onChange={setColor} />
         </Section>
 
-        {/* A view setting like zoom: never stored, never in undo. Snap is on by
-            default and works with the lines hidden; Show only draws them. */}
-        <Section title="Grid">
-          <div className="flex flex-col gap-1.5">
-            <ToggleRow
-              label="Show grid"
-              pressed={grid.show}
-              onToggle={() => onGridChange({ ...grid, show: !grid.show })}
-            />
-            <ToggleRow
-              label="Snap to grid"
-              pressed={grid.snap}
-              onToggle={() => onGridChange({ ...grid, snap: !grid.snap })}
-            />
-          </div>
-        </Section>
-
         <Section title="Theme" icon={<BrushIcon />}>
           <ThemeStrip theme={theme} onSelect={onThemeChange} />
         </Section>
@@ -491,42 +316,6 @@ export function ToolsPanel({
         </div>
       )}
     </div>
-  )
-}
-
-/** One tab in the header row: the selected one carries the underline. Never takes focus from a run. */
-function TabButton({
-  id,
-  panelId,
-  selected,
-  onSelect,
-  children,
-}: {
-  id: string
-  panelId: string
-  selected: boolean
-  onSelect: () => void
-  children: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      id={id}
-      aria-selected={selected}
-      aria-controls={panelId}
-      tabIndex={selected ? 0 : -1}
-      // Never take focus — see the note at the top of the file.
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onSelect}
-      className={`-mb-px flex h-9 cursor-pointer items-center border-b-2 text-[11px] font-semibold transition-colors ${FOCUS_RING} ${
-        selected
-          ? 'border-app-foreground text-app-foreground'
-          : 'border-transparent text-app-muted hover:text-app-foreground'
-      }`}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -569,44 +358,6 @@ function Section({
   )
 }
 
-/**
- * A labelled on/off switch, drawn as a filled row like the panel's fields. Refuses
- * focus on mousedown like every other button here, so a run's caret survives.
- */
-function ToggleRow({
-  label,
-  pressed,
-  disabled,
-  onToggle,
-}: {
-  label: string
-  pressed: boolean
-  disabled?: boolean
-  onToggle: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={pressed}
-      aria-label={label}
-      disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onToggle}
-      className={`${FIELD} w-full justify-between px-2 disabled:cursor-not-allowed disabled:opacity-45 ${FOCUS_RING}`}
-    >
-      <span>{label}</span>
-      <span
-        aria-hidden="true"
-        className={`relative h-3.5 w-6 rounded-full transition-colors ${pressed ? 'bg-app-accent' : 'bg-app-foreground/25'}`}
-      >
-        <span
-          className={`absolute top-0.5 size-2.5 rounded-full bg-white transition-[left] ${pressed ? 'left-3' : 'left-0.5'}`}
-        />
-      </span>
-    </button>
-  )
-}
 
 /** The short label above a field. */
 function Caption({ children }: { children: ReactNode }) {
@@ -614,79 +365,6 @@ function Caption({ children }: { children: ReactNode }) {
 }
 
 /* --------------------------------------------------------------- inputs --- */
-
-/**
- * A number entered as a percentage, committed on Enter or when it loses focus.
- *
- * The value is a multiple (1 = 100%), held as text while it is being typed so a
- * half-typed "1" on the way to "120" is not clamped and rewritten under the
- * caret. Anything that is not a number reverts to what it was; a number outside
- * `min`/`max` is handed up as typed and the caller's own clamp decides — the same
- * clamp the step buttons go through, so all routes agree on the range.
- */
-function PercentField({
-  label,
-  value,
-  min,
-  max,
-  onCommit,
-  prefix,
-  compact,
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  onCommit: (next: number) => void
-  /** An icon or letter inside the field, before the value — how Figma names a field without a caption. */
-  prefix?: ReactNode
-  /** A narrow, borderless variant for the header. */
-  compact?: boolean
-}) {
-  const [draft, setDraft] = useState<string | null>(null)
-  // Escape must abandon the draft, but blurring the field is what commits it —
-  // so the abandon is remembered for the blur that follows.
-  const abandon = useRef(false)
-
-  function commit() {
-    if (abandon.current) {
-      abandon.current = false
-      setDraft(null)
-      return
-    }
-    if (draft !== null) {
-      const parsed = Number.parseFloat(draft.replace('%', ''))
-      if (Number.isFinite(parsed)) onCommit(parsed / 100)
-    }
-    setDraft(null)
-  }
-
-  return (
-    <label className={`${FIELD} ${compact ? 'h-6 w-14 gap-0.5 px-1.5' : 'gap-1.5 px-2'}`}>
-      {prefix && <span className="shrink-0 text-app-muted">{prefix}</span>}
-      <input
-        type="text"
-        inputMode="numeric"
-        aria-label={`${label} (${Math.round(min * 100)}–${Math.round(max * 100)}%)`}
-        value={draft ?? String(Math.round(value * 100))}
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={(e) => e.currentTarget.select()}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur()
-          else if (e.key === 'Escape') {
-            abandon.current = true
-            e.currentTarget.blur()
-          }
-        }}
-        className={`min-w-0 flex-1 bg-transparent tabular-nums outline-none ${compact ? 'text-right' : ''}`}
-      />
-      <span aria-hidden="true" className="shrink-0 text-app-muted">
-        %
-      </span>
-    </label>
-  )
-}
 
 /**
  * A tray of icon buttons, the selected one raised as a chip — Figma's segmented
@@ -742,10 +420,8 @@ function SegButton({
 }
 
 /**
- * The font list, open in the flow of the panel rather than floating over it.
- *
- * A popup would be clipped by the panel's own scroll area; expanding in place
- * cannot be. Each row is set in its own typeface, so the list is a specimen, and
+ * The font list: a dropdown floating over the panel, portalled out of it so the
+ * panel's scroll area cannot clip it. Each row is set in its own typeface, so the list is a specimen, and
  * hovering a row *previews* it on the slide — `onPreview` is told the font on the
  * way in and `undefined` on the way out — before anything is committed. The
  * current choice carries a tick, as in Figma's font list. "Theme font" is first
@@ -765,6 +441,9 @@ function FontPicker({
   onPreview: (fontFamily: string | null | undefined) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [place, setPlace] = useState<MenuPlace | null>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
   const current = FONT_CHOICES.find((font) => font.value === value)
   // A stack that is not one of ours (an older deck, or a hand-edited row) still
   // gets a label and a preview rather than reading as "Theme font".
@@ -777,21 +456,70 @@ function FontPicker({
   })
   useEffect(() => () => stop.current(undefined), [])
 
+  function close() {
+    setOpen(false)
+    stop.current(undefined)
+  }
+
+  /*
+    The list floats over the panel rather than pushing the sections below it
+    down. It is portalled to <body> with fixed coordinates taken from the trigger,
+    because anything inside the panel would be clipped by its scroll area. It
+    opens below the trigger, or above when there is more room there, and scrolls
+    within whatever height it gets.
+  */
+  useLayoutEffect(() => {
+    if (!open) return
+    function measure() {
+      const rect = trigger.current?.getBoundingClientRect()
+      if (rect) setPlace(menuPlace(rect, window.innerHeight))
+    }
+    measure()
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node
+      if (!menu.current?.contains(target) && !trigger.current?.contains(target)) close()
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      // The editor's own Escape stands down for a key a dropdown already used.
+      e.preventDefault()
+      close()
+    }
+    function onScroll(e: Event) {
+      // Scrolling the list itself is fine; scrolling what it hangs off would leave it floating.
+      if (!menu.current?.contains(e.target as Node)) close()
+    }
+    // Capture phase, like the toolbar's menus: the canvas's pan hook stops presses
+    // in its own capture phase, which a bubble listener would never hear.
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKey, true)
+    document.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [open])
+
   function pick(fontFamily: string | null) {
     onChange(fontFamily)
-    onPreview(undefined)
-    setOpen(false)
+    close()
   }
 
   return (
     <div>
       <button
+        ref={trigger}
         type="button"
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
-          setOpen((v) => !v)
+          if (open) close()
+          else setOpen(true)
           onPreview(undefined)
         }}
+        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Font — ${label}`}
         title={`Font — ${label}`}
@@ -805,32 +533,64 @@ function FontPicker({
         <ChevronIcon open={open} />
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          onPointerLeave={() => onPreview(undefined)}
-          className="mt-1 rounded-[5px] border border-app-border bg-app-background p-1 shadow-app"
-        >
-          <FontRow
-            label="Theme font"
-            active={value === ''}
-            onHover={() => onPreview(null)}
-            onPick={() => pick(null)}
-          />
-          {FONT_CHOICES.map((font) => (
+      {open &&
+        place &&
+        createPortal(
+          <div
+            ref={menu}
+            role="menu"
+            aria-label="Font"
+            onPointerLeave={() => onPreview(undefined)}
+            style={{
+              left: place.left,
+              width: place.width,
+              maxHeight: place.maxHeight,
+              ...(place.above ? { bottom: place.bottom } : { top: place.top }),
+            }}
+            className="scrollbar-none fixed z-50 overflow-y-auto rounded-[5px] border border-app-border bg-app-background p-1 shadow-app"
+          >
             <FontRow
-              key={font.value}
-              label={font.label}
-              active={value === font.value}
-              style={{ fontFamily: font.value }}
-              onHover={() => onPreview(font.value)}
-              onPick={() => pick(font.value)}
+              label="Theme font"
+              active={value === ''}
+              onHover={() => onPreview(null)}
+              onPick={() => pick(null)}
             />
-          ))}
-        </div>
-      )}
+            {FONT_CHOICES.map((font) => (
+              <FontRow
+                key={font.value}
+                label={font.label}
+                active={value === font.value}
+                style={{ fontFamily: font.value }}
+                onHover={() => onPreview(font.value)}
+                onPick={() => pick(font.value)}
+              />
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   )
+}
+
+type MenuPlace = { left: number; width: number; maxHeight: number; above: boolean; top: number; bottom: number }
+
+/** Room kept between a floating menu and the window edge, and between it and its trigger. */
+const MENU_GAP = 4
+const MENU_MARGIN = 12
+
+/** Where the font list floats for a trigger at `rect`: below it, or above when there is more room there. */
+function menuPlace(rect: DOMRect, viewportHeight: number): MenuPlace {
+  const below = viewportHeight - rect.bottom - MENU_GAP - MENU_MARGIN
+  const aboveRoom = rect.top - MENU_GAP - MENU_MARGIN
+  const above = below < 240 && aboveRoom > below
+  return {
+    left: rect.left,
+    width: rect.width,
+    maxHeight: Math.max(120, above ? aboveRoom : below),
+    above,
+    top: rect.bottom + MENU_GAP,
+    bottom: viewportHeight - rect.top + MENU_GAP,
+  }
 }
 
 function FontRow({
@@ -937,183 +697,10 @@ function FillPicker({
   )
 }
 
-/* ---------------------------------------------------------------- layout --- */
-
-/**
- * The layout picker: a row of small pictures of the slide, one per layout it can
- * wear, scrolling sideways.
- *
- * Each picture is the card's *own* content drawn in that layout — the same
- * renderer the canvas uses, not an icon — so what you pick is what you see.
- * Varieties of the card's own type only (see `layoutVarieties`): offering another
- * type's layouts would let a bullet list be turned into a timeline and come out
- * blank, which is not what "pick a different layout" means. "Automatic" is first
- * and is not a variety: it hands the card back to the rule-based classifier, the
- * state every card starts in.
- */
-function LayoutStrip({
-  layout,
-  theme,
-  deckTextStyle,
-}: {
-  layout: LayoutTools
-  theme: ThemeTokens
-  deckTextStyle: TextStyle
-}) {
-  const { options, card, isFirstCard } = layout
-
-  // The preview shows the layout, not the nudges: a dragged element would make
-  // every option look the same as the others and as the slide.
-  const previewOf = (layoutType: LayoutType, visualStyle?: VisualStyle): Card => ({
-    ...card,
-    layout: layoutType,
-    visualStyle: visualStyle ?? card.visualStyle,
-    adjusts: undefined,
-  })
-
-  const automaticLabel =
-    layout.resolved && layout.active === 'auto'
-      ? `Automatic · ${LAYOUT_LABELS[layout.resolved]}`
-      : 'Automatic'
-
-  return (
-    <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
-      <LayoutOption
-        label="Automatic"
-        title={automaticLabel}
-        active={layout.active === 'auto'}
-        onClick={() => layout.onChange('auto')}
-      >
-        <SlidePreview
-          card={previewOf('auto')}
-          theme={theme}
-          textStyle={deckTextStyle}
-          isFirstCard={isFirstCard}
-          className="aspect-video w-full rounded-[4px]"
-        />
-      </LayoutOption>
-
-      {options.map((variety, i) => {
-        // Number restarts per component, so a type with two components reads
-        // "Icon grid · 1/2, Numbered list · 1/2" rather than 1..4.
-        const ordinal = options.filter((o, j) => o.layout === variety.layout && j <= i).length
-        const label = `${LAYOUT_LABELS[variety.layout]} · ${ordinal}`
-        return (
-          <LayoutOption
-            key={`${variety.layout}:${variety.visualStyle}`}
-            label={label}
-            title={label}
-            active={
-              layout.active === variety.layout && layout.activeVisualStyle === variety.visualStyle
-            }
-            onClick={() => layout.onChange(variety.layout, variety.visualStyle)}
-          >
-            <SlidePreview
-              card={previewOf(variety.layout, variety.visualStyle)}
-              theme={theme}
-              textStyle={deckTextStyle}
-              isFirstCard={isFirstCard}
-              className="aspect-video w-full rounded-[4px]"
-            />
-          </LayoutOption>
-        )
-      })}
-    </div>
-  )
-}
-
-function LayoutOption({
-  label,
-  title,
-  active,
-  onClick,
-  children,
-}: {
-  label: string
-  title: string
-  active: boolean
-  onClick: () => void
-  children: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      aria-pressed={active}
-      title={title}
-      className={`flex w-28 shrink-0 cursor-pointer flex-col items-stretch gap-1 rounded-[6px] border p-1 text-left transition-colors ${FOCUS_RING} ${
-        active ? 'border-app-accent bg-app-accent/10' : 'border-transparent hover:bg-app-foreground/5'
-      }`}
-    >
-      {children}
-      <span className="truncate px-0.5 text-[11px] text-app-foreground">{label}</span>
-    </button>
-  )
-}
-
-/* --------------------------------------------------------------- content --- */
-
-/**
- * "Content": what can be added to the slide. Like Figma's Fill and Stroke, an
- * empty-until-you-add section whose header carries a "+" — pressing it asks what
- * to add, and choosing a type appends it and folds the list away again.
- *
- * Nothing here knows where the element goes. The store appends it to the card and
- * the layout engine decides how it is drawn; the user can drag it from there.
- */
-function ContentSection({ onPick }: { onPick: (type: ContentType) => void }) {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <Section
-      title="Content"
-      actions={
-        <IconButton
-          small
-          label="Add content"
-          title="Add content to this slide"
-          pressed={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <PlusIcon />
-        </IconButton>
-      }
-    >
-      {open ? (
-        <div>
-          <Caption>What do you want to add?</Caption>
-          <div className="grid grid-cols-2 gap-1.5">
-            {CONTENT_OPTIONS.map((option) => (
-              <button
-                key={option.type}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onPick(option.type)
-                  setOpen(false)
-                }}
-                title={option.description}
-                className={`h-7 cursor-pointer rounded-[5px] bg-app-foreground/[0.06] px-2 text-left text-[11px] text-app-foreground transition-colors hover:bg-app-accent hover:text-white ${FOCUS_RING}`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="text-[11px] leading-snug text-app-muted">
-          Add a heading, text, list or more to this slide.
-        </p>
-      )}
-    </Section>
-  )
-}
-
 /* ---------------------------------------------------------------- atoms --- */
 
 /**
- * One icon button: the header's zoom steppers and a section's action.
+ * One icon button: a section's action.
  *
  * Icons sit at 90% of the foreground colour, which is the token that already
  * flips with the light/dark toggle — so they are always the near-opposite of the
@@ -1175,14 +762,6 @@ const strokeProps = {
   className: 'size-4',
 }
 
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-3">
-      <path d="M6 4.2v11.6a.6.6 0 0 0 .92.5l9-5.8a.6.6 0 0 0 0-1l-9-5.8A.6.6 0 0 0 6 4.2Z" />
-    </svg>
-  )
-}
-
 /**
  * A capital A with an arrow: a big A and an up arrow to make text larger, a small
  * A and a down arrow to make it smaller. The size of the letter carries the same
@@ -1242,14 +821,6 @@ function AlignIcon({ align }: { align: TextAlign }) {
       <path d={shortTop} />
       <path d="M4 10h12" />
       <path d={short} />
-    </svg>
-  )
-}
-
-function PlusIcon() {
-  return (
-    <svg {...strokeProps}>
-      <path d="M10 4.5v11M4.5 10h11" />
     </svg>
   )
 }

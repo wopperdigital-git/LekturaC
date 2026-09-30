@@ -11,7 +11,7 @@ import { CREATABLE_KINDS, KIND_DESCRIPTIONS, type CreatableKind } from '@/engine
  * six-line diagram does.
  *
  * This is the only place a slide's type is chosen. It is not offered for a slide
- * that already exists — to put more on one, the toolbar's Add content adds a
+ * that already exists — to put more on one, the toolbar's Insert adds a
  * single element to it.
  */
 export function CardTypeModal({

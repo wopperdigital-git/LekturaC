@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import type { Card } from '@/engine/contentBlocks'
 import type { TextStyle } from '@/engine/textStyle'
-import { layoutVarieties } from '@/engine/layoutEngine'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { ToolsPanel, type ToolbarLevel } from './ToolsPanel'
-import { DEFAULT_GRID, type EditorGrid } from './gridContext'
 
 /**
  * A render smoke test, and a deliberate exception to "pure logic only" for the
@@ -17,22 +14,9 @@ import { DEFAULT_GRID, type EditorGrid } from './gridContext'
  * removed on purpose. No pure function can see that.
  */
 
-const card: Card = {
-  id: 'a',
-  orderIndex: 0,
-  blocks: [
-    { type: 'heading', text: 'Title' },
-    { type: 'bulletList', items: ['One', 'Two', 'Three'] },
-  ],
-  layout: 'auto',
-  visualStyle: 'structured',
-}
-
 function render(
   level: ToolbarLevel,
-  withCard: boolean,
   textStyle: TextStyle = {},
-  grid: EditorGrid = DEFAULT_GRID,
   extra: Partial<ComponentProps<typeof ToolsPanel>> = {},
 ) {
   const noop = () => {}
@@ -41,30 +25,11 @@ function render(
       <ToolsPanel
         level={level}
         scopeLabel="this slide"
-        presentHref="/deck/x/present"
         textStyle={textStyle}
         onTextStyleChange={noop}
         onFontPreview={noop}
-        layout={
-          withCard
-            ? {
-                options: layoutVarieties(card.blocks, 'list'),
-                active: 'auto',
-                onChange: noop,
-                kind: 'list',
-                card,
-                isFirstCard: false,
-              }
-            : undefined
-        }
-        onAddContent={withCard ? noop : undefined}
         theme={DEFAULT_THEME}
-        deckTextStyle={{}}
         onThemeChange={noop}
-        grid={grid}
-        onGridChange={noop}
-        zoom={1}
-        onZoomChange={noop}
         {...extra}
       />
     </MemoryRouter>,
@@ -75,93 +40,56 @@ describe('ToolsPanel', () => {
   // Modelled on Figma's Design tab: what is always there, and what depends on the
   // selection. Typography and Fill write to the narrowest thing selected, so they
   // are never absent; the theme is ambient.
-  it('always offers present, typography, fill and theme', () => {
-    const html = render(1, false)
-    for (const text of ['Present', '>Design<', '>Typography<', '>Fill<', 'Theme']) {
+  it('always offers typography, fill and theme', () => {
+    const html = render(1)
+    for (const text of ['>Typography<', '>Fill<', 'Theme']) {
       expect(html).toContain(text)
     }
   })
 
-  // History lives in the floating toolbar now; two places for it would be two
-  // ways to do one thing.
-  it('no longer carries undo and redo — the floating toolbar does', () => {
-    const html = render(1, false)
+  // History, zoom, Present and the tabs live in the editor's top bar now, and the
+  // grid in the floating toolbar; two places for each would be two ways to do one thing.
+  it('no longer carries history, zoom, Present or the tab row — the top bar does', () => {
+    const html = render(1, {}, { narrationTab: <p>SLOT</p> })
     expect(html).not.toContain('aria-label="Undo"')
-    expect(html).not.toContain('aria-label="Redo"')
+    expect(html).not.toContain('aria-label="Zoom (50')
+    expect(html).not.toContain('Present')
+    expect(html).not.toContain('role="tab"')
+    expect(html).not.toContain('>Grid<')
+    expect(html).not.toContain('Snap to grid')
   })
 
-  it('offers a specific size and a specific zoom, not only steppers', () => {
-    const html = render(1, false)
-    expect(html).toContain('aria-label="Font size (70–160%)"')
-    expect(html).toContain('aria-label="Zoom (50–200%)"')
+  it('offers a specific size, not only steppers', () => {
+    expect(render(1)).toContain('aria-label="Font size (70–160%)"')
   })
 
-  // The zoom lives in the header beside the tab, where Figma keeps it, so it is
-  // reachable whatever is selected and never scrolls away with the sections.
-  it('keeps the zoom in the header, before any section', () => {
-    const html = render(1, false)
-    expect(html.indexOf('aria-label="Zoom (50')).toBeLessThan(html.indexOf('>Typography<'))
-  })
-
-  it('shows layout and content only while a slide is selected', () => {
-    const none = render(1, false)
-    expect(none).not.toContain('Add content')
-    expect(none).not.toContain('>Layout<')
-    const slide = render(2, true)
-    expect(slide).toContain('aria-label="Add content"')
-    expect(slide).toContain('>Layout<')
-    expect(slide).toContain('>Content<')
+  // Layout and adding content live in the floating toolbar; two places for each
+  // would be two ways to do one thing.
+  it('has no Layout or Content section — the floating toolbar has them', () => {
+    const html = render(2)
+    expect(html).not.toContain('>Layout<')
+    expect(html).not.toContain('>Content<')
+    expect(html).not.toContain('Add content')
   })
 
   it('orders the sections the way the panel is documented to', () => {
-    const html = render(2, true)
+    const html = render(2)
     const at = (needle: string) => html.indexOf(needle)
-    expect(at('>Layout<')).toBeLessThan(at('>Content<'))
-    expect(at('>Content<')).toBeLessThan(at('>Typography<'))
     expect(at('>Typography<')).toBeLessThan(at('>Fill<'))
-    expect(at('>Fill<')).toBeLessThan(at('>Grid<'))
-    expect(at('>Grid<')).toBeLessThan(at('Theme</h3>'))
-  })
-
-  it('draws a picture of every layout the card can wear, plus Automatic', () => {
-    const options = layoutVarieties(card.blocks, 'list')
-    const html = render(2, true)
-    expect(html).toContain('title="Automatic"')
-    expect(options.length).toBeGreaterThan(1)
-    expect(html.match(/ · \d/g)?.length).toBeGreaterThanOrEqual(options.length)
+    expect(at('>Fill<')).toBeLessThan(at('Theme</h3>'))
   })
 
   // Figma's Fill row has a remove button only once there is a fill; with none, a
   // remove button would be a control that does nothing.
   it('offers Remove fill only when a colour is set', () => {
-    expect(render(1, false)).not.toContain('Remove fill')
-    expect(render(1, false, { color: '#ef4444' })).toContain('Remove fill')
-  })
-
-  // The grid is a view setting like zoom, so it is offered whatever is selected.
-  // Snap is on by default and independent of Show: it works with the grid hidden.
-  it('always offers the grid, with snap on and the grid hidden by default', () => {
-    const html = render(1, false)
-    expect(html).toContain('>Grid<')
-    expect(html).toMatch(/aria-checked="false"[^>]*aria-label="Show grid"/)
-    expect(html).toMatch(/aria-checked="true"[^>]*aria-label="Snap to grid"/)
-    expect(render(2, true)).toContain('>Grid<')
-  })
-
-  it('lets snap be switched on or off whether or not the grid is shown', () => {
-    // `disabled=""` is the attribute; a bare `disabled` would also match the `disabled:` utility classes.
-    const disabled = /<button[^>]*aria-label="Snap to grid"[^>]*disabled=""/
-    expect(render(1, false, {}, { show: false, snap: true })).not.toMatch(disabled)
-    expect(render(1, false, {}, { show: false, snap: false })).not.toMatch(disabled)
-    expect(render(1, false, {}, { show: true, snap: false })).toMatch(
-      /aria-checked="false"[^>]*aria-label="Snap to grid"/,
-    )
+    expect(render(1)).not.toContain('Remove fill')
+    expect(render(1, { color: '#ef4444' })).toContain('Remove fill')
   })
 
   // Adding an item moved onto the slide, as a plus under the list. Bringing the
   // button back to the panel would put two ways to do one thing on screen.
   it('has no Add item button — that is the plus under the list now', () => {
-    expect(render(2, true)).not.toContain('Add item')
+    expect(render(2)).not.toContain('Add item')
   })
 
   /* The opening tag that carries `id`, so an assertion can look at its attributes
@@ -170,38 +98,23 @@ describe('ToolsPanel', () => {
     return html.match(new RegExp(`<[^>]*id="${id}"[^>]*>`))?.[0] ?? ''
   }
 
-  it('offers only the Design tab when there is no narration slot', () => {
-    const html = render(1, false)
-    expect(tagWithId(html, 'tools-tab-design')).toContain('aria-selected="true"')
-    expect(html).not.toContain('tools-tab-narration')
-  })
-
-  it('offers Design and Narration, with Design selected by default', () => {
-    const html = render(1, false, {}, DEFAULT_GRID, { narrationTab: <p>SLOT</p> })
-    expect(tagWithId(html, 'tools-tab-design')).toContain('aria-selected="true"')
-    expect(tagWithId(html, 'tools-tab-narration')).toContain('aria-selected="false"')
-    expect(html).toContain('>Narration<')
+  it('has no narration panel when there is no narration slot', () => {
+    expect(render(1)).not.toContain('tools-panel-narration')
   })
 
   // Unmounting the slot on a tab switch would run NarrationTab's cleanup and abort a
   // generation the user only looked away from, so it is rendered and merely hidden.
   it('keeps the narration slot mounted, but hidden, while Design is selected', () => {
-    const html = render(1, false, {}, DEFAULT_GRID, { narrationTab: <p>SLOT</p> })
+    const html = render(1, {}, { narrationTab: <p>SLOT</p> })
     expect(html).toContain('SLOT')
     expect(tagWithId(html, 'tools-panel-narration')).toContain('hidden=""')
     expect(tagWithId(html, 'tools-panel-design')).not.toContain('hidden=""')
   })
 
   it('hides the Design sections, not unmounts them, while Narration is selected', () => {
-    const html = render(1, false, {}, DEFAULT_GRID, { tab: 'narration', narrationTab: <p>SLOT</p> })
-    expect(tagWithId(html, 'tools-tab-narration')).toContain('aria-selected="true"')
+    const html = render(1, {}, { tab: 'narration', narrationTab: <p>SLOT</p> })
     expect(tagWithId(html, 'tools-panel-narration')).not.toContain('hidden=""')
     expect(tagWithId(html, 'tools-panel-design')).toContain('hidden=""')
     expect(html).toContain('>Typography<')
-  })
-
-  it('keeps the zoom in the header on the Narration tab too', () => {
-    const html = render(1, false, {}, DEFAULT_GRID, { tab: 'narration', narrationTab: <p>SLOT</p> })
-    expect(html.indexOf('aria-label="Zoom (50')).toBeLessThan(html.indexOf('SLOT'))
   })
 })

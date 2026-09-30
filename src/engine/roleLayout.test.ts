@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from './contentBlocks'
-import { roleLayoutHint } from './roleLayout'
+import { generatedLayout, roleLayoutHint } from './roleLayout'
 
 const heading: ContentBlock = { type: 'heading', text: 'One clear sentence' }
 const paragraph: ContentBlock = { type: 'paragraph', text: 'Supporting line.' }
@@ -46,5 +46,19 @@ describe('roleLayoutHint', () => {
   it('handles a missing or unknown role', () => {
     expect(roleLayoutHint(undefined, [heading])).toBeNull()
     expect(roleLayoutHint('introduction', [heading])).toBeNull()
+  })
+})
+
+describe('generatedLayout', () => {
+  it('always makes the first card a title slide, whatever it holds or its role', () => {
+    expect(generatedLayout(0, undefined, [heading, paragraph])).toBe('hero')
+    expect(generatedLayout(0, 'problem', [heading, bullets])).toBe('hero')
+    expect(generatedLayout(0, 'recap', [heading, stat])).toBe('hero')
+  })
+
+  it('defers to the role hint, then the classifier, for every later card', () => {
+    expect(generatedLayout(1, 'insight', [heading, paragraph])).toBe('hero')
+    expect(generatedLayout(1, 'recap', [heading, bullets])).toBe('numberedList')
+    expect(generatedLayout(1, undefined, [heading, paragraph])).toBe('auto')
   })
 })

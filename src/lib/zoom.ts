@@ -56,3 +56,14 @@ export function scrollTopAfterZoom(scrollTop: number, viewHeight: number, from: 
   const centre = scrollTop + viewHeight / 2
   return Math.max(0, (centre * to) / from - viewHeight / 2)
 }
+
+/**
+ * The zoom at which the card column fills the view's width (the top bar's Fit).
+ * The column is `columnMax` wide at most and shrinks with a narrower view, so on
+ * a narrow window Fit is 100%; `gutter` is the canvas padding either side, in total.
+ */
+export function fitZoom(viewWidth: number, columnMax: number, gutter: number): number {
+  const available = viewWidth - gutter
+  if (!(available > 0) || !(columnMax > 0)) return DEFAULT_ZOOM
+  return clampZoom(available / Math.min(columnMax, available))
+}

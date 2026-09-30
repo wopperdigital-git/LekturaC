@@ -5,6 +5,7 @@ import {
   CONTENT_OPTIONS,
   CONTENT_TYPES,
   MAX_BLOCKS,
+  elementLabel,
   firstEditableField,
   isPlaceholderText,
   newBlock,
@@ -92,5 +93,24 @@ describe('isPlaceholderText', () => {
   it('does not treat the user’s own words as a placeholder', () => {
     expect(isPlaceholderText('Quarterly revenue')).toBe(false)
     expect(isPlaceholderText('')).toBe(false)
+  })
+})
+
+describe('elementLabel', () => {
+  it('names every insertable type as the Insert menu does', () => {
+    for (const option of CONTENT_OPTIONS) {
+      expect(elementLabel(newBlock(option.type))).toBe(option.label)
+    }
+  })
+
+  it('calls an unsized heading a plain Heading, and names images', () => {
+    expect(elementLabel({ type: 'heading', text: 'T' })).toBe('Heading')
+    expect(elementLabel({ type: 'image', url: 'x' })).toBe('Image')
+  })
+
+  it('names an item of a list or group, not the whole element', () => {
+    expect(elementLabel({ type: 'bulletList', items: ['a'] }, 0)).toBe('List item')
+    expect(elementLabel({ type: 'comparisonGroup', heading: 'H', items: ['a'] }, 0)).toBe('Group item')
+    expect(elementLabel({ type: 'bulletList', items: ['a'] })).toBe('Bullet list')
   })
 })

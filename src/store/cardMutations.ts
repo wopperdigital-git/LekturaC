@@ -34,6 +34,18 @@ export function withCardAfter(cards: Card[], afterCardId: string | null, card: C
   return reindex(next)
 }
 
+/**
+ * A deep copy of `cardId` under `copyId`, placed directly after it. Everything
+ * travels with it — blocks, layout, formatting, nudges, narration and ink — and
+ * nothing is shared with the original, so editing one never edits the other.
+ * Unchanged when `cardId` is not here.
+ */
+export function withDuplicate(cards: Card[], cardId: string, copyId: string): Card[] {
+  const source = cards.find((c) => c.id === cardId)
+  if (!source) return cards
+  return withCardAfter(cards, cardId, { ...structuredClone(source), id: copyId })
+}
+
 /** Cards whose id is not in `orderedIds` — deleted since — drop out. */
 export function inOrder(cards: Card[], orderedIds: string[]): Card[] {
   const byId = new Map(cards.map((c) => [c.id, c]))
