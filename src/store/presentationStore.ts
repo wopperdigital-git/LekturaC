@@ -686,6 +686,142 @@ async function persistSnapshot(id: string, previousCards: Card[], snapshot: Deck
   await persistCardsSync(id, previousCards, snapshot.cards)
 }
 
+export type GeneratedDeckInput = Parameters<PresentationState['createDeckFromGeneration']>[0]
+
+/**
+ * Creates a generated deck's rows and returns them, touching no store state. The background deck
+ * job calls this directly: the store method below also makes it the open deck, which run in the
+ * background would replace whatever deck the user is editing when the job finishes.
+ */
+export async function insertGeneratedDeck(
+  deck: GeneratedDeckInput,
+  requestedCount?: number | 'auto',
+  result?: PipelineResult,
+): Promise<{ id: string; cards: Card[] }> {
+  const id = newId()
+
+  /*
+    The sequence is checked but never enforced. A deck whose roles drifted
+    from the blueprint is still the only copy of content nothing in this app
+    can regenerate, so a mismatch is logged and the deck lands. Only the
+    response *shape* is allowed to fail a generation (zod, in provider.ts).
+
+    Skipped outright when no card carries a role: roles became optional
+    guidance once blueprints did (see ai/slideBlueprints.ts), so a deck with
+    none of them is not "the deck ignored its blueprint" — it is a deck the
+    model never assigned roles to, and warning about a sequence that was
+    never attempted would just be noise on every such deck.
+
+    Checked against the sequence for the count that was actually asked for,
+    not the count the model returned: `sequenceFor` produces exactly as many
+    specs as it's given, so comparing against `deck.cards.length` can never
+    see a wrong count — an 8-slide deck returned for a 6-slide request would
+    compare against the 8-slide sequence and pass. 'auto' has no requested
+    number to check against, so it still falls back to what came back.
+  */
+  if (deck.blueprint && deck.cards.some((c) => c.role)) {
+    const expectedCount =
+      typeof requestedCount === 'number' ? requestedCount : deck.cards.length
+    const problem = sequenceMismatch(
+      sequenceFor(deck.blueprint, expectedCount),
+      deck.cards.map((c) => c.role ?? ''),
+    )
+    if (problem) {
+      console.warn(`[generation] deck does not follow the ${deck.blueprint} blueprint: ${problem}`)
+    }
+  }
+
+  const cards: Card[] = deck.cards.map((c, i) => {
+    // The one moment a deck's text is written, and so the only place the
+    // model's `*asterisks*` can be turned into real bold without the stored
+    // string and the drawn string disagreeing about character offsets.
+    const { blocks, inline } = applyEmphasis(c.blocks)
+    // The pipeline's own script becomes the card's starting narration —
+    // both fields the same text, so the slide reads as already-generated
+    // (`narrationStatus` === 'generated') rather than hand-edited, and Reset
+    // has something to go back to. A blank note (a card the pipeline had no
+    // script for) leaves narration unset rather than storing an empty pair.
+    const notes = capScriptLength(c.speakerNotes ?? '')
+    const narration = notes.trim() !== '' ? { text: notes, generated: notes } : undefined
+    return {
+      id: newId(),
+      orderIndex: i,
+      blocks,
+      layout: generatedLayout(i, c.role, blocks),
+      visualStyle: c.visualStyle,
+      inline,
+      narration,
+    }
+  })
+
+  if (supabaseConfigured && supabase) {
+    await ensureSession()
+    const { data: userData } = await supabase.auth.getUser()
+    const { error: presError } = await supabase.from('presentations').insert({
+      id,
+      owner_id: userData.user?.id,
+      title: deck.title,
+      theme: DEFAULT_THEME,
+    })
+    if (presError) throw presError
+
+    const { error: cardsError } = await supabase.from('cards').insert(
+      cards.map((c) => ({
+        id: c.id,
+        presentation_id: id,
+        order_index: c.orderIndex,
+        blocks: c.blocks,
+        layout: c.layout,
+        visual_style: c.visualStyle,
+        // The emphasis converted above lives here. Without it the delimiters
+        // are stripped from `blocks` on the way into the row while the marks
+        // that replaced them are not, so the bold would be lost for good the
+        // next time the deck was read. `adjusts` is deliberately still left
+        // to its column default: a fresh card has none, and naming it here
+        // would make deck creation fail outright on a project that has not
+        // run migration 0006. `narration` is named outright rather than left
+        // to its default — migration 0008 is already required before any
+        // card write (`cardRow` names it on every upsert elsewhere), so this
+        // creates no new requirement.
+        inline: c.inline ?? {},
+        narration: c.narration ?? {},
+      })),
+    )
+    if (cardsError) throw cardsError
+
+    /*
+      Best-effort, and deliberately last: both inserts above have already
+      succeeded, so the deck itself is never at risk over this. A project
+      that has not run migration 0011 gets a warning instead of a missing
+      deck — the same shape as the `adjusts`/`narration` lesson in
+      CLAUDE.md's Persistence section, just as an update instead of an
+      insert column.
+
+      Wrapped in try/catch, not just a returned `error` check: a rejected
+      `.update()` (a network failure, not only a missing column) must warn
+      the same way rather than reject this whole function — the deck the
+      two inserts above already created must not come back as a failure.
+    */
+    if (result) {
+      try {
+        const meta = buildGenerationMeta(result, cards.map((c) => c.id), new Date().toISOString())
+        const { error: metaError } = await supabase
+          .from('presentations')
+          .update({ generation: meta })
+          .eq('id', id)
+        if (metaError) throw metaError
+      } catch (err) {
+        console.warn(
+          '[generation] could not store generation metadata (run migration 0011):',
+          describeError(err),
+        )
+      }
+    }
+  }
+
+  return { id, cards }
+}
+
 export const usePresentationStore = create<PresentationState>((set, get) => ({
   presentationId: null,
   title: 'Untitled',
@@ -765,127 +901,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   },
 
   async createDeckFromGeneration(deck, requestedCount, result) {
-    const id = newId()
-
-    /*
-      The sequence is checked but never enforced. A deck whose roles drifted
-      from the blueprint is still the only copy of content nothing in this app
-      can regenerate, so a mismatch is logged and the deck lands. Only the
-      response *shape* is allowed to fail a generation (zod, in provider.ts).
-
-      Skipped outright when no card carries a role: roles became optional
-      guidance once blueprints did (see ai/slideBlueprints.ts), so a deck with
-      none of them is not "the deck ignored its blueprint" — it is a deck the
-      model never assigned roles to, and warning about a sequence that was
-      never attempted would just be noise on every such deck.
-
-      Checked against the sequence for the count that was actually asked for,
-      not the count the model returned: `sequenceFor` produces exactly as many
-      specs as it's given, so comparing against `deck.cards.length` can never
-      see a wrong count — an 8-slide deck returned for a 6-slide request would
-      compare against the 8-slide sequence and pass. 'auto' has no requested
-      number to check against, so it still falls back to what came back.
-    */
-    if (deck.blueprint && deck.cards.some((c) => c.role)) {
-      const expectedCount =
-        typeof requestedCount === 'number' ? requestedCount : deck.cards.length
-      const problem = sequenceMismatch(
-        sequenceFor(deck.blueprint, expectedCount),
-        deck.cards.map((c) => c.role ?? ''),
-      )
-      if (problem) {
-        console.warn(`[generation] deck does not follow the ${deck.blueprint} blueprint: ${problem}`)
-      }
-    }
-
-    const cards: Card[] = deck.cards.map((c, i) => {
-      // The one moment a deck's text is written, and so the only place the
-      // model's `*asterisks*` can be turned into real bold without the stored
-      // string and the drawn string disagreeing about character offsets.
-      const { blocks, inline } = applyEmphasis(c.blocks)
-      // The pipeline's own script becomes the card's starting narration —
-      // both fields the same text, so the slide reads as already-generated
-      // (`narrationStatus` === 'generated') rather than hand-edited, and Reset
-      // has something to go back to. A blank note (a card the pipeline had no
-      // script for) leaves narration unset rather than storing an empty pair.
-      const notes = capScriptLength(c.speakerNotes ?? '')
-      const narration = notes.trim() !== '' ? { text: notes, generated: notes } : undefined
-      return {
-        id: newId(),
-        orderIndex: i,
-        blocks,
-        layout: generatedLayout(i, c.role, blocks),
-        visualStyle: c.visualStyle,
-        inline,
-        narration,
-      }
-    })
-
-    if (supabaseConfigured && supabase) {
-      await ensureSession()
-      const { data: userData } = await supabase.auth.getUser()
-      const { error: presError } = await supabase.from('presentations').insert({
-        id,
-        owner_id: userData.user?.id,
-        title: deck.title,
-        theme: DEFAULT_THEME,
-      })
-      if (presError) throw presError
-
-      const { error: cardsError } = await supabase.from('cards').insert(
-        cards.map((c) => ({
-          id: c.id,
-          presentation_id: id,
-          order_index: c.orderIndex,
-          blocks: c.blocks,
-          layout: c.layout,
-          visual_style: c.visualStyle,
-          // The emphasis converted above lives here. Without it the delimiters
-          // are stripped from `blocks` on the way into the row while the marks
-          // that replaced them are not, so the bold would be lost for good the
-          // next time the deck was read. `adjusts` is deliberately still left
-          // to its column default: a fresh card has none, and naming it here
-          // would make deck creation fail outright on a project that has not
-          // run migration 0006. `narration` is named outright rather than left
-          // to its default — migration 0008 is already required before any
-          // card write (`cardRow` names it on every upsert elsewhere), so this
-          // creates no new requirement.
-          inline: c.inline ?? {},
-          narration: c.narration ?? {},
-        })),
-      )
-      if (cardsError) throw cardsError
-
-      /*
-        Best-effort, and deliberately last: both inserts above have already
-        succeeded, so the deck itself is never at risk over this. A project
-        that has not run migration 0011 gets a warning instead of a missing
-        deck — the same shape as the `adjusts`/`narration` lesson in
-        CLAUDE.md's Persistence section, just as an update instead of an
-        insert column.
-
-        Wrapped in try/catch, not just a returned `error` check: a rejected
-        `.update()` (a network failure, not only a missing column) must warn
-        the same way rather than reject this whole function — the deck the
-        two inserts above already created must not come back as a failure.
-      */
-      if (result) {
-        try {
-          const meta = buildGenerationMeta(result, cards.map((c) => c.id), new Date().toISOString())
-          const { error: metaError } = await supabase
-            .from('presentations')
-            .update({ generation: meta })
-            .eq('id', id)
-          if (metaError) throw metaError
-        } catch (err) {
-          console.warn(
-            '[generation] could not store generation metadata (run migration 0011):',
-            describeError(err),
-          )
-        }
-      }
-    }
-
+    const { id, cards } = await insertGeneratedDeck(deck, requestedCount, result)
     set({ presentationId: id, title: deck.title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards, status: 'idle', errorMessage: null, past: [], future: [] })
     return id
   },
