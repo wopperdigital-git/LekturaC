@@ -451,19 +451,34 @@ export function QuizModal({
         })}
       </div>
 
-      <div role="tabpanel" id="quiz-panel-create" aria-labelledby="quiz-tab-create" hidden={tab !== 'create'}>
-        {createPanel()}
-      </div>
-      <div role="tabpanel" id="quiz-panel-list" aria-labelledby="quiz-tab-list" hidden={tab !== 'list'}>
-        <DeckQuizList
-          quizzes={previous}
-          loadError={previousError}
-          isTeacher={isTeacher}
-          pdfBusy={pdfBusy}
-          busy={busy}
-          onPdf={(id) => void downloadPdf(id, () => loadOwnerQuiz(id))}
-        />
-        {tab === 'list' && notices}
+      {/* One fixed height for both tabs, so switching never resizes the modal; each panel scrolls inside it. */}
+      <div className="h-[60vh]">
+        <div
+          role="tabpanel"
+          id="quiz-panel-create"
+          aria-labelledby="quiz-tab-create"
+          hidden={tab !== 'create'}
+          className="scrollbar-subtle h-full overflow-y-auto pr-1"
+        >
+          {createPanel()}
+        </div>
+        <div
+          role="tabpanel"
+          id="quiz-panel-list"
+          aria-labelledby="quiz-tab-list"
+          hidden={tab !== 'list'}
+          className="scrollbar-subtle h-full overflow-y-auto pr-1"
+        >
+          <DeckQuizList
+            quizzes={previous}
+            loadError={previousError}
+            isTeacher={isTeacher}
+            pdfBusy={pdfBusy}
+            busy={busy}
+            onPdf={(id) => void downloadPdf(id, () => loadOwnerQuiz(id))}
+          />
+          {tab === 'list' && notices}
+        </div>
       </div>
     </Modal>
   )

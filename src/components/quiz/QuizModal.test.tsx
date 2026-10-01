@@ -54,6 +54,20 @@ describe('QuizModal', () => {
     expect(html).toContain('value="Test 1"')
     expect(html).not.toContain('value="Test 2"')
   })
+
+  it('keeps both tab panels mounted inside one fixed-height area, so switching tabs never resizes it', () => {
+    const html = renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} />)
+    const area = html.indexOf('h-[60vh]')
+    const create = html.indexOf('id="quiz-panel-create"')
+    const list = html.indexOf('id="quiz-panel-list"')
+    expect(area).toBeGreaterThan(-1)
+    expect(create).toBeGreaterThan(area)
+    expect(list).toBeGreaterThan(create)
+    // The list panel is rendered (hidden), not left out, so the area doesn't depend on which tab is open.
+    const listTag = html.slice(html.lastIndexOf('<div', list), html.indexOf('>', list) + 1)
+    expect(listTag).toContain('hidden=""')
+    expect(listTag).toContain('h-full')
+  })
 })
 
 describe('SectionList', () => {
