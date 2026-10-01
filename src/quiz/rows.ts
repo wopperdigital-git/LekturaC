@@ -1,4 +1,4 @@
-import { fromDbConfig, fromDbSections, type QuizAnswer, type QuizConfig, type QuizSection, type QuizType } from './types'
+import { fromDbSections, type QuizAnswer, type QuizSection, type QuizType } from './types'
 
 /*
   Row shapes as PostgREST / the RPCs return them, and the mapping to app types.
@@ -78,17 +78,19 @@ export interface TakeQuestion {
   slideNumber: number
   prompt: string
   choices: string[]
+  sectionIndex: number
+  type: QuizType
 }
 
 export interface TakeQuiz {
   id: string
   title: string
   deckTitle: string
-  config: QuizConfig
+  sections: QuizSection[]
   classes: { id: string; name: string; attempted: boolean }[]
   questions: TakeQuestion[]
-  /** Shuffled answers to offer above the blanks, or `null` when the quiz has no word box. */
-  wordBox: string[] | null
+  /** Shuffled answers to offer above a fill-in-the-blank test, keyed by the test's index. */
+  wordBoxes: Record<number, string[]>
 }
 
 function strings(value: unknown): string[] {
@@ -175,20 +177,56 @@ interface TakeJson {
   quiz_type: string
   settings: unknown
   classes: { id: string; name: string; attempted: boolean }[]
-  questions: { id: string; order_index: number; slide_number: number; prompt: string; choices: unknown }[]
-  word_box: unknown
+  questions: {
+    id: string
+    order_index: number
+    section_index?: number | null
+    question_type?: string | null
+    slide_number: number
+    prompt: string
+    choices: unknown
+  }[]
+  /** 0016 and later. */
+  word_boxes?: unknown
+  /** Before 0016: one box for the whole (single-type) quiz. */
+  word_box?: unknown
+}
+
+function wordBoxesFrom(json: TakeJson, sectionCount: number): Record<number, string[]> {
+  const out: Record<number, string[]> = {}
+  if (json.word_boxes && typeof json.word_boxes === 'object' && !Array.isArray(json.word_boxes)) {
+    for (const [k, v] of Object.entries(json.word_boxes as Record<string, unknown>)) {
+      const index = Number(k)
+      if (!/^\d+$/.test(k) || index >= sectionCount || !Array.isArray(v)) continue
+      out[index] = strings(v)
+    }
+  } else if (Array.isArray(json.word_box)) {
+    out[0] = strings(json.word_box)
+  }
+  return out
 }
 
 export function takeQuizFromJson(json: TakeJson): TakeQuiz {
+  const sections = fromDbSections(json.quiz_type, json.settings)
   return {
     id: json.id,
     title: json.title,
     deckTitle: json.deck_title,
-    config: fromDbConfig(json.quiz_type, json.settings),
+    sections,
     classes: json.classes,
     questions: [...json.questions]
       .sort((a, b) => a.order_index - b.order_index)
-      .map((q) => ({ id: q.id, slideNumber: q.slide_number, prompt: q.prompt, choices: strings(q.choices) })),
-    wordBox: Array.isArray(json.word_box) ? strings(json.word_box) : null,
+      .map((q) => {
+        const sectionIndex = sectionIndexOf(q.section_index, sections)
+        return {
+          id: q.id,
+          slideNumber: q.slide_number,
+          prompt: q.prompt,
+          choices: strings(q.choices),
+          sectionIndex,
+          type: asQuizType(q.question_type, sections[sectionIndex].config.type),
+        }
+      }),
+    wordBoxes: wordBoxesFrom(json, sections.length),
   }
 }

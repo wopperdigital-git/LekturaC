@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { getQuizForTaking, submitQuizAttempt, type AttemptResult, type SubmittedAnswers } from '@/quiz/api'
 import { normalizeQuizCode } from '@/quiz/quizCode'
-import type { TakeQuestion, TakeQuiz } from '@/quiz/rows'
+import { groupBySection, type TakeQuestion, type TakeQuiz } from '@/quiz/rows'
+import type { QuizConfig } from '@/quiz/types'
 import { allAnswered, buildAnswers, defaultClassId } from '@/quiz/taking'
 
 const CHOICE_LETTERS = 'ABCD'
@@ -167,38 +168,52 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
             <span className="font-mono">{progressPercent}%</span>
           </div>
 
-          {quiz.wordBox && quiz.wordBox.length > 0 && (
-            <div className="rounded-app-sm border border-app-border bg-app-surface p-3">
-              <p className="mb-2 text-xs font-medium text-app-muted">Word box</p>
-              <ul className="flex flex-wrap gap-2">
-                {quiz.wordBox.map((word, i) => (
-                  <li
-                    key={i}
-                    className="rounded-app-sm border border-app-border bg-app-background px-2.5 py-1 text-sm text-app-foreground"
-                  >
-                    {word}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {groupBySection(quiz.sections, quiz.questions).map(({ section, index, questions }) => {
+            const words = quiz.wordBoxes[index]
+            return (
+              <section key={index} aria-labelledby={`quiz-test-${index}`} className="flex flex-col gap-4">
+                <div>
+                  <h2 id={`quiz-test-${index}`} className="text-base font-semibold text-app-foreground">
+                    {section.title}
+                  </h2>
+                  {section.instructions && <p className="mt-1 text-sm text-app-muted">{section.instructions}</p>}
+                </div>
 
-          <ol className="flex flex-col gap-4">
-            {quiz.questions.map((q, i) => (
-              <li
-                key={q.id}
-                className="rounded-app border border-app-border/80 bg-app-surface/20 p-4 sm:p-5 transition-colors hover:border-app-border"
-              >
-                <QuestionField
-                  index={i}
-                  question={q}
-                  config={quiz.config}
-                  answer={answers[q.id]}
-                  onAnswer={(value) => setAnswer(q.id, value)}
-                />
-              </li>
-            ))}
-          </ol>
+                {words && words.length > 0 && (
+                  <div className="rounded-app-sm border border-app-border bg-app-surface p-3">
+                    <p className="mb-2 text-xs font-medium text-app-muted">Word box</p>
+                    <ul className="flex flex-wrap gap-2">
+                      {words.map((word, i) => (
+                        <li
+                          key={i}
+                          className="rounded-app-sm border border-app-border bg-app-background px-2.5 py-1 text-sm text-app-foreground"
+                        >
+                          {word}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <ol className="flex flex-col gap-4">
+                  {questions.map((q, i) => (
+                    <li
+                      key={q.id}
+                      className="rounded-app border border-app-border/80 bg-app-surface/20 p-4 sm:p-5 transition-colors hover:border-app-border"
+                    >
+                      <QuestionField
+                        index={i}
+                        question={q}
+                        config={section.config}
+                        answer={answers[q.id]}
+                        onAnswer={(value) => setAnswer(q.id, value)}
+                      />
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )
+          })}
 
           {submitError && (
             <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
@@ -237,7 +252,7 @@ function QuestionField({
 }: {
   index: number
   question: TakeQuestion
-  config: TakeQuiz['config']
+  config: QuizConfig
   answer: number | string | boolean | undefined
   onAnswer: (value: number | string | boolean) => void
 }) {
@@ -260,7 +275,7 @@ function QuestionField({
     </div>
   )
 
-  switch (config.type) {
+  switch (question.type) {
     case 'multiple_choice':
       return (
         <div role="radiogroup" aria-labelledby={promptId} className="flex flex-col gap-2">
@@ -323,7 +338,7 @@ function QuestionField({
 
     case 'true_false': {
       const options: { value: boolean; label: string; spoken: string }[] =
-        config.notation === 'letter'
+        config.type === 'true_false' && config.notation === 'letter'
           ? [
               { value: true, label: 'T', spoken: 'True' },
               { value: false, label: 'F', spoken: 'False' },
@@ -367,6 +382,7 @@ function QuestionField({
 function ResultPanel({ quiz, result }: { quiz: TakeQuiz; result: AttemptResult }) {
   const navigate = useNavigate()
   const scorePercent = Math.round(result.score * 100)
+  const positions = new Map(quiz.questions.map((q, i) => [q.id, i]))
 
   return (
     <Panel>
@@ -386,32 +402,39 @@ function ResultPanel({ quiz, result }: { quiz: TakeQuiz; result: AttemptResult }
           <span className="text-xs text-app-muted">Submitted to instructor</span>
         </div>
 
-        <ol className="divide-y divide-app-border">
-          {quiz.questions.map((q, i) => {
-            const right = result.results[i] === true
-            return (
-              <li key={q.id} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
-                <span
-                  className={`mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${
-                    right
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-red-500/15 text-red-600 dark:text-red-400'
-                  }`}
-                  aria-label={right ? 'Correct' : 'Incorrect'}
-                >
-                  {right ? '✓' : '✕'}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-xs text-app-muted">
-                    <span className="font-mono font-medium">Question {i + 1}</span>
-                    {q.slideNumber > 0 && <span>· Slide {q.slideNumber}</span>}
-                  </div>
-                  <p className="mt-1 text-sm text-app-foreground leading-snug">{q.prompt}</p>
-                </div>
-              </li>
-            )
-          })}
-        </ol>
+        <div className="flex flex-col gap-6">
+          {groupBySection(quiz.sections, quiz.questions).map(({ section, index, questions }) => (
+            <section key={index} aria-label={section.title}>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-muted">{section.title}</h3>
+              <ol className="divide-y divide-app-border">
+                {questions.map((q, i) => {
+                  const right = result.results[positions.get(q.id) ?? -1] === true
+                  return (
+                    <li key={q.id} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
+                      <span
+                        className={`mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${
+                          right
+                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-red-500/15 text-red-600 dark:text-red-400'
+                        }`}
+                        aria-label={right ? 'Correct' : 'Incorrect'}
+                      >
+                        {right ? '✓' : '✕'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 text-xs text-app-muted">
+                          <span className="font-mono font-medium">Question {i + 1}</span>
+                          {q.slideNumber > 0 && <span>· Slide {q.slideNumber}</span>}
+                        </div>
+                        <p className="mt-1 text-sm text-app-foreground leading-snug">{q.prompt}</p>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+            </section>
+          ))}
+        </div>
 
         <div className="mt-8 flex justify-end border-t border-app-border pt-4">
           <Button variant="secondary" onClick={() => void navigate('/classes')}>

@@ -94,20 +94,44 @@ describe('groupBySection', () => {
 })
 
 describe('takeQuizFromJson', () => {
-  it('maps the RPC payload and never expects an answer', () => {
+  it('maps a sectioned payload and never expects an answer', () => {
     const quiz = takeQuizFromJson({
       id: 'q',
       title: 'T',
       deck_title: 'D',
-      quiz_type: 'multiple_choice',
-      settings: { choiceCount: 3 },
+      quiz_type: 'mixed',
+      settings: { sections: [
+        { title: 'A', instructions: 'Pick.', type: 'multiple_choice', choiceCount: 3 },
+        { title: 'B', instructions: '', type: 'fill_blank', wordBox: true },
+      ] },
       classes: [{ id: 'c', name: 'Bio', attempted: false }],
-      questions: [{ id: 'x', order_index: 0, slide_number: 2, prompt: 'P', choices: ['a', 'b', 'c'] }],
-      word_box: null,
+      questions: [
+        { id: 'x', order_index: 0, section_index: 0, question_type: 'multiple_choice', slide_number: 2, prompt: 'P', choices: ['a', 'b', 'c'] },
+        { id: 'y', order_index: 1, section_index: 1, question_type: 'fill_blank', slide_number: 3, prompt: 'The ___.', choices: [] },
+      ],
+      word_boxes: { '1': ['sun', 'moon'], junk: ['x'], '0': 'nope' },
     })
-    expect(quiz.config).toEqual({ type: 'multiple_choice', choiceCount: 3 })
-    expect(quiz.questions[0]).toEqual({ id: 'x', slideNumber: 2, prompt: 'P', choices: ['a', 'b', 'c'] })
-    expect(quiz.wordBox).toBeNull()
+    expect(quiz.sections.map((s) => s.title)).toEqual(['A', 'B'])
+    expect(quiz.questions[0]).toEqual({
+      id: 'x', slideNumber: 2, prompt: 'P', choices: ['a', 'b', 'c'], sectionIndex: 0, type: 'multiple_choice',
+    })
+    expect(quiz.wordBoxes).toEqual({ 1: ['sun', 'moon'] })
     expect('answer' in quiz.questions[0]).toBe(false)
+  })
+
+  it('reads a legacy payload (no section fields, old word_box) as one test', () => {
+    const quiz = takeQuizFromJson({
+      id: 'q',
+      title: 'T',
+      deck_title: 'D',
+      quiz_type: 'fill_blank',
+      settings: { wordBox: true },
+      classes: [],
+      questions: [{ id: 'x', order_index: 0, slide_number: 2, prompt: 'The ___.', choices: [] }],
+      word_box: ['sun'],
+    })
+    expect(quiz.sections).toHaveLength(1)
+    expect(quiz.questions[0]).toMatchObject({ sectionIndex: 0, type: 'fill_blank' })
+    expect(quiz.wordBoxes).toEqual({ 0: ['sun'] })
   })
 })
