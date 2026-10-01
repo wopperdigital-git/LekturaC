@@ -339,6 +339,17 @@ body {
   pointer. Text selection is off for the duration, or the drag would paint a
   selection across the slides it passes over.
 */
+/*
+  A selected element that is not being typed into moves when dragged from
+  anywhere on it (`Adjustable`), so the move cursor covers all of it — its text
+  runs included, which otherwise show the text cursor. Unlayered, so it beats
+  their Tailwind `cursor-text`; the pan cursor below still wins with `!important`.
+*/
+[data-element-grabbable],
+[data-element-grabbable] * {
+  cursor: move;
+}
+
 [data-pan-ready] * {
   cursor: grab !important;
 }

@@ -22,12 +22,15 @@ function render(
     withShapes: boolean
     slide: ComponentProps<typeof EditorToolbar>['slide']
     grid: EditorGrid
+    canUndo: boolean
+    canRedo: boolean
   }> = {},
 ) {
-  const { tool = 'select', withPen = true, withShapes = true, slide, grid = DEFAULT_GRID } = overrides
+  const { tool = 'select', withPen = true, withShapes = true, slide, grid = DEFAULT_GRID, canUndo = true, canRedo = true } = overrides
   const noop = () => {}
   return renderToStaticMarkup(
     <EditorToolbar
+      history={{ canUndo, canRedo, onUndo: noop, onRedo: noop }}
       tool={tool}
       slide={slide}
       onToolChange={noop}
@@ -69,9 +72,9 @@ function button(html: string, label: string): string {
 }
 
 describe('EditorToolbar', () => {
-  it('offers select, move, pen, shapes, show grid and snap, in that order', () => {
+  it('offers undo, redo, select, move, pen, shapes, show grid and snap, in that order', () => {
     const html = render()
-    const labels = ['Select', 'Move', 'Pen', 'Shapes', 'Show grid', 'Snap to grid']
+    const labels = ['Undo', 'Redo', 'Select', 'Move', 'Pen', 'Shapes', 'Show grid', 'Snap to grid']
     const at = labels.map((label) => html.indexOf(`aria-label="${label}"`))
     expect(at.every((i) => i >= 0)).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
@@ -80,7 +83,7 @@ describe('EditorToolbar', () => {
   // Icons only: each name is in a hover tooltip, not a native title.
   it('names every button in a tooltip, and in no native title', () => {
     const html = render({
-      slide: { number: 1, total: 1, layout: undefined, onAddContent: () => {} },
+      slide: { layout: undefined, onAddContent: () => {} },
     })
     for (const label of ['Select', 'Move', 'Insert', 'Pen', 'Shapes', 'Show grid', 'Snap to grid']) {
       expect(html).toMatch(new RegExp(`role="tooltip"[^>]*>${label}<`))
@@ -94,10 +97,16 @@ describe('EditorToolbar', () => {
     expect(button(html, 'Snap to grid')).toContain('aria-pressed="true"')
   })
 
-  // History moved to the top bar; two places for it would be two ways to do one thing.
-  it('no longer carries undo and redo — the top bar does', () => {
-    expect(() => button(render(), 'Undo')).toThrow()
-    expect(() => button(render(), 'Redo')).toThrow()
+  // History lives here, in front, where the slide counter used to be.
+  it('disables undo and redo when there is nothing to undo or redo', () => {
+    expect(button(render({ canUndo: false }), 'Undo')).toContain('disabled=""')
+    expect(button(render({ canRedo: false }), 'Redo')).toContain('disabled=""')
+    expect(button(render(), 'Undo')).not.toContain('disabled=""')
+    expect(button(render(), 'Redo')).not.toContain('disabled=""')
+  })
+
+  it('has no slide counter', () => {
+    expect(render({ slide: {} })).not.toMatch(/Slide \d+ of \d+/)
   })
 
   it('marks Select or Move as the active tool', () => {
@@ -141,13 +150,13 @@ describe('EditorToolbar', () => {
       onChange: () => {},
       kind: 'list' as const,
     }
-    const slide = { number: 3, total: 7, layout, onAddContent: () => {} }
+    const slide = { layout, onAddContent: () => {} }
 
-    it('with a slide clicked: slide number, select, move, layout, insert, pen, shapes, grid, snap', () => {
+    it('with a slide clicked: undo, redo, select, move, layout, insert, pen, shapes, grid, snap', () => {
       const html = render({ slide })
       const at = (needle: string) => html.indexOf(needle)
-      expect(html).toContain('3 / 7')
-      expect(at('3 / 7')).toBeLessThan(at('aria-label="Select"'))
+      expect(at('aria-label="Undo"')).toBeLessThan(at('aria-label="Redo"'))
+      expect(at('aria-label="Redo"')).toBeLessThan(at('aria-label="Select"'))
       expect(at('aria-label="Select"')).toBeLessThan(at('aria-label="Move"'))
       expect(at('aria-label="Move"')).toBeLessThan(at('aria-label="Layout"'))
       expect(at('aria-label="Layout"')).toBeLessThan(at('aria-label="Insert"'))
@@ -166,10 +175,9 @@ describe('EditorToolbar', () => {
 
     // With nothing clicked there is no slide to arrange or add to: the default set.
     it('has no Layout or Insert until a slide is clicked', () => {
-      const html = render({ slide: { number: 3, total: 7 } })
+      const html = render({ slide: {} })
       expect(() => button(html, 'Layout')).toThrow()
       expect(() => button(html, 'Insert')).toThrow()
-      expect(html).toContain('3 / 7')
     })
 
     // The picker offers only layouts of the slide's own type, so it names that type.
@@ -196,7 +204,7 @@ describe('EditorToolbar', () => {
     })
   })
 
-  it('shows the element set, with no slide number, layout or insert, while an element is picked', () => {
+  it('shows the element set, with no layout or insert, while an element is picked', () => {
     const html = render()
     expect(() => button(html, 'Layout')).toThrow()
     expect(() => button(html, 'Insert')).toThrow()

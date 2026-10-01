@@ -31,6 +31,22 @@ describe('previewFont', () => {
     expect(result.cards).toBe(cards)
   })
 
+  // The preview and the write share the rule: a wider font reaches what had its own.
+  it('previews a deck font on slides and elements that had their own', () => {
+    const cards = [card('a', { textStyle: { fontFamily: 'x' }, inline: { '0': { style: { fontFamily: 'y' } } } }), card('b')]
+    const result = previewFont(cards, {}, target({}), FONT)
+    expect(result.cards[0].textStyle).toEqual({})
+    expect(result.cards[0].inline).toEqual({})
+    expect(result.cards[1]).toBe(cards[1])
+  })
+
+  it('previews a card font on its elements that had their own', () => {
+    const cards = [card('a', { inline: { '0': { style: { fontFamily: 'y', fontScale: 0.9 } } } })]
+    const result = previewFont(cards, {}, target({ scope: { kind: 'card', cardId: 'a' } }), FONT)
+    expect(result.cards[0].textStyle).toEqual({ fontFamily: FONT })
+    expect(result.cards[0].inline).toEqual({ '0': { style: { fontScale: 0.9 } } })
+  })
+
   it('previews on the selected card only', () => {
     const cards = [card('a'), card('b')]
     const result = previewFont(cards, {}, target({ scope: { kind: 'card', cardId: 'a' } }), FONT)

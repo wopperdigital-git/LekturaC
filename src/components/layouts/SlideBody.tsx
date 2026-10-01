@@ -1,4 +1,5 @@
-import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { StartMove } from '@/components/editor/SelectionLayer'
 import type { Card } from '@/engine/contentBlocks'
 import type { OverlayItem, Shape } from '@/engine/overlay'
 import { SelectionLayer } from '@/components/editor/SelectionLayer'
@@ -51,7 +52,14 @@ export function SlideBody({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
-  const adjusting = useContext(BlockAdjustContext)
+  const outer = useContext(BlockAdjustContext)
+  // Filled in by the selection layer, which holds the selected element's frame.
+  const moveRef = useRef<StartMove | null>(null)
+  const setMove = useCallback((move: StartMove | null) => {
+    moveRef.current = move
+  }, [])
+  const startMove = useCallback<StartMove>((event, onTap) => moveRef.current?.(event, onTap), [])
+  const adjusting = useMemo(() => outer && { ...outer, startMove }, [outer, startMove])
   const grid = useEditorGrid()
   const drawing = useContext(DrawingContext)
   // Which strokes the eraser is over right now; both ink layers draw them faded.
@@ -84,10 +92,11 @@ export function SlideBody({
     <div ref={ref} className="relative" {...{ [SLIDE_BODY_ATTR]: true }}>
       <CardBoxContext.Provider value={{ width }}>
         <BlockDataContext.Provider value={{ adjusts: card.adjusts, inline: card.inline }}>
+          <BlockAdjustContext.Provider value={adjusting}>
           {children}
           {/* The editor's graph paper, in this same content-box space. Gated on
               the interaction context so no other surface can ever show it. */}
-          {adjusting && grid.show && <GridOverlay contentWidth={width} />}
+          {outer && grid.show && <GridOverlay contentWidth={width} />}
           {/* Ink. What is part of the slide draws on every surface (it is on the
               card); temporary ink only where the editor provides it. */}
           <OverlayLayer
@@ -122,7 +131,8 @@ export function SlideBody({
           )}
           {/* Only where something can be selected. The presenter view and the
               thumbnails render adjusted elements but draw no box around them. */}
-          {adjusting && <SelectionLayer cardRef={ref} />}
+          {outer && <SelectionLayer cardRef={ref} onMoveReady={setMove} />}
+          </BlockAdjustContext.Provider>
         </BlockDataContext.Provider>
       </CardBoxContext.Provider>
     </div>

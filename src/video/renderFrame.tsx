@@ -10,7 +10,8 @@ import { SlideSurface } from '@/components/theme/SlideSurface'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
-import { FRAME_HEIGHT, FRAME_WIDTH, STAGE_PADDING, fitScale } from './timeline'
+import { FRAME_HEIGHT, FRAME_WIDTH, STAGE_PADDING, frameScale } from './timeline'
+import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
 
 /*
   Draws one slide, exactly as the presenter and the thumbnails do, into the encoder's canvas.
@@ -89,12 +90,13 @@ function videoSlide(o: {
         className="flex items-center justify-center p-10"
         style={{ width: FRAME_WIDTH, height: FRAME_HEIGHT }}
       >
-        {/* Scaled about its centre when the slide is taller than the frame; transforms do not affect
-            layout, so `SlideBody`'s measured width (what nudges are fractions of) is unchanged. */}
+        {/* Laid out at the editor's width, so text wraps as it does there, then scaled about its
+            centre to fill the frame (and down, never cropped, when the slide is tall); transforms do
+            not affect layout, so `SlideBody`'s measured width (what nudges are fractions of) is unchanged. */}
         <div
           ref={onFit}
-          className="w-full"
-          style={{ transformOrigin: 'center center' }}
+          className="shrink-0"
+          style={{ width: SLIDE_WIDTH_PX, transformOrigin: 'center center' }}
         >
           <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
             <SlideSurface className="w-full rounded-slide p-10 shadow-slide-card">
@@ -175,8 +177,13 @@ export async function createSlideRenderer(o: {
 
       const { stage, fit } = refs
       if (!stage || !fit) throw new Error('the slide did not mount')
-      const scale = fitScale(fit.offsetHeight, FRAME_HEIGHT - 2 * STAGE_PADDING)
-      fit.style.transform = scale < 1 ? `scale(${scale})` : ''
+      const scale = frameScale(
+        SLIDE_WIDTH_PX,
+        fit.offsetHeight,
+        FRAME_WIDTH - 2 * STAGE_PADDING,
+        FRAME_HEIGHT - 2 * STAGE_PADDING,
+      )
+      fit.style.transform = scale !== 1 ? `scale(${scale})` : ''
 
       const picture = await toCanvas(stage, { width: FRAME_WIDTH, height: FRAME_HEIGHT, pixelRatio: 1, skipFonts: true })
       context.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)

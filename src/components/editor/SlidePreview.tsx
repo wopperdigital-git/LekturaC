@@ -8,6 +8,7 @@ import { SlideSurface } from '@/components/theme/SlideSurface'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
+import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
 
 /*
   One card, drawn for real and shrunk: the actual `LayoutRenderer` output at full
@@ -18,7 +19,10 @@ import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
   It is the one implementation behind the dashboard's deck covers and the
   editor's layout picker, so both show a slide exactly as the canvas would.
 */
-const BASE_WIDTH = 800
+/** The stage's padding around the card (`p-10`), either side. */
+const STAGE_PADDING_PX = 40
+// The card at the editor's own width, with the stage around it: text wraps as it does on the canvas.
+const BASE_WIDTH = SLIDE_WIDTH_PX + 2 * STAGE_PADDING_PX
 // Unlike the outline rail, this assumes 16:9 — see the crop note below.
 const BASE_HEIGHT = (BASE_WIDTH * 9) / 16
 
@@ -54,7 +58,7 @@ export function SlidePreview({
     const frame = frameRef.current
     if (!frame) return
     // Measured before paint, so the first frame is already at the right scale
-    // instead of flashing an 800px slide inside a small tile.
+    // instead of flashing a full-size slide inside a small tile.
     const measure = () => setFrameWidth(frame.clientWidth)
     measure()
     const observer = new ResizeObserver(measure)

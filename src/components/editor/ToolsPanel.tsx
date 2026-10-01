@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from 'react'
 import { createPortal } from 'react-dom'
 import {
   COLOR_CHOICES,
@@ -23,7 +31,7 @@ import {
 } from '@/engine/marks'
 import { FIELD, PercentField } from './PercentField'
 import type { ThemeTokens } from '@/lib/theme-tokens'
-import { ThemeStrip } from '@/components/theme/ThemeStrip'
+import { ThemeGrid } from '@/components/theme/ThemeGrid'
 
 /*
   The editing tools, docked at the right of the canvas.
@@ -48,18 +56,19 @@ import { ThemeStrip } from '@/components/theme/ThemeStrip'
     segmented groups where the selected option is a raised chip, and a short
     caption above each field. Every icon-only control carries a tooltip naming
     it, with its shortcut where it has one.
-  - **What is not a property lives in the editor's top bar:** history, zoom,
-    Present, and the Edit / Narrate modes that pick this panel's tab.
+  - **What is not a property lives outside the panel:** history, zoom and
+    Present in the editor's top bar, and the Edit / Narrate modes that pick this
+    panel's tab in a row of their own above it (`ModeTabs`).
 
   Deliberately app chrome, not deck theme: it follows the light/dark toggle and
   uses `app-*` tokens, because it is a tool sitting beside the deck rather than
-  part of it. (The previews inside it are the deck's own theme on purpose — they
+  part of it. (The theme wireframes inside it are in each theme's own colours on purpose — they
   are pictures of slides.)
 
   Every button refuses focus on mousedown. Formatting applies to the *character
   selection* inside a contentEditable run, and a button that took focus would
   collapse it and blur the run before the click landed. The inputs (size, zoom
-  and the colour swatch) are the exceptions, since they have to take focus to be
+  and the custom colour swatch) are the exceptions, since they have to take focus to be
   used; the run's last reported selection survives that, which is how a size
   typed for three selected letters still reaches those three.
 */
@@ -112,7 +121,7 @@ export function ToolsPanel({
   activeAlign?: TextAlign | null
   theme: ThemeTokens
   onThemeChange: (theme: ThemeTokens) => void
-  /** Which tab is showing, picked by the top bar's Edit / Narrate. Defaults to Design. */
+  /** Which tab is showing, picked by the Edit / Narrate modes above the panel. Defaults to Design. */
   tab?: PanelTab
   /**
    * The Narration tab's body. Supplied by the page so this panel knows nothing about
@@ -165,7 +174,7 @@ export function ToolsPanel({
     <div
       role="region"
       aria-label="Tools"
-      className="flex h-full flex-col overflow-hidden rounded-app border border-app-border bg-app-background shadow-app"
+      className="flex h-full flex-col overflow-hidden rounded-app border border-app-border bg-app-background"
     >
       {/* No `display` utility on this element: it would override `hidden`. */}
       <div
@@ -300,7 +309,7 @@ export function ToolsPanel({
         </Section>
 
         <Section title="Theme" icon={<BrushIcon />}>
-          <ThemeStrip theme={theme} onSelect={onThemeChange} />
+          <ThemeGrid theme={theme} onSelect={onThemeChange} />
         </Section>
       </div>
 
@@ -410,7 +419,7 @@ function SegButton({
       title={title ?? label}
       className={`flex h-6 min-w-7 flex-1 cursor-pointer items-center justify-center rounded-[4px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING} ${
         pressed
-          ? 'bg-app-background text-app-foreground shadow-sm ring-1 ring-app-border'
+          ? 'bg-app-background text-app-foreground ring-1 ring-app-border'
           : 'text-app-foreground/70 hover:text-app-foreground'
       }`}
     >
@@ -441,7 +450,6 @@ function FontPicker({
   onPreview: (fontFamily: string | null | undefined) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [place, setPlace] = useState<MenuPlace | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   const current = FONT_CHOICES.find((font) => font.value === value)
@@ -461,47 +469,8 @@ function FontPicker({
     stop.current(undefined)
   }
 
-  /*
-    The list floats over the panel rather than pushing the sections below it
-    down. It is portalled to <body> with fixed coordinates taken from the trigger,
-    because anything inside the panel would be clipped by its scroll area. It
-    opens below the trigger, or above when there is more room there, and scrolls
-    within whatever height it gets.
-  */
-  useLayoutEffect(() => {
-    if (!open) return
-    function measure() {
-      const rect = trigger.current?.getBoundingClientRect()
-      if (rect) setPlace(menuPlace(rect, window.innerHeight))
-    }
-    measure()
-    function onPointerDown(e: PointerEvent) {
-      const target = e.target as Node
-      if (!menu.current?.contains(target) && !trigger.current?.contains(target)) close()
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key !== 'Escape') return
-      // The editor's own Escape stands down for a key a dropdown already used.
-      e.preventDefault()
-      close()
-    }
-    function onScroll(e: Event) {
-      // Scrolling the list itself is fine; scrolling what it hangs off would leave it floating.
-      if (!menu.current?.contains(e.target as Node)) close()
-    }
-    // Capture phase, like the toolbar's menus: the canvas's pan hook stops presses
-    // in its own capture phase, which a bubble listener would never hear.
-    document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('keydown', onKey, true)
-    document.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', measure)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('keydown', onKey, true)
-      document.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', measure)
-    }
-  }, [open])
+  // The list floats over the panel rather than pushing the sections below it down.
+  const place = useFloatingMenu(open, close, trigger, menu)
 
   function pick(fontFamily: string | null) {
     onChange(fontFamily)
@@ -578,7 +547,7 @@ type MenuPlace = { left: number; width: number; maxHeight: number; above: boolea
 const MENU_GAP = 4
 const MENU_MARGIN = 12
 
-/** Where the font list floats for a trigger at `rect`: below it, or above when there is more room there. */
+/** Where a menu floats for a trigger at `rect`: below it, or above when there is more room there. */
 function menuPlace(rect: DOMRect, viewportHeight: number): MenuPlace {
   const below = viewportHeight - rect.bottom - MENU_GAP - MENU_MARGIN
   const aboveRoom = rect.top - MENU_GAP - MENU_MARGIN
@@ -591,6 +560,65 @@ function menuPlace(rect: DOMRect, viewportHeight: number): MenuPlace {
     top: rect.bottom + MENU_GAP,
     bottom: viewportHeight - rect.top + MENU_GAP,
   }
+}
+
+/**
+ * Where a floating menu sits while `open`, and what closes it.
+ *
+ * A menu here is portalled to <body> with fixed coordinates taken from its
+ * trigger, because anything inside the panel would be clipped by its scroll area.
+ * It opens below the trigger, or above when there is more room there, and scrolls
+ * within whatever height it gets. An outside press, Escape, or a scroll of
+ * anything but the menu itself closes it.
+ */
+function useFloatingMenu(
+  open: boolean,
+  close: () => void,
+  trigger: RefObject<HTMLElement | null>,
+  menu: RefObject<HTMLElement | null>,
+): MenuPlace | null {
+  const [place, setPlace] = useState<MenuPlace | null>(null)
+  const closeRef = useRef(close)
+  useEffect(() => {
+    closeRef.current = close
+  })
+
+  useLayoutEffect(() => {
+    if (!open) return
+    function measure() {
+      const rect = trigger.current?.getBoundingClientRect()
+      if (rect) setPlace(menuPlace(rect, window.innerHeight))
+    }
+    measure()
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node
+      if (!menu.current?.contains(target) && !trigger.current?.contains(target)) closeRef.current()
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      // The editor's own Escape stands down for a key a dropdown already used.
+      e.preventDefault()
+      closeRef.current()
+    }
+    function onScroll(e: Event) {
+      // Scrolling the menu itself is fine; scrolling what it hangs off would leave it floating.
+      if (!menu.current?.contains(e.target as Node)) closeRef.current()
+    }
+    // Capture phase, like the toolbar's menus: the canvas's pan hook stops presses
+    // in its own capture phase, which a bubble listener would never hear.
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKey, true)
+    document.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', measure)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', measure)
+    }
+  }, [open, trigger, menu])
+
+  return open ? place : null
 }
 
 function FontRow({
@@ -630,15 +658,18 @@ function FontRow({
 }
 
 /**
- * The text colour, in Figma's Fill form: a row of [swatch] [value] and, once a
- * colour is set, a remove button in the section header. The swatch is the native
- * colour input itself (invisible over a painted square), so clicking it opens the
- * system picker — Figma's "click the swatch to edit" — and the twelve presets sit
- * underneath for the common case.
+ * The text colour, in Figma's Fill form: one bar of [swatch] [value] and, once a
+ * colour is set, a remove button in the section header. The colours themselves
+ * stay out of the panel until asked for: pressing the bar opens a small popover
+ * with the twelve presets and a Custom swatch, which is the native colour input
+ * (invisible over a painted square), so it opens the system picker.
  *
- * With no colour set the row says "Theme colour" and the swatch is struck through:
+ * With no colour set the bar says "Theme colour" and the swatch is struck through:
  * a text layer with no fill *is* the theme's. The presets are fixed hexes, so a
  * colour somebody picked stays that colour across a theme switch.
+ *
+ * A preset closes the popover; the system picker does not, because it reports
+ * every colour it passes over on the way to the one that is wanted.
  */
 function FillPicker({
   value,
@@ -647,53 +678,100 @@ function FillPicker({
   value: string
   onChange: (color: string | null) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  const place = useFloatingMenu(open, () => setOpen(false), trigger, menu)
   const named = COLOR_CHOICES.find((c) => c.value === value)?.label
+  const label = value === '' ? 'Theme colour' : (named ?? value)
   return (
     <div>
-      <div className={`${FIELD} gap-2 px-1.5`}>
-        <label className="relative size-5 shrink-0 cursor-pointer">
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 rounded-[4px] border border-app-border"
-            style={{
-              background:
-                value ||
-                'linear-gradient(135deg, transparent 46%, rgb(239 68 68) 46%, rgb(239 68 68) 54%, transparent 54%)',
-            }}
-          />
-          <input
-            type="color"
-            aria-label="Pick a fill colour"
-            title="Pick a fill colour"
-            value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#3b82f6'}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 size-full cursor-pointer opacity-0"
-          />
-        </label>
+      <button
+        ref={trigger}
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Fill colour — ${label}`}
+        title={`Fill colour — ${label}`}
+        className={`${FIELD} w-full cursor-pointer gap-2 px-1.5 ${FOCUS_RING} ${
+          open ? 'bg-app-background ring-1 ring-app-accent' : ''
+        }`}
+      >
+        <FillSwatch value={value} />
         <span className="truncate uppercase tabular-nums">
           {value === '' ? <span className="normal-case">Theme colour</span> : value}
         </span>
-        {named && <span className="ml-auto truncate text-app-muted">{named}</span>}
-      </div>
+        <span className="ml-auto flex min-w-0 items-center gap-1.5">
+          {named && <span className="truncate text-app-muted">{named}</span>}
+          <ChevronIcon open={open} />
+        </span>
+      </button>
 
-      <div className="mt-2 grid grid-cols-6 gap-1.5">
-        {COLOR_CHOICES.map((color) => (
-          <button
-            key={color.value}
-            type="button"
-            aria-label={color.label}
-            aria-pressed={value === color.value}
-            title={color.label}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onChange(color.value)}
-            className={`aspect-square cursor-pointer rounded-[4px] border transition-transform hover:scale-110 ${FOCUS_RING} ${
-              value === color.value ? 'border-app-accent ring-2 ring-app-accent/40' : 'border-app-border'
-            }`}
-            style={{ backgroundColor: color.value }}
-          />
-        ))}
-      </div>
+      {open &&
+        place &&
+        createPortal(
+          <div
+            ref={menu}
+            role="dialog"
+            aria-label="Fill colour"
+            style={{
+              left: place.left,
+              width: place.width,
+              ...(place.above ? { bottom: place.bottom } : { top: place.top }),
+            }}
+            className="fixed z-50 rounded-[5px] border border-app-border bg-app-background p-2 shadow-app"
+          >
+            <div className="grid grid-cols-6 gap-1.5">
+              {COLOR_CHOICES.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  aria-label={color.label}
+                  aria-pressed={value === color.value}
+                  title={color.label}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onChange(color.value)
+                    setOpen(false)
+                  }}
+                  className={`aspect-square cursor-pointer rounded-[4px] border transition-transform hover:scale-110 ${FOCUS_RING} ${
+                    value === color.value ? 'border-app-accent ring-2 ring-app-accent/40' : 'border-app-border'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                />
+              ))}
+            </div>
+            <label className="relative mt-2 flex h-7 cursor-pointer items-center gap-2 rounded-[4px] px-1 text-[11px] text-app-foreground hover:bg-app-foreground/[0.06]">
+              <FillSwatch value={named ? '' : value} custom />
+              Custom…
+              <input
+                type="color"
+                aria-label="Pick a custom fill colour"
+                value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#3b82f6'}
+                onChange={(e) => onChange(e.target.value)}
+                className="absolute inset-0 size-full cursor-pointer opacity-0"
+              />
+            </label>
+          </div>,
+          document.body,
+        )}
     </div>
+  )
+}
+
+/** A painted square of `value`. With none: struck through (no fill), or a spectrum for the Custom swatch. */
+function FillSwatch({ value, custom }: { value: string; custom?: boolean }) {
+  const empty = custom
+    ? 'conic-gradient(#ef4444, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444)'
+    : 'linear-gradient(135deg, transparent 46%, rgb(239 68 68) 46%, rgb(239 68 68) 54%, transparent 54%)'
+  return (
+    <span
+      aria-hidden="true"
+      className="block size-5 shrink-0 rounded-[4px] border border-app-border"
+      style={{ background: value || empty }}
+    />
   )
 }
 

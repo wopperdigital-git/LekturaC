@@ -12,11 +12,14 @@ import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { BinIcon } from './ElementActions'
+import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
 
 // Live-scaled preview: the real layout is rendered at full slide width inside an
 // offscreen box, then shrunk with a CSS transform — always in sync with the
 // actual card, no screenshot/canvas capture needed.
-const THUMB_BASE_WIDTH = 800
+// The card at the editor's own width plus the stage's `p-10` either side, so text wraps as it
+// does on the canvas (see `lib/slideSize.ts`).
+const THUMB_BASE_WIDTH = SLIDE_WIDTH_PX + 2 * 40
 // Cards size to their content (no fixed aspect ratio — see CardCanvas), so the
 // thumbnail can't assume 16:9 either. This is only the pre-measurement guess
 // used for the very first layout pass.

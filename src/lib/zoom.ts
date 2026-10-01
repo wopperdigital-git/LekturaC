@@ -58,12 +58,13 @@ export function scrollTopAfterZoom(scrollTop: number, viewHeight: number, from: 
 }
 
 /**
- * The zoom at which the card column fills the view's width (the top bar's Fit).
- * The column is `columnMax` wide at most and shrinks with a narrower view, so on
- * a narrow window Fit is 100%; `gutter` is the canvas padding either side, in total.
+ * How much the card column is shrunk to fit a view narrower than itself, as a
+ * multiple on top of the zoom. The column is always laid out `columnMax` wide and
+ * only its picture is scaled, so a narrower view (a docked panel opening, a small
+ * window) makes the cards smaller without re-wrapping a word of them. Never above
+ * 1: a wider view leaves the column at its natural size.
  */
-export function fitZoom(viewWidth: number, columnMax: number, gutter: number): number {
-  const available = viewWidth - gutter
-  if (!(available > 0) || !(columnMax > 0)) return DEFAULT_ZOOM
-  return clampZoom(available / Math.min(columnMax, available))
+export function fitScale(availableWidth: number, columnMax: number): number {
+  if (!(availableWidth > 0) || !(columnMax > 0)) return 1
+  return Math.min(1, availableWidth / columnMax)
 }

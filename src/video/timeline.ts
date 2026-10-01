@@ -76,3 +76,18 @@ export function fitScale(contentHeight: number, availableHeight: number): number
   if (!Number.isFinite(contentHeight) || contentHeight <= 0 || availableHeight <= 0) return 1
   return Math.min(1, availableHeight / contentHeight)
 }
+
+/**
+ * The scale that fits a slide laid out `contentWidth` x `contentHeight` into the
+ * `availableWidth` x `availableHeight` inside the frame: as large as fits, up or
+ * down, and never cropped. 1 when there is nothing to measure.
+ */
+export function frameScale(
+  contentWidth: number,
+  contentHeight: number,
+  availableWidth: number,
+  availableHeight: number,
+): number {
+  if (!(contentWidth > 0) || !(contentHeight > 0) || !(availableWidth > 0) || !(availableHeight > 0)) return 1
+  return Math.min(availableWidth / contentWidth, availableHeight / contentHeight)
+}

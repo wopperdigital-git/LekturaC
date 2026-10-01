@@ -10,8 +10,10 @@ import {
   BlockDataContext,
   CardBoxContext,
   blockStyleKey,
+  canGrab,
   measurableNode,
 } from './adjustContext'
+import { useTextEditing } from './textEditingContext'
 
 /*
   Wraps one element of a card so it can be nudged, resized, styled and selected.
@@ -44,7 +46,10 @@ export function Adjustable({ index, children }: { index: number; children: React
   const cardBox = useContext(CardBoxContext)
   const wrappedAbove = useContext(AdjustedIndexContext)
   const theme = useSlideTheme()
+  const activeRef = useTextEditing()?.activeRef
   const holder = useRef<HTMLDivElement>(null)
+  // Selected and not being typed into: a press anywhere on it grabs it to move.
+  const grabbable = adjusting ? canGrab(adjusting, activeRef, index, { button: 0 }) : false
 
   const adjust = data?.adjusts?.[String(index)]
   const style = data?.inline?.[blockStyleKey(index)]?.style
@@ -81,6 +86,9 @@ export function Adjustable({ index, children }: { index: number; children: React
     node.style.maxHeight = geometry.maxHeight ?? ''
 
     applyTextStyle(node, style, theme)
+    // The move cursor over the whole element while it can be grabbed (see `index.css`).
+    if (grabbable) node.setAttribute('data-element-grabbable', '')
+    else node.removeAttribute('data-element-grabbable')
   })
 
   if (nested) return <>{children}</>
@@ -94,13 +102,17 @@ export function Adjustable({ index, children }: { index: number; children: React
         adjusting
           ? (event) => {
               /*
-                Selecting only — the move drag lives on the selection box's
-                border. Starting a move from anywhere on the element would fight
-                the click that puts a caret in its text, and would mean a stray
-                pixel of travel while clicking nudged the slide.
+                The first press selects. Once selected, a press anywhere on the
+                element grabs it: it becomes a move only after the pointer has
+                travelled a few pixels (`startPendingDrag`), so a still click
+                still reaches the text and opens it for editing, and a stray
+                pixel of travel while clicking does not nudge the slide. Not
+                while its text is open: a press there places a caret.
               */
               event.stopPropagation()
+              const grab = canGrab(adjusting, activeRef, index, event)
               adjusting.select(index)
+              if (grab) adjusting.startMove?.(event)
             }
           : undefined
       }

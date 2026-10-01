@@ -14,12 +14,13 @@ import type { EditorGrid } from './gridContext'
  * The floating toolbar over the canvas. Icons only; each is named in a tooltip
  * under it on hover or keyboard focus.
  *
- * Always: Select, Move (the hand), Pen, Shapes, then the grid's two view settings,
- * Show grid and Snap to grid (the magnet). Between them, by what is selected:
+ * Always: Undo and Redo in front, then Select, Move (the hand), Pen, Shapes, then
+ * the grid's two view settings, Show grid and Snap to grid (the magnet). Between
+ * them, by what is selected:
  *
- * - **Slide** (nothing picked, or a whole slide; given by `slide`): the slide
- *   number in front. After Move come Layout and Insert (headings, body text and
- *   every other element), only while a slide is actually selected — with nothing selected there is no slide
+ * - **Slide** (nothing picked, or a whole slide; given by `slide`): after Move
+ *   come Layout and Insert (headings, body text and every other element), only
+ *   while a slide is actually selected — with nothing selected there is no slide
  *   to act on.
  * - **Element** (an element picked on the slide): nothing more.
  *
@@ -28,6 +29,7 @@ import type { EditorGrid } from './gridContext'
  * The pen and shapes buttons are present when the page gives them their state.
  */
 export function EditorToolbar({
+  history,
   tool,
   onToolChange,
   slide,
@@ -36,16 +38,15 @@ export function EditorToolbar({
   pen,
   shapes,
 }: {
+  /** Undo and redo: whether each has anything to do, and what it does. */
+  history: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }
   tool: EditorTool
   onToolChange: (tool: EditorTool) => void
   /**
    * Present while no element is picked: shows the slide set instead of the element
-   * set. `number` is 1-based and absent for an empty deck. `layout` and
-   * `onAddContent` are given only while a slide is selected.
+   * set. `layout` and `onAddContent` are given only while a slide is selected.
    */
   slide?: {
-    number?: number
-    total: number
     layout?: LayoutTools
     onAddContent?: (type: ContentType) => void
   }
@@ -78,18 +79,17 @@ export function EditorToolbar({
         aria-label="Editing tools"
         className="pointer-events-auto flex items-center gap-0.5 rounded-app border border-app-border bg-app-background p-1 shadow-app"
       >
-        {slide && (
-          <>
-            <span
-              aria-label={slide.number ? `Slide ${slide.number} of ${slide.total}` : 'No slides'}
-              className="flex h-8 items-center gap-1.5 px-2 text-xs font-medium tabular-nums text-app-foreground/90"
-            >
-              <SlideIcon />
-              {slide.number ? `${slide.number} / ${slide.total}` : '–'}
-            </span>
-            <Divider />
-          </>
-        )}
+        <Tip name="Undo (Ctrl+Z)">
+          <ToolButton label="Undo" disabled={!history.canUndo} onClick={history.onUndo}>
+            <UndoIcon />
+          </ToolButton>
+        </Tip>
+        <Tip name="Redo (Ctrl+Shift+Z)">
+          <ToolButton label="Redo" disabled={!history.canRedo} onClick={history.onRedo}>
+            <UndoIcon flip />
+          </ToolButton>
+        </Tip>
+        <Divider />
 
         <Tip name="Select">
           <ToolButton label="Select" pressed={tool === 'select'} onClick={() => onToolChange('select')}>
@@ -195,11 +195,13 @@ function Tip({ name, children }: { name: string; children: ReactNode }) {
 function ToolButton({
   label,
   pressed,
+  disabled,
   onClick,
   children,
 }: {
   label: string
   pressed?: boolean
+  disabled?: boolean
   onClick: () => void
   children: ReactNode
 }) {
@@ -208,9 +210,10 @@ function ToolButton({
       type="button"
       aria-label={label}
       aria-pressed={pressed}
+      disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent ${
+      className={`flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ${
         pressed ? 'bg-app-foreground/15' : ''
       }`}
     >
@@ -266,10 +269,12 @@ function ShapesIcon() {
   )
 }
 
-function SlideIcon() {
+/* One glyph for both directions: redo is the same arrow mirrored. */
+function UndoIcon({ flip }: { flip?: boolean }) {
   return (
-    <svg {...strokeProps} className="size-4">
-      <rect x="3" y="4.5" width="14" height="11" rx="1.5" />
+    <svg {...strokeProps} style={flip ? { transform: 'scaleX(-1)' } : undefined}>
+      <path d="M4 9h8.5a3.5 3.5 0 0 1 0 7H8" />
+      <path d="M7 5.5 3.5 9 7 12.5" />
     </svg>
   )
 }

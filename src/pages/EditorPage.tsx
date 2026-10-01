@@ -9,7 +9,7 @@ import { browserStore, pruneTempInk, readTempInk, writeTempInk, type TempInk } f
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
-import { CANVAS_GUTTER_PX, COLUMN_MAX_WIDTH_PX, CardCanvas } from '@/components/editor/CardCanvas'
+import { CardCanvas } from '@/components/editor/CardCanvas'
 import { DeleteSlideModal } from '@/components/editor/DeleteSlideModal'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import type { PenPopover } from '@/components/editor/PenPopover'
@@ -17,6 +17,7 @@ import type { ShapePopover } from '@/components/editor/ShapePopover'
 import { DEFAULT_TOOL, type EditorTool } from '@/engine/editorTool'
 import { DEFAULT_GRID, type EditorGrid } from '@/components/editor/gridContext'
 import { SlideStage } from '@/components/theme/SlideStage'
+import { ModeTabs } from '@/components/editor/ModeTabs'
 import { ToolsPanel, type PanelTab } from '@/components/editor/ToolsPanel'
 import type { LayoutTools } from '@/components/editor/LayoutPicker'
 import type { Card } from '@/engine/contentBlocks'
@@ -41,9 +42,12 @@ import { parseTextRef } from '@/engine/blockText'
 import { SLIDE_BODY_ATTR, blockIndexOf, blockStyleKey } from '@/components/layouts/adjustContext'
 import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
-import { DEFAULT_ZOOM, clampZoom, fitZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
+import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
 import { QuizModal } from '@/components/quiz/QuizModal'
+import { SettingsModal } from '@/components/settings/SettingsModal'
+import { ROLE_LABEL } from '@/classroom/roles'
+import { hasNarrationScript, narrationScriptText, scriptFileName } from '@/engine/narrationScript'
 import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
 import { hasQuizContent } from '@/ai/quizPrompt'
 
@@ -106,6 +110,11 @@ export function EditorPage() {
   // A selected shape, kept apart from the element selection (a shape is not a block).
   const [selectedShape, setSelectedShape] = useState<{ cardId: string; id: string; keep: InkKeep } | null>(null)
   const userId = useAuthStore((state) => state.user?.id ?? null)
+  const userEmail = useAuthStore((state) => state.user?.email ?? '')
+  const profile = useAuthStore((state) => state.profile)
+  const profileDegraded = useAuthStore((state) => state.profileDegraded)
+  const signOut = useAuthStore((state) => state.signOut)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   /*
     Temporary ink for this deck, kept in this browser (see lib/temporaryInk.ts).
     Loaded once the deck and the user are both known, by resetting state during
@@ -519,6 +528,19 @@ export function EditorPage() {
       : !hasQuizContent(sortedCards)
         ? 'Add some slide content first'
         : null
+  const scriptDisabledReason = hasNarrationScript(sortedCards) ? null : 'No narration scripts yet'
+
+  // The narration scripts as a text file. Reads the deck in hand; asks no provider for anything.
+  function exportScript() {
+    const blob = new Blob([narrationScriptText(store.title, sortedCards)], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = scriptFileName(store.title)
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const selectedIndex = sortedCards.findIndex((c) => c.id === selectedCardId)
   const selectedCard = selectedIndex >= 0 ? sortedCards[selectedIndex] : null
   // The picker offers varieties of this type only, so the type is resolved once
@@ -627,8 +649,6 @@ export function EditorPage() {
       resolved: resolveLayout(card.layout, card.blocks, { isFirstCard: index === 0 }),
     }
   }
-  // The slide the floating toolbar speaks for: the selected one, else the one in view.
-  const toolbarIndex = sortedCards.findIndex((c) => c.id === (selectedCardId ?? activeCardId))
 
   // The plus under a selected list names its own block; nothing else calls this.
   function addListItem(blockIndex: number) {
@@ -761,22 +781,8 @@ export function EditorPage() {
         title={store.title}
         onTitleChange={store.setTitle}
         saveStatus={store.status}
-        tab={panelTab}
-        onTabChange={(next) => {
-          setPanelTab(next)
-          // The modes are the panel's tabs; picking one with the panel tucked away shows it.
-          setToolsOpen(true)
-        }}
-        canUndo={store.past.length > 0}
-        canRedo={store.future.length > 0}
-        onUndo={undo}
-        onRedo={redo}
         zoom={zoom}
         onZoomChange={changeZoom}
-        onFit={() => {
-          const width = canvasRef.current?.clientWidth
-          if (width) setZoom(fitZoom(width, COLUMN_MAX_WIDTH_PX, CANVAS_GUTTER_PX))
-        }}
         onExport={() =>
           void exportDeck({
             title: store.title,
@@ -790,6 +796,12 @@ export function EditorPage() {
         presentHref={`/deck/${id}/present`}
         onQuiz={() => setQuizOpen(true)}
         quizDisabledReason={quizDisabledReason}
+        onExportScript={exportScript}
+        scriptDisabledReason={scriptDisabledReason}
+        accountName={profile?.displayName.trim() || userEmail || 'Account'}
+        // A dash when the profile could not be read, rather than labelling a teacher General.
+        accountType={profileDegraded || !profile ? '—' : ROLE_LABEL[profile.role]}
+        onProfileSettings={() => setSettingsOpen(true)}
       />
       {/*
         A failed write used to say "Save failed" in grey, 11px, in the corner of
@@ -880,11 +892,15 @@ export function EditorPage() {
             stretching the flex row. */}
         <div className="relative flex min-w-0 flex-1 flex-col">
           <EditorToolbar
+            history={{
+              canUndo: store.past.length > 0,
+              canRedo: store.future.length > 0,
+              onUndo: undo,
+              onRedo: redo,
+            }}
             slide={
               selectedBlockIndex === null && activeShape === null
                 ? {
-                    number: toolbarIndex >= 0 ? toolbarIndex + 1 : undefined,
-                    total: sortedCards.length,
                     // Only for a slide the user has actually clicked, not merely the one in view.
                     layout: selectedCard ? layoutToolsFor(selectedCard, selectedIndex) : undefined,
                     onAddContent: selectedCard ? addContent : undefined,
@@ -992,7 +1008,7 @@ export function EditorPage() {
             // arrow would be half off-screen.
             className={`absolute top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 cursor-pointer ${
               toolsOpen ? 'left-0 -translate-x-1/2' : 'right-1'
-            } items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent`}
+            } items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent`}
           >
             {toolsOpen ? '›' : '‹'}
           </button>
@@ -1000,7 +1016,10 @@ export function EditorPage() {
             className="h-full overflow-hidden transition-all duration-200"
             style={{ width: toolsOpen ? RIGHT_PANEL_WIDTH_PX : 0, marginRight: toolsOpen ? 12 : 0, marginLeft: toolsOpen ? 12 : 0 }}
           >
-            <div className="h-full" style={{ width: RIGHT_PANEL_WIDTH_PX }}>
+            <div className="flex h-full flex-col gap-2" style={{ width: RIGHT_PANEL_WIDTH_PX }}>
+              {/* The modes pick the panel's tab, so they sit on top of it and fold away with it. */}
+              <ModeTabs tab={panelTab} onTabChange={setPanelTab} />
+              <div className="min-h-0 flex-1">
               <ToolsPanel
                 level={level}
                 scopeLabel={scopeLabel}
@@ -1051,6 +1070,7 @@ export function EditorPage() {
                 // one (the same rule the pen uses). No stepper — the canvas is the viewer.
                 narrationTab={<NarrationTab cards={sortedCards} cardId={selectedCardId ?? activeCardId} />}
               />
+              </div>
             </div>
           </aside>
         </div>
@@ -1082,6 +1102,9 @@ export function EditorPage() {
             />
           )
         })()}
+      {settingsOpen && (
+        <SettingsModal initialTab="profile" onClose={() => setSettingsOpen(false)} onSignOut={() => void signOut()} />
+      )}
       {quizOpen && (
         <QuizModal presentationId={id} title={store.title} cards={sortedCards} onClose={() => setQuizOpen(false)} />
       )}

@@ -1,7 +1,8 @@
-import { createContext, useContext, type HTMLAttributes } from 'react'
+import { createContext, useContext, type HTMLAttributes, type PointerEvent as ReactPointerEvent } from 'react'
 import type { BlockAdjust, BlockAdjusts } from '@/engine/blockAdjust'
 import { parseTextRef } from '@/engine/blockText'
 import type { Card } from '@/engine/contentBlocks'
+import { TextEditingContext } from './textEditingContext'
 
 /**
  * Per-element data for one card: where each element was nudged to, and how its
@@ -89,6 +90,30 @@ export interface BlockAdjusting {
   canAddItem?: (blockIndex: number) => boolean
   /** Appends an item to the list at this block index. Behind the plus under a selected list. */
   addItem?: (blockIndex: number) => void
+  /**
+   * Starts moving the selected element from a press anywhere on it. It stays a
+   * tap (and `onTap` runs) unless the pointer travels far enough to be a drag.
+   * Provided by `SlideBody`, which owns the selection box the move goes through.
+   */
+  startMove?: (event: ReactPointerEvent, onTap?: () => void) => void
+}
+
+/**
+ * Whether a press on block `index` should grab it to move: it is the selected
+ * element (not one of its items), none of its text is open for editing — a press
+ * there is placing a caret or selecting characters — and it is a plain primary
+ * press.
+ */
+export function canGrab(
+  adjusting: BlockAdjusting,
+  activeRef: string | null | undefined,
+  index: number,
+  event: { button: number },
+): boolean {
+  if (adjusting.selected !== index || adjusting.selectedItem !== null || !adjusting.startMove) return false
+  if (event.button !== 0) return false
+  const editing = activeRef ? parseTextRef(activeRef) : null
+  return editing?.blockIndex !== index
 }
 
 export const BlockAdjustContext = createContext<BlockAdjusting | null>(null)
@@ -122,10 +147,17 @@ const NO_ITEM_PROPS = (): HTMLAttributes<HTMLElement> => ({})
  */
 export function useItemProps(): (blockIndex: number, itemIndex: number) => HTMLAttributes<HTMLElement> {
   const adjusting = useContext(BlockAdjustContext)
+  const activeRef = useContext(TextEditingContext)?.activeRef
   if (!adjusting) return NO_ITEM_PROPS
   return (blockIndex, itemIndex) => ({
     onPointerDown: (event) => {
       event.stopPropagation()
+      // With the whole list selected, a press on an item grabs the list; only a
+      // press that does not move goes on to pick the item out.
+      if (canGrab(adjusting, activeRef, blockIndex, event)) {
+        adjusting.startMove?.(event, () => adjusting.selectItem(blockIndex, itemIndex))
+        return
+      }
       adjusting.selectItem(blockIndex, itemIndex)
     },
     onClick: (event) => event.stopPropagation(),

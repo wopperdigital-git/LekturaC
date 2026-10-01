@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { SlideSurface } from '@/components/theme/SlideSurface'
+import { ScaledSlide } from '@/components/theme/ScaledSlide'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle } from '@/engine/textStyle'
@@ -94,16 +95,20 @@ export function PresentPage() {
               className="scrollbar-subtle flex h-full shrink-0 items-center justify-center overflow-y-auto px-6 py-10 sm:px-10"
               style={{ width: `${100 / count}%` }}
             >
-              <TextStyleScope style={mergeTextStyle(store.textStyle, card.textStyle)}>
-                <SlideSurface className="w-full max-w-5xl rounded-slide p-8 shadow-slide-card sm:p-10">
-                  {/* Provides the card width every stored element nudge is a
-                      fraction of, so the presenter shows the same arrangement
-                      the editor does. */}
-                  <SlideBody card={card}>
-                    <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
-                  </SlideBody>
-                </SlideSurface>
-              </TextStyleScope>
+              {/* Laid out at the editor's width and scaled to the screen (up to
+                  `max-w-5xl`), so text wraps exactly as it does in the editor. */}
+              <ScaledSlide maxDisplayWidth={1024}>
+                <TextStyleScope style={mergeTextStyle(store.textStyle, card.textStyle)}>
+                  <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
+                    {/* Provides the card width every stored element nudge is a
+                        fraction of, so the presenter shows the same arrangement
+                        the editor does. */}
+                    <SlideBody card={card}>
+                      <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
+                    </SlideBody>
+                  </SlideSurface>
+                </TextStyleScope>
+              </ScaledSlide>
             </div>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FRAME_HEIGHT, FRAME_STEP_SECONDS, SILENT_SLIDE_SECONDS, STAGE_PADDING, fitScale, frameSlots, planTimeline } from './timeline'
+import { FRAME_HEIGHT, FRAME_STEP_SECONDS, SILENT_SLIDE_SECONDS, STAGE_PADDING, fitScale, frameScale, frameSlots, planTimeline } from './timeline'
 
 describe('constants', () => {
   it('holds a silent slide for four seconds in a 1280x720 frame', () => {
@@ -71,5 +71,19 @@ describe('fitScale', () => {
 
   it('is 1 when there is no room to fit into', () => {
     expect(fitScale(500, 0)).toBe(1)
+  })
+})
+
+describe('frameScale', () => {
+  it('grows a short slide to the frame width', () => {
+    expect(frameScale(976, 400, 1200, 640)).toBeCloseTo(1200 / 976)
+  })
+
+  it('shrinks a tall slide to the frame height, never cropping it', () => {
+    expect(frameScale(976, 1280, 1200, 640)).toBe(0.5)
+  })
+
+  it('is 1 when there is nothing to measure', () => {
+    expect(frameScale(976, 0, 1200, 640)).toBe(1)
   })
 })

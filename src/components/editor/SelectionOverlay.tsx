@@ -12,10 +12,11 @@ import { useCanvasZoom } from './zoomContext'
   itself would be less code and would also change what the user is editing —
   two pixels on every side, reflowing its text the moment it is selected.
 
-  The interior is `pointer-events: none`, so the element's text stays clickable
-  and a caret can still be placed in it. The *border* is not: dragging an edge
-  moves the element. That split is what lets one gesture vocabulary cover both
-  editing text and moving the box, with no modifier key and no mode.
+  The interior is `pointer-events: none`, so presses reach the element itself:
+  there a drag moves it and a still click opens its text (`Adjustable`, through
+  `SelectionLayer`'s move). The *border* takes presses too: dragging an edge
+  also moves the element, which is the only way to grab it while its text is
+  open for editing.
 
   Every gesture is computed from the frame captured at the press, never from the
   live one. The live frame changes underneath as each move is committed, so

@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { NO_ADJUST, type BlockAdjust } from '@/engine/blockAdjust'
 import type { Frame, Handle } from '@/engine/frame'
 import { clampFrame } from '@/engine/frameGeometry'
@@ -9,6 +9,11 @@ import { BlockAdjustContext, BlockDataContext } from '@/components/layouts/adjus
 import { currentFrame, measureAt, measureBlock, toAdjust, type Measured } from './measureBlock'
 import { SelectionOverlay, type GestureKind } from './SelectionOverlay'
 import { ElementActions } from './ElementActions'
+import { startPendingDrag } from './pointerDrag'
+import { useCanvasZoom } from './zoomContext'
+
+/** Moves the selected element from a press anywhere on it; see `BlockAdjusting.startMove`. */
+export type StartMove = (event: ReactPointerEvent, onTap?: () => void) => void
 
 /*
   Draws the selection box over whichever element is selected, and turns the
@@ -20,7 +25,14 @@ import { ElementActions } from './ElementActions'
   element looks is `Adjustable`'s business, and the box is strictly drawn on top.
 */
 
-export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement | null> }) {
+export function SelectionLayer({
+  cardRef,
+  onMoveReady,
+}: {
+  cardRef: RefObject<HTMLDivElement | null>
+  /** Handed this layer's move gesture (or `null` with nothing selected), for a press on the element itself to start. */
+  onMoveReady?: (move: StartMove | null) => void
+}) {
   const adjusting = useContext(BlockAdjustContext)
   const data = useContext(BlockDataContext)
   const selected = adjusting?.selected ?? null
@@ -118,9 +130,32 @@ export function SelectionLayer({ cardRef }: { cardRef: RefObject<HTMLDivElement 
     state.adjusting.change(state.selected, last, true)
   }, [])
 
-  if (!measured || selected === null) return null
+  const zoom = useCanvasZoom()
+  const frame = measured && selected !== null ? currentFrame(measured.natural, adjust, measured.card) : null
 
-  const frame = currentFrame(measured.natural, adjust, measured.card)
+  /*
+    A press on the element's body moves it, through the same `onChange` and
+    `onCommit` as a drag on the box's edge — clamped, snapped and saved alike.
+    From the frame at the press, divided by the zoom like every other gesture.
+  */
+  useLayoutEffect(() => {
+    onMoveReady?.(
+      frame
+      ? (event, onTap) => {
+          const start = frame
+          startPendingDrag(event, {
+            onMove: (dx, dy) => onChange({ ...start, x: start.x + dx / zoom, y: start.y + dy / zoom }, 'move'),
+            onEnd: onCommit,
+            onTap,
+          })
+        }
+      : null,
+    )
+  })
+  useEffect(() => () => onMoveReady?.(null), [onMoveReady])
+
+  if (!measured || selected === null || !frame) return null
+
   return (
     <>
       {!itemPicked && <SelectionOverlay frame={frame} onChange={onChange} onCommit={onCommit} />}

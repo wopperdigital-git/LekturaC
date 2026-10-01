@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import type { TextStyle } from '@/engine/textStyle'
+import { COLOR_CHOICES, type TextStyle } from '@/engine/textStyle'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { ToolsPanel, type ToolbarLevel } from './ToolsPanel'
 
@@ -84,6 +84,22 @@ describe('ToolsPanel', () => {
   it('offers Remove fill only when a colour is set', () => {
     expect(render(1)).not.toContain('Remove fill')
     expect(render(1, { color: '#ef4444' })).toContain('Remove fill')
+  })
+
+  // The colours stay out of the panel until the Fill bar is pressed: only the bar
+  // (what the colour is) is drawn, and the presets live in its popover.
+  it('shows the fill as one bar, with the presets hidden until it is opened', () => {
+    const html = render(1)
+    expect(html).toContain('aria-label="Fill colour — Theme colour"')
+    for (const { label } of COLOR_CHOICES) expect(html).not.toContain(`aria-label="${label}"`)
+    expect(html).not.toContain('type="color"')
+  })
+
+  // Low fidelity on purpose: a wireframe per theme, not a rendered slide.
+  it('draws the themes as a grid of wireframes, without sample slide text', () => {
+    const html = render(1)
+    expect(html).toContain('grid-cols-2')
+    expect(html).not.toContain('Exploring Life')
   })
 
   // Adding an item moved onto the slide, as a plus under the list. Bringing the

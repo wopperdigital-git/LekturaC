@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { fitScale } from '@/lib/zoom'
 import { CanvasZoomContext } from './zoomContext'
 
 /**
@@ -20,7 +21,7 @@ import { CanvasZoomContext } from './zoomContext'
  * edge and can be scrolled to. Centred by a transform's own origin it would
  * overflow equally to the left, into a region nothing can scroll to.
  *
- * At 100% it renders no transform at all — a stacking context and a containing
+ * At 100% with room for the whole column it renders no transform at all — a stacking context and a containing
  * block for nothing — so the default view is exactly what it was before zoom
  * existed.
  */
@@ -30,7 +31,7 @@ export function ZoomFrame({
   children,
 }: {
   zoom: number
-  /** The natural width of the column, in unscaled pixels; narrower windows shrink it. */
+  /** The width the column is laid out at, in unscaled pixels; a narrower view scales it down. */
   maxWidth: number
   children: ReactNode
 }) {
@@ -54,8 +55,14 @@ export function ZoomFrame({
     return () => observer.disconnect()
   }, [])
 
-  const zoomed = zoom !== 1
-  const natural = Math.min(maxWidth, availableWidth)
+  /*
+    The column is always laid out `maxWidth` wide. With less room than that (the
+    tools panel or the outline opening, a small window) the picture is shrunk to
+    fit instead of the column being narrowed: a narrower column re-wraps every
+    line, so toggling a panel used to rearrange the slides.
+  */
+  const scale = zoom * fitScale(availableWidth, maxWidth)
+  const scaled = scale !== 1
 
   /*
     One tree whatever the zoom, and only styles differ. Rendering a different
@@ -63,18 +70,19 @@ export function ZoomFrame({
     crossed it — dropping the text being edited and the selection with it.
   */
   return (
-    <CanvasZoomContext.Provider value={zoom}>
+    // The scale actually drawn, not the zoom setting: gestures divide by it.
+    <CanvasZoomContext.Provider value={scale}>
       <div ref={available} className="w-full">
         <div
           style={
-            zoomed
-              ? { width: natural * zoom, height: innerHeight * zoom, marginInline: 'auto' }
+            scaled
+              ? { width: maxWidth * scale, height: innerHeight * scale, marginInline: 'auto' }
               : { maxWidth, marginInline: 'auto' }
           }
         >
           <div
             ref={inner}
-            style={zoomed ? { width: natural, transform: `scale(${zoom})`, transformOrigin: 'top left' } : undefined}
+            style={scaled ? { width: maxWidth, transform: `scale(${scale})`, transformOrigin: 'top left' } : undefined}
           >
             {children}
           </div>

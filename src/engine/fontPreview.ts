@@ -2,6 +2,7 @@ import type { Card } from './contentBlocks'
 import { applyValueMark, type TextRange } from './marks'
 import type { TypographyScope } from './textScope'
 import { applyTextStylePatch, type TextStyle } from './textStyle'
+import { clearDeckOverrides, clearStyleOverrides, patchKeys } from './styleOverrides'
 
 /*
   Previewing a font while the pointer is over it.
@@ -59,7 +60,8 @@ export function previewFont(
 
   const { scope } = target
   if (scope.kind === 'deck') {
-    return { cards, textStyle: applyTextStylePatch(deckTextStyle, patch) }
+    // As the write does: a deck-wide font reaches the slides and elements that had their own.
+    return { cards: clearDeckOverrides(cards, patchKeys(patch)), textStyle: applyTextStylePatch(deckTextStyle, patch) }
   }
 
   return {
@@ -67,7 +69,10 @@ export function previewFont(
     cards: cards.map((card) => {
       if (card.id !== scope.cardId) return card
       if (scope.kind === 'card') {
-        return { ...card, textStyle: applyTextStylePatch(card.textStyle ?? {}, patch) }
+        return {
+          ...clearStyleOverrides(card, patchKeys(patch), false),
+          textStyle: applyTextStylePatch(card.textStyle ?? {}, patch),
+        }
       }
       // An element with no addressable style key has nothing to preview on.
       if (target.typographyRef === null) return card

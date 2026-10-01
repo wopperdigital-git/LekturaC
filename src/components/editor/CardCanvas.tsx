@@ -10,15 +10,13 @@ import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { listTarget } from '@/engine/listItems'
 import { TextEditingContext, type TextEditing } from '@/components/layouts/textEditingContext'
 import { ZoomFrame } from './ZoomFrame'
+import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
 import { CardActions } from './CardActions'
 import { EditorGridContext, DEFAULT_GRID, type EditorGrid } from './gridContext'
 import { DrawingContext, NO_DRAWING, type CanvasDrawing } from './drawingContext'
 
-/** The column's natural width: `max-w-5xl` (1024px) less the 24px of padding either side. */
-export const COLUMN_MAX_WIDTH_PX = 976
-
-/** The canvas padding either side of the column (`px-12`), in total. */
-export const CANVAS_GUTTER_PX = 96
+/** The column's width: the one width every surface lays a slide out at (see `lib/slideSize.ts`). */
+const COLUMN_MAX_WIDTH_PX = SLIDE_WIDTH_PX
 
 /**
  * Renders the deck.

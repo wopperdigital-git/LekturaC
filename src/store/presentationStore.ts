@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
 import { DEFAULT_THEME, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
 import { EMPTY_TEXT_STYLE, applyTextStylePatch, parseTextStyle, type TextStyle } from '@/engine/textStyle'
+import { clearDeckOverrides, clearStyleOverrides, patchKeys } from '@/engine/styleOverrides'
+import { dropUnreadableColors } from '@/engine/readableColor'
 import {
   applyMark,
   applyValueMark,
@@ -636,6 +638,44 @@ function pushHistory(set: StatusSetter, get: Getter, coalesceKey?: string) {
   set({ past: [...get().past, snapshotOf(get)].slice(-MAX_HISTORY), future: [] })
 }
 
+/**
+ * Schedules the writes for a card whose own style overrides were cleared by a
+ * wider write, for whichever of `text_style` and `inline` actually changed.
+ *
+ * On the keys the card's own style writers use, so a pending save that captured
+ * the old override is replaced rather than left to land afterwards and put it back.
+ */
+function scheduleClearedStyleSave(set: StatusSetter, card: Card, before: Card) {
+  if (card.textStyle !== before.textStyle) {
+    scheduleSave(`cardTextStyle:${card.id}`, () =>
+      runSave(set, () => persistCardPatch(card.id, { text_style: card.textStyle ?? {} })),
+    )
+  }
+  if (card.inline !== before.inline) {
+    // `blocks` alongside `inline`, for the reason `toggleTextMark` gives.
+    scheduleSave(`inline:${card.id}`, () =>
+      runSave(set, () => persistCardPatch(card.id, { inline: card.inline ?? {}, blocks: card.blocks })),
+    )
+  }
+}
+
+/** Writes whatever `dropUnreadableColors` changed: the deck's own style and the cards it touched. */
+function scheduleReadabilitySave(
+  set: StatusSetter,
+  presentationId: string,
+  before: { cards: Card[]; textStyle: TextStyle },
+  after: { cards: Card[]; textStyle: TextStyle },
+) {
+  if (after.textStyle !== before.textStyle) {
+    scheduleSave('textStyle', () =>
+      runSave(set, () => persistPresentationPatch(presentationId, { text_style: after.textStyle })),
+    )
+  }
+  after.cards.forEach((card, i) => {
+    if (card !== before.cards[i]) scheduleClearedStyleSave(set, card, before.cards[i])
+  })
+}
+
 /** Writes a restored snapshot back to Supabase — every field it covers, since any of them may differ. */
 async function persistSnapshot(id: string, previousCards: Card[], snapshot: DeckSnapshot) {
   await persistPresentationPatch(id, {
@@ -882,12 +922,16 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         set({ status: 'idle' })
         return
       }
+      // A deck saved before unreadable colours were dropped on a theme change may
+      // still carry one; opening it clears them, and the fix is written back.
+      const readable = dropUnreadableColors(deck.cards, deck.textStyle, deck.theme.colors.background)
+      scheduleReadabilitySave(set, id, deck, readable)
       set({
         presentationId: id,
         title: deck.title,
         theme: deck.theme,
-        textStyle: deck.textStyle,
-        cards: deck.cards,
+        textStyle: readable.textStyle,
+        cards: readable.cards,
         status: 'idle',
         past: [],
         future: [],
@@ -920,12 +964,17 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
   setTheme(theme) {
     pushHistory(set, get)
-    set({ theme })
+    // A picked colour that cannot be read on the new theme (black carried onto a
+    // dark one) is dropped, handing that text back to the theme's own colour.
+    const before = { cards: get().cards, textStyle: get().textStyle }
+    const readable = dropUnreadableColors(before.cards, before.textStyle, theme.colors.background)
+    set({ theme, ...readable })
     const id = get().presentationId
     if (id) {
       scheduleSave('theme', () =>
         runSave(set, () => persistPresentationPatch(id, { theme })),
       )
+      scheduleReadabilitySave(set, id, before, readable)
     }
   },
 
@@ -934,13 +983,20 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     // bold-then-italic are two and must undo separately.
     pushHistory(set, get, `deckTextStyle:${Object.keys(patch).join(',')}`)
     const next = applyTextStylePatch(get().textStyle, patch)
-    set({ textStyle: next })
+    // A deck-wide write reaches every slide: the same fields are cleared on any
+    // card or element that had its own, or it would go on ignoring the deck.
+    const before = get().cards
+    const cards = clearDeckOverrides(before, patchKeys(patch))
+    set({ textStyle: next, cards })
 
     const id = get().presentationId
     if (id) {
       scheduleSave('textStyle', () =>
         runSave(set, () => persistPresentationPatch(id, { text_style: next })),
       )
+      cards.forEach((card, i) => {
+        if (card !== before[i]) scheduleClearedStyleSave(set, card, before[i])
+      })
     }
   },
 
@@ -950,8 +1006,10 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
     pushHistory(set, get, `cardTextStyle:${cardId}:${Object.keys(patch).join(',')}`)
     const next = applyTextStylePatch(card.textStyle ?? {}, patch)
+    // A slide-wide write reaches every element on it, the way a deck-wide one reaches every slide.
+    const styled = { ...clearStyleOverrides(card, patchKeys(patch), false), textStyle: next }
 
-    const cards = get().cards.map((c) => (c.id === cardId ? { ...c, textStyle: next } : c))
+    const cards = get().cards.map((c) => (c.id === cardId ? styled : c))
     set({ cards })
 
     const id = get().presentationId
@@ -961,6 +1019,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       scheduleSave(`cardTextStyle:${cardId}`, () =>
         runSave(set, () => persistCardPatch(cardId, { text_style: next })),
       )
+      if (styled.inline !== card.inline) scheduleClearedStyleSave(set, styled, { ...styled, inline: card.inline })
     }
   },
 

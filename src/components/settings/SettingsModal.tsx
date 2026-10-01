@@ -7,10 +7,10 @@ import { ProfileSection } from './ProfileSection'
 import { PasswordSection } from './PasswordSection'
 import { DangerSection } from './DangerSection'
 
-type TabKey = 'appearance' | 'profile' | 'security' | 'account'
+export type SettingsTab = 'appearance' | 'profile' | 'security' | 'account'
 
 interface TabConfig {
-  key: TabKey
+  key: SettingsTab
   label: string
   icon: (active: boolean) => ReactNode
 }
@@ -105,11 +105,14 @@ const TABS: TabConfig[] = [
 export function SettingsModal({
   onClose,
   onSignOut,
+  initialTab = 'appearance',
 }: {
   onClose: () => void
   onSignOut: () => void
+  /** Which tab it opens on; the editor's account menu opens it on Profile. */
+  initialTab?: SettingsTab
 }) {
-  const [activeTab, setActiveTab] = useState<TabKey>('appearance')
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
 
   return (
     <Modal
