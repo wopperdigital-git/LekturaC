@@ -1,4 +1,4 @@
-import type { OwnerQuiz } from '@/quiz/rows'
+import { groupBySection, type OwnerQuiz } from '@/quiz/rows'
 
 /*
   The PDF's content and pagination, with no drawing. Geometry (fonts, margins,
@@ -25,61 +25,50 @@ export interface PdfItem {
 
 const LETTERS = ['A', 'B', 'C', 'D']
 
-function instruction(config: OwnerQuiz['config']): string {
-  switch (config.type) {
-    case 'multiple_choice':
-      return 'Choose the best answer for each question.'
-    case 'fill_blank':
-      return config.wordBox
-        ? 'Fill in each blank using a word from the word box.'
-        : 'Fill in each blank with the missing word or words.'
-    case 'true_false':
-      return config.notation === 'letter'
-        ? 'Write T if the statement is true or F if it is false.'
-        : 'Write TRUE if the statement is true or FALSE if it is false.'
-  }
-}
-
-/** The quiz sheet and its answer key as flat, geometry-free items. */
+/** The quiz sheet and its answer key as flat, geometry-free items. Numbering restarts in each test. */
 export function buildQuizItems(quiz: OwnerQuiz): { sheet: PdfItem[]; key: PdfItem[] } {
-  const { config } = quiz
   const sheet: PdfItem[] = [
     { kind: 'title', text: quiz.title },
     { kind: 'subtitle', text: `From: ${quiz.deckTitle}` },
     { kind: 'subtitle', text: 'Name: ____________________________     Date: ______________' },
-    { kind: 'instruction', text: instruction(config) },
   ]
-
-  if (config.type === 'fill_blank' && config.wordBox) {
-    const words = [
-      ...new Set(quiz.questions.map((q) => (typeof q.answer === 'object' ? q.answer.text : '')).filter(Boolean)),
-    ].sort((a, b) => a.localeCompare(b))
-    sheet.push({ kind: 'wordBox', text: words.join('   ·   ') })
-  }
-
   const key: PdfItem[] = [{ kind: 'title', text: 'Answer key' }, { kind: 'subtitle', text: quiz.title }]
 
-  quiz.questions.forEach((q, i) => {
-    const n = i + 1
-    // A spacer BETWEEN questions only: a trailing one could open an empty page before the key.
-    if (i > 0) sheet.push({ kind: 'blank', text: '' })
-    sheet.push({ kind: 'question', text: `${n}. ${q.prompt}` })
+  groupBySection(quiz.sections, quiz.questions).forEach(({ section, questions }, gi) => {
+    const { config } = section
+    // Spacers only BETWEEN things: a trailing one could open an empty page before the key.
+    if (gi > 0) sheet.push({ kind: 'blank', text: '' })
+    sheet.push({ kind: 'heading', text: section.title })
+    if (section.instructions) sheet.push({ kind: 'instruction', text: section.instructions })
 
-    if (config.type === 'multiple_choice') {
-      q.choices.forEach((c, ci) => sheet.push({ kind: 'choice', text: `${LETTERS[ci]}. ${c}` }))
-      key.push({ kind: 'keyLine', text: `${n}. ${LETTERS[typeof q.answer === 'number' ? q.answer : 0]}` })
-    } else if (config.type === 'fill_blank') {
-      const a = typeof q.answer === 'object' ? q.answer : { text: '', accepted: [] as string[] }
-      const also = a.accepted.length > 0 ? ` (also accepted: ${a.accepted.join(', ')})` : ''
-      key.push({ kind: 'keyLine', text: `${n}. ${a.text}${also}` })
-    } else {
-      const value = q.answer === true
-      sheet.push({ kind: 'answerLine', text: config.notation === 'letter' ? 'T / F' : 'TRUE / FALSE' })
-      key.push({
-        kind: 'keyLine',
-        text: `${n}. ${config.notation === 'letter' ? (value ? 'T' : 'F') : value ? 'TRUE' : 'FALSE'}`,
-      })
+    if (config.type === 'fill_blank' && config.wordBox) {
+      const words = [
+        ...new Set(questions.map((q) => (typeof q.answer === 'object' ? q.answer.text : '')).filter(Boolean)),
+      ].sort((a, b) => a.localeCompare(b))
+      if (words.length > 0) sheet.push({ kind: 'wordBox', text: words.join('   ·   ') })
     }
+
+    key.push({ kind: 'heading', text: section.title })
+    const letter = config.type === 'true_false' && config.notation === 'letter'
+
+    questions.forEach((q, i) => {
+      const n = i + 1
+      if (i > 0) sheet.push({ kind: 'blank', text: '' })
+      sheet.push({ kind: 'question', text: `${n}. ${q.prompt}` })
+
+      if (q.type === 'multiple_choice') {
+        q.choices.forEach((c, ci) => sheet.push({ kind: 'choice', text: `${LETTERS[ci]}. ${c}` }))
+        key.push({ kind: 'keyLine', text: `${n}. ${LETTERS[typeof q.answer === 'number' ? q.answer : 0]}` })
+      } else if (q.type === 'fill_blank') {
+        const a = typeof q.answer === 'object' ? q.answer : { text: '', accepted: [] as string[] }
+        const also = a.accepted.length > 0 ? ` (also accepted: ${a.accepted.join(', ')})` : ''
+        key.push({ kind: 'keyLine', text: `${n}. ${a.text}${also}` })
+      } else {
+        const value = q.answer === true
+        sheet.push({ kind: 'answerLine', text: letter ? 'T / F' : 'TRUE / FALSE' })
+        key.push({ kind: 'keyLine', text: `${n}. ${letter ? (value ? 'T' : 'F') : value ? 'TRUE' : 'FALSE'}` })
+      }
+    })
   })
 
   return { sheet, key }

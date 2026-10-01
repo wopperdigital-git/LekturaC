@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { formatDate, formatPercent } from '@/classroom/format'
 import type { StudentQuizItem } from '@/classroom/select'
-import { QUIZ_TYPE_LABELS } from '@/quiz/types'
+import { quizTypeLabel as labelFor } from '@/quiz/types'
 
 /**
  * One quiz posted to a class, as its student sees it: open ones link to the
@@ -10,7 +10,7 @@ import { QUIZ_TYPE_LABELS } from '@/quiz/types'
  */
 export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
   const { quiz, postedAt, attempt } = item
-  const quizTypeLabel = QUIZ_TYPE_LABELS[quiz.quizType] ?? 'Multiple choice'
+  const quizTypeLabel = labelFor(quiz.quizType)
 
   const scorePercent = attempt ? Math.round(attempt.score * 100) : 0
   const isHigh = scorePercent >= 80

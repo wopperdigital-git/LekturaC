@@ -1,4 +1,4 @@
-import { fromDbConfig } from '@/quiz/types'
+import { parseTypeSummary } from '@/quiz/types'
 import type { Announcement, Attempt, ClassRoom, Member, Person, Posting, QuizSummary, StudentQuiz } from './types'
 
 /*
@@ -120,7 +120,7 @@ export function quizFromRow(row: QuizRow): QuizSummary {
     createdAt: row.created_at,
     slideNumbers: (row.quiz_questions ?? []).map((q) => q.slide_number),
     code: row.code,
-    quizType: fromDbConfig(row.quiz_type, {}).type,
+    quizType: parseTypeSummary(row.quiz_type),
   }
 }
 
@@ -129,7 +129,7 @@ export function studentQuizFromRow(row: StudentQuizRow): StudentQuiz {
     id: row.id,
     title: row.title,
     code: row.code,
-    quizType: fromDbConfig(row.quiz_type, {}).type,
+    quizType: parseTypeSummary(row.quiz_type),
     createdAt: row.created_at,
   }
 }

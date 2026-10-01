@@ -16,6 +16,10 @@ import {
   MAX_QUIZ_ITEMS,
   MIN_QUIZ_ITEMS,
   clampItemCount,
+  defaultInstructions,
+  defaultSectionTitle,
+  quizTypeLabel,
+  summaryType,
   type QuizConfig,
   type QuizQuestionDraft,
   type QuizType,
@@ -31,12 +35,6 @@ const TYPE_OPTIONS: { value: QuizType; label: string }[] = [
   { value: 'fill_blank', label: 'Fill in the blank' },
   { value: 'true_false', label: 'True or False' },
 ]
-
-const TYPE_LABEL: Record<QuizType, string> = {
-  multiple_choice: 'Multiple choice',
-  fill_blank: 'Fill in the blank',
-  true_false: 'True or False',
-}
 
 type Phase = 'form' | 'generating' | 'saving' | 'done'
 
@@ -254,8 +252,12 @@ export function QuizModal({
           presentationId,
           title: `${title} — quiz`,
           deckTitle: title,
-          config: p.config,
-          questions: p.questions,
+          sections: [
+            {
+              section: { config: p.config, title: defaultSectionTitle(0), instructions: defaultInstructions(p.config) },
+              questions: p.questions,
+            },
+          ],
         })
         savedId = created.id
       }
@@ -573,7 +575,7 @@ export function QuizModal({
                     <div className="min-w-0">
                       <p className="truncate font-medium text-app-foreground">{q.title}</p>
                       <p className="text-xs text-app-muted">
-                        {q.itemCount} questions · {TYPE_LABEL[q.config.type]} ·{' '}
+                        {q.itemCount} questions · {quizTypeLabel(summaryType(q.sections))} ·{' '}
                         {new Date(q.createdAt).toLocaleDateString()}
                       </p>
                     </div>

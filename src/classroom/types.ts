@@ -4,7 +4,7 @@
   Timestamps stay ISO strings as Supabase returns them.
 */
 
-import type { QuizType } from '@/quiz/types'
+import type { QuizTypeSummary } from '@/quiz/types'
 
 /** Anyone shown by name: a student on a roster, a teacher on a class card. */
 export interface Person {
@@ -58,7 +58,7 @@ export interface QuizSummary {
   slideNumbers: number[]
   /** The share code students use at `/quiz/:code`. */
   code: string
-  quizType: QuizType
+  quizType: QuizTypeSummary
 }
 
 /** A quiz posted to a class. */
@@ -98,7 +98,7 @@ export interface StudentQuiz {
   title: string
   /** The share code, i.e. the `/quiz/:code` they open. */
   code: string
-  quizType: QuizType
+  quizType: QuizTypeSummary
   createdAt: string
 }
 

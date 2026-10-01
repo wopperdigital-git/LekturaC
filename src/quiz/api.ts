@@ -14,7 +14,7 @@ import {
   type TakeQuiz,
 } from './rows'
 import { normalizeQuizCode } from './quizCode'
-import { toDbConfig, type QuizConfig, type QuizQuestionDraft } from './types'
+import { toDbConfig, type QuizQuestionDraft, type QuizSection } from './types'
 
 /*
   Every quiz read and write. Components call these and never build a query —
@@ -46,23 +46,36 @@ export function questionJson(q: QuizQuestionDraft) {
   }
 }
 
+export interface SectionToSave {
+  section: QuizSection
+  questions: QuizQuestionDraft[]
+}
+
+/** One element of `create_quiz`'s `p_sections` (supabase/migrations/0016_quiz_sections.sql). */
+export function sectionJson({ section, questions }: SectionToSave) {
+  const { quiz_type, settings } = toDbConfig(section.config)
+  return {
+    title: section.title,
+    instructions: section.instructions,
+    type: quiz_type,
+    settings,
+    questions: questions.map(questionJson),
+  }
+}
+
 export async function createQuiz(input: {
   presentationId: string
   title: string
   deckTitle: string
-  config: QuizConfig
-  questions: QuizQuestionDraft[]
+  sections: SectionToSave[]
 }): Promise<{ id: string; code: string }> {
   const client = await db()
-  const { quiz_type, settings } = toDbConfig(input.config)
   return rpcValue<{ id: string; code: string }>(
     await client.rpc('create_quiz', {
       p_presentation_id: input.presentationId,
       p_title: input.title,
       p_deck_title: input.deckTitle,
-      p_quiz_type: quiz_type,
-      p_settings: settings,
-      p_questions: input.questions.map(questionJson),
+      p_sections: input.sections.map(sectionJson),
     }),
   )
 }

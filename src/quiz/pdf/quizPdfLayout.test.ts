@@ -1,20 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import type { OwnerQuiz } from '@/quiz/rows'
+import type { OwnerQuestion, OwnerQuiz } from '@/quiz/rows'
+import { defaultInstructions, type QuizConfig } from '@/quiz/types'
 import { buildQuizItems, paginate, wrapText } from './quizPdfLayout'
 
 const measure = (s: string) => s.length * 10 // 10 units per character
 
-function quiz(over: Partial<OwnerQuiz>): OwnerQuiz {
+function quiz(over: Partial<OwnerQuiz> & { config?: QuizConfig }): OwnerQuiz {
+  const { config = { type: 'multiple_choice', choiceCount: 4 }, ...rest } = over
   return {
     id: 'q',
     code: 'ABCD23XY',
     title: 'Cells quiz',
     deckTitle: 'Cells',
     createdAt: '2026-09-24T00:00:00Z',
-    config: { type: 'multiple_choice', choiceCount: 4 },
+    sections: [{ title: 'Test 1', instructions: defaultInstructions(config), config }],
     questions: [],
-    ...over,
+    ...rest,
   }
+}
+
+/** A question in section 0 whose type defaults to the first section's. */
+function question(over: Partial<OwnerQuestion>): OwnerQuestion {
+  return { id: '1', sectionIndex: 0, type: 'multiple_choice', slideNumber: 1, slideHeading: 'H', prompt: 'P', choices: [], answer: 0, ...over }
 }
 
 describe('wrapText', () => {
@@ -58,7 +65,7 @@ describe('buildQuizItems', () => {
     const { sheet, key } = buildQuizItems(
       quiz({
         questions: [
-          { id: '1', slideNumber: 2, slideHeading: 'Cells', prompt: 'Which?', choices: ['a', 'b', 'c', 'd'], answer: 2 },
+          question({ id: '1', slideNumber: 2, slideHeading: 'Cells', prompt: 'Which?', choices: ['a', 'b', 'c', 'd'], answer: 2, type: 'multiple_choice' }),
         ],
       }),
     )
@@ -72,7 +79,7 @@ describe('buildQuizItems', () => {
     const { sheet } = buildQuizItems(
       quiz({
         config: { type: 'multiple_choice', choiceCount: 3 },
-        questions: [{ id: '1', slideNumber: 1, slideHeading: 'H', prompt: 'P', choices: ['x', 'y', 'z'], answer: 0 }],
+        questions: [question({ id: '1', prompt: 'P', choices: ['x', 'y', 'z'], answer: 0, type: 'multiple_choice' })],
       }),
     )
     expect(sheet.filter((i) => i.kind === 'choice').map((i) => i.text)).toEqual(['A. x', 'B. y', 'C. z'])
@@ -80,8 +87,8 @@ describe('buildQuizItems', () => {
 
   it('shows the word box only when the quiz has one, sorted, and puts accepted answers in the key', () => {
     const questions = [
-      { id: '1', slideNumber: 1, slideHeading: 'H', prompt: 'The ___ is big.', choices: [], answer: { text: 'sun', accepted: ['the sun'] } },
-      { id: '2', slideNumber: 1, slideHeading: 'H', prompt: 'A ___ is small.', choices: [], answer: { text: 'ant', accepted: [] } },
+      question({ id: '1', prompt: 'The ___ is big.', answer: { text: 'sun', accepted: ['the sun'] }, type: 'fill_blank' }),
+      question({ id: '2', prompt: 'A ___ is small.', answer: { text: 'ant', accepted: [] }, type: 'fill_blank' }),
     ]
     const withBox = buildQuizItems(quiz({ config: { type: 'fill_blank', wordBox: true }, questions }))
     expect(withBox.sheet.find((i) => i.kind === 'wordBox')?.text).toBe('ant   ·   sun')
@@ -91,7 +98,7 @@ describe('buildQuizItems', () => {
   })
 
   it('uses the chosen true/false notation on the answer line and in the key', () => {
-    const questions = [{ id: '1', slideNumber: 1, slideHeading: 'H', prompt: 'S', choices: [], answer: true }]
+    const questions = [question({ id: '1', prompt: 'S', answer: true, type: 'true_false' })]
     const word = buildQuizItems(quiz({ config: { type: 'true_false', notation: 'word' }, questions }))
     expect(word.sheet.find((i) => i.kind === 'answerLine')?.text).toBe('TRUE / FALSE')
     expect(word.key.map((i) => i.text)).toContain('1. TRUE')
@@ -102,11 +109,50 @@ describe('buildQuizItems', () => {
 
   /* A trailing spacer could land on a fresh page and leave an empty sheet before the key. */
   it('never ends the sheet with a spacer, and separates questions with exactly one', () => {
-    const questions = [1, 2, 3].map((n) => ({
-      id: String(n), slideNumber: 1, slideHeading: 'H', prompt: `P${n}`, choices: [], answer: true,
-    }))
+    const questions = [1, 2, 3].map((n) =>
+      question({ id: String(n), prompt: `P${n}`, answer: true, type: 'true_false' }),
+    )
     const { sheet } = buildQuizItems(quiz({ config: { type: 'true_false', notation: 'word' }, questions }))
     expect(sheet[sheet.length - 1].kind).not.toBe('blank')
     expect(sheet.filter((i) => i.kind === 'blank')).toHaveLength(questions.length - 1)
+  })
+})
+
+describe('buildQuizItems — several tests', () => {
+  const mixed = quiz({
+    sections: [
+      { title: 'Part A', instructions: 'Pick one.', config: { type: 'multiple_choice', choiceCount: 3 } },
+      { title: 'Part B', instructions: '', config: { type: 'fill_blank', wordBox: true } },
+      { title: 'Part C', instructions: 'T or F.', config: { type: 'true_false', notation: 'letter' } },
+    ],
+    questions: [
+      question({ id: 'a1', prompt: 'Which?', choices: ['x', 'y', 'z'], answer: 1 }),
+      question({ id: 'a2', prompt: 'Which else?', choices: ['x', 'y', 'z'], answer: 0 }),
+      question({ id: 'b1', sectionIndex: 1, type: 'fill_blank', prompt: 'The ___ glows.', answer: { text: 'sun', accepted: [] } }),
+      question({ id: 'c1', sectionIndex: 2, type: 'true_false', prompt: 'Water is wet.', answer: true }),
+    ],
+  })
+
+  it('heads each test with its title and instructions and restarts numbering', () => {
+    const { sheet } = buildQuizItems(mixed)
+    expect(sheet.filter((i) => i.kind === 'heading').map((i) => i.text)).toEqual(['Part A', 'Part B', 'Part C'])
+    expect(sheet.filter((i) => i.kind === 'instruction').map((i) => i.text)).toEqual(['Pick one.', 'T or F.'])
+    expect(sheet.filter((i) => i.kind === 'question').map((i) => i.text)).toEqual([
+      '1. Which?', '2. Which else?', '1. The ___ glows.', '1. Water is wet.',
+    ])
+    expect(sheet.filter((i) => i.kind === 'wordBox').map((i) => i.text)).toEqual(['sun'])
+    expect(sheet.filter((i) => i.kind === 'answerLine').map((i) => i.text)).toEqual(['T / F'])
+  })
+
+  it('groups the key by test with numbering restarting', () => {
+    const { key } = buildQuizItems(mixed)
+    expect(key.filter((i) => i.kind === 'heading' || i.kind === 'keyLine').map((i) => i.text)).toEqual([
+      'Part A', '1. B', '2. A', 'Part B', '1. sun', 'Part C', '1. T',
+    ])
+  })
+
+  it('never ends the sheet on a spacer', () => {
+    const { sheet } = buildQuizItems(mixed)
+    expect(sheet[sheet.length - 1].kind).not.toBe('blank')
   })
 })

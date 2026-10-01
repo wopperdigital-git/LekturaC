@@ -1,4 +1,4 @@
-import { fromDbConfig, type QuizAnswer, type QuizConfig } from './types'
+import { fromDbConfig, fromDbSections, type QuizAnswer, type QuizConfig, type QuizSection, type QuizType } from './types'
 
 /*
   Row shapes as PostgREST / the RPCs return them, and the mapping to app types.
@@ -8,7 +8,8 @@ import { fromDbConfig, type QuizAnswer, type QuizConfig } from './types'
 
 export const DECK_QUIZ_COLUMNS = 'id, code, title, created_at, quiz_type, settings, quiz_questions(count)'
 export const OWNER_QUIZ_COLUMNS = 'id, code, title, deck_title, created_at, quiz_type, settings'
-export const OWNER_QUESTION_COLUMNS = 'id, order_index, slide_number, slide_heading, prompt, choices, answer'
+export const OWNER_QUESTION_COLUMNS =
+  'id, order_index, section_index, question_type, slide_number, slide_heading, prompt, choices, answer'
 
 export interface DeckQuizRow {
   id: string
@@ -33,6 +34,8 @@ export interface OwnerQuizRow {
 export interface OwnerQuestionRow {
   id: string
   order_index: number
+  section_index?: number | null
+  question_type?: string | null
   slide_number: number
   slide_heading: string
   prompt: string
@@ -45,12 +48,14 @@ export interface DeckQuizSummary {
   code: string
   title: string
   createdAt: string
-  config: QuizConfig
+  sections: QuizSection[]
   itemCount: number
 }
 
 export interface OwnerQuestion {
   id: string
+  sectionIndex: number
+  type: QuizType
   slideNumber: number
   slideHeading: string
   prompt: string
@@ -64,7 +69,7 @@ export interface OwnerQuiz {
   title: string
   deckTitle: string
   createdAt: string
-  config: QuizConfig
+  sections: QuizSection[]
   questions: OwnerQuestion[]
 }
 
@@ -99,35 +104,67 @@ function asAnswer(value: unknown): QuizAnswer {
   return false
 }
 
+const QUIZ_TYPES: readonly QuizType[] = ['multiple_choice', 'fill_blank', 'true_false']
+
+export function asQuizType(value: unknown, fallback: QuizType): QuizType {
+  return QUIZ_TYPES.includes(value as QuizType) ? (value as QuizType) : fallback
+}
+
+/** A stored section index, clamped onto the quiz's sections (a legacy row has none: 0). */
+function sectionIndexOf(value: unknown, sections: readonly QuizSection[]): number {
+  const n = typeof value === 'number' && Number.isInteger(value) ? value : 0
+  return Math.min(Math.max(0, n), sections.length - 1)
+}
+
+/**
+ * Questions under each test, in order, skipping tests with no questions.
+ * `index` is the test's position in `sections` (what word boxes are keyed by).
+ * Numbering restarts per group, so callers number by position in `questions`.
+ */
+export function groupBySection<T extends { sectionIndex: number }>(
+  sections: readonly QuizSection[],
+  questions: readonly T[],
+): { section: QuizSection; index: number; questions: T[] }[] {
+  return sections
+    .map((section, index) => ({ section, index, questions: questions.filter((q) => q.sectionIndex === index) }))
+    .filter((g) => g.questions.length > 0)
+}
+
 export function deckQuizFromRow(row: DeckQuizRow): DeckQuizSummary {
   return {
     id: row.id,
     code: row.code,
     title: row.title,
     createdAt: row.created_at,
-    config: fromDbConfig(row.quiz_type, row.settings),
+    sections: fromDbSections(row.quiz_type, row.settings),
     itemCount: row.quiz_questions?.[0]?.count ?? 0,
   }
 }
 
 export function ownerQuizFromRows(row: OwnerQuizRow, questions: OwnerQuestionRow[]): OwnerQuiz {
+  const sections = fromDbSections(row.quiz_type, row.settings)
   return {
     id: row.id,
     code: row.code,
     title: row.title,
     deckTitle: row.deck_title,
     createdAt: row.created_at,
-    config: fromDbConfig(row.quiz_type, row.settings),
+    sections,
     questions: [...questions]
       .sort((a, b) => a.order_index - b.order_index)
-      .map((q) => ({
-        id: q.id,
-        slideNumber: q.slide_number,
-        slideHeading: q.slide_heading,
-        prompt: q.prompt,
-        choices: strings(q.choices),
-        answer: asAnswer(q.answer),
-      })),
+      .map((q) => {
+        const sectionIndex = sectionIndexOf(q.section_index, sections)
+        return {
+          id: q.id,
+          sectionIndex,
+          type: asQuizType(q.question_type, sections[sectionIndex].config.type),
+          slideNumber: q.slide_number,
+          slideHeading: q.slide_heading,
+          prompt: q.prompt,
+          choices: strings(q.choices),
+          answer: asAnswer(q.answer),
+        }
+      }),
   }
 }
 

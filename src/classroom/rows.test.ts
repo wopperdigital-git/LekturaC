@@ -75,4 +75,8 @@ describe('row mapping', () => {
   it('falls back to multiple choice for an unknown quiz type', () => {
     expect(studentQuizFromRow({ id: 'q', title: 'T', code: 'C', quiz_type: 'essay', created_at: 'c' }).quizType).toBe('multiple_choice')
   })
+
+  it('keeps a mixed quiz as mixed', () => {
+    expect(studentQuizFromRow({ id: 'q', title: 'T', code: 'C', quiz_type: 'mixed', created_at: 'c' }).quizType).toBe('mixed')
+  })
 })
