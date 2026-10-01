@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Card } from '@/engine/contentBlocks'
 import {
+  MAX_AVOID_CHARS,
+  MAX_AVOID_PROMPTS,
   MAX_SLIDE_CHARS,
   MAX_TOTAL_CHARS,
   QUIZ_SYSTEM_PROMPT,
+  avoidList,
   buildQuizUserPrompt,
   hasQuizContent,
   quizMaxTokens,
@@ -105,5 +108,39 @@ describe('quizMaxTokens', () => {
     expect(quizMaxTokens(10)).toBe(5200) // 10*110 + 3800 = 4900, below the floor
     expect(quizMaxTokens(20)).toBe(6000)
     expect(quizMaxTokens(500)).toBe(7000)
+  })
+})
+
+describe('avoidList / ALREADY ASKED', () => {
+  const base = {
+    title: 'Cells',
+    slides: [{ slide: 1, heading: 'Intro', lines: ['a'] }],
+    count: 5,
+    config: { type: 'true_false' as const, notation: 'word' as const },
+  }
+
+  it('adds no ALREADY ASKED block when nothing was asked', () => {
+    expect(buildQuizUserPrompt(base)).not.toContain('ALREADY ASKED')
+    expect(buildQuizUserPrompt({ ...base, avoid: [] })).not.toContain('ALREADY ASKED')
+  })
+
+  it('lists earlier prompts when given', () => {
+    const prompt = buildQuizUserPrompt({ ...base, avoid: ['What makes ATP?', 'Cells have nuclei.'] })
+    expect(prompt).toContain('ALREADY ASKED')
+    expect(prompt).toContain('- What makes ATP?')
+    expect(prompt).toContain('- Cells have nuclei.')
+  })
+
+  it('keeps the most recent prompts within both caps', () => {
+    const many = Array.from({ length: 60 }, (_, i) => `Question number ${i}`)
+    const kept = avoidList(many)
+    expect(kept.length).toBeLessThanOrEqual(MAX_AVOID_PROMPTS)
+    expect(kept[kept.length - 1]).toBe('Question number 59')
+    const long = Array.from({ length: 10 }, (_, i) => `${i}${'x'.repeat(400)}`)
+    expect(avoidList(long).join('').length).toBeLessThanOrEqual(MAX_AVOID_CHARS)
+  })
+
+  it('drops blank prompts', () => {
+    expect(avoidList(['  ', 'Real'])).toEqual(['Real'])
   })
 })

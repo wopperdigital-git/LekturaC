@@ -45,6 +45,27 @@ export function hasQuizContent(cards: Card[]): boolean {
   return cards.some((card) => contentLines(card.blocks).length > 0)
 }
 
+/*
+  Prompts earlier tests already asked, so a later test doesn't repeat them.
+  Capped because Groq's window counts input too: the most recent prompts are
+  kept, up to MAX_AVOID_PROMPTS and MAX_AVOID_CHARS in total.
+*/
+export const MAX_AVOID_PROMPTS = 40
+export const MAX_AVOID_CHARS = 2000
+
+export function avoidList(prompts: readonly string[]): string[] {
+  const out: string[] = []
+  let used = 0
+  for (let i = prompts.length - 1; i >= 0 && out.length < MAX_AVOID_PROMPTS; i--) {
+    const p = prompts[i].trim()
+    if (!p) continue
+    if (used + p.length > MAX_AVOID_CHARS) break
+    out.unshift(p)
+    used += p.length
+  }
+  return out
+}
+
 export const QUIZ_SYSTEM_PROMPT = `You write quizzes from presentation slides.
 
 RULES
@@ -88,11 +109,17 @@ export function buildQuizUserPrompt(request: QuizRequest): string {
     })
     .join('\n\n')
 
+  const avoid = avoidList(request.avoid ?? [])
+  const asked =
+    avoid.length > 0
+      ? `\n\nALREADY ASKED (earlier tests of this quiz). Do not ask these again or reword them:\n${avoid.map((p) => `- ${p}`).join('\n')}`
+      : ''
+
   return `Presentation title: ${request.title}
 
 ${body}
 
-Write exactly ${request.count} questions.
+Write exactly ${request.count} questions.${asked}
 
 ${typeRules(request.config)}`
 }
