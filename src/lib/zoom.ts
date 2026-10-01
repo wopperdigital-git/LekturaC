@@ -45,16 +45,54 @@ export function zoomFromWheel(zoom: number, deltaY: number): number {
   return clampZoom(zoom * Math.exp(-deltaY * WHEEL_SENSITIVITY))
 }
 
+export interface Point {
+  x: number
+  y: number
+}
+
+export interface Box {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
 /**
- * Where the scroll position has to go so the same part of the canvas stays in
- * the middle of the view when the zoom changes. Without it, zooming in from the
- * top of a long deck lands the viewer somewhere further down every time, since
- * the content grows under a fixed scroll offset.
+ * The point a zoom is anchored to: where it is on screen, and where that is
+ * within the zoomed content, as a fraction of the content's drawn size (outside
+ * the content runs below 0 or past 1, which works just the same).
+ *
+ * Fractions rather than pixels because they are the one thing a zoom does not
+ * change: the same spot of the same slide is the same fraction of the content
+ * at any scale, whatever margins and padding sit around it.
  */
-export function scrollTopAfterZoom(scrollTop: number, viewHeight: number, from: number, to: number): number {
-  if (from <= 0) return scrollTop
-  const centre = scrollTop + viewHeight / 2
-  return Math.max(0, (centre * to) / from - viewHeight / 2)
+export interface ZoomAnchor {
+  client: Point
+  fraction: Point
+}
+
+/** The anchor for screen point `client` over content currently drawn at `content` (screen coordinates). */
+export function zoomAnchor(client: Point, content: Box): ZoomAnchor {
+  return {
+    client,
+    fraction: {
+      x: content.width > 0 ? (client.x - content.left) / content.width : 0,
+      y: content.height > 0 ? (client.y - content.top) / content.height : 0,
+    },
+  }
+}
+
+/**
+ * The scroll position that puts the anchor's content spot back under its screen
+ * point, now that the content is drawn at `content`. Zooming then grows or
+ * shrinks the slides about the cursor instead of about the top of the deck.
+ * Never below 0; the browser clamps the far end.
+ */
+export function scrollKeepingAnchor(scroll: Point, anchor: ZoomAnchor, content: Box): Point {
+  return {
+    x: Math.max(0, scroll.x + content.left + anchor.fraction.x * content.width - anchor.client.x),
+    y: Math.max(0, scroll.y + content.top + anchor.fraction.y * content.height - anchor.client.y),
+  }
 }
 
 /**

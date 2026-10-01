@@ -5,7 +5,8 @@ import {
   MIN_ZOOM,
   clampZoom,
   fitScale,
-  scrollTopAfterZoom,
+  scrollKeepingAnchor,
+  zoomAnchor,
   stepZoom,
   zoomFromWheel,
 } from './zoom'
@@ -68,19 +69,40 @@ describe('zoomFromWheel', () => {
   })
 })
 
-describe('scrollTopAfterZoom', () => {
-  it('keeps the middle of the view on the same content', () => {
-    // Centre of the view is at 300 + 200 = 500 in the old content; doubling the
-    // zoom puts that content at 1000, so the view must start at 1000 - 200.
-    expect(scrollTopAfterZoom(300, 400, 1, 2)).toBe(800)
+describe('zoomAnchor and scrollKeepingAnchor', () => {
+  // Content drawn 1000px wide from x=100, 2000px tall from y=50; cursor at (600, 450).
+  const before = { left: 100, top: 50, width: 1000, height: 2000 }
+  const cursor = { x: 600, y: 450 }
+
+  it('records where the cursor is as a fraction of the content', () => {
+    expect(zoomAnchor(cursor, before).fraction).toEqual({ x: 0.5, y: 0.2 })
   })
 
-  it('leaves the scroll alone when nothing changed', () => {
-    expect(scrollTopAfterZoom(300, 400, 1.5, 1.5)).toBe(300)
+  it('scrolls so the spot under the cursor is still under it after zooming in', () => {
+    const anchor = zoomAnchor(cursor, before)
+    // Doubled, still starting where it did on screen with no scroll yet.
+    const after = { left: 100, top: 50, width: 2000, height: 4000 }
+    const scroll = scrollKeepingAnchor({ x: 0, y: 0 }, anchor, after)
+    // The spot is now at 100 + 0.5 * 2000 = 1100 across and 50 + 0.2 * 4000 = 850 down.
+    expect(scroll).toEqual({ x: 500, y: 400 })
   })
 
-  it('never scrolls above the top', () => {
-    expect(scrollTopAfterZoom(0, 400, 2, 0.5)).toBe(0)
+  it('leaves the scroll alone when nothing moved', () => {
+    const anchor = zoomAnchor(cursor, before)
+    expect(scrollKeepingAnchor({ x: 30, y: 70 }, anchor, before)).toEqual({ x: 30, y: 70 })
+  })
+
+  it('never scrolls before the start', () => {
+    // Halving from no scroll would want -250 and -200: there is nothing before the start to show.
+    const anchor = zoomAnchor(cursor, before)
+    expect(scrollKeepingAnchor({ x: 0, y: 0 }, anchor, { left: 100, top: 50, width: 500, height: 1000 })).toEqual({
+      x: 0,
+      y: 0,
+    })
+  })
+
+  it('treats empty content as anchored at its start', () => {
+    expect(zoomAnchor(cursor, { left: 0, top: 0, width: 0, height: 0 }).fraction).toEqual({ x: 0, y: 0 })
   })
 })
 

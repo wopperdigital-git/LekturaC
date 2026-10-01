@@ -25,6 +25,9 @@ import { CanvasZoomContext } from './zoomContext'
  * block for nothing — so the default view is exactly what it was before zoom
  * existed.
  */
+/** Marks the scaled content, whose on-screen box a zoom keeps the cursor's spot within. */
+export const ZOOM_CONTENT_ATTR = 'data-zoom-content'
+
 export function ZoomFrame({
   zoom,
   maxWidth,
@@ -82,6 +85,8 @@ export function ZoomFrame({
         >
           <div
             ref={inner}
+            // What a zoom is anchored against (`EditorPage`): the slides as drawn.
+            {...{ [ZOOM_CONTENT_ATTR]: '' }}
             style={scaled ? { width: maxWidth, transform: `scale(${scale})`, transformOrigin: 'top left' } : undefined}
           >
             {children}

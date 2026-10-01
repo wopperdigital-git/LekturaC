@@ -42,7 +42,8 @@ import { parseTextRef } from '@/engine/blockText'
 import { SLIDE_BODY_ATTR, blockIndexOf, blockStyleKey } from '@/components/layouts/adjustContext'
 import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
-import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
+import { DEFAULT_ZOOM, clampZoom, scrollKeepingAnchor, stepZoom, zoomAnchor, zoomFromWheel, type ZoomAnchor } from '@/lib/zoom'
+import { ZOOM_CONTENT_ATTR } from '@/components/editor/ZoomFrame'
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
 import { horizontalWheelDelta } from '@/lib/pan'
 import { QuizModal } from '@/components/quiz/QuizModal'
@@ -140,6 +141,15 @@ export function EditorPage() {
   }
   const canvasRef = useRef<HTMLElement>(null)
   const previousZoom = useRef(DEFAULT_ZOOM)
+  // The spot a pending zoom keeps still: under the cursor for Ctrl + wheel, the
+  // middle of the view for the toolbar's buttons and typed value.
+  const zoomAnchorRef = useRef<ZoomAnchor | null>(null)
+
+  /** Records `client` (a screen point) as what the next zoom keeps in place. */
+  function anchorZoomAt(client: { x: number; y: number }) {
+    const content = canvasRef.current?.querySelector(`[${ZOOM_CONTENT_ATTR}]`)
+    zoomAnchorRef.current = content ? zoomAnchor(client, content.getBoundingClientRect()) : null
+  }
   const { status: exportStatus, error: exportError, exportDeck } = useExportPptx()
 
 
@@ -165,6 +175,8 @@ export function EditorPage() {
         return
       }
       e.preventDefault()
+      // Grows or shrinks about the cursor, the way every canvas app zooms.
+      anchorZoomAt({ x: e.clientX, y: e.clientY })
       setZoom((current) => zoomFromWheel(current, e.deltaY))
     }
     node.addEventListener('wheel', onWheel, { passive: false })
@@ -176,12 +188,23 @@ export function EditorPage() {
   // in the Move screen tool a plain drag does.
   useCanvasPan(canvasRef, store.status !== 'loading', tool)
 
-  // Keeps the middle of the view on the same content when the zoom changes; the
-  // content grows or shrinks under a fixed scroll offset otherwise.
+  // Keeps the anchored spot (the cursor's, or the middle of the view) on the same
+  // content when the zoom changes; the content grows or shrinks under a fixed
+  // scroll offset otherwise. Runs after the new scale is laid out, so the
+  // content's box is measured where it now is.
   useLayoutEffect(() => {
     const node = canvasRef.current
-    if (node && previousZoom.current !== zoom) {
-      node.scrollTop = scrollTopAfterZoom(node.scrollTop, node.clientHeight, previousZoom.current, zoom)
+    const anchor = zoomAnchorRef.current
+    zoomAnchorRef.current = null
+    const content = node?.querySelector(`[${ZOOM_CONTENT_ATTR}]`)
+    if (node && content && anchor && previousZoom.current !== zoom) {
+      const next = scrollKeepingAnchor(
+        { x: node.scrollLeft, y: node.scrollTop },
+        anchor,
+        content.getBoundingClientRect(),
+      )
+      node.scrollLeft = next.x
+      node.scrollTop = next.y
     }
     previousZoom.current = zoom
   }, [zoom])
@@ -754,6 +777,9 @@ export function EditorPage() {
   }
 
   function changeZoom(next: number | null, direction?: 1 | -1) {
+    // The buttons and the typed value have no cursor on the slides: they keep the middle of the view still.
+    const view = canvasRef.current?.getBoundingClientRect()
+    if (view) anchorZoomAt({ x: view.left + view.width / 2, y: view.top + view.height / 2 })
     setZoom((current) => (next !== null ? clampZoom(next) : stepZoom(current, direction ?? 1)))
   }
 
