@@ -126,6 +126,7 @@ function SectionCard({
             render={(fieldProps) => (
               <Input
                 {...fieldProps}
+                aria-label={`${name} items`}
                 inputMode="numeric"
                 autoComplete="off"
                 value={draft.countText}
@@ -150,6 +151,7 @@ function SectionCard({
           render={(p) => (
             <Textarea
               id={p.id}
+              aria-label={`${name} instructions`}
               aria-describedby={p['aria-describedby']}
               rows={2}
               value={draft.instructions}

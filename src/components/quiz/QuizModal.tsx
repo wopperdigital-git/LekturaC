@@ -132,7 +132,10 @@ export function QuizModal({
   /** A change to the form drops tests written for the old form (a blur's count commit is not a change). */
   function edit(action: SectionAction) {
     dispatch(action)
-    if (changesForm(action)) setWritten([])
+    if (changesForm(action)) {
+      setWritten([])
+      setError(null)
+    }
   }
 
   function addTest() {
@@ -280,8 +283,8 @@ export function QuizModal({
       return (
         <div>
           <h3 className="text-base font-semibold text-app-foreground">Quiz ready</h3>
-          {short.map((b) => (
-            <p key={b.section.title} className="mt-1 text-sm text-app-muted">
+          {short.map((b, i) => (
+            <p key={i} className="mt-1 text-sm text-app-muted">
               {b.section.title}: generated {b.questions.length} of {b.requested} — the deck didn&apos;t have enough
               material for more.
             </p>
