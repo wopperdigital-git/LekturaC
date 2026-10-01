@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import { hasPanned, panScroll } from '@/lib/pan'
-import { isPanPress, type EditorTool } from '@/engine/editorTool'
+import { RIGHT_BUTTON, isPanPress, type EditorTool } from '@/engine/editorTool'
 
 /** Set on the canvas while Ctrl is held (a drag would pan) and while one is under way. */
 export const PAN_READY_ATTR = 'data-pan-ready'
@@ -8,9 +8,10 @@ export const PANNING_ATTR = 'data-panning'
 
 /**
  * Ctrl + left-drag pans the canvas: grab the view and move it, which is how a
- * zoomed-in deck is got around without the scrollbars. In the Move screen tool
- * (`tool === 'pan'`) a plain left-drag pans too, and the grab cursor stays on
- * whether or not Ctrl is held.
+ * zoomed-in deck is got around without the scrollbars. Holding the right button
+ * and dragging pans in every tool too. In the Move screen tool (`tool === 'pan'`)
+ * a plain left-drag pans as well, and the grab cursor stays on whether or not
+ * Ctrl is held.
  *
  * Wired to the DOM directly, in the *capture* phase, and that is the point.
  * Everything inside the canvas listens for the same press — an element selects
@@ -23,7 +24,8 @@ export const PANNING_ATTR = 'data-panning'
  * - The `click` the release produces is swallowed, or panning would end with the
  *   card underneath being selected — the very thing a pan must not do.
  * - Ctrl+click is a context-menu gesture on a Mac, so that is suppressed too
- *   while it is a pan.
+ *   while it is a pan. So is the menu a right-drag would open on release; a
+ *   right-click that did not move still opens it (paste and spelling in a run).
  *
  * The cursor is CSS, keyed off two attributes set here (`index.css`), so holding
  * Ctrl shows a grab hand over the whole canvas without a render per key.
@@ -41,6 +43,9 @@ export function useCanvasPan(
     let start: { pointer: { x: number; y: number }; scroll: { x: number; y: number } } | null = null
     let moved = false
     let swallowClick = false
+    // A right-drag that panned: the context menu its release brings up is eaten.
+    let swallowMenu = false
+    let rightPress = false
 
     // Move screen keeps the hand showing; otherwise it is only there while Ctrl is.
     const alwaysReady = tool === 'pan'
@@ -69,6 +74,7 @@ export function useCanvasPan(
       }
       moved = false
       swallowClick = true
+      rightPress = e.button === RIGHT_BUTTON
       canvas.setAttribute(PANNING_ATTR, '')
       window.addEventListener('pointermove', onPointerMove)
       window.addEventListener('pointerup', end)
@@ -86,6 +92,7 @@ export function useCanvasPan(
     }
 
     function end() {
+      swallowMenu = rightPress && moved
       start = null
       canvas.removeAttribute(PANNING_ATTR)
       window.removeEventListener('pointermove', onPointerMove)
@@ -96,6 +103,7 @@ export function useCanvasPan(
       // an ordinary click later.
       setTimeout(() => {
         swallowClick = false
+        swallowMenu = false
       }, 0)
     }
 
@@ -107,7 +115,10 @@ export function useCanvasPan(
     }
 
     function onContextMenu(e: MouseEvent) {
-      if (start || e.ctrlKey) e.preventDefault()
+      // `start && rightPress`: where the menu comes on the press rather than the
+      // release (macOS), the button is still held and a pan may follow, so the
+      // menu cannot be let through there.
+      if (swallowMenu || e.ctrlKey || (start && rightPress)) e.preventDefault()
     }
 
     setReady(false)

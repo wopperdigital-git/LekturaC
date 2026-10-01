@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PAN_THRESHOLD_PX, hasPanned, panScroll } from './pan'
+import { PAN_THRESHOLD_PX, hasPanned, horizontalWheelDelta, panScroll } from './pan'
 
 describe('panScroll', () => {
   it('moves the view opposite to the pointer, so the content follows the hand', () => {
@@ -32,5 +32,31 @@ describe('hasPanned', () => {
   it('counts a press that travelled past the threshold in any direction', () => {
     expect(hasPanned({ x: 10, y: 10 }, { x: 10 + PAN_THRESHOLD_PX + 1, y: 10 })).toBe(true)
     expect(hasPanned({ x: 10, y: 10 }, { x: 10, y: 10 - PAN_THRESHOLD_PX - 1 })).toBe(true)
+  })
+})
+
+describe('horizontalWheelDelta', () => {
+  const wheel = (over: Partial<Parameters<typeof horizontalWheelDelta>[0]>) => ({
+    deltaX: 0,
+    deltaY: 0,
+    deltaMode: 0,
+    shiftKey: false,
+    ...over,
+  })
+
+  it('scrolls sideways by a trackpad swipe', () => {
+    expect(horizontalWheelDelta(wheel({ deltaX: 30, deltaY: 5 }))).toBe(30)
+  })
+
+  it('turns Shift + wheel sideways', () => {
+    expect(horizontalWheelDelta(wheel({ deltaY: 100, shiftKey: true }))).toBe(100)
+  })
+
+  it('leaves a plain vertical scroll alone', () => {
+    expect(horizontalWheelDelta(wheel({ deltaY: 100 }))).toBe(0)
+  })
+
+  it('converts a wheel that counts in lines to pixels', () => {
+    expect(horizontalWheelDelta(wheel({ deltaY: 3, shiftKey: true, deltaMode: 1 }))).toBe(48)
   })
 })

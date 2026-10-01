@@ -20,12 +20,20 @@ describe('isPanPress', () => {
     }
   })
 
-  it('never pans on a right or middle press, whatever the tool', () => {
-    for (const button of [1, 2]) {
-      for (const tool of [...EDITOR_TOOLS.map((t) => t.id), 'pen' as const, 'shape' as const]) {
-        expect(isPanPress({ button, ctrlKey: false }, tool)).toBe(false)
-        expect(isPanPress({ button, ctrlKey: true }, tool)).toBe(false)
-      }
+  const ALL_TOOLS = [...EDITOR_TOOLS.map((t) => t.id), 'pen' as const, 'shape' as const]
+
+  // Holding the right button is the hand, whatever tool is active.
+  it('pans on a right press in every tool, with or without Ctrl', () => {
+    for (const tool of ALL_TOOLS) {
+      expect(isPanPress({ button: 2, ctrlKey: false }, tool)).toBe(true)
+      expect(isPanPress({ button: 2, ctrlKey: true }, tool)).toBe(true)
+    }
+  })
+
+  it('never pans on a middle press, whatever the tool', () => {
+    for (const tool of ALL_TOOLS) {
+      expect(isPanPress({ button: 1, ctrlKey: false }, tool)).toBe(false)
+      expect(isPanPress({ button: 1, ctrlKey: true }, tool)).toBe(false)
     }
   })
 })

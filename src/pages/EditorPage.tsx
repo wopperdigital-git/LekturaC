@@ -44,6 +44,7 @@ import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
 import { DEFAULT_ZOOM, clampZoom, scrollTopAfterZoom, stepZoom, zoomFromWheel } from '@/lib/zoom'
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
+import { horizontalWheelDelta } from '@/lib/pan'
 import { QuizModal } from '@/components/quiz/QuizModal'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 import { ROLE_LABEL } from '@/classroom/roles'
@@ -153,7 +154,16 @@ export function EditorPage() {
     const node = canvasRef.current
     if (!node) return
     function onWheel(e: WheelEvent) {
-      if (!e.ctrlKey && !e.metaKey) return
+      if (!e.ctrlKey && !e.metaKey) {
+        // The canvas hides its horizontal scrollbar, which also stops the wheel
+        // scrolling it sideways; this puts that back.
+        const dx = horizontalWheelDelta(e)
+        if (dx === 0 || !node) return
+        node.scrollLeft += dx
+        // Shift + wheel is all sideways; a trackpad swipe keeps its vertical part.
+        if (e.deltaX === 0) e.preventDefault()
+        return
+      }
       e.preventDefault()
       setZoom((current) => zoomFromWheel(current, e.deltaY))
     }
@@ -915,7 +925,9 @@ export function EditorPage() {
             shapes={shapeTools}
           />
         {/* Transparent: the stage layer above is the background now. */}
-        <main ref={canvasRef} className="scrollbar-subtle relative min-h-0 flex-1 overflow-auto">
+        {/* No horizontal scrollbar: a zoomed-in deck is moved sideways by panning, a
+            trackpad swipe or Shift + wheel (handled with Ctrl + wheel above). */}
+        <main ref={canvasRef} className="scrollbar-subtle relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {cards.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-app-muted">
               <p>No slides yet.</p>
