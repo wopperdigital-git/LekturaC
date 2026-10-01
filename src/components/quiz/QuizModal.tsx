@@ -9,12 +9,12 @@ import { CodeChip } from './CodeChip'
 import { QuizPreviewModal } from './QuizPreviewModal'
 import { QUIZ_CHAIN, generateQuizWithFallback } from '@/ai/fallbackProvider'
 import { hasQuizContent, quizSlides } from '@/ai/quizPrompt'
-import { AIProviderError } from '@/ai/provider'
 import { buildQuestions } from '@/quiz/build'
 import { createQuiz, listQuizzesForDeck, loadOwnerQuiz } from '@/quiz/api'
 import type { DeckQuizSummary, OwnerQuiz } from '@/quiz/rows'
 import { exportQuizPdf } from '@/quiz/pdf/quizPdf'
-import { EmptySectionError, SectionFailure, generateSections, type BuiltSection } from '@/quiz/sections'
+import { SectionFailure, generateSections, type BuiltSection } from '@/quiz/sections'
+import { failureMessage, friendlyError } from '@/jobs/quizJob'
 import { changesForm, newSection, sectionsReducer, toSectionRequests, type SectionAction } from '@/quiz/sectionForm'
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { describeError } from '@/store/presentationStore'
@@ -38,21 +38,6 @@ interface Pending {
 interface Result {
   quiz: OwnerQuiz
   built: BuiltSection[]
-}
-
-function friendlyError(err: unknown, saving: boolean): string {
-  if (err instanceof AIProviderError && err.kind === 'capacity') {
-    return 'The free AI model is busy. Try again in a minute.'
-  }
-  const message = describeError(err)
-  return saving && /create_quiz/i.test(message) ? `${message} Run migration 0016 in Supabase.` : message
-}
-
-function failureMessage(failure: SectionFailure): string {
-  if (failure.cause instanceof EmptySectionError) {
-    return `The AI couldn't write questions for ${failure.section.title}. Try again or add more content.`
-  }
-  return `${failure.section.title}: ${friendlyError(failure.cause, false)}`
 }
 
 /**
