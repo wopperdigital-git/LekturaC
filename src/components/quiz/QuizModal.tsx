@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { Field, Input } from '@/components/ui/Input'
 import { QuizPreview } from './QuizPreview'
+import { SectionList } from './SectionCard'
+import { CodeChip, DeckQuizList } from './DeckQuizList'
 import { QUIZ_CHAIN, generateQuizWithFallback } from '@/ai/fallbackProvider'
 import { hasQuizContent, quizSlides } from '@/ai/quizPrompt'
 import { AIProviderError } from '@/ai/provider'
@@ -11,53 +12,30 @@ import { buildQuestions } from '@/quiz/build'
 import { createQuiz, listQuizzesForDeck, loadOwnerQuiz } from '@/quiz/api'
 import type { DeckQuizSummary, OwnerQuiz } from '@/quiz/rows'
 import { exportQuizPdf } from '@/quiz/pdf/quizPdf'
-import {
-  DEFAULT_CONFIGS,
-  MAX_QUIZ_ITEMS,
-  MIN_QUIZ_ITEMS,
-  clampItemCount,
-  defaultInstructions,
-  defaultSectionTitle,
-  quizTypeLabel,
-  summaryType,
-  type QuizConfig,
-  type QuizQuestionDraft,
-  type QuizType,
-} from '@/quiz/types'
+import { EmptySectionError, SectionFailure, generateSections, type BuiltSection } from '@/quiz/sections'
+import { changesForm, newSection, sectionsReducer, toSectionRequests, type SectionAction } from '@/quiz/sectionForm'
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { describeError } from '@/store/presentationStore'
 import { useAuthStore } from '@/store/authStore'
 
-const DEFAULT_COUNT = 10
-
-const TYPE_OPTIONS: { value: QuizType; label: string }[] = [
-  { value: 'multiple_choice', label: 'Multiple choice' },
-  { value: 'fill_blank', label: 'Fill in the blank' },
-  { value: 'true_false', label: 'True or False' },
-]
-
+type Tab = 'create' | 'list'
 type Phase = 'form' | 'generating' | 'saving' | 'done'
 
-/** Generated questions held after a failed save, so "Save again" never regenerates. */
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'create', label: 'Create new quiz' },
+  { id: 'list', label: 'Quizzes from this deck' },
+]
+
+/** Written tests held after a failed save, so "Save again" never regenerates. */
 interface Pending {
-  questions: QuizQuestionDraft[]
-  shortfall: number
-  config: QuizConfig
-  requested: number
+  built: BuiltSection[]
   /** Set once `create_quiz` has succeeded, so a retry only re-reads and never creates a duplicate. */
   savedId: string | null
 }
 
 interface Result {
   quiz: OwnerQuiz
-  shortfall: number
-  requested: number
-}
-
-/** What the number field means: an integer within 1–20, or `null` when the text isn't a number. */
-function parseCount(text: string): number | null {
-  if (!/^\s*\d+\s*$/.test(text)) return null
-  return clampItemCount(Number(text))
+  built: BuiltSection[]
 }
 
 function friendlyError(err: unknown, saving: boolean): string {
@@ -65,105 +43,26 @@ function friendlyError(err: unknown, saving: boolean): string {
     return 'The free AI model is busy. Try again in a minute.'
   }
   const message = describeError(err)
-  return saving && /create_quiz/i.test(message) ? `${message} Run migration 0012 in Supabase.` : message
+  return saving && /create_quiz/i.test(message) ? `${message} Run migration 0016 in Supabase.` : message
 }
 
-interface RadioOption<T extends string> {
-  value: T
-  label: string
-}
-
-/** A small exclusive choice, drawn as chips. Arrow keys move between options like a native radio group. */
-function Radios<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  disabled = false,
-}: {
-  label: string
-  value: T
-  options: RadioOption<T>[]
-  onChange: (value: T) => void
-  disabled?: boolean
-}) {
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
-    if (step === 0 || disabled) return
-    e.preventDefault()
-    const at = options.findIndex((o) => o.value === value)
-    const next = options[(at + step + options.length) % options.length]
-    onChange(next.value)
-    const buttons = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')
-    buttons[(at + step + options.length) % options.length]?.focus()
+function failureMessage(failure: SectionFailure): string {
+  if (failure.cause instanceof EmptySectionError) {
+    return `The AI couldn't write questions for ${failure.section.title}. Try again or add more content.`
   }
-
-  return (
-    <div role="radiogroup" aria-label={label} onKeyDown={onKeyDown} className="flex flex-wrap gap-2">
-      {options.map((o) => {
-        const checked = o.value === value
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={checked}
-            tabIndex={checked ? 0 : -1}
-            disabled={disabled}
-            onClick={() => onChange(o.value)}
-            className={`cursor-pointer rounded-app-sm border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 ${
-              checked
-                ? 'border-app-accent bg-app-accent/15 text-app-accent-text'
-                : 'border-app-border bg-app-surface text-app-foreground hover:bg-app-border/40'
-            }`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** A share code in a monospace chip with a Copy button. Only ever rendered for Teachers. */
-function CodeChip({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1500)
-    return () => clearTimeout(timer)
-  }, [copied])
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-    } catch {
-      // Clipboard blocked: the code is on screen to copy by hand.
-    }
-  }
-
-  return (
-    <span className="inline-flex items-center gap-2">
-      <code className="rounded-app-sm border border-app-border bg-app-surface px-2 py-1 font-mono text-sm tracking-wider text-app-foreground">
-        {code}
-      </code>
-      <Button variant="secondary" className="!px-2 !py-1 text-xs" onClick={() => void copy()}>
-        {copied ? 'Copied' : 'Copy'}
-      </Button>
-    </span>
-  )
+  return `${failure.section.title}: ${friendlyError(failure.cause, false)}`
 }
 
 /**
- * Generates a quiz from the open deck: one model call, deterministic assembly
- * (`buildQuestions`), one `create_quiz` write, then the owner's preview and PDF.
+ * Makes a quiz of 1–3 tests from the open deck: one model call per test, in
+ * order (`generateSections`), deterministic assembly (`buildQuestions`), one
+ * `create_quiz` write for the whole quiz, then the owner's preview and PDF.
  *
- * Two failure paths are kept apart on purpose. A failed *generation* returns to
- * the form (nothing worth keeping). A failed *save* keeps the questions already
- * written (`pending`) and offers Save again, because regenerating would spend a
- * model call and hand back different questions.
+ * Failure paths are kept apart on purpose. A failed *test* keeps the tests
+ * before it and Try again resumes there (each test is a model call worth
+ * keeping); editing the form drops them, since they no longer match it. A
+ * failed *save* keeps every written test (`pending`) and offers Save again.
+ * Both tab panels stay mounted, so switching tabs never cancels a run.
  */
 export function QuizModal({
   presentationId,
@@ -179,18 +78,18 @@ export function QuizModal({
 }) {
   const isTeacher = useAuthStore((s) => s.profile?.role) === 'teacher'
 
-  const [count, setCount] = useState(DEFAULT_COUNT)
-  const [countText, setCountText] = useState(String(DEFAULT_COUNT))
-  const [type, setType] = useState<QuizType>('multiple_choice')
-  // One config per type, so toggling away and back keeps the sub-option chosen.
-  const [configs, setConfigs] = useState<Record<QuizType, QuizConfig>>(DEFAULT_CONFIGS)
-  const config = configs[type]
+  const [tab, setTab] = useState<Tab>('create')
+  const [drafts, dispatch] = useReducer(sectionsReducer, undefined, () => [newSection(0, crypto.randomUUID())])
+  /** Tests finished before a failure; the next Generate resumes after them. */
+  const [written, setWritten] = useState<BuiltSection[]>([])
+  const [progress, setProgress] = useState<number | null>(null)
 
   const [phase, setPhase] = useState<Phase>('form')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [result, setResult] = useState<Result | null>(null)
   const [previous, setPrevious] = useState<DeckQuizSummary[] | null>(null)
+  const [previousError, setPreviousError] = useState(false)
   const [pdfNotice, setPdfNotice] = useState<string | null>(null)
   /** A failed PDF build (shown as an alert), apart from the muted font notice above. */
   const [pdfError, setPdfError] = useState<string | null>(null)
@@ -198,6 +97,7 @@ export function QuizModal({
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   // Leaving mid-generation must stop the request, not let it finish unseen.
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -209,7 +109,7 @@ export function QuizModal({
         if (live) setPrevious(rows)
       })
       .catch(() => {
-        if (live) setPrevious([])
+        if (live) setPreviousError(true)
       })
     return () => {
       live = false
@@ -219,8 +119,9 @@ export function QuizModal({
   async function refreshPrevious() {
     try {
       setPrevious(await listQuizzesForDeck(presentationId))
+      setPreviousError(false)
     } catch {
-      // A list that can't load just isn't shown.
+      // Keep what is shown.
     }
   }
 
@@ -228,17 +129,14 @@ export function QuizModal({
   const noContent = !hasQuizContent(cards)
   const busy = phase === 'generating' || phase === 'saving'
 
-  /** Settles the number field: valid text is clamped and shown; anything else reverts. */
-  function commitCount(): number {
-    const parsed = parseCount(countText)
-    const next = parsed ?? count
-    setCount(next)
-    setCountText(String(next))
-    return next
+  /** A change to the form drops tests written for the old form (a blur's count commit is not a change). */
+  function edit(action: SectionAction) {
+    dispatch(action)
+    if (changesForm(action)) setWritten([])
   }
 
-  function pickSubOption(next: QuizConfig) {
-    setConfigs((current) => ({ ...current, [next.type]: next }))
+  function addTest() {
+    edit({ kind: 'add', key: crypto.randomUUID() })
   }
 
   async function save(p: Pending) {
@@ -252,17 +150,12 @@ export function QuizModal({
           presentationId,
           title: `${title} — quiz`,
           deckTitle: title,
-          sections: [
-            {
-              section: { config: p.config, title: defaultSectionTitle(0), instructions: defaultInstructions(p.config) },
-              questions: p.questions,
-            },
-          ],
+          sections: p.built.map((b) => ({ section: b.section, questions: b.questions })),
         })
         savedId = created.id
       }
       const quiz = await loadOwnerQuiz(savedId)
-      setResult({ quiz, shortfall: p.shortfall, requested: p.requested })
+      setResult({ quiz, built: p.built })
       setPhase('done')
       void refreshPrevious()
     } catch (err) {
@@ -273,12 +166,15 @@ export function QuizModal({
   }
 
   async function generate() {
-    const requested = commitCount()
-    const chosen = config
+    dispatch({ kind: 'commitAll' })
+    const requests = toSectionRequests(drafts)
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
     const { signal } = controller
+    const seed = crypto.randomUUID()
+    const slides = quizSlides(cards)
+    const cardRefs = cards.map((c, i) => ({ id: c.id, heading: headingTextOf(c, i) }))
 
     setError(null)
     setPdfNotice(null)
@@ -286,44 +182,46 @@ export function QuizModal({
     setPending(null)
     setPhase('generating')
 
-    let built: ReturnType<typeof buildQuestions>
+    let built: BuiltSection[]
     try {
-      const response = await generateQuizWithFallback(
-        QUIZ_CHAIN,
-        { title, slides: quizSlides(cards), count: requested, config: chosen },
+      built = await generateSections({
+        requests,
+        written,
         signal,
-      )
-      if (signal.aborted) {
-        setPhase('form')
-        return
-      }
-      built = buildQuestions({
-        response,
-        config: chosen,
-        count: requested,
-        cards: cards.map((c, i) => ({ id: c.id, heading: headingTextOf(c, i) })),
-        seed: crypto.randomUUID(),
+        onProgress: setProgress,
+        write: async (request, index, avoid) => {
+          const response = await generateQuizWithFallback(
+            QUIZ_CHAIN,
+            { title, slides, count: request.count, config: request.section.config, avoid },
+            signal,
+          )
+          return buildQuestions({
+            response,
+            config: request.section.config,
+            count: request.count,
+            cards: cardRefs,
+            seed: `${seed}:${index}`,
+          })
+        },
       })
     } catch (err) {
-      // A cancel is the user's own act: back to the form, no message.
-      if (!signal.aborted) setError(friendlyError(err, false))
+      setProgress(null)
+      if (signal.aborted) {
+        // A cancel is the user's own act: back to the form, nothing kept, no message.
+        setWritten([])
+      } else if (err instanceof SectionFailure) {
+        setWritten(err.written)
+        setError(failureMessage(err))
+      } else {
+        setError(friendlyError(err, false))
+      }
       setPhase('form')
       return
     }
 
-    if (built.questions.length === 0) {
-      setError("The AI couldn't write questions from this deck. Try again or add more content.")
-      setPhase('form')
-      return
-    }
-
-    await save({
-      questions: built.questions,
-      shortfall: built.shortfall,
-      config: chosen,
-      requested,
-      savedId: null,
-    })
+    setProgress(null)
+    setWritten([])
+    await save({ built, savedId: null })
   }
 
   async function downloadPdf(key: string, load: () => Promise<OwnerQuiz>) {
@@ -350,78 +248,96 @@ export function QuizModal({
     setPhase('form')
   }
 
-  if (phase === 'done' && result) {
-    const { quiz, shortfall, requested } = result
-    return (
-      <Modal title="Generate a quiz" onClose={onClose}>
-        <h3 className="text-base font-semibold text-app-foreground">Quiz ready</h3>
-        {shortfall > 0 && (
-          <p className="mt-1 text-sm text-app-muted">
-            Generated {quiz.questions.length} of {requested} — the deck didn't have enough material for more.
-          </p>
-        )}
-
-        <div className="mt-3">
-          <QuizPreview quiz={quiz} />
-        </div>
-
-        <div className="mt-4 text-sm">
-          {isTeacher ? (
-            <div className="space-y-2">
-              <CodeChip code={quiz.code} />
-              <p className="text-xs text-app-muted">
-                Post it to a class from{' '}
-                <Link
-                  to="/classroom/quizzes"
-                  className="rounded-app-sm text-app-accent-text underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-                >
-                  Quizzes
-                </Link>{' '}
-                to let students answer.
-              </p>
-            </div>
-          ) : (
-            <p className="text-xs text-app-muted">Sharing needs a Teacher account.</p>
-          )}
-        </div>
-
-        {pdfNotice && (
-          <p role="status" className="mt-3 text-xs text-app-muted">
-            {pdfNotice}
-          </p>
-        )}
-
-        {pdfError && (
-          <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
-            {pdfError}
-          </p>
-        )}
-
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <Button variant="secondary" onClick={makeAnother}>
-            Make another
-          </Button>
-          <Button
-            variant="primary"
-            loading={pdfBusy === 'result'}
-            disabled={pdfBusy !== null}
-            onClick={() => void downloadPdf('result', () => Promise.resolve(quiz))}
-          >
-            Download PDF
-          </Button>
-        </div>
-      </Modal>
-    )
+  function onTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    if (step === 0) return
+    e.preventDefault()
+    const at = TABS.findIndex((t) => t.id === tab)
+    const next = (at + step + TABS.length) % TABS.length
+    setTab(TABS[next].id)
+    tabRefs.current[next]?.focus()
   }
 
-  return (
-    <Modal title="Generate a quiz" onClose={onClose}>
-      {pending ? (
+  const notices = (
+    <>
+      {pdfNotice && (
+        <p role="status" className="mt-3 text-xs text-app-muted">
+          {pdfNotice}
+        </p>
+      )}
+      {pdfError && (
+        <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+          {pdfError}
+        </p>
+      )}
+    </>
+  )
+
+  function createPanel() {
+    if (phase === 'done' && result) {
+      const { quiz, built } = result
+      const short = built.filter((b) => b.shortfall > 0)
+      return (
+        <div>
+          <h3 className="text-base font-semibold text-app-foreground">Quiz ready</h3>
+          {short.map((b) => (
+            <p key={b.section.title} className="mt-1 text-sm text-app-muted">
+              {b.section.title}: generated {b.questions.length} of {b.requested} — the deck didn&apos;t have enough
+              material for more.
+            </p>
+          ))}
+
+          <div className="mt-3">
+            <QuizPreview quiz={quiz} />
+          </div>
+
+          <div className="mt-4 text-sm">
+            {isTeacher ? (
+              <div className="space-y-2">
+                <CodeChip code={quiz.code} />
+                <p className="text-xs text-app-muted">
+                  Post it to a class from{' '}
+                  <Link
+                    to="/classroom/quizzes"
+                    className="rounded-app-sm text-app-accent-text underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+                  >
+                    Quizzes
+                  </Link>{' '}
+                  to let students answer.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-app-muted">Sharing needs a Teacher account.</p>
+            )}
+          </div>
+
+          {notices}
+
+          <div className="mt-6 flex items-center justify-end gap-2">
+            <Button variant="secondary" onClick={makeAnother}>
+              Make another
+            </Button>
+            <Button
+              variant="primary"
+              loading={pdfBusy === 'result'}
+              disabled={pdfBusy !== null}
+              onClick={() => void downloadPdf('result', () => Promise.resolve(quiz))}
+            >
+              Download PDF
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    if (pending) {
+      const count = pending.built.reduce((n, b) => n + b.questions.length, 0)
+      return (
         <div>
           <p className="text-sm text-app-muted">
             {pending.savedId !== null
               ? `Your quiz was saved, but it couldn't be loaded just now.`
-              : `${pending.questions.length} questions are written. They just haven't been saved yet.`}
+              : `${count} questions are written. They just haven't been saved yet.`}
           </p>
           {error && (
             <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -445,159 +361,107 @@ export function QuizModal({
             </Button>
           </div>
         </div>
-      ) : (
-        <>
-          <p className="text-sm text-app-muted">
-            Questions are written once from your slides and saved. The answer key is for you; students see only the
-            questions.
+      )
+    }
+
+    const resuming = written.length > 0
+    return (
+      <div>
+        <p className="mb-4 text-sm text-app-muted">
+          Questions are written once from your slides and saved. Each test is written separately; the answer key is for
+          you, and students see only the questions.
+        </p>
+
+        <SectionList drafts={drafts} dispatch={edit} onAdd={addTest} disabled={busy} />
+
+        {noKey && <p className="mt-4 text-xs text-app-muted">Quiz generation needs VITE_GROQ_API_KEY.</p>}
+        {!noKey && noContent && <p className="mt-4 text-xs text-app-muted">Add some slide content first.</p>}
+        {phase === 'generating' && progress !== null && (
+          <p role="status" className="mt-4 text-sm text-app-muted">
+            Writing {drafts[progress]?.title.trim() || `Test ${progress + 1}`} ({progress + 1} of {drafts.length})…
           </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+        {resuming && phase === 'form' && (
+          <p className="mt-2 text-xs text-app-muted">
+            {written.length === 1 ? 'The first test is' : `The first ${written.length} tests are`} written; Try again
+            continues from the next one. Changing the form starts over.
+          </p>
+        )}
+        {notices}
 
-          <div className="mt-4 space-y-4">
-            <div className="w-28">
-              <Field
-                label="Items"
-                hint={`${MIN_QUIZ_ITEMS}–${MAX_QUIZ_ITEMS}`}
-                render={(fieldProps) => (
-                  <Input
-                    {...fieldProps}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={countText}
-                    disabled={busy}
-                    onChange={(e) => setCountText(e.target.value)}
-                    onBlur={commitCount}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        commitCount()
-                      }
-                    }}
-                  />
-                )}
-              />
-            </div>
-
-            <div>
-              <p className="mb-1 text-xs font-medium text-app-muted">Type</p>
-              <Radios
-                label="Quiz type"
-                value={type}
-                options={TYPE_OPTIONS}
-                onChange={setType}
-                disabled={busy}
-              />
-            </div>
-
-            <div>
-              <p className="mb-1 text-xs font-medium text-app-muted">Options</p>
-              {config.type === 'multiple_choice' && (
-                <Radios
-                  label="Number of choices"
-                  value={String(config.choiceCount)}
-                  options={[
-                    { value: '3', label: 'A–C' },
-                    { value: '4', label: 'A–D' },
-                  ]}
-                  onChange={(v) => pickSubOption({ type: 'multiple_choice', choiceCount: v === '3' ? 3 : 4 })}
-                  disabled={busy}
-                />
-              )}
-              {config.type === 'fill_blank' && (
-                <Radios
-                  label="Word box"
-                  value={config.wordBox ? 'box' : 'none'}
-                  options={[
-                    { value: 'none', label: 'No word box' },
-                    { value: 'box', label: 'Word box' },
-                  ]}
-                  onChange={(v) => pickSubOption({ type: 'fill_blank', wordBox: v === 'box' })}
-                  disabled={busy}
-                />
-              )}
-              {config.type === 'true_false' && (
-                <Radios
-                  label="Answer notation"
-                  value={config.notation}
-                  options={[
-                    { value: 'word', label: 'TRUE / FALSE' },
-                    { value: 'letter', label: 'T / F' },
-                  ]}
-                  onChange={(v) => pickSubOption({ type: 'true_false', notation: v })}
-                  disabled={busy}
-                />
-              )}
-            </div>
-          </div>
-
-          {noKey && <p className="mt-4 text-xs text-app-muted">Quiz generation needs VITE_GROQ_API_KEY.</p>}
-          {!noKey && noContent && <p className="mt-4 text-xs text-app-muted">Add some slide content first.</p>}
-          {error && (
-            <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
-              {error}
-            </p>
-          )}
-          {pdfNotice && (
-            <p role="status" className="mt-3 text-xs text-app-muted">
-              {pdfNotice}
-            </p>
-          )}
-          {pdfError && (
-            <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
-              {pdfError}
-            </p>
-          )}
-
-          <div className="mt-6 flex items-center justify-end gap-2">
-            {phase === 'generating' && (
-              <Button variant="secondary" onClick={() => abortRef.current?.abort()}>
-                Cancel
-              </Button>
-            )}
-            <Button
-              variant="primary"
-              loading={busy}
-              disabled={busy || noKey || noContent}
-              onClick={() => void generate()}
-            >
-              Generate
+        <div className="mt-6 flex items-center justify-end gap-2">
+          {phase === 'generating' && (
+            <Button variant="secondary" onClick={() => abortRef.current?.abort()}>
+              Cancel
             </Button>
-          </div>
-
-          {previous && previous.length > 0 && (
-            <section className="mt-6 border-t border-app-border pt-4" aria-label="Quizzes from this deck">
-              <h3 className="text-sm font-semibold text-app-foreground">Quizzes from this deck</h3>
-              <ul className="mt-2 space-y-2">
-                {previous.map((q) => (
-                  <li
-                    key={q.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-app border border-app-border px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-app-foreground">{q.title}</p>
-                      <p className="text-xs text-app-muted">
-                        {q.itemCount} questions · {quizTypeLabel(summaryType(q.sections))} ·{' '}
-                        {new Date(q.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isTeacher && <CodeChip code={q.code} />}
-                      <Button
-                        variant="secondary"
-                        className="!px-2 !py-1 text-xs"
-                        loading={pdfBusy === q.id}
-                        disabled={pdfBusy !== null || busy}
-                        onClick={() => void downloadPdf(q.id, () => loadOwnerQuiz(q.id))}
-                      >
-                        PDF
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
           )}
-        </>
-      )}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={busy || noKey || noContent}
+            onClick={() => void generate()}
+          >
+            {resuming ? 'Try again' : 'Generate'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Modal title="Generate a quiz" maxWidth="max-w-3xl" onClose={onClose}>
+      <div role="tablist" aria-label="Quiz" onKeyDown={onTabKeyDown} className="mb-5 flex gap-1 border-b border-app-border">
+        {TABS.map((t, i) => {
+          const selected = tab === t.id
+          return (
+            <button
+              key={t.id}
+              ref={(el) => {
+                tabRefs.current[i] = el
+              }}
+              type="button"
+              role="tab"
+              id={`quiz-tab-${t.id}`}
+              aria-controls={`quiz-panel-${t.id}`}
+              aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setTab(t.id)}
+              className={`-mb-px cursor-pointer border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+                selected
+                  ? 'border-app-accent text-app-foreground'
+                  : 'border-transparent text-app-muted hover:text-app-foreground'
+              }`}
+            >
+              {t.label}
+              {t.id === 'list' && previous && previous.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-app-surface px-1.5 py-0.5 text-xs text-app-muted">
+                  {previous.length}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      <div role="tabpanel" id="quiz-panel-create" aria-labelledby="quiz-tab-create" hidden={tab !== 'create'}>
+        {createPanel()}
+      </div>
+      <div role="tabpanel" id="quiz-panel-list" aria-labelledby="quiz-tab-list" hidden={tab !== 'list'}>
+        <DeckQuizList
+          quizzes={previous}
+          loadError={previousError}
+          isTeacher={isTeacher}
+          pdfBusy={pdfBusy}
+          busy={busy}
+          onPdf={(id) => void downloadPdf(id, () => loadOwnerQuiz(id))}
+        />
+        {tab === 'list' && notices}
+      </div>
     </Modal>
   )
 }
