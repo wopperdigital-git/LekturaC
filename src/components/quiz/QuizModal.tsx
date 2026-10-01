@@ -4,7 +4,9 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { QuizPreview } from './QuizPreview'
 import { SectionList } from './SectionCard'
-import { CodeChip, DeckQuizList } from './DeckQuizList'
+import { DeckQuizList } from './DeckQuizList'
+import { CodeChip } from './CodeChip'
+import { QuizPreviewModal } from './QuizPreviewModal'
 import { QUIZ_CHAIN, generateQuizWithFallback } from '@/ai/fallbackProvider'
 import { hasQuizContent, quizSlides } from '@/ai/quizPrompt'
 import { AIProviderError } from '@/ai/provider'
@@ -95,6 +97,8 @@ export function QuizModal({
   const [pdfError, setPdfError] = useState<string | null>(null)
   /** Which PDF is being built: 'result' for the one just made, else a quiz id. */
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
+  /** The saved quiz open in the preview modal, if any. */
+  const [previewing, setPreviewing] = useState<DeckQuizSummary | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -417,7 +421,9 @@ export function QuizModal({
   }
 
   return (
-    <Modal title="Generate a quiz" maxWidth="max-w-3xl" onClose={onClose}>
+    // While the preview is open, Escape and a backdrop press belong to it alone:
+    // both modals listen for Escape on the window, so this one stands down.
+    <Modal title="Generate a quiz" maxWidth="max-w-3xl" onClose={previewing ? () => {} : onClose}>
       <div role="tablist" aria-label="Quiz" onKeyDown={onTabKeyDown} className="mb-5 flex gap-1 border-b border-app-border">
         {TABS.map((t, i) => {
           const selected = tab === t.id
@@ -476,10 +482,26 @@ export function QuizModal({
             pdfBusy={pdfBusy}
             busy={busy}
             onPdf={(id) => void downloadPdf(id, () => loadOwnerQuiz(id))}
+            onOpen={(q) => {
+              setPdfNotice(null)
+              setPdfError(null)
+              setPreviewing(q)
+            }}
           />
-          {tab === 'list' && notices}
+          {tab === 'list' && !previewing && notices}
         </div>
       </div>
+
+      {previewing && (
+        <QuizPreviewModal
+          summary={previewing}
+          isTeacher={isTeacher}
+          pdfBusy={pdfBusy}
+          onPdf={(quiz) => void downloadPdf(quiz.id, () => Promise.resolve(quiz))}
+          notices={notices}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
     </Modal>
   )
 }

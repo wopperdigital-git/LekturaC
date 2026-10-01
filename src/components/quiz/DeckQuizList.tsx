@@ -1,40 +1,14 @@
-import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
+import { CodeChip } from './CodeChip'
 import type { DeckQuizSummary } from '@/quiz/rows'
 import { quizTypeLabel, summaryType } from '@/quiz/types'
 
-/** A share code in a monospace chip with a Copy button. Only ever rendered for Teachers. */
-export function CodeChip({ code }: { code: string }) {
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1500)
-    return () => clearTimeout(timer)
-  }, [copied])
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(code)
-      setCopied(true)
-    } catch {
-      // Clipboard blocked: the code is on screen to copy by hand.
-    }
-  }
-
-  return (
-    <span className="inline-flex items-center gap-2">
-      <code className="rounded-app-sm border border-app-border bg-app-surface px-2 py-1 font-mono text-sm tracking-wider text-app-foreground">
-        {code}
-      </code>
-      <Button variant="secondary" className="!px-2 !py-1 text-xs" onClick={() => void copy()}>
-        {copied ? 'Copied' : 'Copy'}
-      </Button>
-    </span>
-  )
-}
-
-/** The quizzes already made from this deck: their codes (Teachers) and PDFs. */
+/**
+ * The quizzes already made from this deck: open one to preview it, copy its
+ * code (Teachers), or download its PDF. The whole row opens the preview; its
+ * title is the real button (so it is reachable by keyboard), and the code chip
+ * and PDF button stop their presses so they never open it as well.
+ */
 export function DeckQuizList({
   quizzes,
   loadError,
@@ -42,6 +16,7 @@ export function DeckQuizList({
   pdfBusy,
   busy,
   onPdf,
+  onOpen,
 }: {
   /** `null` while loading. */
   quizzes: DeckQuizSummary[] | null
@@ -50,6 +25,7 @@ export function DeckQuizList({
   pdfBusy: string | null
   busy: boolean
   onPdf: (quizId: string) => void
+  onOpen: (quiz: DeckQuizSummary) => void
 }) {
   if (loadError) return <p className="text-sm text-app-muted">The quizzes from this deck couldn&apos;t be loaded.</p>
   if (quizzes === null) return <p className="text-sm text-app-muted">Loading…</p>
@@ -61,10 +37,21 @@ export function DeckQuizList({
       {quizzes.map((q) => (
         <li
           key={q.id}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-app border border-app-border px-3 py-2 text-sm"
+          onClick={() => onOpen(q)}
+          className="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-app border border-app-border px-3 py-2 text-sm transition-colors hover:border-app-accent/40 hover:bg-app-surface/50"
         >
           <div className="min-w-0">
-            <p className="truncate font-medium text-app-foreground">{q.title}</p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpen(q)
+              }}
+              aria-label={`Open preview of ${q.title}`}
+              className="block max-w-full cursor-pointer truncate rounded-app-sm text-left font-medium text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+            >
+              {q.title}
+            </button>
             <p className="text-xs text-app-muted">
               {q.itemCount} questions · {q.sections.length} {q.sections.length === 1 ? 'test' : 'tests'} ·{' '}
               {quizTypeLabel(summaryType(q.sections))} · {new Date(q.createdAt).toLocaleDateString()}
@@ -77,7 +64,10 @@ export function DeckQuizList({
               className="!px-2 !py-1 text-xs"
               loading={pdfBusy === q.id}
               disabled={pdfBusy !== null || busy}
-              onClick={() => onPdf(q.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onPdf(q.id)
+              }}
             >
               PDF
             </Button>
