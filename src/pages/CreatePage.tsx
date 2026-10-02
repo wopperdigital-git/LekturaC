@@ -1,15 +1,13 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
-import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
-import { AIProviderError, type AIProvider, type GenerationBrief } from '@/ai/provider'
+import { PROVIDER_CHAIN } from '@/ai/fallbackProvider'
 import { DEFAULT_TONE } from '@/ai/prompts'
-import { generatePresentation, type GenerationStage } from '@/generation/pipeline'
+import { startDeckJob } from '@/jobs/start'
+import { useJobsStore } from '@/jobs/jobsStore'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
-import { Modal } from '@/components/ui/Modal'
-import { Spinner } from '@/components/ui/Spinner'
 import { AgentHeader } from '@/components/create/AgentHeader'
 import { AnswerPill, OptionCards, StepBlock } from '@/components/create/ConversationStep'
 import { ArrowLeftIcon, CheckIcon } from '@/components/create/icons'
@@ -62,11 +60,11 @@ const DETAIL_OPTIONS: { value: DetailLevel; label: string; description: string }
 ]
 
 /** `answering` covers both the initial brief and any post-error edit. */
-type Phase = 'answering' | 'generating' | 'failed' | 'done'
+type Phase = 'answering' | 'failed' | 'done'
 
 export function CreatePage() {
   const navigate = useNavigate()
-  const { createDeckFromGeneration, createDeck } = usePresentationStore()
+  const { createDeck } = usePresentationStore()
 
   const uid = useId()
   const qid = (step: StepKey) => `${uid}-q-${step}`
@@ -100,21 +98,11 @@ export function CreatePage() {
 
   const [phase, setPhase] = useState<Phase>('answering')
   const [error, setError] = useState<string | null>(null)
-  const [elapsed, setElapsed] = useState(0)
   const [skipping, setSkipping] = useState(false)
-  const [confirmLeave, setConfirmLeave] = useState(false)
-  // Which stage of the pipeline is running, for the spinner copy below. `null`
-  // outside `generating` and reset once the request ends, so a stale "Checking
-  // quality" can't linger into the next attempt.
-  const [stage, setStage] = useState<GenerationStage | null>(null)
-  // Only meaningful during the 'repair' stage — how many slides the pass targeted.
-  const [repairSlideCount, setRepairSlideCount] = useState(0)
-
-  const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const { topic, slideCount, audience, detailLevel, guidance } = answers
-  const isGenerating = phase === 'generating'
+  const deckRunning = useJobsStore((s) => s.jobs.deck?.status === 'running')
 
   // Falls back to the answer itself, and then to "there is unsubmitted text in
   // the custom field" — which is how a draft saved mid-sentence reopens on the
@@ -133,108 +121,36 @@ export function CreatePage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [answers, editing, phase, error])
 
-  // Elapsed counter: a long generation with a bare spinner looks indistinguishable
-  // from a hang, and the provider can retry for several seconds before succeeding.
-  useEffect(() => {
-    if (!isGenerating) return
-    setElapsed(0)
-    const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
-    return () => clearInterval(timer)
-  }, [isGenerating])
-
-  // A reload mid-generation loses the in-flight deck, which nothing can recover.
-  useEffect(() => {
-    if (!isGenerating) return
-    function warn(e: BeforeUnloadEvent) {
-      e.preventDefault()
-    }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [isGenerating])
-
-  // Abandoning the page mid-request should stop it, not leave it running.
-  useEffect(() => () => abortRef.current?.abort(), [])
-
-  /** Confirmed exit mid-generation: stop the request, keep the brief as a draft. */
-  function cancelAndLeave() {
-    abortRef.current?.abort()
-    setConfirmLeave(false)
-    void navigate('/')
-  }
-
-  async function startGeneration(brief: Answers) {
+  function startGeneration(brief: Answers) {
     const { topic: t, slideCount: count, audience: aud, detailLevel: level } = brief
-    // Narrows the nullable fields in one place. Previously a failed check
-    // silently fell through and left "All set…" on screen forever.
     if (t === null || count === null || aud === null || level === null) {
       setPhase('failed')
       setError('Some answers are still missing. Fill in the questions above and try again.')
       return
     }
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    setPhase('generating')
-    setError(null)
-
-    try {
-      const provider: AIProvider = new FallbackProvider(PROVIDER_CHAIN)
-      const generationBrief: GenerationBrief = {
+    // Saved now, not by the autosave effect: the page unmounts before that would run, and the
+    // draft is what "Edit brief" comes back to if the job fails.
+    saveDraft({ id: draftId, answers: brief, pendingText: '', savedAt: Date.now() })
+    const started = startDeckJob({
+      topic: t,
+      requestedCount: count,
+      draftId,
+      brief: {
         slideCount: count,
         audience: aud,
         detailLevel: level,
-        // The brief no longer asks for a tone; every deck is generated with
-        // the default the question used to preselect.
+        // The brief no longer asks for a tone; every deck is generated with the default.
         tone: DEFAULT_TONE,
         guidance: brief.guidance ?? '',
-      }
-      const result = await generatePresentation(provider, t, generationBrief, {
-        signal: controller.signal,
-        onStage: (s, detail) => {
-          setStage(s)
-          if (detail?.slides !== undefined) setRepairSlideCount(detail.slides)
-        },
-      })
-      if (controller.signal.aborted) {
-        // Cancel landed while the last await above was still settling — the
-        // generation finished (or was mid-resolution) right as the user left.
-        // Without this check the deck below would still get created and
-        // navigated to, which is exactly what Cancel promises won't happen.
-        setPhase('answering')
-        return
-      }
-      const id = await createDeckFromGeneration(result.deck, count, result)
-      deleteDraft(draftId)
-      setPhase('done')
-      void navigate(`/deck/${id}`)
-    } catch (err) {
-      if (controller.signal.aborted) {
-        // user-initiated — back to the brief with no error shouting at them
-        setPhase('answering')
-        return
-      }
+      },
+    })
+    if (!started) {
       setPhase('failed')
-      setError(err instanceof AIProviderError ? err.message : 'Generation failed. Try again.')
-    } finally {
-      abortRef.current = null
-      setStage(null)
-      setRepairSlideCount(0)
+      setError('A deck is already generating. Wait for it to finish, then try again.')
+      return
     }
-  }
-
-  /** The spinner's second line — what the pipeline is doing right now, by stage. */
-  function stageMessage(): string {
-    switch (stage) {
-      case 'research':
-        return 'Researching sources'
-      case 'validate':
-        return 'Checking quality'
-      case 'repair':
-        return `Tightening ${repairSlideCount} slide${repairSlideCount === 1 ? '' : 's'}`
-      case 'write':
-      default:
-        return 'Writing slides from your brief'
-    }
+    setPhase('done')
+    void navigate('/')
   }
 
   function answer(patch: Partial<Answers>, { generate = false } = {}) {
@@ -247,7 +163,7 @@ export function CreatePage() {
       setPhase('answering')
       setError(null)
     }
-    if (generate) void startGeneration(next)
+    if (generate) startGeneration(next)
   }
 
   function beginEdit(step: StepKey) {
@@ -305,8 +221,8 @@ export function CreatePage() {
   const activeStep: StepKey | null =
     editing ?? STEP_ORDER.find((step) => answers[step] === null) ?? null
 
-  /** Answers lock while a request is in flight, so the brief can't drift under it. */
-  const canEdit = phase !== 'generating' && phase !== 'done'
+  /** Answers lock once the brief has been handed off. */
+  const canEdit = phase !== 'done'
   const editHandler = (step: StepKey) => (canEdit ? () => beginEdit(step) : undefined)
 
   /**
@@ -349,15 +265,6 @@ export function CreatePage() {
       <div className="flex items-center px-6 py-4">
         <Link
           to="/"
-          onClick={(e) => {
-            // Leaving mid-brief is free — the draft is already saved, and it's
-            // waiting under Drafts. Only an in-flight generation is worth
-            // interrupting for, since cancelling it wastes real work.
-            // Left as a real <Link> so middle-click / open-in-new-tab still work.
-            if (!isGenerating) return
-            e.preventDefault()
-            setConfirmLeave(true)
-          }}
           className="group inline-flex items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-sm font-medium text-app-muted transition-colors hover:bg-app-border/40 hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
         >
           <ArrowLeftIcon className="size-3.5 transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transform-none" />
@@ -659,34 +566,13 @@ export function CreatePage() {
                   </StepBlock>
                 )}
 
-                {phase === 'generating' && (
-                  <div className="create-step-in mt-3 flex items-center gap-3 rounded-app border border-app-border bg-app-surface/50 p-4 sm:p-5">
-                    <Spinner className="size-4 shrink-0 text-app-accent-text" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-app-foreground">
-                        Generating your presentation…
-                      </p>
-                      <p className="mt-0.5 text-xs tabular-nums text-app-muted">
-                        {stageMessage()} · {elapsed}s
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => abortRef.current?.abort()}
-                      className={`shrink-0 ${subtleButton}`}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-
                 {phase === 'failed' && error && (
                   <div className="mt-3 flex flex-col gap-3">
                     <Alert tone="error">{error}</Alert>
                     <Button
                       variant="primary"
                       className="self-start"
-                      onClick={() => void startGeneration(answers)}
+                      onClick={() => startGeneration(answers)}
                     >
                       Try again
                     </Button>
@@ -696,7 +582,12 @@ export function CreatePage() {
                 {/* Reachable after cancelling or editing once the brief is complete. */}
                 {phase === 'answering' && answeredAll && editing === null && (
                   <div className="mt-4 flex justify-end border-t border-app-border pt-4">
-                    <Button variant="primary" onClick={() => void startGeneration(answers)}>
+                    <Button
+                      variant="primary"
+                      disabled={deckRunning}
+                      title={deckRunning ? 'A deck is already generating' : undefined}
+                      onClick={() => startGeneration(answers)}
+                    >
                       Generate presentation
                     </Button>
                   </div>
@@ -725,22 +616,6 @@ export function CreatePage() {
         </div>
       </div>
 
-      {confirmLeave && (
-        <Modal title="Cancel this generation?" onClose={() => setConfirmLeave(false)}>
-          <p className="text-sm text-app-muted">
-            Your presentation is still being generated. Leaving now cancels it — your brief is
-            saved under Drafts, so you can come back and run it again.
-          </p>
-          <div className="mt-6 flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={() => setConfirmLeave(false)}>
-              Keep waiting
-            </Button>
-            <Button variant="danger" onClick={cancelAndLeave}>
-              Cancel and go home
-            </Button>
-          </div>
-        </Modal>
-      )}
     </div>
   )
 }

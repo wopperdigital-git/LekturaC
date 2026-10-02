@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { useParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
+import { clearNew } from '@/jobs/newItems'
 import { useAuthStore } from '@/store/authStore'
 import { appendItem, canAppendItem, eraseItems, replaceItem, type Shape, type Stroke } from '@/engine/overlay'
 import { DEFAULT_SHAPE_SETTINGS, type ShapeSettings } from '@/engine/shapes'
@@ -212,6 +213,10 @@ export function EditorPage() {
   useEffect(() => {
     if (id) void store.loadDeck(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  useEffect(() => {
+    if (id) clearNew(id, 'deck')
   }, [id])
 
   /*

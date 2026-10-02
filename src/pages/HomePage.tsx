@@ -16,6 +16,8 @@ import {
   type DeckView,
 } from '@/components/home/deckFilters'
 import { useExportPptx } from '@/export/useExportPptx'
+import { useJobsStore } from '@/jobs/jobsStore'
+import { clearDeck } from '@/jobs/newItems'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -39,6 +41,12 @@ export function HomePage() {
     void refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const finishedDeckId = useJobsStore((s) => (s.jobs.deck?.status === 'done' ? s.jobs.deck.resultDeckId : null))
+  useEffect(() => {
+    if (finishedDeckId) void refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishedDeckId])
 
   const visibleDecks = useMemo(
     () => selectDecks(decks, query, filters),
@@ -125,6 +133,8 @@ export function HomePage() {
           deck={deckPendingDelete}
           onCancel={() => setDeckPendingDelete(null)}
           onConfirm={async () => {
+            useJobsStore.getState().abortForDeck(deckPendingDelete.id)
+            clearDeck(deckPendingDelete.id)
             await deleteDeck(deckPendingDelete.id)
             setDeckPendingDelete(null)
             await refresh()
