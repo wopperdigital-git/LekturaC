@@ -49,7 +49,20 @@ function currentSlideIds(): string[] {
  *
  * `cards` must already be sorted by `orderIndex`.
  */
-export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string | null }) {
+export function NarrationTab({
+  cards,
+  cardId,
+  openVoice,
+  onVoiceOpened,
+  onVideoStarted,
+}: {
+  cards: Card[]
+  cardId: string | null
+  /** True when the page asks for the voice dialog (the corner panel's "View Video"). */
+  openVoice?: boolean
+  onVoiceOpened?: () => void
+  onVideoStarted?: () => void
+}) {
   const presentationId = usePresentationStore((s) => s.presentationId)
   const theme = usePresentationStore((s) => s.theme)
   const textStyle = usePresentationStore((s) => s.textStyle)
@@ -65,6 +78,12 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
   const [choosing, setChoosing] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!openVoice) return
+    setVoiceOpen(true)
+    onVoiceOpened?.()
+  }, [openVoice, onVoiceOpened])
 
   // Cancelling has to stop the request, not just stop listening to it —
   // otherwise scripts the user walked away from land and overwrite the deck.
@@ -239,6 +258,7 @@ export function NarrationTab({ cards, cardId }: { cards: Card[]; cardId: string 
         <CloneVoiceModal
           deck={{ presentationId, title, cards, theme, textStyle }}
           onClose={() => setVoiceOpen(false)}
+          onVideoStarted={onVideoStarted}
         />
       )}
     </div>

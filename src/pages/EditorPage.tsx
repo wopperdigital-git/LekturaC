@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { clearNew, useNewItems } from '@/jobs/newItems'
 import { useJobsStore } from '@/jobs/jobsStore'
@@ -62,6 +62,7 @@ const RIGHT_PANEL_WIDTH_PX = 280
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const store = usePresentationStore()
   const { cards, undo, redo } = store
 
@@ -108,6 +109,22 @@ export function EditorPage() {
     next.delete('quiz')
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
+
+  const [voiceRequested, setVoiceRequested] = useState(false)
+
+  // `?video=1` (the corner panel's "View Video") opens the Narrate tab and the voice dialog, once.
+  useEffect(() => {
+    if (searchParams.get('video') !== '1') return
+    setToolsOpen(true)
+    setPanelTab('narration')
+    setVoiceRequested(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('video')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  const onVoiceOpened = useCallback(() => setVoiceRequested(false), [])
+  const onVideoStarted = useCallback(() => void navigate('/'), [navigate])
 
   const openQuizList = useCallback(() => {
     setQuizTab('list')
@@ -1140,7 +1157,15 @@ export function EditorPage() {
                 tab={panelTab}
                 // The slide the editor is on: the selected one, else the outline's active
                 // one (the same rule the pen uses). No stepper — the canvas is the viewer.
-                narrationTab={<NarrationTab cards={sortedCards} cardId={selectedCardId ?? activeCardId} />}
+                narrationTab={
+                  <NarrationTab
+                    cards={sortedCards}
+                    cardId={selectedCardId ?? activeCardId}
+                    openVoice={voiceRequested}
+                    onVoiceOpened={onVoiceOpened}
+                    onVideoStarted={onVideoStarted}
+                  />
+                }
               />
               </div>
             </div>

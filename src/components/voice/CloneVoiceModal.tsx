@@ -46,12 +46,13 @@ import {
 import { RecordingError, recordingSupport, startRecording, type Recorder, type Recording } from '@/voice/recorder'
 import { formatDuration } from '@/lib/speakingTime'
 import { supabase } from '@/lib/supabaseClient'
-import { VideoError } from '@/video/errors'
 import { hasWebCodecs } from '@/video/format'
-import type { Progress } from '@/video/pipeline'
 import { loadVideo, supabasePorts, type VideoView } from '@/video/storage'
-import { canCancelVideo, canStartGenerate, generateBlocker, stageRows } from '@/video/ui'
+import { canStartGenerate, generateBlocker } from '@/video/ui'
 import type { VideoDeck } from '@/video/generate'
+import { startVideoJob } from '@/jobs/start'
+import { useJobsStore } from '@/jobs/jobsStore'
+import { clearNew } from '@/jobs/newItems'
 
 /*
   Sets up the narration voice: pick a premade voice or record and clone your own, tune
@@ -61,9 +62,9 @@ import type { VideoDeck } from '@/video/generate'
   Three things are cleaned up when it closes, because closing is done by Escape, the
   backdrop or Cancel and none of them run any code of ours first: the microphone
   (`recorderRef.cancel()`, which stops every track), the preview audio, and every
-  request still in flight (their AbortControllers), and the video run (`genAbortRef`,
-  which cancels narration, drawing and encoding; a save already under way finishes).
-  The cleanup effect below is that.
+  request still in flight (their AbortControllers). The video run is not one of them: it
+  is a background job (`startVideoJob`) that outlives the modal and is cancelled from the
+  corner panel. The cleanup effect below is that.
 */
 
 function describe(err: unknown): string {
@@ -91,7 +92,15 @@ interface VoiceLists {
 const SELECT =
   'h-8 w-full rounded-app-sm border border-app-border bg-app-background px-2 text-sm text-app-foreground outline-none focus:border-app-accent disabled:cursor-not-allowed disabled:opacity-50'
 
-export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: () => void }) {
+export function CloneVoiceModal({
+  deck,
+  onClose,
+  onVideoStarted,
+}: {
+  deck: VideoDeck
+  onClose: () => void
+  onVideoStarted?: () => void
+}) {
   const warning = useVoiceStore((s) => s.warning)
   // False after a failed read of the saved voice: what is on screen is then the defaults, not
   // what is stored, and Save is off (see `canSaveVoice`). Reopening the modal tries the read again.
@@ -106,10 +115,9 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
 
   /* ---- the video ---- */
   const [existing, setExisting] = useState<VideoView | null>(null)
-  const [generating, setGenerating] = useState(false)
-  const [progress, setProgress] = useState<Progress | null>(null)
+  // Any video running (it is a background job): Generate stays off until it finishes.
+  const generating = useJobsStore((s) => s.jobs.video?.status === 'running')
   const [videoError, setVideoError] = useState<string | null>(null)
-  const genAbortRef = useRef<AbortController | null>(null)
   const webCodecs = useMemo(() => hasWebCodecs(), [])
 
   // The deck's saved video, if it has one. Nothing to show is not an error: a project without
@@ -124,6 +132,11 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
       cancelled = true
     }
   }, [deck.presentationId, deck.title])
+
+  // Showing a saved video here is seeing it: the card's video dot goes.
+  useEffect(() => {
+    if (existing && deck.presentationId) clearNew(deck.presentationId, 'video')
+  }, [existing, deck.presentationId])
 
   // Reads the saved voice once, on open. The draft only replaces itself here, before
   // anything can have been changed, because the controls are disabled until `ready`.
@@ -314,7 +327,6 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
       mountedRef.current = false
       recorderRef.current?.cancel()
       cloneAbortRef.current?.abort()
-      genAbortRef.current?.abort()
       const p = previewRef.current
       if (p) {
         p.controller.abort()
@@ -347,40 +359,16 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
     setVideoError(null)
     // The video needs the voice, so the voice is saved first; if that fails, its own error shows.
     if (!(await useVoiceStore.getState().save(draft))) return
-    // Closing during the voice save must not start a run that nothing can abort (cleanup ran with no controller yet).
     if (!mountedRef.current) return
-
-    const controller = new AbortController()
-    genAbortRef.current = controller
-    setGenerating(true)
-    setProgress(null)
-    try {
-      const { generateVideoForDeck } = await import('@/video/generate')
-      const result = await generateVideoForDeck({
-        deck,
-        voice: draft,
-        previous: existing?.record ?? null,
-        signal: controller.signal,
-        onProgress: (p) => {
-          if (mountedRef.current) setProgress(p)
-        },
-      })
-      if (!mountedRef.current) return
-      if (result.status === 'done') setExisting(result.view)
-    } catch (err) {
-      // A cancel is a return to the modal, not a failure to report.
-      if (!mountedRef.current || controller.signal.aborted) return
-      // A VideoError already carries its own words; anything else (a failed chunk import, no 2d context, a
-      // missing OfflineAudioContext) would otherwise leave nothing in the console to find it by.
-      if (!(err instanceof VideoError)) console.error('[video]', err)
-      setVideoError(err instanceof VideoError ? err.message : 'Something went wrong. Try again.')
-    } finally {
-      if (genAbortRef.current === controller) genAbortRef.current = null
-      if (mountedRef.current) {
-        setGenerating(false)
-        setProgress(null)
-      }
+    const { presentationId } = deck
+    if (!presentationId) return
+    const started = startVideoJob({ deck: { ...deck, presentationId }, voice: draft, previous: existing?.record ?? null })
+    if (!started) {
+      setVideoError('A video is already generating. Wait for it to finish, then try again.')
+      return
     }
+    onClose()
+    onVideoStarted?.()
   }
 
   const recording = recState === 'recording'
@@ -630,20 +618,6 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
             <p className="text-xs text-app-muted">No video yet.</p>
           )}
 
-          {generating && (
-            <ol aria-live="polite" className="flex flex-col gap-1 text-xs">
-              {stageRows(progress).map((row) => (
-                <li
-                  key={row.stage}
-                  className={row.state === 'active' ? 'font-medium text-app-foreground' : row.state === 'done' ? 'text-app-muted' : 'text-app-muted opacity-60'}
-                >
-                  {row.state === 'done' ? '✓ ' : row.state === 'active' ? '… ' : '· '}
-                  {row.label}
-                  {row.detail ? ` ${row.detail}` : ''}
-                </li>
-              ))}
-            </ol>
-          )}
           {videoError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{videoError}</p>}
         </section>
 
@@ -662,26 +636,15 @@ export function CloneVoiceModal({ deck, onClose }: { deck: VideoDeck; onClose: (
           <Button variant="ghost" onClick={onClose}>
             Close
           </Button>
-          {generating ? (
-            <Button
-              variant="secondary"
-              onClick={() => genAbortRef.current?.abort()}
-              disabled={!canCancelVideo(progress)}
-              aria-label="Cancel video"
-            >
-              Cancel video
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={() => void generate()}
-              disabled={!canGenerate}
-              aria-label="Generate Presentation"
-            >
-              {saving ? <Spinner /> : null}
-              Generate Presentation
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            onClick={() => void generate()}
+            disabled={!canGenerate}
+            aria-label="Generate Presentation"
+          >
+            {saving ? <Spinner /> : null}
+            Generate Presentation
+          </Button>
         </div>
       </div>
     </Modal>
