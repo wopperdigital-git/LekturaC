@@ -15,6 +15,7 @@ import { ClassFolderPage } from '@/pages/classroom/ClassFolderPage'
 import { StudentsPage } from '@/pages/classroom/StudentsPage'
 import { QuizzesPage } from '@/pages/classroom/QuizzesPage'
 import { MyClassesPage } from '@/pages/classroom/MyClassesPage'
+import { JobTray } from '@/components/jobs/JobTray'
 import { StudentClassPage } from '@/pages/classroom/StudentClassPage'
 
 /** The narration page is gone; its script lives in the editor's Narration tab. Old links land on the deck. */
@@ -122,6 +123,7 @@ function App() {
         <Route path="/classes" element={joinerOnly(<MyClassesPage />)} />
         <Route path="/classes/:classId" element={studentOnly(<StudentClassPage />)} />
       </Routes>
+      <JobTray />
     </BrowserRouter>
   )
 }
