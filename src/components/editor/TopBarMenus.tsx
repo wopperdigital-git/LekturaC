@@ -90,10 +90,12 @@ function MenuItem({
   disabled,
   title,
   onClick,
+  className,
   children,
 }: {
   icon: ReactNode
   disabled?: boolean
+  className?: string
   /** Why it is disabled, as a tooltip. */
   title?: string
   onClick: () => void
@@ -107,7 +109,7 @@ function MenuItem({
       title={title}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`flex h-8 w-full cursor-pointer items-center gap-2 rounded-[5px] px-2 text-left text-sm text-app-foreground transition-colors hover:bg-app-foreground/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ${FOCUS_RING}`}
+      className={`flex h-8 w-full cursor-pointer items-center gap-2 rounded-[5px] px-2 text-left text-sm text-app-foreground transition-colors hover:bg-app-foreground/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent ${FOCUS_RING}${className ? ` ${className}` : ''}`}
     >
       <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center text-app-foreground/80">
         {icon}
@@ -132,6 +134,8 @@ export function ExportMenu({
   onQuiz,
   quizDisabledReason,
   defaultOpen,
+  highlight,
+  highlightQuiz,
 }: {
   onExportPptx: () => void
   exporting: boolean
@@ -143,12 +147,16 @@ export function ExportMenu({
   /** Why a quiz cannot be made right now, or `null` when it can. */
   quizDisabledReason: string | null
   defaultOpen?: boolean
+  /** Rings the trigger: something new is inside. */
+  highlight?: boolean
+  /** Marks the Generate Quiz item: a quiz finished and has not been opened. */
+  highlightQuiz?: boolean
 }) {
   return (
     <Dropdown
       label="Export"
       trigger={exporting ? <Spinner /> : <DownloadIcon />}
-      triggerClassName="flex size-8 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10"
+      triggerClassName={`flex size-8 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10${highlight ? ' ring-2 ring-amber-400 ring-offset-1 ring-offset-app-background' : ''}`}
       defaultOpen={defaultOpen}
     >
       {(close) => (
@@ -179,12 +187,14 @@ export function ExportMenu({
             icon={<QuizIcon />}
             disabled={quizDisabledReason !== null}
             title={quizDisabledReason ?? 'Make a quiz from these slides'}
+            className={highlightQuiz ? 'bg-amber-400/15 font-medium' : undefined}
             onClick={() => {
               close()
               onQuiz()
             }}
           >
             Generate Quiz
+            {highlightQuiz && <span aria-hidden className="ml-auto size-2 rounded-full bg-amber-400" />}
           </MenuItem>
         </>
       )}

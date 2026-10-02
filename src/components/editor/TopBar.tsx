@@ -28,6 +28,8 @@ export function TopBar({
   accountName,
   accountType,
   onProfileSettings,
+  quizStrip,
+  exportHighlight,
 }: {
   title: string
   onTitleChange: (title: string) => void
@@ -49,6 +51,10 @@ export function TopBar({
   /** The account type in words, shown under the name. */
   accountType: string
   onProfileSettings: () => void
+  /** The background quiz job's progress, drawn after the save status. */
+  quizStrip?: ReactNode
+  /** A finished quiz the user has not opened yet: rings the Export trigger. */
+  exportHighlight?: boolean
 }) {
   return (
     // The title's side is the flexible one: it takes what the right group leaves, and wraps.
@@ -111,6 +117,7 @@ export function TopBar({
           {saveStatus === 'saving' && 'Saving…'}
           {saveStatus === 'error' && 'Not saved'}
         </span>
+        {quizStrip}
       </div>
 
       <div className="flex shrink-0 items-center justify-end gap-2">
@@ -148,6 +155,8 @@ export function TopBar({
           scriptDisabledReason={scriptDisabledReason}
           onQuiz={onQuiz}
           quizDisabledReason={quizDisabledReason}
+          highlight={exportHighlight}
+          highlightQuiz={exportHighlight}
         />
         {/* A link, not a button, because it navigates. */}
         <Link

@@ -1,7 +1,9 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
-import { clearNew } from '@/jobs/newItems'
+import { clearNew, useNewItems } from '@/jobs/newItems'
+import { useJobsStore } from '@/jobs/jobsStore'
+import { QuizJobStrip } from '@/components/editor/QuizJobStrip'
 import { useAuthStore } from '@/store/authStore'
 import { appendItem, canAppendItem, eraseItems, replaceItem, type Shape, type Stroke } from '@/engine/overlay'
 import { DEFAULT_SHAPE_SETTINGS, type ShapeSettings } from '@/engine/shapes'
@@ -59,6 +61,7 @@ const RIGHT_PANEL_WIDTH_PX = 280
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const store = usePresentationStore()
   const { cards, undo, redo } = store
 
@@ -92,6 +95,27 @@ export function EditorPage() {
   const [addSlideOpen, setAddSlideOpen] = useState(false)
   // Whether the quiz generation dialog is open. Guarded like `addSlideOpen`.
   const [quizOpen, setQuizOpen] = useState(false)
+  const [quizTab, setQuizTab] = useState<'create' | 'list'>('create')
+  const newKinds = useNewItems(id ?? '')
+  const quizRunning = useJobsStore((s) => s.jobs.quiz?.status === 'running')
+
+  // `?quiz=list` (the corner panel's "View Quiz") opens the quiz dialog on its list tab, once.
+  useEffect(() => {
+    if (searchParams.get('quiz') !== 'list') return
+    setQuizTab('list')
+    setQuizOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('quiz')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  const openQuizList = useCallback(() => {
+    setQuizTab('list')
+    setQuizOpen(true)
+  }, [])
+  const onQuizListOpened = useCallback(() => {
+    if (id) clearNew(id, 'quiz')
+  }, [id])
   // The slide a delete button asked to remove, waiting on the confirmation dialog.
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   // A card added from the picker does not exist in the DOM until the next
@@ -835,7 +859,12 @@ export function EditorPage() {
         exporting={exportStatus === 'working'}
         canExport={cards.length > 0}
         presentHref={`/deck/${id}/present`}
-        onQuiz={() => setQuizOpen(true)}
+        onQuiz={() => {
+          setQuizTab('create')
+          setQuizOpen(true)
+        }}
+        quizStrip={id ? <QuizJobStrip deckId={id} onView={openQuizList} /> : null}
+        exportHighlight={newKinds.includes('quiz')}
         quizDisabledReason={quizDisabledReason}
         onExportScript={exportScript}
         scriptDisabledReason={scriptDisabledReason}
@@ -1149,7 +1178,16 @@ export function EditorPage() {
         <SettingsModal initialTab="profile" onClose={() => setSettingsOpen(false)} onSignOut={() => void signOut()} />
       )}
       {quizOpen && (
-        <QuizModal presentationId={id} title={store.title} cards={sortedCards} onClose={() => setQuizOpen(false)} />
+        <QuizModal
+          presentationId={id}
+          title={store.title}
+          cards={sortedCards}
+          onClose={() => setQuizOpen(false)}
+          initialTab={quizTab}
+          quizIsNew={newKinds.includes('quiz')}
+          quizRunning={quizRunning}
+          onListOpened={onQuizListOpened}
+        />
       )}
     </div>
   )

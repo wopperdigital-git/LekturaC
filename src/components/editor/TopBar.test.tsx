@@ -96,4 +96,15 @@ describe('TopBar', () => {
     expect(tag(render({ zoom: 0.5 }), 'aria-label="Zoom out"')).toContain('disabled=""')
     expect(tag(render({ zoom: 2 }), 'aria-label="Zoom in"')).toContain('disabled=""')
   })
+
+  it('renders the quiz strip between the save status and the zoom', () => {
+    const html = render({ quizStrip: <span data-testid="strip">strip</span> })
+    expect(html.indexOf('data-testid="strip"')).toBeGreaterThan(-1)
+    expect(html.indexOf('data-testid="strip"')).toBeLessThan(html.indexOf('aria-label="Zoom out"'))
+  })
+
+  it('rings the Export trigger when a quiz is new', () => {
+    expect(render({ exportHighlight: true })).toContain('ring-amber-400')
+    expect(render()).not.toContain('ring-amber-400')
+  })
 })

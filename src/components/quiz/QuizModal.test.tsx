@@ -58,6 +58,21 @@ describe('QuizModal', () => {
     expect(html).not.toContain('value="Test 2"')
   })
 
+  it('opens on the list tab when asked, with the new dot', () => {
+    const html = renderToStaticMarkup(
+      <QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} initialTab="list" quizIsNew />,
+    )
+    expect(buttonTag(html, 'Quizzes from this deck')).toContain('aria-selected="true"')
+    expect(html).toContain('aria-label="New quiz"')
+    expect(renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} />)).not.toContain('aria-label="New quiz"')
+  })
+
+  it('disables Generate while a quiz is generating', () => {
+    const html = renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} quizRunning />)
+    expect(html).toContain('A quiz is already generating')
+    expect(buttonTag(html, '>Generate<')).toMatch(DISABLED_ATTR)
+  })
+
   it('keeps both tab panels mounted inside one fixed-height area, so switching tabs never resizes it', () => {
     const html = renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} />)
     const area = html.indexOf('h-[60vh]')

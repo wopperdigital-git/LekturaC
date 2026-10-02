@@ -65,6 +65,20 @@ describe('ExportMenu', () => {
   })
 })
 
+describe('ExportMenu highlights', () => {
+  it('highlights Generate Quiz when a quiz is new', () => {
+    const quiz = buttonWith(exportMenu({ highlightQuiz: true }), 'Generate Quiz')
+    expect(quiz).toContain('bg-amber-400/15')
+    expect(quiz).toContain('bg-amber-400')
+    expect(buttonWith(exportMenu(), 'Generate Quiz')).not.toContain('amber')
+  })
+
+  it('rings the trigger with highlight', () => {
+    expect(exportMenu({ highlight: true, defaultOpen: false })).toContain('ring-amber-400')
+    expect(exportMenu({ defaultOpen: false })).not.toContain('ring-amber-400')
+  })
+})
+
 describe('AccountMenu', () => {
   it('shows the name with the account type under it, then Profile settings', () => {
     const html = renderToStaticMarkup(
