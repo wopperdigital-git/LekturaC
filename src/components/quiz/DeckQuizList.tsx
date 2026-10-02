@@ -7,7 +7,7 @@ import { quizTypeLabel, summaryType } from '@/quiz/types'
  * The quizzes already made from this deck: open one to preview it, copy its
  * code (Teachers), or download its PDF. The whole row opens the preview; its
  * title is the real button (so it is reachable by keyboard), and the code chip
- * and PDF button stop their presses so they never open it as well.
+ * PDF and Delete buttons stop their presses so they never open it as well.
  */
 export function DeckQuizList({
   quizzes,
@@ -17,6 +17,7 @@ export function DeckQuizList({
   busy,
   onPdf,
   onOpen,
+  onDelete,
 }: {
   /** `null` while loading. */
   quizzes: DeckQuizSummary[] | null
@@ -26,6 +27,7 @@ export function DeckQuizList({
   busy: boolean
   onPdf: (quizId: string) => void
   onOpen: (quiz: DeckQuizSummary) => void
+  onDelete: (quiz: DeckQuizSummary) => void
 }) {
   if (loadError) return <p className="text-sm text-app-muted">The quizzes from this deck couldn&apos;t be loaded.</p>
   if (quizzes === null) return <p className="text-sm text-app-muted">Loading…</p>
@@ -70,6 +72,18 @@ export function DeckQuizList({
               }}
             >
               PDF
+            </Button>
+            <Button
+              variant="ghost"
+              className="!px-2 !py-1 text-xs text-red-600 dark:text-red-400"
+              disabled={busy}
+              aria-label={`Delete ${q.title}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(q)
+              }}
+            >
+              Delete
             </Button>
           </div>
         </li>

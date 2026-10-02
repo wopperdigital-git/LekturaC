@@ -104,6 +104,31 @@ export async function loadOwnerQuiz(quizId: string): Promise<OwnerQuiz> {
   return ownerQuizFromRows(quiz, many<OwnerQuestionRow>(questionResult))
 }
 
+/**
+ * How much a delete would take with it: the classes the quiz is posted to and the attempts
+ * submitted there. Both are read under RLS, which lets the owner see them only in classes they
+ * teach — which is every class a quiz can be posted to.
+ */
+export async function quizUsage(quizId: string): Promise<{ classes: number; attempts: number }> {
+  const client = await db()
+  const [classes, attempts] = await Promise.all([
+    client.from('quiz_classes').select('quiz_id', { count: 'exact', head: true }).eq('quiz_id', quizId),
+    client.from('quiz_attempts').select('id', { count: 'exact', head: true }).eq('quiz_id', quizId),
+  ])
+  if (classes.error) throw classes.error
+  if (attempts.error) throw attempts.error
+  return { classes: classes.count ?? 0, attempts: attempts.count ?? 0 }
+}
+
+/**
+ * Deletes a quiz the caller owns. Its questions, class postings and every attempt go with it
+ * (`on delete cascade`, migration 0009), so scores leave the class statistics for good.
+ */
+export async function deleteQuiz(quizId: string): Promise<void> {
+  const client = await db()
+  changed(await client.from('quizzes').delete().eq('id', quizId).select('id'))
+}
+
 export async function postQuiz(quizId: string, classId: string): Promise<void> {
   const client = await db()
   many(await client.from('quiz_classes').insert({ quiz_id: quizId, class_id: classId }).select('quiz_id'))

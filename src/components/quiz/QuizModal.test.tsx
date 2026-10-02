@@ -126,6 +126,7 @@ function list(extra: Partial<ComponentProps<typeof DeckQuizList>> = {}) {
       busy={false}
       onPdf={noop}
       onOpen={noop}
+      onDelete={noop}
       {...extra}
     />,
   )
@@ -140,6 +141,10 @@ describe('DeckQuizList', () => {
     const html = list()
     expect(html).toContain('12 questions · 2 tests · Mixed')
     expect(html).not.toContain('ABCD23XY')
+  })
+
+  it('offers a Delete button named after each quiz', () => {
+    expect(list()).toContain('aria-label="Delete Cells — quiz"')
   })
 
   it('opens a quiz from a real button named after it', () => {

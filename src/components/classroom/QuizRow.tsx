@@ -7,6 +7,7 @@ import { postQuiz, unpostQuiz } from '@/quiz/api'
 import { describeError } from '@/store/presentationStore'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
+import { DeleteQuizConfirm } from '@/components/quiz/DeleteQuizConfirm'
 
 type Copied = 'code' | 'link' | null
 type CopyState = Copied | 'failed-code' | 'failed-link'
@@ -14,7 +15,7 @@ type CopyState = Copied | 'failed-code' | 'failed-link'
 /**
  * Executive Assessment Card.
  * Displays quiz source slides, voucher share codes, assigned classrooms,
- * and allows instant class posting and link copying.
+ * and allows instant class posting, link copying and deleting.
  */
 export function QuizRow({
   quiz,
@@ -32,6 +33,7 @@ export function QuizRow({
   const [selectedClassId, setSelectedClassId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   useEffect(() => {
     if (!copied) return
@@ -264,52 +266,78 @@ export function QuizRow({
           </button>
         </div>
 
-        {/* Right: Custom Select Post to Class */}
-        {available.length > 0 ? (
-          <div className="flex items-center gap-2">
-            <Select
-              value={selectedClassId}
-              onChange={(v) => setSelectedClassId(v)}
-              options={postOptions}
-              placeholder="Post to class…"
-              ariaLabel={`Class to post ${quiz.title} to`}
-              disabled={busy}
-              size="sm"
-              align="right"
-              className="w-48"
-            />
-            <Button
-              type="button"
-              disabled={busy || !selectedClassId || !available.some((c) => c.id === selectedClassId)}
-              onClick={() =>
-                void change(async () => {
-                  await postQuiz(quiz.id, selectedClassId)
-                  setSelectedClassId('')
-                })
-              }
-              loading={busy}
-              variant="primary"
-              className="gap-1.5 px-3 py-1 text-xs font-semibold"
-            >
-              <span>Post</span>
-              <span aria-hidden="true">→</span>
-            </Button>
-          </div>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs text-app-muted">
-            <svg className="size-3.5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="8" cy="8" r="6" />
-              <path d="M5.5 8l2 2 3.5-3.5" />
+        {/* Right: Custom Select Post to Class, then Delete */}
+        <div className="flex flex-wrap items-center gap-2">
+          {available.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedClassId}
+                onChange={(v) => setSelectedClassId(v)}
+                options={postOptions}
+                placeholder="Post to class…"
+                ariaLabel={`Class to post ${quiz.title} to`}
+                disabled={busy}
+                size="sm"
+                align="right"
+                className="w-48"
+              />
+              <Button
+                type="button"
+                disabled={busy || !selectedClassId || !available.some((c) => c.id === selectedClassId)}
+                onClick={() =>
+                  void change(async () => {
+                    await postQuiz(quiz.id, selectedClassId)
+                    setSelectedClassId('')
+                  })
+                }
+                loading={busy}
+                variant="primary"
+                className="gap-1.5 px-3 py-1 text-xs font-semibold"
+              >
+                <span>Post</span>
+                <span aria-hidden="true">→</span>
+              </Button>
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-app-muted">
+              <svg className="size-3.5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="8" cy="8" r="6" />
+                <path d="M5.5 8l2 2 3.5-3.5" />
+              </svg>
+              <span>{allClasses.length === 0 ? 'Create a class to assign this quiz' : 'Posted to every classroom'}</span>
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setConfirmingDelete(true)}
+            aria-label={`Delete ${quiz.title}`}
+            title="Delete quiz"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+          >
+            <svg className="size-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+              <path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4" />
             </svg>
-            <span>{allClasses.length === 0 ? 'Create a class to assign this quiz' : 'Posted to every classroom'}</span>
-          </span>
-        )}
+            <span>Delete</span>
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="border-t border-red-500/20 bg-red-500/5 px-4 py-2 text-xs font-medium text-red-600 dark:text-red-400">
           {error}
         </div>
+      )}
+
+      {confirmingDelete && (
+        <DeleteQuizConfirm
+          quiz={quiz}
+          onCancel={() => setConfirmingDelete(false)}
+          onDeleted={() => {
+            setConfirmingDelete(false)
+            onChanged()
+          }}
+        />
       )}
     </div>
   )

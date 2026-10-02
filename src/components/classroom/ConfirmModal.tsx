@@ -14,6 +14,7 @@ export function ConfirmModal({
   confirmLabel,
   pendingLabel,
   danger = true,
+  confirmDisabled = false,
   onCancel,
   onConfirm,
 }: {
@@ -22,6 +23,8 @@ export function ConfirmModal({
   confirmLabel: string
   pendingLabel: string
   danger?: boolean
+  /** Holds the confirm button back, e.g. while what the warning names is still loading. */
+  confirmDisabled?: boolean
   onCancel: () => void
   onConfirm: () => Promise<void>
 }) {
@@ -51,7 +54,7 @@ export function ConfirmModal({
         <Button variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
-        <Button variant={danger ? 'danger' : 'primary'} onClick={() => void confirm()} loading={pending}>
+        <Button variant={danger ? 'danger' : 'primary'} onClick={() => void confirm()} loading={pending} disabled={confirmDisabled}>
           {pending ? pendingLabel : confirmLabel}
         </Button>
       </div>

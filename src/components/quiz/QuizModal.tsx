@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { SectionList } from './SectionCard'
 import { DeckQuizList } from './DeckQuizList'
 import { QuizPreviewModal } from './QuizPreviewModal'
+import { DeleteQuizConfirm } from './DeleteQuizConfirm'
 import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
 import { hasQuizContent } from '@/ai/quizPrompt'
 import { listQuizzesForDeck, loadOwnerQuiz } from '@/quiz/api'
@@ -65,6 +66,8 @@ export function QuizModal({
   const [pdfBusy, setPdfBusy] = useState<string | null>(null)
   /** The saved quiz open in the preview modal, if any. */
   const [previewing, setPreviewing] = useState<DeckQuizSummary | null>(null)
+  /** The saved quiz waiting on its delete confirmation, if any. */
+  const [deleting, setDeleting] = useState<DeckQuizSummary | null>(null)
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
@@ -186,7 +189,7 @@ export function QuizModal({
   return (
     // While the preview is open, Escape and a backdrop press belong to it alone:
     // both modals listen for Escape on the window, so this one stands down.
-    <Modal title="Generate a quiz" maxWidth="max-w-3xl" onClose={previewing ? () => {} : onClose}>
+    <Modal title="Generate a quiz" maxWidth="max-w-3xl" onClose={previewing || deleting ? () => {} : onClose}>
       <div role="tablist" aria-label="Quiz" onKeyDown={onTabKeyDown} className="mb-5 flex gap-1 border-b border-app-border">
         {TABS.map((t, i) => {
           const selected = tab === t.id
@@ -253,6 +256,7 @@ export function QuizModal({
               setPdfError(null)
               setPreviewing(q)
             }}
+            onDelete={setDeleting}
           />
           {tab === 'list' && !previewing && notices}
         </div>
@@ -266,6 +270,18 @@ export function QuizModal({
           onPdf={(quiz) => void downloadPdf(quiz.id, () => Promise.resolve(quiz))}
           notices={notices}
           onClose={() => setPreviewing(null)}
+        />
+      )}
+
+      {deleting && (
+        <DeleteQuizConfirm
+          quiz={deleting}
+          onCancel={() => setDeleting(null)}
+          onDeleted={() => {
+            const gone = deleting.id
+            setPrevious((rows) => rows?.filter((r) => r.id !== gone) ?? rows)
+            setDeleting(null)
+          }}
         />
       )}
     </Modal>
