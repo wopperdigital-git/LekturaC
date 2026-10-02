@@ -1,4 +1,6 @@
 import type { DeckSummary } from '@/store/presentationStore'
+import { useNewItems } from '@/jobs/newItems'
+import { NewDot } from '@/components/jobs/NewDot'
 import { deckSwatch } from './deckSwatch'
 import { DeckMenu } from './DeckMenu'
 import { relativeUpdatedAt } from './relativeTime'
@@ -20,6 +22,7 @@ export function DeckListRow({
   exporting: boolean
 }) {
   const swatch = deckSwatch(deck.id)
+  const newKinds = useNewItems(deck.id)
   const initial = deck.title.trim().charAt(0).toUpperCase() || '?'
 
   return (
@@ -36,7 +39,10 @@ export function DeckListRow({
           {initial}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium text-app-foreground">{deck.title}</span>
+          <span className="flex items-center">
+            <span className="block truncate font-medium text-app-foreground">{deck.title}</span>
+            <NewDot kinds={newKinds} className="ml-2 inline-block shrink-0 align-middle" />
+          </span>
           <span className="mt-0.5 block text-xs text-app-muted sm:hidden">
             {relativeUpdatedAt(deck.updatedAt)}
           </span>

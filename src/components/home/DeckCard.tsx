@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { DeckSummary } from '@/store/presentationStore'
+import { useNewItems } from '@/jobs/newItems'
+import { NewDot } from '@/components/jobs/NewDot'
 import { deckSwatch } from './deckSwatch'
 import { DeckMenu } from './DeckMenu'
 import { DeckThumbnail } from './DeckThumbnail'
@@ -21,6 +23,7 @@ export function DeckCard({
   exporting: boolean
 }) {
   const swatch = deckSwatch(deck.id)
+  const newKinds = useNewItems(deck.id)
 
   return (
     <div
@@ -65,6 +68,7 @@ export function DeckCard({
           onDark
         />
       </div>
+      <NewDot kinds={newKinds} className="pointer-events-none absolute -top-1 -right-1 z-10" />
     </div>
   )
 }
