@@ -56,8 +56,9 @@ import { hasNarrationScript, narrationScriptText, scriptFileName } from '@/engin
 import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
 import { hasQuizContent } from '@/ai/quizPrompt'
 
+import { RIGHT_PANEL_WIDTH_PX } from '@/components/editor/panelSize'
+
 const SIDEBAR_WIDTH_PX = 160
-const RIGHT_PANEL_WIDTH_PX = 280
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -1161,7 +1162,7 @@ export function EditorPage() {
                   <NarrationTab
                     cards={sortedCards}
                     cardId={selectedCardId ?? activeCardId}
-                    openVoice={voiceRequested}
+                    openVoice={voiceRequested && store.presentationId === id}
                     onVoiceOpened={onVoiceOpened}
                     onVideoStarted={onVideoStarted}
                   />

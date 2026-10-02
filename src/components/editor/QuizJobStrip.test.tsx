@@ -27,5 +27,6 @@ describe('QuizJobStripView', () => {
     const html = render({ ...job, status: 'failed', error: 'busy' })
     expect(html).toContain('Quiz failed')
     expect(html).toContain('Try again')
+    expect(html).toContain('>busy<')
   })
 })

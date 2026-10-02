@@ -107,7 +107,7 @@ export function JobRow({ job, actions, fadeAfterMs }: { job: Job; actions: JobAc
                 className={`flex items-center gap-1.5 ${e.state === 'active' ? 'font-medium text-app-foreground' : e.state === 'done' ? 'text-app-muted' : 'text-app-muted opacity-60'}`}
               >
                 <span aria-hidden className="inline-flex w-3 justify-center">
-                  {e.state === 'done' ? '✓' : e.state === 'active' ? <span className="size-2.5 animate-spin rounded-full border border-current border-t-transparent" /> : '·'}
+                  {e.state === 'done' ? '✓' : e.state === 'active' ? <span className="size-2.5 animate-spin motion-reduce:animate-none rounded-full border border-current border-t-transparent" /> : '·'}
                 </span>
                 {e.label}
               </li>

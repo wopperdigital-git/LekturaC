@@ -374,7 +374,7 @@ export function CloneVoiceModal({
   const recording = recState === 'recording'
   const cloneReady = clip !== null && canClone({ clipSeconds: clip.seconds, name })
   const emotionOff = draft.language !== 'en'
-  const disabledAll = !ready || !configured || generating
+  const disabledAll = !ready || !configured
 
   return (
     <Modal title="Narration voice" onClose={onClose}>
@@ -461,7 +461,7 @@ export function CloneVoiceModal({
               <Button
                 variant="secondary"
                 onClick={() => void startRecord()}
-                disabled={!canRecord({ ready, configured, supported: support.supported, recState, cloning: cloning || generating })}
+                disabled={!canRecord({ ready, configured, supported: support.supported, recState, cloning })}
                 aria-label="Record voice"
               >
                 {recState === 'recorded' ? 'Record again' : 'Record voice'}
@@ -628,6 +628,7 @@ export function CloneVoiceModal({
         )}
         {saveError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{saveError}</p>}
         {blocker && configured && <p className="text-xs text-app-muted">{blocker}</p>}
+        {generating && <p className="text-xs text-app-muted">A video is already generating.</p>}
         <p className="text-xs text-app-muted">
           Generating narrates every slide with Cartesia, which uses credits
           {existing ? ' and replaces the current video' : ''}. Keep this tab in the foreground while the slides are drawn.
@@ -640,6 +641,7 @@ export function CloneVoiceModal({
             variant="primary"
             onClick={() => void generate()}
             disabled={!canGenerate}
+            title={generating ? 'A video is already generating.' : undefined}
             aria-label="Generate Presentation"
           >
             {saving ? <Spinner /> : null}

@@ -69,8 +69,8 @@ export function QuizModal({
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   useEffect(() => {
-    if (tab === 'list') onListOpened?.()
-  }, [tab, onListOpened])
+    if (tab === 'list' && quizIsNew) onListOpened?.()
+  }, [tab, quizIsNew, onListOpened])
 
   useEffect(() => {
     let live = true
@@ -84,7 +84,7 @@ export function QuizModal({
     return () => {
       live = false
     }
-  }, [presentationId])
+  }, [presentationId, quizIsNew])
 
   const noKey = QUIZ_CHAIN.length === 0
   const noContent = !hasQuizContent(cards)
@@ -203,7 +203,7 @@ export function QuizModal({
               aria-selected={selected}
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(t.id)}
-              className={`-mb-px cursor-pointer border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+              className={`relative -mb-px cursor-pointer border-b-2 px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
                 selected
                   ? 'border-app-accent text-app-foreground'
                   : 'border-transparent text-app-muted hover:text-app-foreground'
@@ -211,7 +211,7 @@ export function QuizModal({
             >
               {t.label}
               {t.id === 'list' && quizIsNew && (
-                <span aria-label="New quiz" className="ml-1.5 inline-block size-2 rounded-full bg-amber-400 align-middle" />
+                <span role="img" aria-label="New quiz" className="absolute -top-0.5 -right-1.5 size-2.5 rounded-full bg-amber-400" />
               )}
               {t.id === 'list' && previous && previous.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-app-surface px-1.5 py-0.5 text-xs text-app-muted">

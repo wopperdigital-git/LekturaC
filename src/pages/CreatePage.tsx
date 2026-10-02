@@ -572,6 +572,8 @@ export function CreatePage() {
                     <Button
                       variant="primary"
                       className="self-start"
+                      disabled={deckRunning}
+                      title={deckRunning ? 'A deck is already generating' : undefined}
                       onClick={() => startGeneration(answers)}
                     >
                       Try again
@@ -597,7 +599,7 @@ export function CreatePage() {
                   <div className="mt-3 flex items-center gap-2.5 rounded-app border border-app-border bg-app-surface/50 p-4 sm:p-5">
                     <CheckIcon className="size-4 shrink-0 text-app-accent-text" />
                     <p className="text-sm text-app-foreground">
-                      All set — taking you to your presentation…
+                      Generating in the background — taking you to your dashboard…
                     </p>
                   </div>
                 )}

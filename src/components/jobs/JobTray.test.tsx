@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Job } from '@/jobs/jobsStore'
-import { JobTrayView, viewHref, type JobActions } from './JobTray'
+import { JobTrayView, trayRoute, viewHref, type JobActions } from './JobTray'
 
 const noop = () => {}
 const actions: JobActions = { cancel: noop, retry: noop, dismiss: noop, view: noop, editBrief: noop }
@@ -54,6 +54,19 @@ describe('JobTrayView', () => {
     expect(html).toContain('25%')
     expect(html).not.toContain('Researching sources')
   })
+  it('minimized, a done job still shows its View button, not a percentage', () => {
+    const html = render([{ ...base, kind: 'video', status: 'done', progress: 1, resultDeckId: 'd1' }], true)
+    expect(html).toContain('View Video')
+    expect(html).not.toContain('100%')
+  })
+  it('minimized, a failed job still shows its reason and Try again', () => {
+    const html = render([{ ...base, status: 'failed', error: 'Groq is busy' }], true)
+    expect(html).toContain('Groq is busy')
+    expect(html).toContain('Try again')
+  })
+  it('the tray container lets clicks through to the page', () => {
+    expect(render([base], true)).toContain('pointer-events-none')
+  })
   it('the video row says to keep the tab open while drawing', () => {
     const html = render([{ ...base, kind: 'video', timeline: [{ id: 'rendering', label: 'Drawing slides', state: 'active' }] }])
     expect(html).toContain('Keep this tab open')
@@ -65,5 +78,13 @@ describe('viewHref', () => {
     expect(viewHref({ ...base, status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1')
     expect(viewHref({ ...base, kind: 'quiz', status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1?quiz=list')
     expect(viewHref({ ...base, kind: 'video', status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1?video=1')
+  })
+})
+
+describe('trayRoute', () => {
+  it('pills on the editor, hidden on deck sub-routes, full elsewhere', () => {
+    expect(trayRoute('/deck/d1')).toEqual({ editorDeckId: 'd1', hidden: false })
+    expect(trayRoute('/deck/d1/present')).toEqual({ editorDeckId: null, hidden: true })
+    expect(trayRoute('/')).toEqual({ editorDeckId: null, hidden: false })
   })
 })
