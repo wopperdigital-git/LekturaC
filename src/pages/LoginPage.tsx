@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabaseConfigured } from '@/lib/supabaseClient'
 import { AuthLayout } from '@/components/auth/AuthLayout'
@@ -52,7 +52,9 @@ export function LoginPage() {
   const signUp = useAuthStore((s) => s.signUp)
   const resetPasswordForEmail = useAuthStore((s) => s.resetPasswordForEmail)
 
-  const [mode, setMode] = useState<Mode>('login')
+  // the landing page's "Start free" links here with ?mode=signup
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<Mode>(searchParams.get('mode') === 'signup' ? 'signup' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-dom'
 import { HomePage } from '@/pages/HomePage'
 import { CreatePage } from '@/pages/CreatePage'
@@ -17,6 +17,9 @@ import { QuizzesPage } from '@/pages/classroom/QuizzesPage'
 import { MyClassesPage } from '@/pages/classroom/MyClassesPage'
 import { JobTray } from '@/components/jobs/JobTray'
 import { StudentClassPage } from '@/pages/classroom/StudentClassPage'
+
+/** The landing page pulls in GSAP and Lenis; lazy, so the app bundle never carries them. */
+const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 
 /** The narration page is gone; its script lives in the editor's Narration tab. Old links land on the deck. */
 function NarrateRedirect() {
@@ -60,9 +63,17 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
+          path="/welcome"
+          element={
+            <Suspense fallback={null}>
+              <WelcomePage />
+            </Suspense>
+          }
+        />
+        <Route
           path="/"
           element={
-            <RequireAuth>
+            <RequireAuth signedOutTo="/welcome">
               <HomePage />
             </RequireAuth>
           }
