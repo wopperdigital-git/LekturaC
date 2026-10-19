@@ -63,7 +63,7 @@ describe('clipFileName', () => {
 })
 
 describe('canRecord', () => {
-  const ok = { ready: true, configured: true, supported: true, recState: 'idle' as const, cloning: false }
+  const ok = { ready: true, configured: true, supported: true, recState: 'idle' as const, cloning: false, consented: true, ownVoicesKnown: true }
 
   it('is true when everything is in order, and for a second take after a recording', () => {
     expect(canRecord(ok)).toBe(true)
@@ -85,6 +85,16 @@ describe('canRecord', () => {
     expect(canRecord({ ...ok, ready: false })).toBe(false)
     expect(canRecord({ ...ok, configured: false })).toBe(false)
     expect(canRecord({ ...ok, supported: false })).toBe(false)
+  })
+
+  // The notice before Record says where the recording goes; the box is the agreement to it.
+  it('is false until the person has agreed to their voice being copied', () => {
+    expect(canRecord({ ...ok, consented: false })).toBe(false)
+  })
+
+  // A clone that can't be recorded as this person's would be nobody's: shown to no one, deletable by no one.
+  it("is false while it isn't known whose voices are whose", () => {
+    expect(canRecord({ ...ok, ownVoicesKnown: false })).toBe(false)
   })
 })
 

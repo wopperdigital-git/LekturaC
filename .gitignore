@@ -120,6 +120,9 @@ scratch/
 targets/
 strix_runs/
 *.sql
+# ...but never the database migrations and their hand-run checks.
+!supabase/migrations/*.sql
+!supabase/tests/*.sql
 *.sqlite
 *.db
 sec_test_cookies*.txt

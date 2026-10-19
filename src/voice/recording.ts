@@ -43,7 +43,9 @@ export type RecState = 'idle' | 'starting' | 'recording' | 'recorded'
  *
  * Not while a clone is in flight: finishing a clone clears the recording state, so a take
  * started meanwhile would be left running with its Stop button gone and its microphone
- * held. Not while one is already starting or running either.
+ * held. Not while one is already starting or running either. Not before the person has
+ * ticked the consent box under the notice, and not while it is unknown whose voices are
+ * whose (`clonedVoices.ts`): a clone that can't be recorded as theirs would be nobody's.
  */
 export function canRecord(s: {
   ready: boolean
@@ -51,8 +53,18 @@ export function canRecord(s: {
   supported: boolean
   recState: RecState
   cloning: boolean
+  consented: boolean
+  ownVoicesKnown: boolean
 }): boolean {
-  return s.ready && s.configured && s.supported && !s.cloning && (s.recState === 'idle' || s.recState === 'recorded')
+  return (
+    s.ready &&
+    s.configured &&
+    s.supported &&
+    s.consented &&
+    s.ownVoicesKnown &&
+    !s.cloning &&
+    (s.recState === 'idle' || s.recState === 'recorded')
+  )
 }
 
 /**

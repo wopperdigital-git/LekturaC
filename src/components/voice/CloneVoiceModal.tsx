@@ -7,6 +7,7 @@ import { useVoiceStore } from '@/voice/voiceStore'
 import {
   CartesiaError,
   cloneVoice,
+  deleteVoice,
   isCartesiaConfigured,
   listVoices,
   speak,
@@ -43,6 +44,17 @@ import {
   languageForClone,
   type RecState,
 } from '@/voice/recording'
+import {
+  CLONES_MIGRATION_MESSAGE,
+  CloneNotKeptError,
+  cloneOwnVoice,
+  deleteOwnVoice,
+  keepOwnVoice,
+  ownClones,
+  readOwnVoices,
+  supabaseClonePorts,
+  type OwnVoices,
+} from '@/voice/clonedVoices'
 import { RecordingError, recordingSupport, startRecording, type Recorder, type Recording } from '@/voice/recorder'
 import { formatDuration } from '@/lib/speakingTime'
 import { supabase } from '@/lib/supabaseClient'
@@ -68,10 +80,15 @@ import { VOICE_NOT_SET_UP } from '@/lib/setupCopy'
   request still in flight (their AbortControllers). The video run is not one of them: it
   is a background job (`startVideoJob`) that outlives the modal and is cancelled from the
   corner panel. The cleanup effect below is that.
+
+  Recorded voices have owners (`clonedVoices.ts`): the site's one Cartesia account holds
+  every user's clones, so "Your voices" lists only this user's, a saved pick of anyone
+  else's is dropped, and recording waits for the notice's consent box and for ownership
+  to be known. A clone in flight when the dialog closes still gets recorded as theirs.
 */
 
 function describe(err: unknown): string {
-  return err instanceof CartesiaError || err instanceof RecordingError
+  return err instanceof CartesiaError || err instanceof RecordingError || err instanceof CloneNotKeptError
     ? err.message
     : 'Something went wrong. Try again.'
 }
@@ -91,6 +108,8 @@ interface VoiceLists {
   mine: VoiceSummary[]
   error: string | null
 }
+
+const OWNER_UNKNOWN: OwnVoices = { kind: 'failed' }
 
 const SELECT =
   'h-8 w-full rounded-app-sm border border-app-border bg-app-background px-2 text-sm text-app-foreground outline-none focus:border-app-accent disabled:cursor-not-allowed disabled:opacity-50'
@@ -178,6 +197,50 @@ export function CloneVoiceModal({
     return () => controller.abort()
   }, [configured, draft.language, debouncedQuery, refresh, listKey])
 
+  /* ---- whose voices are whose ---- */
+  const [own, setOwn] = useState<OwnVoices | null>(null)
+  useEffect(() => {
+    if (!supabase || !configured) return
+    let cancelled = false
+    void readOwnVoices(supabaseClonePorts(supabase)).then((result) => {
+      if (!cancelled) setOwn(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [configured])
+
+  // The voice in use: a cloned pick only once it is known to be this user's (a pick saved before
+  // voices had owners can be someone else's), so until then, and for anyone else's, none.
+  const choice = keepOwnVoice(draft, own ?? OWNER_UNKNOWN)
+
+  const [confirmDelete, setConfirmDelete] = useState<VoiceSummary | null>(null)
+  const [deletingVoice, setDeletingVoice] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function removeVoice(voice: VoiceSummary) {
+    if (!supabase) return
+    setDeletingVoice(true)
+    setDeleteError(null)
+    try {
+      await deleteOwnVoice(voice.id, { remove: (id) => deleteVoice(id), ports: supabaseClonePorts(supabase) })
+      if (!mountedRef.current) return
+      setOwn((o) => (o?.kind === 'known' ? { kind: 'known', ids: new Set([...o.ids].filter((id) => id !== voice.id)) } : o))
+      setDraft((d) => (d.voiceId === voice.id ? { ...d, voiceId: null, voiceName: null, voiceSource: null } : d))
+      // A saved pick of it would narrate the next video with a voice that no longer exists.
+      const saved = useVoiceStore.getState().settings
+      if (saved.voiceId === voice.id) {
+        void useVoiceStore.getState().save({ ...saved, voiceId: null, voiceName: null, voiceSource: null })
+      }
+      setConfirmDelete(null)
+      setRefresh((n) => n + 1)
+    } catch (err) {
+      if (mountedRef.current) setDeleteError(describe(err))
+    } finally {
+      if (mountedRef.current) setDeletingVoice(false)
+    }
+  }
+
   function pick(voice: VoiceSummary, source: VoiceSource) {
     setDraft((d) => ({ ...d, voiceId: voice.id, voiceName: voice.name, voiceSource: source }))
   }
@@ -194,6 +257,7 @@ export function CloneVoiceModal({
   const [name, setName] = useState('')
   const [cloning, setCloning] = useState(false)
   const [cloneError, setCloneError] = useState<string | null>(null)
+  const [consented, setConsented] = useState(false)
   const recorderRef = useRef<Recorder | null>(null)
   const clipUrlRef = useRef<string | null>(null)
   const cloneAbortRef = useRef<AbortController | null>(null)
@@ -210,7 +274,7 @@ export function CloneVoiceModal({
   }
 
   async function startRecord() {
-    if (!support.supported || !canRecord({ ready, configured, supported: true, recState, cloning })) return
+    if (!support.supported || !canRecord({ ...recordGate, supported: true })) return
     const startedIn = draft.language
     discardClip()
     setRecError(null)
@@ -243,19 +307,28 @@ export function CloneVoiceModal({
   }
 
   async function clone() {
-    if (!clip || !canClone({ clipSeconds: clip.seconds, name })) return
+    const client = supabase
+    if (!clip || !client || !consented || !canClone({ clipSeconds: clip.seconds, name })) return
     const controller = new AbortController()
     cloneAbortRef.current = controller
     setCloning(true)
     setCloneError(null)
     try {
-      const voice = await cloneVoice({
-        clip: clip.blob,
-        name,
-        language: languageForClone(clipLanguage, draft.language),
-        signal: controller.signal,
+      // Once Cartesia has made the voice it is recorded as this user's even if the dialog closes:
+      // the signal only cancels the clone request itself.
+      const voice = await cloneOwnVoice({
+        clone: () =>
+          cloneVoice({
+            clip: clip.blob,
+            name,
+            language: languageForClone(clipLanguage, draft.language),
+            signal: controller.signal,
+          }),
+        ports: supabaseClonePorts(client),
+        discard: (id) => deleteVoice(id),
       })
       if (controller.signal.aborted) return
+      setOwn((o) => (o?.kind === 'known' ? { kind: 'known', ids: new Set([...o.ids, voice.id]) } : o))
       pick(voice, 'cloned')
       setRefresh((n) => n + 1)
       discardClip()
@@ -287,7 +360,7 @@ export function CloneVoiceModal({
   }
 
   async function playPreview() {
-    if (!draft.voiceId) return
+    if (!choice.voiceId) return
     stopPreview()
     const controller = new AbortController()
     const state = { controller, audio: null as HTMLAudioElement | null, url: null as string | null }
@@ -296,7 +369,7 @@ export function CloneVoiceModal({
     setPreviewError(null)
     try {
       const blob = await speak({
-        voiceId: draft.voiceId,
+        voiceId: choice.voiceId,
         transcript: previewTranscript(draft.language),
         language: draft.language,
         speed: draft.speed,
@@ -342,7 +415,7 @@ export function CloneVoiceModal({
     webCodecs,
     hasDeck: deck.presentationId !== null,
     slideCount: deck.cards.length,
-    voiceChosen: draft.voiceId !== null,
+    voiceChosen: choice.voiceId !== null,
   })
   const canGenerate = canStartGenerate({
     configured,
@@ -357,13 +430,15 @@ export function CloneVoiceModal({
 
   async function generate() {
     if (!canGenerate) return
+    const voice = choice
+    if (voice.voiceId === null) return
     setVideoError(null)
     // The video needs the voice, so the voice is saved first; if that fails, its own error shows.
-    if (!(await useVoiceStore.getState().save(draft))) return
+    if (!(await useVoiceStore.getState().save(voice))) return
     if (!mountedRef.current) return
     const { presentationId } = deck
     if (!presentationId) return
-    const started = startVideoJob({ deck: { ...deck, presentationId }, voice: draft, previous: existing?.record ?? null })
+    const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null })
     if (!started) {
       setVideoError('A video is already generating. Wait for it to finish, then try again.')
       return
@@ -373,7 +448,11 @@ export function CloneVoiceModal({
   }
 
   const recording = recState === 'recording'
-  const cloneReady = clip !== null && canClone({ clipSeconds: clip.seconds, name })
+  const recordGate = { ready, configured, recState, cloning, consented, ownVoicesKnown: own?.kind === 'known' }
+  const cloneReady = clip !== null && consented && canClone({ clipSeconds: clip.seconds, name })
+  const mineShown = own && lists ? ownClones(lists.mine, own) : []
+  // Only a recorded voice of this user's can be deleted, and only from the list it is in.
+  const selectedOwn = mineShown.find((v) => v.id === choice.voiceId) ?? null
   const emotionOff = draft.language !== 'en'
   const disabledAll = !ready || !configured
 
@@ -425,17 +504,53 @@ export function CloneVoiceModal({
             {lists?.error && !loadingVoices && <p className="p-3 text-xs text-red-600 dark:text-red-400">{lists.error}</p>}
             {lists && !loadingVoices && !lists.error && (
               <>
-                <VoiceGroup title="Your voices" voices={lists.mine} selectedId={draft.voiceId} onPick={(v) => pick(v, 'cloned')} />
-                <VoiceGroup title="Premade voices" voices={lists.premade} selectedId={draft.voiceId} onPick={(v) => pick(v, 'premade')} />
-                {lists.mine.length === 0 && lists.premade.length === 0 && (
+                <VoiceGroup title="Your voices" voices={mineShown} selectedId={choice.voiceId} onPick={(v) => pick(v, 'cloned')} />
+                <VoiceGroup title="Premade voices" voices={lists.premade} selectedId={choice.voiceId} onPick={(v) => pick(v, 'premade')} />
+                {mineShown.length === 0 && lists.premade.length === 0 && (
                   <p className="p-3 text-xs text-app-muted">No voices match.</p>
                 )}
               </>
             )}
           </div>
-          <p className="text-xs text-app-muted">
-            {draft.voiceName ? `Selected: ${draft.voiceName}` : 'No voice selected yet.'}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-xs text-app-muted">
+              {choice.voiceName ? `Selected: ${choice.voiceName}` : 'No voice selected yet.'}
+            </p>
+            {selectedOwn && !confirmDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null)
+                  setConfirmDelete(selectedOwn)
+                }}
+                disabled={disabledAll}
+                className="cursor-pointer text-xs font-medium text-red-600 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+              >
+                Delete this voice
+              </button>
+            )}
+          </div>
+          {confirmDelete && (
+            <div
+              role="alertdialog"
+              aria-labelledby="voice-delete-title"
+              className="flex flex-col gap-2 rounded-app-sm border border-app-border bg-app-surface p-3"
+            >
+              <p id="voice-delete-title" className="text-sm text-app-foreground">
+                Delete <span className="font-medium">“{confirmDelete.name}”</span>? It&apos;s removed from Cartesia for
+                good. Videos you already made keep their sound.
+              </p>
+              {deleteError && <p className="text-xs text-red-600 dark:text-red-400">{deleteError}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setConfirmDelete(null)} disabled={deletingVoice}>
+                  Keep
+                </Button>
+                <Button variant="danger" onClick={() => void removeVoice(confirmDelete)} loading={deletingVoice}>
+                  {deleteError ? 'Try again' : 'Delete voice'}
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ---- Record your voice ---- */}
@@ -443,6 +558,33 @@ export function CloneVoiceModal({
           <h3 id="voice-record" className="text-sm font-semibold text-app-foreground">
             Record your voice
           </h3>
+          <div className="rounded-app-sm border border-app-border bg-app-surface p-3 text-xs text-app-muted">
+            <p className="font-semibold text-app-foreground">Before you record</p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-4">
+              <li>Your recording goes to Cartesia, the voice service this site uses, to make a copy of your voice.</li>
+              <li>
+                The copy is kept in this site&apos;s Cartesia account until you delete it here. Deleting your LekturaC
+                account deletes it too.
+              </li>
+              <li>Only you can pick it in LekturaC. Whoever runs this site can also see it in their Cartesia account.</li>
+            </ul>
+            <label className="mt-2.5 flex cursor-pointer items-start gap-2 text-app-foreground">
+              <input
+                type="checkbox"
+                checked={consented}
+                disabled={disabledAll || recording || cloning}
+                onChange={(e) => setConsented(e.target.checked)}
+                className="mt-0.5 size-3.5 shrink-0 cursor-pointer accent-app-accent"
+              />
+              This is my own voice, and I agree to it being copied.
+            </label>
+          </div>
+          {own?.kind === 'missing' && <p className="text-xs text-app-highlight-text">{CLONES_MIGRATION_MESSAGE}</p>}
+          {own?.kind === 'failed' && (
+            <p className="text-xs text-app-highlight-text">
+              Couldn&apos;t check which voices are yours, so recording is off. Close this and open it again to retry.
+            </p>
+          )}
           <p className="text-xs text-app-muted">
             Read this aloud in a quiet room, at your normal pace ({MIN_CLIP_SECONDS} to {MAX_CLIP_SECONDS} seconds):
           </p>
@@ -459,7 +601,7 @@ export function CloneVoiceModal({
               <Button
                 variant="secondary"
                 onClick={() => void startRecord()}
-                disabled={!canRecord({ ready, configured, supported: support.supported, recState, cloning })}
+                disabled={!canRecord({ ...recordGate, supported: support.supported })}
                 aria-label="Record voice"
               >
                 {recState === 'recorded' ? 'Record again' : 'Record voice'}
@@ -572,7 +714,7 @@ export function CloneVoiceModal({
               <Button
                 variant="secondary"
                 onClick={() => void playPreview()}
-                disabled={disabledAll || draft.voiceId === null}
+                disabled={disabledAll || choice.voiceId === null}
                 aria-label="Preview voice"
               >
                 Preview voice
@@ -583,7 +725,7 @@ export function CloneVoiceModal({
                 Stop
               </Button>
             )}
-            {draft.voiceId === null && <span className="text-xs text-app-muted">Choose a voice first.</span>}
+            {choice.voiceId === null && <span className="text-xs text-app-muted">Choose a voice first.</span>}
           </div>
           {previewError && <p className="text-xs text-red-600 dark:text-red-400">{previewError}</p>}
         </section>

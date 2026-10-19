@@ -168,6 +168,16 @@ export async function cloneVoice(o: {
   return voice
 }
 
+/** Deletes a voice from the account. One that is already gone counts as deleted. */
+export async function deleteVoice(id: string, signal?: AbortSignal): Promise<void> {
+  try {
+    await send(`/voices/${encodeURIComponent(id)}`, { method: 'DELETE', headers: headers() }, signal)
+  } catch (err) {
+    if (err instanceof CartesiaError && err.status === 404) return
+    throw err
+  }
+}
+
 export interface SpeakOptions {
   voiceId: string
   transcript: string

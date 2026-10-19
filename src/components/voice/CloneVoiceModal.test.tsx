@@ -72,6 +72,20 @@ describe('CloneVoiceModal', () => {
     expect(html).toContain('role="dialog"')
   })
 
+  // The recording leaves the browser for a shared account: said before Record, not after.
+  it('says where the recording goes before Record, and asks for consent first', () => {
+    const html = render()
+    const at = (needle: string) => html.indexOf(needle)
+    expect(at('Before you record')).toBeGreaterThan(-1)
+    expect(html).toContain('Your recording goes to Cartesia, the voice service this site uses, to make a copy of your voice.')
+    expect(html).toContain('Deleting your LekturaC account deletes it too.')
+    expect(html).toContain('Only you can pick it in LekturaC.')
+    expect(at('Before you record')).toBeLessThan(at('aria-label="Record voice"'))
+    expect(html).toMatch(/<label[^>]*>\s*<input[^>]*type="checkbox"[^>]*>\s*This is my own voice, and I agree to it being copied\.<\/label>/)
+    expect(html.match(/<input[^>]*type="checkbox"[^>]*>/)?.[0]).not.toContain('checked=""')
+    expect(tagLabelled(html, 'Record voice')).toContain('disabled=""')
+  })
+
   it('shows the passage to read in the chosen language', () => {
     expect(render()).toContain(READING_SCRIPTS.en)
     useVoiceStore.setState({ settings: { ...DEFAULT_SETTINGS, language: 'fr' } })

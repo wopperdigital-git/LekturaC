@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CartesiaError,
   cloneVoice,
+  deleteVoice,
   isCartesiaConfigured,
   listVoices,
   parseVoices,
@@ -145,6 +146,28 @@ describe('speak', () => {
     expect(url).toBe('https://api.cartesia.ai/tts/bytes')
     expect(init.headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(init.body as string).voice).toBe('v1')
+  })
+})
+
+describe('deleteVoice', () => {
+  it('deletes the voice by id with the key and version headers', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await deleteVoice('v/1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://api.cartesia.ai/voices/v%2F1')
+    expect(init.method).toBe('DELETE')
+    expect(init.headers.Authorization).toBe('Bearer sk_car_test')
+  })
+
+  // Deleted already (in Cartesia's dashboard, or by an earlier try): what was asked for is true.
+  it('treats a voice that is already gone as deleted', async () => {
+    fetchMock.mockResolvedValue(json({ message: 'not found' }, 404))
+    await expect(deleteVoice('v1')).resolves.toBeUndefined()
+  })
+
+  it('reports any other failure', async () => {
+    fetchMock.mockResolvedValue(json({}, 503))
+    await expect(deleteVoice('v1')).rejects.toMatchObject({ kind: 'capacity' })
   })
 })
 

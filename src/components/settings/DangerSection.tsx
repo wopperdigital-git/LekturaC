@@ -44,7 +44,7 @@ export function DangerSection() {
               Delete Account
             </h4>
             <p className="mt-0.5 text-xs text-app-muted">
-              Permanently delete your account along with all presentations, saved drafts, and associated classroom data. This action is irreversible.
+              Permanently delete your account along with all presentations, saved drafts, recorded voices, and associated classroom data. This action is irreversible.
             </p>
           </div>
         </div>

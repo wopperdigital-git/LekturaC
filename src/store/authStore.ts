@@ -128,6 +128,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async deleteAccount() {
     if (!supabase) return { error: 'Supabase is not configured.' }
+    // The recorded voices live in the site's Cartesia account, which the RPC can't reach,
+    // and the voice dialog promised they go with the account: they go first, and a failure
+    // stops here with nothing deleted. Imported on demand: nothing else here needs them.
+    const client = supabase
+    const { deleteAllOwnVoices, readOwnVoices, supabaseClonePorts } = await import('@/voice/clonedVoices')
+    const { deleteVoice, isCartesiaConfigured } = await import('@/voice/cartesia')
+    const voices = await deleteAllOwnVoices({
+      own: () => readOwnVoices(supabaseClonePorts(client)),
+      remove: (id) => deleteVoice(id),
+      configured: isCartesiaConfigured(),
+    })
+    if (voices.error) return { error: voices.error }
     // Server-side by necessity: the anon key cannot delete an auth.users row.
     // The RPC takes no argument and reads auth.uid(), so it can only ever
     // delete the caller's own account.
