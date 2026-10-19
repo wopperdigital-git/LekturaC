@@ -1,5 +1,5 @@
 // src/components/jobs/JobRow.tsx
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import type { Job } from '@/jobs/jobsStore'
 import type { JobActions } from './JobTray'
 
@@ -23,14 +23,11 @@ function Bar({ value, label }: { value: number; label: string }) {
   )
 }
 
-export function JobRow({ job, actions, fadeAfterMs }: { job: Job; actions: JobActions; fadeAfterMs?: number }) {
+export function JobRow({ job, actions }: { job: Job; actions: JobActions }) {
   const [confirming, setConfirming] = useState(false)
   if (job.status === 'done') {
     return (
-      <div
-        className={`flex items-center gap-2 rounded-app border border-app-border bg-app-background p-2 shadow-app ${fadeAfterMs ? 'job-fade-out' : ''}`}
-        style={fadeAfterMs ? ({ '--job-fade-delay': `${fadeAfterMs}ms` } as CSSProperties) : undefined}
-      >
+      <div className="flex items-center gap-2 rounded-app border border-app-border bg-app-background p-2 shadow-app">
         <Check />
         <button
           type="button"

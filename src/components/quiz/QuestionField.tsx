@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/Input'
 import type { TakeQuestion } from '@/quiz/rows'
 import type { QuizConfig } from '@/quiz/types'
+import { nextRadioIndex, radioTabStop } from '@/lib/radioKeys'
 
 /*
   One question on the student's quiz page, in its type's control: lettered choices,
@@ -40,11 +41,7 @@ export function QuestionField({
       <span className="font-mono text-xs font-bold text-app-muted">
         Question {index + 1 < 10 ? `0${index + 1}` : index + 1}
       </span>
-      {question.slideNumber > 0 && (
-        <span className="rounded-full border border-app-border bg-app-surface/80 px-2 py-0.2 font-mono text-[10px] text-app-muted">
-          Slide {question.slideNumber}
-        </span>
-      )}
+      {/* No slide number: students can't open the deck, so it would point at nothing. */}
       <p className="w-full text-base font-medium text-app-foreground leading-snug whitespace-pre-wrap">
         {question.prompt}
       </p>
@@ -123,11 +120,14 @@ export function QuestionField({
               { value: true, label: 'TRUE', spoken: 'True' },
               { value: false, label: 'FALSE', spoken: 'False' },
             ]
+      // A radio group's keyboard: one Tab stop, arrows move and choose (`lib/radioKeys.ts`).
+      const selectedIndex = options.findIndex((o) => o.value === answer)
+      const tabStop = radioTabStop(selectedIndex, options.length)
       return (
         <div role="radiogroup" aria-labelledby={promptId} className="flex flex-col gap-2">
           {prompt}
           <div className="mt-1 flex gap-2.5">
-            {options.map((o) => {
+            {options.map((o, oi) => {
               const selected = answer === o.value
               return (
                 <button
@@ -136,7 +136,16 @@ export function QuestionField({
                   role="radio"
                   aria-checked={selected}
                   aria-label={o.spoken}
+                  tabIndex={oi === tabStop ? 0 : -1}
                   onClick={() => onAnswer(o.value)}
+                  onKeyDown={(e) => {
+                    const next = nextRadioIndex(selectedIndex, options.length, e.key)
+                    if (next === null) return
+                    e.preventDefault()
+                    onAnswer(options[next].value)
+                    const target = e.currentTarget.parentElement?.children[next]
+                    if (target instanceof HTMLElement) target.focus()
+                  }}
                   className={`min-w-24 cursor-pointer rounded-app-sm border px-5 py-2.5 text-sm font-semibold transition-all duration-150 ${FOCUS_RING} ${
                     selected
                       ? 'border-app-accent bg-app-accent text-app-accent-foreground shadow-sm'

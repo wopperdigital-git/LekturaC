@@ -7,10 +7,13 @@ import { Button } from '@/components/ui/Button'
 
 export function DeleteDeckModal({
   deck,
+  isTeacher,
   onCancel,
   onConfirm,
 }: {
   deck: DeckSummary
+  /** Only a Teacher has a Quizzes page, where a deleted deck's quizzes can still be found. */
+  isTeacher: boolean
   onCancel: () => void
   onConfirm: () => Promise<void>
 }) {
@@ -42,8 +45,14 @@ export function DeleteDeckModal({
   return (
     <Modal title="Delete presentation" onClose={deleting ? () => {} : onCancel}>
       <p className="text-sm text-app-muted">
-        Delete <span className="font-medium text-app-foreground">"{deck.title}"</span>? This can't
-        be undone.
+        Delete <span className="font-medium text-app-foreground">"{deck.title}"</span>? Its slides,
+        scripts and narrated video are deleted, and this can't be undone.
+      </p>
+      {/* Quizzes outlive the deck (`presentation_id` is set to null), so say where they are. */}
+      <p className="mt-2 text-sm text-app-muted">
+        {isTeacher
+          ? "Quizzes made from it stay on your Quizzes page, with students' scores."
+          : "Quizzes made from it are kept, but you won't be able to open them after this."}
       </p>
       {running.length > 0 && (
         <p className="mt-2 text-sm text-app-muted">

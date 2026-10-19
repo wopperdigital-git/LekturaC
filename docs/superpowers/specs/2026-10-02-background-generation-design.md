@@ -139,7 +139,7 @@ one row per job (at most three), above page content (`z` below modals).
 - **Done**: the spinner becomes a check that draws in (~400 ms), then the row collapses and morphs
   into one button: **View Slide** (deck), **View Quiz** (quiz), **View Video** (video).
   - The deck and quiz buttons stay until clicked or dismissed.
-  - The video button fades out after ~6 s (the card's dot still marks it).
+  - The video button fades out after ~6 s (the card's dot still marks it). *Changed 2026-10-19: it stays until viewed or dismissed; a fade after seconds was missed during a minutes-long render.*
 - **Failed**: red row with the reason and actions; stays until dismissed (×).
   - Deck: **Edit brief** (`/new?draft=<id>`; the draft survives because it is deleted only on
     success) and **Try again**.

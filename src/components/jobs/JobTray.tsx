@@ -29,9 +29,6 @@ export function viewHref(job: Job): string {
   return `/deck/${id}`
 }
 
-/** How long a finished video's View button stays before it fades (the card's dot still marks it). */
-const VIDEO_FADE_MS = 6000
-
 /** Where the tray sits: the open deck's editor (pills, clear of the tools panel), a hidden deck sub-route (presenter), or anywhere else (full panel). */
 export function trayRoute(pathname: string): { editorDeckId: string | null; hidden: boolean } {
   const editor = matchPath('/deck/:id', pathname)
@@ -84,7 +81,7 @@ export function JobTrayView({
           </button>
         ) : (
           <div key={job.id} className="pointer-events-auto w-full">
-            <JobRow job={job} actions={actions} fadeAfterMs={job.kind === 'video' && job.status === 'done' ? VIDEO_FADE_MS : undefined} />
+            <JobRow job={job} actions={actions} />
           </div>
         ),
       )}
@@ -107,14 +104,8 @@ export function JobTray() {
     .filter((j): j is Job => j !== null)
     .filter((j) => !((j.kind === 'quiz' || j.kind === 'narration') && editorDeckId !== null && j.deckId === editorDeckId))
 
-  const doneVideoId = jobsByKind.video?.status === 'done' ? jobsByKind.video.id : null
-  useEffect(() => {
-    if (!doneVideoId) return
-    const t = setTimeout(() => {
-      if (useJobsStore.getState().jobs.video?.id === doneVideoId) useJobsStore.getState().dismiss('video')
-    }, VIDEO_FADE_MS + 600)
-    return () => clearTimeout(t)
-  }, [doneVideoId])
+  // A done video stays until it is viewed or dismissed, like the others: it used to fade after
+  // 6 s, which anyone who looked away during a minutes-long render missed.
 
   if (!user || hidden) return null
   const actions: JobActions = {

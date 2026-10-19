@@ -530,7 +530,8 @@ export function CreatePage() {
                   <StepBlock
                     active={activeStep === 'guidance'}
                     question="Anything to focus on — or steer clear of?"
-                    hint="Optional. A hard constraint that overrides the agent's general content rules."
+                    // The second example matches `isUserMaterialOnly`, which skips web research: it is the way to say so.
+                    hint="Optional. The AI follows this ahead of its own choices. For example: “Focus on the water cycle” or “Only use the facts I paste here.”"
                     questionId={qid('guidance')}
                   >
                     {activeStep === 'guidance' ? (

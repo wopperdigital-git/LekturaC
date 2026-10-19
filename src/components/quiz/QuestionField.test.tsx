@@ -51,3 +51,36 @@ describe('QuestionField (multiple choice)', () => {
     for (const radio of radios) expect(radio).toContain('sr-only')
   })
 })
+
+describe('QuestionField (what a student sees)', () => {
+  // Students can't open the deck, so "Slide 2" would point them at something they can't see.
+  it('shows no slide number', () => {
+    expect(render()).not.toContain('Slide 2')
+    expect(render()).toContain('Which planet is largest?')
+  })
+})
+
+describe('QuestionField (true or false)', () => {
+  const tf: TakeQuestion = { ...question, type: 'true_false', choices: [] }
+  const renderTf = (answer: boolean | undefined) =>
+    renderToStaticMarkup(
+      <QuestionField
+        index={0}
+        question={tf}
+        config={{ type: 'true_false', notation: 'word' }}
+        answer={answer}
+        onAnswer={() => {}}
+      />,
+    )
+  const radios = (html: string) => html.match(/<button[^>]*role="radio"[^>]*>/g) ?? []
+
+  // One Tab stop for the group: the chosen answer, or True before one is chosen.
+  it('can be reached with Tab once, on the chosen answer', () => {
+    const [t, f] = radios(renderTf(undefined))
+    expect(t).toContain('tabindex="0"')
+    expect(f).toContain('tabindex="-1"')
+    const [t2, f2] = radios(renderTf(false))
+    expect(t2).toContain('tabindex="-1"')
+    expect(f2).toContain('tabindex="0"')
+  })
+})

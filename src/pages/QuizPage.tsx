@@ -43,14 +43,11 @@ export function QuizPage() {
 function QuizPageInner({ code }: { code: string }) {
   const navigate = useNavigate()
   const { state, reload } = useAsync(() => getQuizForTaking(code), code)
-  const [query, setQuery] = useState('')
 
   return (
     <DashboardShell
       title={state.status === 'ready' ? state.data.title : 'Quiz'}
       subtitle={state.status === 'ready' ? state.data.deckTitle : undefined}
-      query={query}
-      onQueryChange={setQuery}
     >
       {/* Breadcrumb Navigation */}
       <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-xs text-app-muted">
@@ -424,7 +421,6 @@ function ResultPanel({ quiz, result, answers }: { quiz: TakeQuiz; result: Attemp
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 text-xs text-app-muted">
                           <span className="font-mono font-medium">Question {i + 1}</span>
-                          {q.slideNumber > 0 && <span>· Slide {q.slideNumber}</span>}
                         </div>
                         <p className="mt-1 text-sm text-app-foreground leading-snug">{q.prompt}</p>
                         <p className="mt-1 text-sm text-app-muted">

@@ -125,6 +125,11 @@ describe('parseEvidencePack', () => {
 })
 
 describe('isUserMaterialOnly', () => {
+  // /new's guidance hint offers this as its example of using only your own material.
+  it("treats the /new hint's example as the user's material only", () => {
+    expect(isUserMaterialOnly('Only use the facts I paste here.')).toBe(true)
+  })
+
   it('is true for "Only use the facts I gave you"', () => {
     expect(isUserMaterialOnly('Only use the facts I gave you')).toBe(true)
   })

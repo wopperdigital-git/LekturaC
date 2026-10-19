@@ -20,8 +20,9 @@ export function DashboardShell({
 }: {
   title: ReactNode
   subtitle?: ReactNode
-  query: string
-  onQueryChange: (value: string) => void
+  /** Omit both on a page with nothing to filter: the rail then shows no search field. */
+  query?: string
+  onQueryChange?: (value: string) => void
   children: ReactNode
 }) {
   const user = useAuthStore((s) => s.user)

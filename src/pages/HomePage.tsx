@@ -17,9 +17,11 @@ import {
 } from '@/components/home/deckFilters'
 import { useExportPptx } from '@/export/useExportPptx'
 import { useJobsStore } from '@/jobs/jobsStore'
+import { useAuthStore } from '@/store/authStore'
 import { clearDeck } from '@/jobs/newItems'
 
 export function HomePage() {
+  const isTeacher = useAuthStore((st) => st.profile?.role === 'teacher')
   const navigate = useNavigate()
   const { listDecks, deleteDeck } = usePresentationStore()
   const [decks, setDecks] = useState<DeckSummary[]>([])
@@ -131,6 +133,7 @@ export function HomePage() {
       {deckPendingDelete && (
         <DeleteDeckModal
           deck={deckPendingDelete}
+          isTeacher={isTeacher}
           onCancel={() => setDeckPendingDelete(null)}
           onConfirm={async () => {
             useJobsStore.getState().abortForDeck(deckPendingDelete.id)

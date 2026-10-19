@@ -186,8 +186,9 @@ export function AppSidebar({
   open,
   onClose,
 }: {
-  query: string
-  onQueryChange: (value: string) => void
+  /** The page's search; absent on a page with nothing to filter, which then shows no field. */
+  query?: string
+  onQueryChange?: (value: string) => void
   email?: string
   onSignOut: () => void
   open: boolean
@@ -214,9 +215,13 @@ export function AppSidebar({
     onClose()
   }
 
+  const searchable = onQueryChange !== undefined
+
   // the ⌘F / Ctrl+F chip in the field has to actually do something, so take over
-  // the browser's find shortcut while the dashboard is open
+  // the browser's find shortcut while the dashboard is open (only where there is a
+  // field: elsewhere the browser's own find is the useful one)
   useEffect(() => {
+    if (!searchable) return
     function onKeyDown(e: KeyboardEvent) {
       if (e.key.toLowerCase() === 'f' && (isMac ? e.metaKey : e.ctrlKey)) {
         e.preventDefault()
@@ -226,7 +231,7 @@ export function AppSidebar({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [searchable])
 
   return (
     <>
@@ -268,37 +273,39 @@ export function AppSidebar({
           </button>
         </div>
 
-        <div className="px-4">
-          <div className="relative">
-            <svg
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-app-muted"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <circle cx="7.2" cy="7.2" r="4.6" />
-              <path d="M10.6 10.6L14 14" />
-            </svg>
-            <input
-              ref={searchRef}
-              type="search"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Search"
-              aria-label="Search"
-              className="w-full rounded-app-sm border border-app-border bg-app-surface/60 py-2.5 pr-14 pl-9 text-sm text-app-foreground outline-none transition-colors duration-150 placeholder:text-app-muted focus:border-app-accent focus:bg-app-background focus:ring-2 focus:ring-app-accent/25 [&::-webkit-search-cancel-button]:hidden"
-            />
-            <kbd
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-app-border bg-app-surface px-1.5 py-0.5 font-app text-[10px] font-medium text-app-muted"
-            >
-              {isMac ? '⌘F' : 'Ctrl F'}
-            </kbd>
+        {searchable && (
+          <div className="px-4">
+            <div className="relative">
+              <svg
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-app-muted"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <circle cx="7.2" cy="7.2" r="4.6" />
+                <path d="M10.6 10.6L14 14" />
+              </svg>
+              <input
+                ref={searchRef}
+                type="search"
+                value={query ?? ''}
+                onChange={(e) => onQueryChange(e.target.value)}
+                placeholder="Search"
+                aria-label="Search"
+                className="w-full rounded-app-sm border border-app-border bg-app-surface/60 py-2.5 pr-14 pl-9 text-sm text-app-foreground outline-none transition-colors duration-150 placeholder:text-app-muted focus:border-app-accent focus:bg-app-background focus:ring-2 focus:ring-app-accent/25 [&::-webkit-search-cancel-button]:hidden"
+              />
+              <kbd
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-app-border bg-app-surface px-1.5 py-0.5 font-app text-[10px] font-medium text-app-muted"
+              >
+                {isMac ? '⌘F' : 'Ctrl F'}
+              </kbd>
+            </div>
           </div>
-        </div>
+        )}
 
         <nav className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto px-4 py-6">
           <SidebarSection label="Workspace">

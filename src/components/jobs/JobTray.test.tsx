@@ -38,6 +38,12 @@ describe('JobTrayView', () => {
     expect(render([{ ...base, kind: 'quiz', status: 'done', resultDeckId: 'd1' }])).toContain('View Quiz')
     expect(render([{ ...base, kind: 'video', status: 'done', resultDeckId: 'd1' }])).toContain('View Video')
   })
+  // A video takes minutes; a View button that fades after seconds is missed by anyone who looked away.
+  it('keeps a done video until it is viewed or dismissed, like every other done job', () => {
+    const html = render([{ ...base, kind: 'video', status: 'done', resultDeckId: 'd1' }])
+    expect(html).not.toContain('job-fade-out')
+    expect(html).toContain('aria-label="Dismiss Volcanoes"')
+  })
   it('a failed deck job offers Edit brief and Try again with the reason', () => {
     const html = render([{ ...base, status: 'failed', error: 'Groq is busy' }])
     expect(html).toContain('Groq is busy')
