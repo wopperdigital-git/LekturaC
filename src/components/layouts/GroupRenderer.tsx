@@ -193,7 +193,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       }
       return (
         <Adjustable index={list.index}>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+          <div className="grid grid-cols-2 gap-4 @min-[640px]:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
             {list.block.items.map((item, i) => (
               <div
                 key={i}
@@ -484,7 +484,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
         )
       }
       return (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 @min-[640px]:grid-cols-3">
           {node.items.map((img) => (
             <Adjustable key={img.index} index={img.index}>
               <figure className="overflow-hidden rounded-slide-sm border border-slide-border">

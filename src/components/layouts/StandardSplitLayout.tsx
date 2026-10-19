@@ -33,7 +33,7 @@ export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 md:items-center">
+      <div className="grid grid-cols-1 gap-8 @min-[768px]:grid-cols-2 @min-[768px]:items-center">
         {variant === 'expressive' ? (
           <>
             {image}

@@ -45,6 +45,16 @@ export function zoomFromWheel(zoom: number, deltaY: number): number {
   return clampZoom(zoom * Math.exp(-deltaY * WHEEL_SENSITIVITY))
 }
 
+/**
+ * The zoom during a two-finger pinch: the zoom it started from, scaled by how far the
+ * fingers have spread since (`distance / startDistance`). Measured from the start of the
+ * gesture, not step by step, so the slides stay under the fingers however many events arrive.
+ */
+export function zoomFromPinch(startZoom: number, startDistance: number, distance: number): number {
+  if (!(startDistance > 0)) return clampZoom(startZoom)
+  return clampZoom((startZoom * distance) / startDistance)
+}
+
 export interface Point {
   x: number
   y: number

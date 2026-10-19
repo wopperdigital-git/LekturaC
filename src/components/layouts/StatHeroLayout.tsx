@@ -15,9 +15,9 @@ export function StatHeroLayout({ blocks, variant }: { blocks: ContentBlock[]; va
 
   if (variant === 'expressive') {
     return (
-      <div className="flex flex-col items-center gap-6 rounded-slide-sm bg-slide-surface p-8 sm:flex-row sm:items-center sm:gap-10">
+      <div className="flex flex-col items-center gap-6 rounded-slide-sm bg-slide-surface p-8 @min-[640px]:flex-row @min-[640px]:items-center @min-[640px]:gap-10">
         {stat && <StatBlockView value={stat.block.value} label={stat.block.label} valueRef={textRef(stat.index, 'value')} labelRef={textRef(stat.index, 'label')} />}
-        <div className="flex flex-col gap-3 text-center sm:text-left">
+        <div className="flex flex-col gap-3 text-center @min-[640px]:text-left">
           {headings.map(({ block, index }) => (
             <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
           ))}

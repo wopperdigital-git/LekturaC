@@ -19,10 +19,13 @@ function Dropdown({
   trigger,
   triggerClassName,
   defaultOpen = false,
+  align = 'end',
   children,
 }: {
   /** The trigger's accessible name, and the popover's. */
   label: string
+  /** Which edge of the trigger the popover lines up with: the right (top bar) or the left. */
+  align?: 'start' | 'end'
   title?: string
   trigger: ReactNode
   triggerClassName: string
@@ -76,7 +79,7 @@ function Dropdown({
           id={menuId}
           role="menu"
           aria-label={label}
-          className="absolute right-0 top-full z-30 mt-1.5 min-w-52 rounded-app-sm border border-app-border bg-app-background p-1 shadow-app"
+          className={`absolute ${align === 'end' ? 'right-0' : 'left-0'} top-full z-30 mt-1.5 min-w-52 rounded-app-sm border border-app-border bg-app-background p-1 shadow-app`}
         >
           {children(() => setOpen(false))}
         </div>
@@ -152,6 +155,7 @@ export function ExportMenu({
   defaultOpen,
   highlight,
   highlightQuiz,
+  align,
 }: {
   onExportPptx: () => void
   exporting: boolean
@@ -171,10 +175,13 @@ export function ExportMenu({
   highlight?: boolean
   /** Marks the Quiz item: a quiz finished and has not been opened. */
   highlightQuiz?: boolean
+  /** The popover opens to the right of a trigger at the left of the screen (the phone view). */
+  align?: 'start' | 'end'
 }) {
   return (
     <Dropdown
       label="Create & export"
+      align={align}
       trigger={
         <>
           {exporting ? <Spinner /> : <DownloadIcon />}

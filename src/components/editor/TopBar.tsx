@@ -171,7 +171,7 @@ export function TopBar({
           to={presentHref}
           aria-label="Present"
           title="Present this deck"
-          className={`flex size-8 shrink-0 items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 ${FOCUS_RING}`}
+          className={`flex size-8 shrink-0 pointer-coarse:size-11 items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 ${FOCUS_RING}`}
         >
           <PlayIcon />
         </Link>
@@ -205,7 +205,7 @@ function IconButton({
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
+      className={`flex size-8 shrink-0 pointer-coarse:size-11 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
     >
       {children}
     </button>

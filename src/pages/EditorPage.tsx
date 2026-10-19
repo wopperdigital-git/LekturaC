@@ -11,6 +11,9 @@ import { DEFAULT_PEN_SETTINGS, type InkKeep, type PenSettings } from '@/engine/p
 import { browserStore, pruneTempInk, readTempInk, writeTempInk, type TempInk } from '@/lib/temporaryInk'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TopBar } from '@/components/editor/TopBar'
+import { ExportMenu } from '@/components/editor/TopBarMenus'
+import { PhoneDeckView } from '@/components/editor/PhoneDeckView'
+import { CloneVoiceModal } from '@/components/voice/CloneVoiceModal'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
 import { CardCanvas } from '@/components/editor/CardCanvas'
 import { DeleteSlideModal } from '@/components/editor/DeleteSlideModal'
@@ -46,7 +49,7 @@ import { parseTextRef } from '@/engine/blockText'
 import { SLIDE_BODY_ATTR, blockIndexOf, blockStyleKey } from '@/components/layouts/adjustContext'
 import { useRenderedAlign } from '@/components/editor/useRenderedAlign'
 import { useExportPptx } from '@/export/useExportPptx'
-import { DEFAULT_ZOOM, clampZoom, scrollKeepingAnchor, stepZoom, zoomAnchor, zoomFromWheel, type ZoomAnchor } from '@/lib/zoom'
+import { DEFAULT_ZOOM, clampZoom, scrollKeepingAnchor, stepZoom, zoomAnchor, zoomFromPinch, zoomFromWheel, type ZoomAnchor } from '@/lib/zoom'
 import { ZOOM_CONTENT_ATTR } from '@/components/editor/ZoomFrame'
 import { useCanvasPan } from '@/components/editor/useCanvasPan'
 import { horizontalWheelDelta } from '@/lib/pan'
@@ -64,6 +67,8 @@ import { readGenerationRow, writeGenerationRow } from '@/generation/metaRow'
 import { FactCheckModal } from '@/components/editor/FactCheckModal'
 
 import { RIGHT_PANEL_WIDTH_PX } from '@/components/editor/panelSize'
+import { editorLayout } from '@/lib/editorLayout'
+import { useEditorLayout } from '@/lib/useEditorLayout'
 
 const SIDEBAR_WIDTH_PX = 160
 
@@ -74,9 +79,27 @@ export function EditorPage() {
   const { cards, undo, redo } = store
 
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
-  const [outlineOpen, setOutlineOpen] = useState(true)
-  // The tools panel on the right; collapsible, open by default.
-  const [toolsOpen, setToolsOpen] = useState(true)
+  /*
+    How much room the window has (`lib/editorLayout.ts`). On a compact window (an iPad in
+    portrait) the outline and tools panel start closed and open over the canvas, not beside
+    it, so the slides keep their size; turning into compact closes them again. A phone gets
+    the deck view instead of the editor (`PhoneDeckView`).
+  */
+  const layout = useEditorLayout()
+  const overlayPanels = layout === 'compact'
+  // The canvas, and the listeners attached to it, exist only outside the phone view.
+  const canvasShown = layout !== 'phone'
+  const [outlineOpen, setOutlineOpen] = useState(() => editorLayout(window.innerWidth) === 'full')
+  // The tools panel on the right; collapsible, open by default where there is room for it.
+  const [toolsOpen, setToolsOpen] = useState(() => editorLayout(window.innerWidth) === 'full')
+  const [panelsLayout, setPanelsLayout] = useState(layout)
+  if (panelsLayout !== layout) {
+    setPanelsLayout(layout)
+    if (layout === 'compact') {
+      setOutlineOpen(false)
+      setToolsOpen(false)
+    }
+  }
   /*
     The font the pointer is currently over in the panel, shown on the slide but
     never stored. `undefined` is "nothing hovered"; `null` previews the theme's own
@@ -261,12 +284,55 @@ export function EditorPage() {
     }
     node.addEventListener('wheel', onWheel, { passive: false })
     return () => node.removeEventListener('wheel', onWheel)
-    // The canvas only exists once the deck has loaded, hence the dependency.
-  }, [store.status])
+    // The canvas only exists once the deck has loaded, and not in the phone view
+    // (a window widened or turned past it gets one), hence the dependencies.
+  }, [store.status, canvasShown])
+
+  /*
+    Two fingers pinch-zoom the canvas, about the point between them, on a tablet. The
+    browser's own pinch would zoom the whole page instead, so the canvas allows only
+    panning (`touch-pan-x touch-pan-y`, one finger still scrolls) and these
+    non-passive listeners take the two-finger gesture. A drag a first finger began
+    stands down when the second lands (`pointerDrag.ts`). Measured from the start of
+    the pinch (`zoomFromPinch`), so the zoom it started at is read once, from `zoomRef`.
+  */
+  const zoomRef = useRef(zoom)
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+  useEffect(() => {
+    const node = canvasRef.current
+    if (!node) return
+    let pinch: { zoom: number; distance: number } | null = null
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length === 2) pinch = { zoom: zoomRef.current, distance: spread(e.touches) }
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (!pinch || e.touches.length !== 2) return
+      e.preventDefault()
+      const [a, b] = [e.touches[0], e.touches[1]]
+      anchorZoomAt({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 })
+      setZoom(zoomFromPinch(pinch.zoom, pinch.distance, spread(e.touches)))
+    }
+    function onTouchEnd(e: TouchEvent) {
+      if (e.touches.length < 2) pinch = null
+    }
+    node.addEventListener('touchstart', onTouchStart, { passive: true })
+    node.addEventListener('touchmove', onTouchMove, { passive: false })
+    node.addEventListener('touchend', onTouchEnd)
+    node.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      node.removeEventListener('touchstart', onTouchStart)
+      node.removeEventListener('touchmove', onTouchMove)
+      node.removeEventListener('touchend', onTouchEnd)
+      node.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [store.status, canvasShown])
 
   // Ctrl + drag grabs the canvas and moves it, for getting around once zoomed in;
   // in the Move screen tool a plain drag does.
-  useCanvasPan(canvasRef, store.status !== 'loading', tool)
+  useCanvasPan(canvasRef, store.status !== 'loading' && canvasShown, tool)
 
   // Keeps the anchored spot (the cursor's, or the middle of the view) on the same
   // content when the zoom changes; the content grows or shrinks under a fixed
@@ -926,6 +992,79 @@ export function EditorPage() {
     return <div className="p-8 text-app-muted">Loading…</div>
   }
 
+  const quizModal = quizOpen && (
+    <QuizModal
+      presentationId={id}
+      title={store.title}
+      cards={sortedCards}
+      onClose={() => setQuizOpen(false)}
+      initialTab={quizTab}
+      quizIsNew={newKinds.includes('quiz')}
+      quizRunning={quizRunning}
+      onListOpened={onQuizListOpened}
+    />
+  )
+  const exportPptx = () =>
+    void exportDeck({
+      title: store.title,
+      theme: store.theme,
+      textStyle: store.textStyle,
+      cards,
+    })
+
+  // No room to edit: the deck read-only, with Present and the Create & export menu.
+  if (layout === 'phone') {
+    return (
+      <>
+        {exportError && (
+          <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+            Export failed: {exportError}
+          </p>
+        )}
+        <PhoneDeckView
+          title={store.title}
+          cards={sortedCards}
+          theme={store.theme}
+          textStyle={store.textStyle}
+          presentHref={`/deck/${id}/present`}
+          exportMenu={
+            <ExportMenu
+              onExportPptx={exportPptx}
+              exporting={exportStatus === 'working'}
+              canExport={cards.length > 0}
+              onExportScript={exportScript}
+              scriptDisabledReason={scriptDisabledReason}
+              onQuiz={() => {
+                setQuizTab('create')
+                setQuizOpen(true)
+              }}
+              quizDisabledReason={quizDisabledReason}
+              onVideo={openVideo}
+              videoDisabledReason={videoDisabledReason}
+              highlight={newKinds.includes('quiz')}
+              highlightQuiz={newKinds.includes('quiz')}
+              align="start"
+            />
+          }
+        />
+        {/* The Narrate tab that opens it elsewhere isn't here, so the request opens the dialog itself. */}
+        {voiceRequested && (
+          <CloneVoiceModal
+            deck={{
+              presentationId: id,
+              title: store.title,
+              cards: sortedCards,
+              theme: store.theme,
+              textStyle: store.textStyle,
+            }}
+            onClose={() => setVoiceRequested(false)}
+          />
+        )}
+        {quizModal}
+      </>
+    )
+  }
+
   return (
     <div className="flex h-screen flex-col bg-app-canvas">
       <TopBar
@@ -934,14 +1073,7 @@ export function EditorPage() {
         saveStatus={store.status}
         zoom={zoom}
         onZoomChange={changeZoom}
-        onExport={() =>
-          void exportDeck({
-            title: store.title,
-            theme: store.theme,
-            textStyle: store.textStyle,
-            cards,
-          })
-        }
+        onExport={exportPptx}
         exporting={exportStatus === 'working'}
         canExport={cards.length > 0}
         presentHref={`/deck/${id}/present`}
@@ -1035,22 +1167,32 @@ export function EditorPage() {
           </ThemeProvider>
         </div>
 
-        <div className="relative flex shrink-0 items-stretch py-3">
-          {/* No surface, border or shadow of its own: the thumbnails are the
-              only thing that should read as an object here, floating straight
-              on the page. Giving the rail a surface of its own would put a
-              second card behind every card. */}
+        <div
+          className={`flex shrink-0 items-stretch py-3 ${overlayPanels ? 'absolute inset-y-0 left-0 z-30' : 'relative'}`}
+        >
+          {/* No surface, border or shadow of its own beside the canvas: the
+              thumbnails are the only thing that should read as an object there,
+              floating straight on the page. Giving the rail a surface would put
+              a second card behind every card. Over the canvas (compact) it needs
+              one, or the slides show through it. */}
           <aside
             className="h-full overflow-hidden transition-all duration-200"
             style={{ width: outlineOpen ? SIDEBAR_WIDTH_PX : 0, marginLeft: outlineOpen ? 12 : 0 }}
           >
-            <div className="h-full" style={{ width: SIDEBAR_WIDTH_PX }}>
+            <div
+              className={`h-full ${overlayPanels ? 'rounded-app border border-app-border bg-app-background shadow-app' : ''}`}
+              style={{ width: SIDEBAR_WIDTH_PX }}
+            >
               <CardOutlineSidebar
                 cards={cards}
                 theme={store.theme}
                 deckTextStyle={store.textStyle}
                 activeCardId={activeCardId}
-                onSelect={scrollToCard}
+                onSelect={(cardId) => {
+                  scrollToCard(cardId)
+                  // Over the canvas the rail hides the slide it just scrolled to.
+                  if (overlayPanels) setOutlineOpen(false)
+                }}
                 onReorder={store.reorderCards}
                 onDelete={setPendingDeleteId}
                 onAddCard={() => setAddSlideOpen(true)}
@@ -1062,7 +1204,11 @@ export function EditorPage() {
           <button
             onClick={() => setOutlineOpen((v) => !v)}
             aria-label={outlineOpen ? 'Collapse outline' : 'Expand outline'}
-            className="absolute right-0 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+            // Straddling the rail's edge while open; tucked inside the window edge when
+            // collapsed, like the tools arrow, or it is half off-screen.
+            className={`absolute top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 ${
+              outlineOpen ? 'right-0 translate-x-1/2' : 'left-1'
+            } cursor-pointer items-center justify-center rounded-full border border-app-border bg-app-background text-lg text-app-muted shadow-app transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent`}
           >
             {outlineOpen ? '‹' : '›'}
           </button>
@@ -1099,7 +1245,10 @@ export function EditorPage() {
         {/* Transparent: the stage layer above is the background now. */}
         {/* No horizontal scrollbar: a zoomed-in deck is moved sideways by panning, a
             trackpad swipe or Shift + wheel (handled with Ctrl + wheel above). */}
-        <main ref={canvasRef} className="scrollbar-subtle relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <main
+          ref={canvasRef}
+          className="scrollbar-subtle relative min-h-0 flex-1 touch-pan-x touch-pan-y overflow-x-hidden overflow-y-auto"
+        >
           {cards.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-app-muted">
               <p>No slides yet.</p>
@@ -1183,7 +1332,9 @@ export function EditorPage() {
             full of controls rather than pictures. `relative` is required: the
             stage layer is absolutely positioned, so without it this panel's
             static content paints *underneath* the deck's backdrop. */}
-        <div className="relative flex shrink-0 items-stretch py-3">
+        <div
+          className={`flex shrink-0 items-stretch py-3 ${overlayPanels ? 'absolute inset-y-0 right-0 z-30' : 'relative'}`}
+        >
           <button
             onClick={() => setToolsOpen((v) => !v)}
             aria-label={toolsOpen ? 'Collapse tools' : 'Expand tools'}
@@ -1308,18 +1459,7 @@ export function EditorPage() {
       {settingsOpen && (
         <SettingsModal initialTab="profile" onClose={() => setSettingsOpen(false)} onSignOut={() => void signOut()} />
       )}
-      {quizOpen && (
-        <QuizModal
-          presentationId={id}
-          title={store.title}
-          cards={sortedCards}
-          onClose={() => setQuizOpen(false)}
-          initialTab={quizTab}
-          quizIsNew={newKinds.includes('quiz')}
-          quizRunning={quizRunning}
-          onListOpened={onQuizListOpened}
-        />
-      )}
+      {quizModal}
     </div>
   )
 }

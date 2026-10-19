@@ -8,6 +8,7 @@ import {
   scrollKeepingAnchor,
   zoomAnchor,
   stepZoom,
+  zoomFromPinch,
   zoomFromWheel,
 } from './zoom'
 
@@ -121,5 +122,23 @@ describe('fitScale', () => {
     expect(fitScale(0, 976)).toBe(1)
     expect(fitScale(Number.NaN, 976)).toBe(1)
     expect(fitScale(500, 0)).toBe(1)
+  })
+})
+
+describe('zoomFromPinch', () => {
+  // Fingers twice as far apart doubles the zoom the pinch started from, as in every touch app.
+  it('scales the starting zoom by how far the fingers have spread', () => {
+    expect(zoomFromPinch(1, 100, 150)).toBe(1.5)
+    expect(zoomFromPinch(0.9, 200, 100)).toBe(0.5)
+  })
+
+  it('stays within the zoom limits', () => {
+    expect(zoomFromPinch(1.5, 100, 1000)).toBe(MAX_ZOOM)
+    expect(zoomFromPinch(0.6, 100, 10)).toBe(MIN_ZOOM)
+  })
+
+  // Two fingers landing on the same spot have no distance to compare against.
+  it('keeps the starting zoom when there is no starting distance', () => {
+    expect(zoomFromPinch(1.2, 0, 50)).toBe(1.2)
   })
 })

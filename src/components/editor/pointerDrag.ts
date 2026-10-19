@@ -28,23 +28,37 @@ export function startPointerDrag(
 ): void {
   const startX = event.clientX
   const startY = event.clientY
+  const own = event.pointerId
 
   function handleMove(e: PointerEvent) {
+    if (e.pointerId !== own) return
     onMove(e.clientX - startX, e.clientY - startY, e)
   }
 
-  function handleEnd() {
+  function handleRelease(e: PointerEvent) {
+    if (e.pointerId === own) finish()
+  }
+
+  // A second finger is a pinch to zoom: the gesture ends where it is.
+  function handleOtherPress(e: PointerEvent) {
+    if (e.pointerId !== own) finish()
+  }
+
+  function finish() {
     window.removeEventListener('pointermove', handleMove)
-    window.removeEventListener('pointerup', handleEnd)
+    window.removeEventListener('pointerup', handleRelease)
     // A cancelled pointer (the browser taking over for a scroll or a gesture)
     // has to tear down too, or the drag outlives the press it belongs to.
-    window.removeEventListener('pointercancel', handleEnd)
+    window.removeEventListener('pointercancel', handleRelease)
+    window.removeEventListener('pointerdown', handleOtherPress)
     onEnd?.()
   }
 
   window.addEventListener('pointermove', handleMove)
-  window.addEventListener('pointerup', handleEnd)
-  window.addEventListener('pointercancel', handleEnd)
+  window.addEventListener('pointerup', handleRelease)
+  window.addEventListener('pointercancel', handleRelease)
+  // The press that started this is still bubbling and reaches this listener too: it is `own`.
+  window.addEventListener('pointerdown', handleOtherPress)
 }
 
 /** How far the pointer travels before a press on an element becomes a move rather than a click. */
@@ -81,9 +95,11 @@ export function startPendingDrag(
 ): void {
   const startX = event.clientX
   const startY = event.clientY
+  const own = event.pointerId
   let dragging = false
 
   function handleMove(e: PointerEvent) {
+    if (e.pointerId !== own) return
     const dx = e.clientX - startX
     const dy = e.clientY - startY
     if (!dragging) {
@@ -95,22 +111,34 @@ export function startPendingDrag(
     handlers.onMove(dx, dy, e)
   }
 
-  function handleEnd() {
+  function handleRelease(e: PointerEvent) {
+    if (e.pointerId === own) finish(true)
+  }
+
+  // A second finger is a pinch to zoom: not a tap, and a move ends where it is.
+  function handleOtherPress(e: PointerEvent) {
+    if (e.pointerId !== own) finish(false)
+  }
+
+  function finish(released: boolean) {
     window.removeEventListener('pointermove', handleMove)
-    window.removeEventListener('pointerup', handleEnd)
-    window.removeEventListener('pointercancel', handleEnd)
+    window.removeEventListener('pointerup', handleRelease)
+    window.removeEventListener('pointercancel', handleRelease)
+    window.removeEventListener('pointerdown', handleOtherPress)
     if (dragging) {
       document.body.style.userSelect = ''
       swallowNextClick()
       handlers.onEnd?.()
-    } else {
+    } else if (released) {
       handlers.onTap?.()
     }
   }
 
   window.addEventListener('pointermove', handleMove)
-  window.addEventListener('pointerup', handleEnd)
-  window.addEventListener('pointercancel', handleEnd)
+  window.addEventListener('pointerup', handleRelease)
+  window.addEventListener('pointercancel', handleRelease)
+  // The press that started this is still bubbling and reaches this listener too: it is `own`.
+  window.addEventListener('pointerdown', handleOtherPress)
 }
 
 /**

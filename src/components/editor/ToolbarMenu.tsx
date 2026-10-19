@@ -130,7 +130,7 @@ export function ToolbarMenu({
           onTrigger?.()
           setOpen((current) => (hover ? true : !current))
         }}
-        className={`flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-40 ${
+        className={`flex size-8 shrink-0 pointer-coarse:size-11 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-40 ${
           open || pressed ? 'bg-app-foreground/15' : ''
         }`}
       >

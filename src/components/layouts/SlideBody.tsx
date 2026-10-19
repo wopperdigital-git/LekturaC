@@ -89,7 +89,10 @@ export function SlideBody({
   }, [])
 
   return (
-    <div ref={ref} className="relative" {...{ [SLIDE_BODY_ATTR]: true }}>
+    // `@container`: a layout that changes with width asks this box (the slide's content
+    // width), never the screen, so a slide looks the same on every surface and screen
+    // (`slideWidthOnly.test.ts`). Safe because this box always fills a block of set width.
+    <div ref={ref} className="@container relative" {...{ [SLIDE_BODY_ATTR]: true }}>
       <CardBoxContext.Provider value={{ width }}>
         <BlockDataContext.Provider value={{ adjusts: card.adjusts, inline: card.inline }}>
           <BlockAdjustContext.Provider value={adjusting}>
