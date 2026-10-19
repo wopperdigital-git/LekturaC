@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VideoError } from './errors'
 import { MP4_FORMAT, WEBM_FORMAT } from './format'
 import { MIGRATION_MESSAGE } from './storageErrors'
-import { loadVideo, removeDeckVideo, saveVideo, type SaveVideoInput, type StoragePorts } from './storage'
+import { deleteDeckWithVideo, loadVideo, saveVideo, type SaveVideoInput, type StoragePorts } from './storage'
 import type { VideoRecord } from './videoRecord'
 
 function fakePorts(overrides: Partial<StoragePorts> = {}) {
@@ -211,27 +211,46 @@ describe('loadVideo', () => {
   })
 })
 
-describe('removeDeckVideo', () => {
-  it("removes the deck's video object", async () => {
+describe('deleteDeckWithVideo', () => {
+  // The row goes first: a delete that fails must leave the deck with the video it had.
+  it('deletes the row, then removes its video object', async () => {
     const { ports, log } = fakePorts({ readRecord: async () => ({ data: previous, error: null }) })
-    await removeDeckVideo(ports, 'p1')
-    expect(log).toEqual(['remove u1/p1.mp4'])
+    await deleteDeckWithVideo(ports, 'p1', async () => {
+      log.push('delete row')
+    })
+    expect(log).toEqual(['delete row', 'remove u1/p1.mp4'])
   })
 
-  it('does nothing when the deck has no video', async () => {
+  it('removes nothing when the row delete fails, and passes the failure on', async () => {
+    const { ports, log } = fakePorts({ readRecord: async () => ({ data: previous, error: null }) })
+    await expect(
+      deleteDeckWithVideo(ports, 'p1', async () => Promise.reject(new Error('offline'))),
+    ).rejects.toThrow('offline')
+    expect(log).toEqual([])
+  })
+
+  it('removes nothing when the deck has no video', async () => {
     const { ports, log } = fakePorts()
-    await removeDeckVideo(ports, 'p1')
+    await deleteDeckWithVideo(ports, 'p1', async () => {})
     expect(log).toEqual([])
   })
 
   // Deleting a deck must never be blocked by its video.
-  it('never throws', async () => {
-    const { ports } = fakePorts({ readRecord: async () => Promise.reject(new Error('offline')) })
-    await expect(removeDeckVideo(ports, 'p1')).resolves.toBeUndefined()
-    const removing = fakePorts({
+  it('still deletes the row when the video cannot be read or removed', async () => {
+    let deleted = 0
+    const unreadable = fakePorts({ readRecord: async () => Promise.reject(new Error('offline')) })
+    await deleteDeckWithVideo(unreadable.ports, 'p1', async () => {
+      deleted++
+    })
+    const unremovable = fakePorts({
       readRecord: async () => ({ data: previous, error: null }),
       remove: async () => Promise.reject(new Error('offline')),
     })
-    await expect(removeDeckVideo(removing.ports, 'p1')).resolves.toBeUndefined()
+    await expect(
+      deleteDeckWithVideo(unremovable.ports, 'p1', async () => {
+        deleted++
+      }),
+    ).resolves.toBeUndefined()
+    expect(deleted).toBe(2)
   })
 })

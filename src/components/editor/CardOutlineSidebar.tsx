@@ -45,10 +45,13 @@ function CardThumbnail({
   card,
   index,
   deckTextStyle,
+  needsFactCheck = false,
 }: {
   card: Card
   index: number
   deckTextStyle: TextStyle
+  /** The slide has AI claims with no source the teacher has not checked (`factCheck.ts`). */
+  needsFactCheck?: boolean
 }) {
   const frameRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -117,8 +120,13 @@ function CardThumbnail({
           </TextStyleScope>
         </SlideStage>
       </div>
-      <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+      <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
         {index + 1}
+        {needsFactCheck && (
+          <span title="Claims to check on this slide" className="size-1.5 rounded-full bg-amber-400">
+            <span className="sr-only">, claims to check</span>
+          </span>
+        )}
       </span>
     </div>
   )
@@ -131,6 +139,7 @@ function SortableRow({
   onSelect,
   onDelete,
   deckTextStyle,
+  needsFactCheck,
 }: {
   card: Card
   index: number
@@ -138,6 +147,7 @@ function SortableRow({
   onSelect: () => void
   onDelete: () => void
   deckTextStyle: TextStyle
+  needsFactCheck: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -166,7 +176,7 @@ function SortableRow({
         onClick={onSelect}
         className="block w-full cursor-pointer touch-manipulation text-left active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
       >
-        <CardThumbnail card={card} index={index} deckTextStyle={deckTextStyle} />
+        <CardThumbnail card={card} index={index} deckTextStyle={deckTextStyle} needsFactCheck={needsFactCheck} />
       </button>
       <button
         onClick={(e) => {
@@ -192,6 +202,7 @@ export function CardOutlineSidebar({
   onReorder,
   onDelete,
   onAddCard,
+  factCheckCardIds,
 }: {
   cards: Card[]
   theme: ThemeTokens
@@ -202,6 +213,8 @@ export function CardOutlineSidebar({
   onDelete: (id: string) => void
   /** Opens the card type picker; the new slide lands after the active one. */
   onAddCard: () => void
+  /** Slides with claims to check, marked on their thumbnails. */
+  factCheckCardIds?: ReadonlySet<string>
 }) {
   /*
     Press-and-hold to drag, rather than the old dedicated ⠿ handle.
@@ -259,6 +272,7 @@ export function CardOutlineSidebar({
                     onSelect={() => onSelect(card.id)}
                     onDelete={() => onDelete(card.id)}
                     deckTextStyle={deckTextStyle}
+                    needsFactCheck={factCheckCardIds?.has(card.id) ?? false}
                   />
                 ))}
               </div>

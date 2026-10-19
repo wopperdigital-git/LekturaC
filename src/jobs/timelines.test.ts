@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deckTimeline, quizTimeline, videoTimeline } from './timelines'
+import { deckTimeline, narrationTimeline, quizTimeline, videoTimeline } from './timelines'
 
 const states = (r: { timeline: { id: string; state: string }[] }) => r.timeline.map((e) => `${e.id}:${e.state}`)
 
@@ -51,5 +51,14 @@ describe('videoTimeline', () => {
     expect(a.timeline[0].label).toMatch(/1\/4$/)
     expect(b.progress).toBeGreaterThan(a.progress)
     expect(videoTimeline({ stage: 'uploading', done: 0, total: 1 }).progress).toBeGreaterThanOrEqual(0.9)
+  })
+})
+
+describe('narrationTimeline', () => {
+  it('writes, then saves, naming how many slides', () => {
+    expect(states(narrationTimeline(3, 'write'))).toEqual(['write:active', 'save:pending'])
+    expect(states(narrationTimeline(3, 'save'))).toEqual(['write:done', 'save:active'])
+    expect(narrationTimeline(1, 'write').timeline[0].label).toBe('Writing scripts for 1 slide')
+    expect(narrationTimeline(3, 'write').progress).toBeLessThan(narrationTimeline(3, 'save').progress)
   })
 })

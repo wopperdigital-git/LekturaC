@@ -53,11 +53,14 @@ import type { VideoDeck } from '@/video/generate'
 import { startVideoJob } from '@/jobs/start'
 import { useJobsStore } from '@/jobs/jobsStore'
 import { clearNew } from '@/jobs/newItems'
+import { VOICE_NOT_SET_UP } from '@/lib/setupCopy'
 
 /*
-  Sets up the narration voice: pick a premade voice or record and clone your own, tune
-  how it speaks, and hear two fixed sentences in it. It works on a draft; nothing is
-  saved until Generate Presentation, which saves the voice and then makes the narrated video.
+  Makes the narrated video. First the voice: pick a premade voice or record and clone your
+  own, tune how it speaks, and hear two fixed sentences in it. It works on a draft; nothing
+  is saved until Generate video, which saves the voice and then starts the video. (It was
+  "Narration voice" with a "Generate Presentation" button, the same words that make a deck
+  at /new, behind a "Clone voice" button; nobody looking for a video looked there.)
 
   Three things are cleaned up when it closes, because closing is done by Escape, the
   backdrop or Cancel and none of them run any code of ours first: the microphone
@@ -95,11 +98,9 @@ const SELECT =
 export function CloneVoiceModal({
   deck,
   onClose,
-  onVideoStarted,
 }: {
   deck: VideoDeck
   onClose: () => void
-  onVideoStarted?: () => void
 }) {
   const warning = useVoiceStore((s) => s.warning)
   // False after a failed read of the saved voice: what is on screen is then the defaults, not
@@ -367,8 +368,8 @@ export function CloneVoiceModal({
       setVideoError('A video is already generating. Wait for it to finish, then try again.')
       return
     }
+    // The editor stays open: the video shows its progress in the corner panel, like a quiz.
     onClose()
-    onVideoStarted?.()
   }
 
   const recording = recState === 'recording'
@@ -377,13 +378,10 @@ export function CloneVoiceModal({
   const disabledAll = !ready || !configured
 
   return (
-    <Modal title="Narration voice" onClose={onClose}>
+    <Modal title="Narrated video" onClose={onClose}>
       <div className="flex flex-col gap-5">
-        {!configured && (
-          <p className="text-sm text-red-600 dark:text-red-400">
-            Add VITE_CARTESIA_API_KEY to your .env file to use voices.
-          </p>
-        )}
+        <p className="text-sm text-app-muted">Pick a voice, then make a video of the whole deck read aloud.</p>
+        {!configured && <p className="text-sm text-red-600 dark:text-red-400">{VOICE_NOT_SET_UP}</p>}
         {warning && <p className="text-xs text-app-highlight-text">{warning}</p>}
 
         {/* ---- Voice ---- */}
@@ -642,10 +640,10 @@ export function CloneVoiceModal({
             onClick={() => void generate()}
             disabled={!canGenerate}
             title={generating ? 'A video is already generating.' : undefined}
-            aria-label="Generate Presentation"
+            aria-label="Generate video"
           >
             {saving ? <Spinner /> : null}
-            Generate Presentation
+            Generate video
           </Button>
         </div>
       </div>

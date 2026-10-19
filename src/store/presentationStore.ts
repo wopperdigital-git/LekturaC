@@ -26,7 +26,7 @@ import { capScriptLength, isResettable, mergeNarration, parseNarration, type Gen
 import { layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { buildGenerationMeta } from '@/generation/meta'
 import type { PipelineResult } from '@/generation/pipeline'
-import { removeDeckVideo, supabasePorts } from '@/video/storage'
+import { deleteDeckWithVideo, supabasePorts } from '@/video/storage'
 import { inOrder, withCardAfter, withDuplicate, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
 import { withBlockAppended, type ContentType } from '@/engine/newContent'
@@ -67,6 +67,13 @@ interface PresentationState {
    * that has not run migration 0013 — must not read as "the deck did not save".
    */
   overlayWarning: string | null
+  /**
+   * Set when `loadDeck` could not read the deck, and only then. Kept apart from
+   * `status: 'error'`, which means a *save* failed: its banner tells the user that
+   * reloading loses their changes, the opposite of the advice for a deck that
+   * never opened.
+   */
+  loadError: (LoadError & { deckId: string }) | null
   persisted: boolean
   past: DeckSnapshot[]
   future: DeckSnapshot[]
@@ -329,6 +336,20 @@ type StatusSetter = (partial: Partial<PresentationState>) => void
  * column the schema cache does not have, i.e. a migration that has not been
  * run), and `hint` because PostgREST often puts the fix there.
  */
+/** Why a deck could not be opened: it is not there (or not this account's), or the read failed. */
+export interface LoadError {
+  kind: 'missing' | 'failed'
+  message: string
+}
+
+/** PostgREST's reply when `.single()` finds no row: under RLS, a deck that is gone or is someone else's. */
+const NO_ROW_CODE = 'PGRST116'
+
+export function loadFailure(err: unknown): LoadError {
+  const code = err && typeof err === 'object' ? (err as { code?: unknown }).code : undefined
+  return { kind: code === NO_ROW_CODE ? 'missing' : 'failed', message: describeError(err) }
+}
+
 export function describeError(err: unknown): string {
   if (err instanceof Error) return err.message
 
@@ -534,6 +555,27 @@ function cardFromRow(row: CardRow): Card {
 */
 export const cardRowForTest = cardRow
 export const cardFromRowForTest = cardFromRow
+
+/**
+ * Writes generated narration into a deck that is not open, without touching store state —
+ * what the background narration job (`jobs/narrationJob.ts`) calls once the user has left
+ * that deck. When the deck is open the job goes through `applyGeneratedNarration` instead,
+ * which also takes an undo step. Only the `allowed` positions (in `orderIndex` order) can
+ * change, by `mergeNarration`; only the cards that changed are written.
+ */
+export async function insertNarration(
+  deckId: string,
+  scripts: GeneratedScript[],
+  allowed: ReadonlySet<number>,
+): Promise<void> {
+  const deck = await fetchDeck(deckId)
+  if (!deck) throw new Error("This deck couldn't be read, so the scripts weren't saved. Try again.")
+  const sorted = [...deck.cards].sort((a, b) => a.orderIndex - b.orderIndex)
+  const capped = scripts.map((s) => ({ ...s, text: capScriptLength(s.text) }))
+  const merged = mergeNarration(sorted, capped, allowed)
+  const changed = merged.filter((c, i) => c !== sorted[i])
+  if (changed.length > 0) await persistCardsSync(deckId, changed, changed)
+}
 
 export async function fetchDeck(id: string): Promise<DeckContent | null> {
   if (!supabaseConfigured || !supabase) return null
@@ -831,6 +873,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   status: 'idle',
   errorMessage: null,
   overlayWarning: null,
+  loadError: null,
   persisted: supabaseConfigured,
   past: [],
   future: [],
@@ -896,13 +939,13 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       })
       if (error) throw error
     }
-    set({ presentationId: id, title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards: [], status: 'idle', errorMessage: null, past: [], future: [] })
+    set({ presentationId: id, title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards: [], status: 'idle', errorMessage: null, loadError: null, past: [], future: [] })
     return id
   },
 
   async createDeckFromGeneration(deck, requestedCount, result) {
     const { id, cards } = await insertGeneratedDeck(deck, requestedCount, result)
-    set({ presentationId: id, title: deck.title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards, status: 'idle', errorMessage: null, past: [], future: [] })
+    set({ presentationId: id, title: deck.title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards, status: 'idle', errorMessage: null, loadError: null, past: [], future: [] })
     return id
   },
 
@@ -930,11 +973,22 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     // one being left. Let it land before its cards are replaced.
     await flushScheduledSaves()
 
-    set({ status: 'loading', errorMessage: null, overlayWarning: null })
+    // The deck being left goes now, not when the new one arrives: a read that fails
+    // must not leave it on screen (and editable) under the new deck's address.
+    set({
+      status: 'loading',
+      errorMessage: null,
+      overlayWarning: null,
+      loadError: null,
+      presentationId: null,
+      cards: [],
+      past: [],
+      future: [],
+    })
     try {
       const deck = await fetchDeck(id)
       if (!deck) {
-        // Supabase not configured: nothing to load, keep whatever is in memory.
+        // Supabase not configured: there is nothing to read.
         set({ status: 'idle' })
         return
       }
@@ -953,18 +1007,21 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         future: [],
       })
     } catch (err) {
-      set({ status: 'error', errorMessage: describeError(err) })
+      console.warn('[deck] load failed:', err)
+      set({ status: 'idle', loadError: { ...loadFailure(err), deckId: id } })
     }
   },
 
   async deleteDeck(id: string) {
     if (!supabaseConfigured || !supabase) return
     await ensureSession()
-    // The video is a Storage object the row's deletion cannot reach, and afterwards nothing would
-    // point at it. Best effort and never throws (see `removeDeckVideo`): a video must not block a delete.
-    await removeDeckVideo(supabasePorts(supabase), id)
-    const { error } = await supabase.from('presentations').delete().eq('id', id)
-    if (error) throw error
+    // The video is a Storage object the row's deletion cannot reach. It is removed after the row,
+    // so a failed delete keeps it (see `deleteDeckWithVideo`).
+    const client = supabase
+    await deleteDeckWithVideo(supabasePorts(client), id, async () => {
+      const { error } = await client.from('presentations').delete().eq('id', id)
+      if (error) throw error
+    })
   },
 
   setTitle(title) {

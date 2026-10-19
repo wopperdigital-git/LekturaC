@@ -1,5 +1,7 @@
 # Narrated video: "Generate Presentation" in the voice modal
 
+> **Renamed 2026-10-19:** the button is now **Generate video**, the modal is titled **Narrated video**, and the tab's footer button is **Voice & video**. "Generate Presentation" was also `/new`'s label for making a deck, so the two read as the same action.
+
 Date: 2026-09-27. Status: approved; implemented on branch feat/narrated-video. Updated during planning: fonts and tab visibility (Pipeline), the codec check split (Format), upload not abortable (Cancellation), record-write rollback (Errors), and the risk list (Testing).
 Builds on `2026-09-27-narration-voice-design.md` (the modal this changes) and
 `2026-09-26-narration-tab-design.md`. Leaves the narration data rules untouched.

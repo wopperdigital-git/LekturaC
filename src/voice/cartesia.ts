@@ -1,6 +1,7 @@
 import { clipFileName } from './recording'
 import { clampSpeed, clampVolume, type Emotion } from './settingsRow'
 import type { VoiceLanguage } from './scripts'
+import { VOICE_NOT_SET_UP } from '@/lib/setupCopy'
 
 /*
   The one file that talks to Cartesia. Everything else in `src/voice/` is pure or UI.
@@ -86,7 +87,7 @@ async function errorFor(res: Response): Promise<CartesiaError> {
     // No readable body: the status alone has to do.
   }
   if (res.status === 401) {
-    return new CartesiaError('Cartesia rejected the API key. Check VITE_CARTESIA_API_KEY.', 'auth', 401)
+    return new CartesiaError("Cartesia didn't accept this site's voice key. Whoever runs the site needs to check it.", 'auth', 401)
   }
   if (res.status === 403) {
     return new CartesiaError(
@@ -111,7 +112,7 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
 
 async function send(path: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
   if (!isCartesiaConfigured()) {
-    throw new CartesiaError('Add VITE_CARTESIA_API_KEY to your .env file to use voices.', 'auth')
+    throw new CartesiaError(VOICE_NOT_SET_UP, 'auth')
   }
   let res: Response
   try {

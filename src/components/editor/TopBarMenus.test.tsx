@@ -21,6 +21,8 @@ function exportMenu(extra: Partial<ComponentProps<typeof ExportMenu>> = {}) {
       scriptDisabledReason={null}
       onQuiz={noop}
       quizDisabledReason={null}
+      onVideo={noop}
+      videoDisabledReason={null}
       defaultOpen
       {...extra}
     />,
@@ -32,45 +34,58 @@ function buttonWith(html: string, label: string): string {
   return html.split('<button').find((chunk) => chunk.split('</button>')[0].includes(label)) ?? ''
 }
 
+const QUIZ = 'Quiz…'
+const VIDEO = 'Narrated video…'
+const PPTX = 'PowerPoint (.pptx)'
+const SCRIPT = 'Narration script (.txt)'
+
 describe('ExportMenu', () => {
-  it('keeps its items out of the bar until it is opened', () => {
+  it('is a labelled button that keeps its items out of the bar until it is opened', () => {
     const html = exportMenu({ defaultOpen: false })
-    expect(html).toContain('aria-label="Export"')
+    expect(html).toContain('aria-label="Create &amp; export"')
+    expect(html).toContain('>Create &amp; export<')
     expect(html).not.toContain('role="menuitem"')
   })
 
-  it('offers Export PPT, Export Script and Generate Quiz, in that order', () => {
+  // What a teacher makes comes first: a quiz and a video were hard to find under "Export".
+  it('offers what can be made from the deck, then what can be downloaded, in that order', () => {
     const html = exportMenu()
     const at = (needle: string) => html.indexOf(needle)
-    expect(at('Export PPT')).toBeGreaterThan(-1)
-    expect(at('Export PPT')).toBeLessThan(at('Export Script'))
-    expect(at('Export Script')).toBeLessThan(at('Generate Quiz'))
-    for (const label of ['Export PPT', 'Export Script', 'Generate Quiz']) {
+    expect(at('Make from this deck')).toBeGreaterThan(-1)
+    expect(at('Make from this deck')).toBeLessThan(at(QUIZ))
+    expect(at(QUIZ)).toBeLessThan(at(VIDEO))
+    expect(at(VIDEO)).toBeLessThan(at('>Download<'))
+    expect(at('>Download<')).toBeLessThan(at(PPTX))
+    expect(at(PPTX)).toBeLessThan(at(SCRIPT))
+    for (const label of [QUIZ, VIDEO, PPTX, SCRIPT]) {
       expect(buttonWith(html, label)).not.toContain('disabled=""')
     }
   })
 
-  it('disables Export PPT with nothing to export, and while the file is being built', () => {
-    expect(buttonWith(exportMenu({ canExport: false }), 'Export PPT')).toContain('disabled=""')
-    expect(buttonWith(exportMenu({ exporting: true }), 'Export PPT')).toContain('disabled=""')
+  it('disables the PowerPoint item with nothing to export, and while the file is being built', () => {
+    expect(buttonWith(exportMenu({ canExport: false }), PPTX)).toContain('disabled=""')
+    expect(buttonWith(exportMenu({ exporting: true }), PPTX)).toContain('disabled=""')
   })
 
-  it('disables Export Script and Generate Quiz with the reason as the tooltip', () => {
-    const script = buttonWith(exportMenu({ scriptDisabledReason: 'No narration scripts yet' }), 'Export Script')
+  it('disables the script, quiz and video items with the reason as the tooltip', () => {
+    const script = buttonWith(exportMenu({ scriptDisabledReason: 'No narration scripts yet' }), SCRIPT)
     expect(script).toContain('disabled=""')
     expect(script).toContain('title="No narration scripts yet"')
-    const quiz = buttonWith(exportMenu({ quizDisabledReason: 'Needs a Groq key' }), 'Generate Quiz')
+    const quiz = buttonWith(exportMenu({ quizDisabledReason: 'Not set up' }), QUIZ)
     expect(quiz).toContain('disabled=""')
-    expect(quiz).toContain('title="Needs a Groq key"')
+    expect(quiz).toContain('title="Not set up"')
+    const video = buttonWith(exportMenu({ videoDisabledReason: 'No voices' }), VIDEO)
+    expect(video).toContain('disabled=""')
+    expect(video).toContain('title="No voices"')
   })
 })
 
 describe('ExportMenu highlights', () => {
-  it('highlights Generate Quiz when a quiz is new', () => {
-    const quiz = buttonWith(exportMenu({ highlightQuiz: true }), 'Generate Quiz')
+  it('highlights the Quiz item when a quiz is new', () => {
+    const quiz = buttonWith(exportMenu({ highlightQuiz: true }), QUIZ)
     expect(quiz).toContain('bg-amber-400/15')
     expect(quiz).toContain('bg-amber-400')
-    expect(buttonWith(exportMenu(), 'Generate Quiz')).not.toContain('amber')
+    expect(buttonWith(exportMenu(), QUIZ)).not.toContain('amber')
   })
 
   it('rings the trigger with highlight', () => {

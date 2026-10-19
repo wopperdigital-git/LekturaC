@@ -137,18 +137,27 @@ export async function loadVideo(
 }
 
 /**
- * Removes a deck's video file before the deck row goes (SQL cannot safely delete Storage objects).
- * Best effort and never throws: deleting a deck must not be blocked by its video.
+ * Deletes a deck (`deleteRow`) and then its video file (SQL cannot safely delete Storage objects).
+ *
+ * The record is read first, since the row is what says where the file is, but the file is removed
+ * only once the row is gone: a delete that fails leaves the deck with the video it had, and the
+ * failure is passed on. Reading or removing the video is best effort: a deck delete is never blocked
+ * by its video, and a file left behind costs space, not correctness.
  */
-export async function removeDeckVideo(ports: StoragePorts, presentationId: string): Promise<void> {
+export async function deleteDeckWithVideo(
+  ports: StoragePorts,
+  presentationId: string,
+  deleteRow: () => Promise<void>,
+): Promise<void> {
+  let record: VideoRecord | null = null
   try {
     const { data, error } = await ports.readRecord(presentationId)
-    if (error) return
-    const record = parseVideo(data)
-    if (record) await bestEffortRemove(ports, [record.path])
+    if (!error) record = parseVideo(data)
   } catch {
-    // Same reason as above.
+    // Unreadable: the deck still goes, and its file (if any) is orphaned.
   }
+  await deleteRow()
+  if (record) await bestEffortRemove(ports, [record.path])
 }
 
 /** The real ports, over the app's Supabase client. */

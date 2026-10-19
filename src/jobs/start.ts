@@ -6,9 +6,10 @@ import { deleteDraft } from '@/lib/briefDrafts'
 import { createQuiz } from '@/quiz/api'
 import { buildQuestions } from '@/quiz/build'
 import type { SectionRequest } from '@/quiz/sections'
-import { insertGeneratedDeck } from '@/store/presentationStore'
+import { fetchDeck, insertGeneratedDeck, insertNarration, usePresentationStore } from '@/store/presentationStore'
 import { deckJobSpec, type DeckJobInput } from './deckJob'
 import { useJobsStore } from './jobsStore'
+import { narrationJobSpec, type NarrationJobInput } from './narrationJob'
 import { quizJobSpec } from './quizJob'
 import { videoJobSpec, type VideoJobInput } from './videoJob'
 
@@ -51,6 +52,29 @@ export function startVideoJob(input: VideoJobInput): boolean {
     videoJobSpec(input, {
       // Through import() only: this file must not pull the encoder into the entry bundle.
       generate: async (o) => (await import('@/video/generate')).generateVideoForDeck(o),
+    }),
+  )
+}
+
+const byOrder = (cards: Card[]) => [...cards].sort((a, b) => a.orderIndex - b.orderIndex)
+
+/** The open deck's store when it is this deck (the editor or presenter has it), else the database. */
+export function startNarrationJob(input: NarrationJobInput): boolean {
+  return useJobsStore.getState().start(
+    narrationJobSpec(input, {
+      cards: async (deckId) => {
+        const store = usePresentationStore.getState()
+        if (store.presentationId === deckId) return byOrder(store.cards)
+        const deck = await fetchDeck(deckId)
+        if (!deck) throw new Error("This deck couldn't be read. Try again.")
+        return byOrder(deck.cards)
+      },
+      write: (title, slides, signal) => new FallbackProvider(PROVIDER_CHAIN).generateNarration(title, slides, signal),
+      apply: async (deckId, scripts, targets) => {
+        const store = usePresentationStore.getState()
+        if (store.presentationId === deckId) store.applyGeneratedNarration(scripts, targets)
+        else await insertNarration(deckId, scripts, targets)
+      },
     }),
   )
 }

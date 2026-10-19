@@ -157,9 +157,12 @@ describe('errors', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('maps 401 to an auth error that names the key', async () => {
+  // A teacher reads this in the voice dialog: it says the key was refused, not the variable it lives in.
+  it('maps 401 to an auth error that says the key was refused, without naming a key variable', async () => {
     fetchMock.mockResolvedValue(json({}, 401))
-    await expect(call()).rejects.toMatchObject({ kind: 'auth', status: 401, message: expect.stringContaining('API key') })
+    const err = await call().catch((e: unknown) => e)
+    expect(err).toMatchObject({ kind: 'auth', status: 401, message: expect.stringContaining('voice key') })
+    expect((err as Error).message).not.toContain('VITE_')
   })
 
   it("maps 403 to an auth error and keeps the server's reason", async () => {

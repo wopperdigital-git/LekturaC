@@ -112,14 +112,19 @@ describe('CloneVoiceModal', () => {
     expect(tagLabelled(html, 'Volume')).toContain('max="2"')
   })
 
-  it('explains itself when no Cartesia key is configured', () => {
+  it('explains itself when no Cartesia key is configured, without naming a key variable', () => {
     vi.stubEnv('VITE_CARTESIA_API_KEY', '')
-    expect(render()).toContain('VITE_CARTESIA_API_KEY')
+    const html = render()
+    expect(html).toContain('Cartesia key')
+    expect(html).not.toContain('VITE_')
   })
 
-  it('offers Generate Presentation, not Save voice', () => {
+  // Named for what it makes: "Generate Presentation" is also what makes a deck at /new.
+  it('is titled Narrated video and offers Generate video, not Generate Presentation or Save voice', () => {
     const html = render()
-    expect(html).toContain('Generate Presentation')
+    expect(html).toContain('>Narrated video<')
+    expect(html).toContain('Generate video')
+    expect(html).not.toContain('Generate Presentation')
     expect(html).not.toContain('Save voice')
   })
 
@@ -129,20 +134,20 @@ describe('CloneVoiceModal', () => {
     stubEncoders()
     Object.assign(useVoiceStore.getInitialState(), { loaded: true })
     const html = render()
-    expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
+    expect(tagLabelled(html, 'Generate video')).toContain('disabled=""')
     expect(html).toContain('<p class="text-xs text-app-muted">Choose a voice first.</p>')
   })
 
   it('can generate once a voice is chosen, the browser can encode and the deck has slides', () => {
     stubEncoders()
     withVoice()
-    expect(tagLabelled(render(), 'Generate Presentation')).not.toContain('disabled=""')
+    expect(tagLabelled(render(), 'Generate video')).not.toContain('disabled=""')
   })
 
   it('cannot generate in a browser without WebCodecs, and says so', () => {
     withVoice()
     const html = render()
-    expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
+    expect(tagLabelled(html, 'Generate video')).toContain('disabled=""')
     expect(html).toContain('cannot encode video')
   })
 
@@ -150,7 +155,7 @@ describe('CloneVoiceModal', () => {
     stubEncoders()
     withVoice()
     const html = render({ ...DECK, cards: [] })
-    expect(tagLabelled(html, 'Generate Presentation')).toContain('disabled=""')
+    expect(tagLabelled(html, 'Generate video')).toContain('disabled=""')
     expect(html).toContain('no slides')
   })
 

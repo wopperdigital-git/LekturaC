@@ -310,6 +310,16 @@ export function CreatePage() {
               </div>
             ) : (
               <>
+                {/* Said before the first question, not after the last: the brief can still be
+                    written now, and it waits in Drafts until a deck can be generated. */}
+                {deckRunning && phase === 'answering' && (
+                  <div className="mb-4">
+                    <Alert tone="info">
+                      A deck is generating right now. You can still write this brief. It waits in Drafts until you
+                      can generate it.
+                    </Alert>
+                  </div>
+                )}
                 <StepBlock
                   active={activeStep === 'topic'}
                   question="What's this presentation about?"
@@ -548,12 +558,20 @@ export function CreatePage() {
                             <button
                               type="button"
                               onClick={() => answer({ guidance: '' }, { generate: true })}
-                              className={subtleButton}
+                              disabled={deckRunning}
+                              title={deckRunning ? 'A deck is already generating' : undefined}
+                              className={`${subtleButton} disabled:cursor-not-allowed disabled:opacity-50`}
                             >
-                              Skip
+                              Skip and generate
                             </button>
                           )}
-                          <Button type="submit" variant="primary">
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            // Saving an edited answer never generates, so only the first pass waits.
+                            disabled={deckRunning && editing !== 'guidance'}
+                            title={deckRunning && editing !== 'guidance' ? 'A deck is already generating' : undefined}
+                          >
                             {editing === 'guidance' ? 'Save' : 'Generate'}
                           </Button>
                         </div>

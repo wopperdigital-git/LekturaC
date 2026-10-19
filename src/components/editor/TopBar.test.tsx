@@ -26,6 +26,8 @@ function render(extra: Partial<ComponentProps<typeof TopBar>> = {}) {
         presentHref="/deck/x/present"
         onQuiz={noop}
         quizDisabledReason={null}
+        onVideo={noop}
+        videoDisabledReason={null}
         onExportScript={noop}
         scriptDisabledReason={null}
         accountName="Ada Lovelace"
@@ -70,25 +72,26 @@ describe('TopBar', () => {
     expect(html).toContain('A very long deck title that will need a second line </span>')
   })
 
-  it('offers zoom with a typed value, then Export, Present and the account', () => {
+  it('offers zoom with a typed value, then Create & export, Present and the account', () => {
     const html = render()
     const at = (needle: string) => html.indexOf(needle)
     expect(html).toContain('aria-label="Zoom (50–200%)"')
     expect(at('Zoom out')).toBeLessThan(at('Zoom (50'))
     expect(at('Zoom (50')).toBeLessThan(at('Zoom in'))
-    expect(at('Zoom in')).toBeLessThan(at('aria-label="Export"'))
+    expect(at('Zoom in')).toBeLessThan(at('aria-label="Create &amp; export"'))
     expect(html).not.toContain('Fit</button>')
-    expect(at('aria-label="Export"')).toBeLessThan(at('aria-label="Present"'))
+    expect(at('aria-label="Create &amp; export"')).toBeLessThan(at('aria-label="Present"'))
     expect(at('aria-label="Present"')).toBeLessThan(at('aria-label="Account"'))
     expect(html).toContain('href="/deck/x/present"')
   })
 
-  // Present is an icon; the quiz lives in the Export menu; light/dark lives in the settings.
+  // Present is an icon; the quiz lives in the Create & export menu; light/dark lives in the settings.
   it('has no Present word, no standalone quiz button and no light/dark toggle', () => {
     const html = render()
     expect(html).not.toContain('Present</a>')
     expect(html).not.toContain('Generate quiz')
     expect(html).not.toContain('Generate Quiz')
+    expect(html).not.toContain('Quiz…')
     expect(html).not.toContain('theme')
   })
 
@@ -103,7 +106,7 @@ describe('TopBar', () => {
     expect(html.indexOf('data-testid="strip"')).toBeLessThan(html.indexOf('aria-label="Zoom out"'))
   })
 
-  it('rings the Export trigger when a quiz is new', () => {
+  it('rings the Create & export trigger when a quiz is new', () => {
     expect(render({ exportHighlight: true })).toContain('ring-amber-400')
     expect(render()).not.toContain('ring-amber-400')
   })

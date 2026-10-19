@@ -65,3 +65,11 @@ export function videoTimeline(p: Progress | null): TimelineReport {
   const within = p.total > 0 ? Math.min(1, p.done / p.total) : 0
   return { timeline, progress: before + VIDEO_SPANS[index] * within }
 }
+
+export function narrationTimeline(slideCount: number, stage: 'write' | 'save'): TimelineReport {
+  const rows = [
+    { id: 'write', label: `Writing scripts for ${slideCount} slide${slideCount === 1 ? '' : 's'}` },
+    { id: 'save', label: 'Saving' },
+  ]
+  return { timeline: entries(rows, stage === 'write' ? 0 : 1), progress: stage === 'write' ? 0.1 : 0.9 }
+}

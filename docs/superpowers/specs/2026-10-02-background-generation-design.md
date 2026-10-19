@@ -191,7 +191,9 @@ hover menu at `top-3 right-3`; list rows put it beside the title. `aria-label` n
   quiz is running. The "done" result view (preview, PDF) is reached from the Quizzes list (the
   existing preview modal).
 - **`CloneVoiceModal`**: Generate Presentation saves the voice, calls `startVideoJob(...)`, closes
-  the modal and navigates to `/`. Its in-modal progress rows go; the saved-video player stays.
+  the modal and navigates to `/`. *(Changed 2026-10-19: the button is now Generate video and the
+  editor stays open, like the quiz; leaving for the dashboard was half of why the video read as a
+  different feature. See the UX audit's P1 #1.)* Its in-modal progress rows go; the saved-video player stays.
 - `HomePage` reloads its deck list when a deck job reaches `done`.
 
 ## Error handling summary

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { clearNew, useNewItems } from '@/jobs/newItems'
 import { useJobsStore } from '@/jobs/jobsStore'
@@ -14,6 +14,7 @@ import { TopBar } from '@/components/editor/TopBar'
 import { CardOutlineSidebar } from '@/components/editor/CardOutlineSidebar'
 import { CardCanvas } from '@/components/editor/CardCanvas'
 import { DeleteSlideModal } from '@/components/editor/DeleteSlideModal'
+import { DeckLoadError } from '@/components/editor/DeckLoadError'
 import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import type { PenPopover } from '@/components/editor/PenPopover'
 import type { ShapePopover } from '@/components/editor/ShapePopover'
@@ -55,6 +56,12 @@ import { ROLE_LABEL } from '@/classroom/roles'
 import { hasNarrationScript, narrationScriptText, scriptFileName } from '@/engine/narrationScript'
 import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
 import { hasQuizContent } from '@/ai/quizPrompt'
+import { isCartesiaConfigured } from '@/voice/cartesia'
+import { QUIZ_NOT_SET_UP, VOICE_NOT_SET_UP, warnMissingKey } from '@/lib/setupCopy'
+import { supabase } from '@/lib/supabaseClient'
+import { factCheckNotice, markChecked, readFactCheck } from '@/generation/factCheck'
+import { readGenerationRow, writeGenerationRow } from '@/generation/metaRow'
+import { FactCheckModal } from '@/components/editor/FactCheckModal'
 
 import { RIGHT_PANEL_WIDTH_PX } from '@/components/editor/panelSize'
 
@@ -63,7 +70,6 @@ const SIDEBAR_WIDTH_PX = 160
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const store = usePresentationStore()
   const { cards, undo, redo } = store
 
@@ -113,19 +119,39 @@ export function EditorPage() {
 
   const [voiceRequested, setVoiceRequested] = useState(false)
 
-  // `?video=1` (the corner panel's "View Video") opens the Narrate tab and the voice dialog, once.
-  useEffect(() => {
-    if (searchParams.get('video') !== '1') return
+  // The narrated video dialog lives in the Narrate tab, so asking for it opens the panel on that tab.
+  const openVideo = useCallback(() => {
     setToolsOpen(true)
     setPanelTab('narration')
     setVoiceRequested(true)
+  }, [])
+
+  // `?video=1` (the corner panel's "View Video") opens the video dialog, once.
+  useEffect(() => {
+    if (searchParams.get('video') !== '1') return
+    openVideo()
     const next = new URLSearchParams(searchParams)
     next.delete('video')
     setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams])
+  }, [searchParams, setSearchParams, openVideo])
 
   const onVoiceOpened = useCallback(() => setVoiceRequested(false), [])
-  const onVideoStarted = useCallback(() => void navigate('/'), [navigate])
+
+  // `?narrate=1` (the corner panel's "View Scripts", once you have left the editor) opens the Narrate tab, once.
+  useEffect(() => {
+    if (searchParams.get('narrate') !== '1') return
+    setToolsOpen(true)
+    setPanelTab('narration')
+    const next = new URLSearchParams(searchParams)
+    next.delete('narrate')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  // The key names are for whoever runs the site; the screen says it in words (`setupCopy.ts`).
+  useEffect(() => {
+    if (QUIZ_CHAIN.length === 0) warnMissingKey('Quiz making', 'VITE_GROQ_API_KEY')
+    if (!isCartesiaConfigured()) warnMissingKey('Voices and narrated video', 'VITE_CARTESIA_API_KEY')
+  }, [])
 
   const openQuizList = useCallback(() => {
     setQuizTab('list')
@@ -160,6 +186,17 @@ export function EditorPage() {
   const profileDegraded = useAuthStore((state) => state.profileDegraded)
   const signOut = useAuthStore((state) => state.signOut)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  /*
+    The fact check (`generation/factCheck.ts`): the stored generation row, read on its own
+    best-effort call (see `metaRow.ts`), tagged with its deck so another deck's row never
+    shows here. The notice can be hidden for this visit; it comes back on the next one while
+    claims still need checking.
+  */
+  const [generation, setGeneration] = useState<{ deckId: string; row: unknown } | null>(null)
+  const [factCheckOpen, setFactCheckOpen] = useState(false)
+  const [factNoticeHidden, setFactNoticeHidden] = useState(false)
+  const [checkSaveFailed, setCheckSaveFailed] = useState(false)
   /*
     Temporary ink for this deck, kept in this browser (see lib/temporaryInk.ts).
     Loaded once the deck and the user are both known, by resetting state during
@@ -478,6 +515,33 @@ export function EditorPage() {
     cardRefs.current.get(cardId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const loadedDeckId = store.presentationId === id ? id : null
+  useEffect(() => {
+    if (!loadedDeckId || !supabase) return
+    let cancelled = false
+    void readGenerationRow(supabase, loadedDeckId).then((row) => {
+      if (!cancelled) setGeneration({ deckId: loadedDeckId, row })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [loadedDeckId])
+
+  const generationRow = generation && generation.deckId === loadedDeckId ? generation.row : null
+  const factCheck = useMemo(() => readFactCheck(generationRow, cards), [generationRow, cards])
+  const factNotice = factCheck ? factCheckNotice(factCheck) : null
+  const factCheckCardIds = useMemo(() => new Set(factCheck?.needsCheck.map((i) => i.cardId)), [factCheck])
+
+  function checkClaim(claimId: string) {
+    const deckId = loadedDeckId
+    const next = markChecked(generationRow, claimId)
+    if (!deckId || !next) return
+    // Shown as checked at once; a failed save is said in the dialog and the claim returns next visit.
+    setGeneration({ deckId, row: next })
+    if (!supabase) return
+    void writeGenerationRow(supabase, deckId, next).then((ok) => setCheckSaveFailed(!ok))
+  }
+
   /*
     The selection-dependent keys — Backspace and Delete to remove, Escape to step
     out — read what is selected *now*. The listener is registered once, so it
@@ -604,11 +668,12 @@ export function EditorPage() {
   const sortedCards = useMemo(() => [...cards].sort((a, b) => a.orderIndex - b.orderIndex), [cards])
   const quizDisabledReason =
     QUIZ_CHAIN.length === 0
-      ? 'Quiz generation needs VITE_GROQ_API_KEY'
+      ? QUIZ_NOT_SET_UP
       : !hasQuizContent(sortedCards)
         ? 'Add some slide content first'
         : null
   const scriptDisabledReason = hasNarrationScript(sortedCards) ? null : 'No narration scripts yet'
+  const videoDisabledReason = isCartesiaConfigured() ? null : VOICE_NOT_SET_UP
 
   // The narration scripts as a text file. Reads the deck in hand; asks no provider for anything.
   function exportScript() {
@@ -854,6 +919,9 @@ export function EditorPage() {
   }
 
   if (!id) return null
+  if (store.loadError?.deckId === id) {
+    return <DeckLoadError error={store.loadError} onRetry={() => void store.loadDeck(id)} />
+  }
   if (store.status === 'loading') {
     return <div className="p-8 text-app-muted">Loading…</div>
   }
@@ -884,6 +952,8 @@ export function EditorPage() {
         quizStrip={id ? <QuizJobStrip deckId={id} onView={openQuizList} /> : null}
         exportHighlight={newKinds.includes('quiz')}
         quizDisabledReason={quizDisabledReason}
+        onVideo={openVideo}
+        videoDisabledReason={videoDisabledReason}
         onExportScript={exportScript}
         scriptDisabledReason={scriptDisabledReason}
         accountName={profile?.displayName.trim() || userEmail || 'Account'}
@@ -917,6 +987,29 @@ export function EditorPage() {
         <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           Export failed: {exportError}
         </p>
+      )}
+      {/* AI-written claims with no source: said once per visit, before the teacher presents them. */}
+      {factNotice && !factNoticeHidden && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          <span>{factNotice}</span>
+          <button
+            type="button"
+            onClick={() => setFactCheckOpen(true)}
+            className="cursor-pointer font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+          >
+            Review
+          </button>
+          <button
+            type="button"
+            onClick={() => setFactNoticeHidden(true)}
+            className="ml-auto cursor-pointer text-xs underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+          >
+            Hide for now
+          </button>
+        </div>
       )}
 
       <div className="relative flex flex-1 overflow-hidden">
@@ -961,6 +1054,7 @@ export function EditorPage() {
                 onReorder={store.reorderCards}
                 onDelete={setPendingDeleteId}
                 onAddCard={() => setAddSlideOpen(true)}
+                factCheckCardIds={factCheckCardIds}
               />
             </div>
           </aside>
@@ -1164,7 +1258,6 @@ export function EditorPage() {
                     cardId={selectedCardId ?? activeCardId}
                     openVoice={voiceRequested && store.presentationId === id}
                     onVoiceOpened={onVoiceOpened}
-                    onVideoStarted={onVideoStarted}
                   />
                 }
               />
@@ -1200,6 +1293,18 @@ export function EditorPage() {
             />
           )
         })()}
+      {factCheckOpen && factCheck && (
+        <FactCheckModal
+          fc={factCheck}
+          saveFailed={checkSaveFailed}
+          onClose={() => setFactCheckOpen(false)}
+          onGoToSlide={(cardId) => {
+            setFactCheckOpen(false)
+            scrollToCard(cardId)
+          }}
+          onMarkChecked={checkClaim}
+        />
+      )}
       {settingsOpen && (
         <SettingsModal initialTab="profile" onClose={() => setSettingsOpen(false)} onSignOut={() => void signOut()} />
       )}

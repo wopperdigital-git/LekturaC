@@ -16,6 +16,7 @@ import { GeminiProvider } from './geminiProvider'
 import { AnthropicProvider } from './anthropicProvider'
 import type { QuizRequest } from '@/quiz/types'
 import type { QuizResponse } from '@/quiz/schema'
+import { QUIZ_NOT_SET_UP } from '@/lib/setupCopy'
 
 /** A provider plus a human-readable name, used only for the console breadcrumb. */
 export interface Named<P> {
@@ -113,7 +114,7 @@ export function generateQuizWithFallback(
 ): Promise<QuizResponse> {
   if (chain.length === 0) {
     return Promise.reject(
-      new AIProviderError('Quiz generation needs VITE_GROQ_API_KEY in your .env file.', { kind: 'auth' }),
+      new AIProviderError(QUIZ_NOT_SET_UP, { kind: 'auth' }),
     )
   }
   return runWithFailover(chain, 'quiz', (provider) => provider.generateQuiz(request, signal), signal)

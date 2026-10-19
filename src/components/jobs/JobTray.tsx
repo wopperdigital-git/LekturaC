@@ -9,7 +9,8 @@ import { JobRow } from './JobRow'
 /*
   The bottom-right panel for background jobs, mounted once beside the routes so it survives
   every page change. On a deck's editor it shrinks to pills (expand on click), and a quiz for
-  the deck that is open is left to the top bar's strip.
+  the deck that is open is left to the top bar's strip, and its narration scripts to the
+  Narration tab.
 */
 
 export interface JobActions {
@@ -24,6 +25,7 @@ export function viewHref(job: Job): string {
   const id = job.resultDeckId ?? job.deckId ?? ''
   if (job.kind === 'quiz') return `/deck/${id}?quiz=list`
   if (job.kind === 'video') return `/deck/${id}?video=1`
+  if (job.kind === 'narration') return `/deck/${id}?narrate=1`
   return `/deck/${id}`
 }
 
@@ -100,10 +102,10 @@ export function JobTray() {
 
   const { editorDeckId, hidden } = trayRoute(pathname)
   useEffect(() => setExpanded(false), [editorDeckId])
-  const jobs = (['deck', 'quiz', 'video'] as const)
+  const jobs = (['deck', 'quiz', 'video', 'narration'] as const)
     .map((k) => jobsByKind[k])
     .filter((j): j is Job => j !== null)
-    .filter((j) => !(j.kind === 'quiz' && editorDeckId !== null && j.deckId === editorDeckId))
+    .filter((j) => !((j.kind === 'quiz' || j.kind === 'narration') && editorDeckId !== null && j.deckId === editorDeckId))
 
   const doneVideoId = jobsByKind.video?.status === 'done' ? jobsByKind.video.id : null
   useEffect(() => {

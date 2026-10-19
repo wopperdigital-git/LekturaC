@@ -6,6 +6,7 @@ import { DeckQuizList } from './DeckQuizList'
 import { QuizPreviewModal } from './QuizPreviewModal'
 import { DeleteQuizConfirm } from './DeleteQuizConfirm'
 import { QUIZ_CHAIN } from '@/ai/fallbackProvider'
+import { QUIZ_NOT_SET_UP } from '@/lib/setupCopy'
 import { hasQuizContent } from '@/ai/quizPrompt'
 import { listQuizzesForDeck, loadOwnerQuiz } from '@/quiz/api'
 import type { DeckQuizSummary, OwnerQuiz } from '@/quiz/rows'
@@ -162,7 +163,7 @@ export function QuizModal({
 
         <SectionList drafts={drafts} dispatch={edit} onAdd={addTest} disabled={false} />
 
-        {noKey && <p className="mt-4 text-xs text-app-muted">Quiz generation needs VITE_GROQ_API_KEY.</p>}
+        {noKey && <p className="mt-4 text-xs text-app-muted">{QUIZ_NOT_SET_UP}</p>}
         {!noKey && noContent && <p className="mt-4 text-xs text-app-muted">Add some slide content first.</p>}
         {quizRunning && <p className="mt-4 text-xs text-app-muted">A quiz is already generating.</p>}
         {startError && (

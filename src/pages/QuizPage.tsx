@@ -1,19 +1,30 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { describeError } from '@/store/presentationStore'
 import { useAsync } from '@/classroom/useAsync'
 import { DashboardShell } from '@/components/home/DashboardShell'
 import { Panel, PanelMessage, RowsSkeleton } from '@/components/classroom/Panel'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { getQuizForTaking, submitQuizAttempt, type AttemptResult, type SubmittedAnswers } from '@/quiz/api'
 import { normalizeQuizCode } from '@/quiz/quizCode'
-import { groupBySection, type TakeQuestion, type TakeQuiz } from '@/quiz/rows'
-import type { QuizConfig } from '@/quiz/types'
-import { allAnswered, buildAnswers, defaultClassId } from '@/quiz/taking'
-
-const CHOICE_LETTERS = 'ABCD'
+import { groupBySection, type TakeQuiz } from '@/quiz/rows'
+import { QuestionField } from '@/components/quiz/QuestionField'
+import {
+  buildAnswers,
+  clearSavedAnswers,
+  defaultClassId,
+  firstUnanswered,
+  isAlreadySubmitted,
+  isAnswered,
+  answerText,
+  readSavedAnswers,
+  saveAnswers,
+} from '@/quiz/taking'
+import { browserStore } from '@/lib/temporaryInk'
+import { useAuthStore } from '@/store/authStore'
+import { Alert } from '@/components/ui/Alert'
+import { Modal } from '@/components/ui/Modal'
 
 const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent'
@@ -87,40 +98,106 @@ function QuizPageInner({ code }: { code: string }) {
 }
 
 function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
+  const userId = useAuthStore((s) => s.user?.id ?? null)
   const [chosenClassId, setChosenClassId] = useState<string | null>(null)
-  const [answers, setAnswers] = useState<SubmittedAnswers>({})
+  // Picked up from this browser, so a reload or a stray click away does not cost the work.
+  const [restored] = useState(() => readSavedAnswers(browserStore(), userId, quiz.id, quiz.questions))
+  const [answers, setAnswers] = useState<SubmittedAnswers>(restored)
+  // Whether this browser is keeping the answers. Blocked storage is told to the student, and
+  // only then does leaving the page ask first: with saving working, a reload loses nothing.
+  const [kept, setKept] = useState(true)
+  const [showMissing, setShowMissing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false)
   const [result, setResult] = useState<AttemptResult | null>(null)
 
   const classId = chosenClassId ?? defaultClassId(quiz.classes)
   const chosenClass = quiz.classes.find((c) => c.id === classId) ?? null
-  const ready = allAnswered(quiz.questions, answers)
+  const restoredCount = Object.keys(restored).length
 
-  const answeredCount = quiz.questions.filter((q) => answers[q.id] !== undefined && answers[q.id] !== '').length
+  const answeredCount = quiz.questions.filter((q) => isAnswered(answers[q.id])).length
   const totalCount = quiz.questions.length
+  const missingCount = totalCount - answeredCount
   const progressPercent = Math.round((answeredCount / totalCount) * 100)
 
+  useEffect(() => {
+    if (kept || answeredCount === 0 || result) return
+    function warn(e: BeforeUnloadEvent) {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [kept, answeredCount, result])
+
   function setAnswer(questionId: string, value: number | string | boolean) {
-    setAnswers((current) => ({ ...current, [questionId]: value }))
+    const next = { ...answers, [questionId]: value }
+    setAnswers(next)
+    setKept(saveAnswers(browserStore(), userId, quiz.id, next))
   }
 
-  async function submit(e: FormEvent) {
+  /** Submit with gaps sends nothing: it marks them and takes the student to the first. */
+  function requestSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!classId || !ready || submitting) return
+    if (!classId || submitting) return
+    const first = firstUnanswered(quiz.questions, answers)
+    if (first) {
+      setShowMissing(true)
+      const node = document.getElementById(questionItemId(first))
+      node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      node?.focus({ preventScroll: true })
+      return
+    }
+    setConfirming(true)
+  }
+
+  async function submit() {
+    if (!classId || submitting) return
+    setConfirming(false)
     setSubmitting(true)
     setSubmitError(null)
     try {
-      setResult(await submitQuizAttempt(code, classId, buildAnswers(quiz.questions, answers)))
+      const attempt = await submitQuizAttempt(code, classId, buildAnswers(quiz.questions, answers))
+      clearSavedAnswers(browserStore(), userId, quiz.id)
+      setResult(attempt)
     } catch (err) {
-      setSubmitError(describeError(err))
+      const message = describeError(err)
+      if (isAlreadySubmitted(message)) {
+        // Sent before (a lost reply, another tab): the score is on the class page, and these answers are spent.
+        clearSavedAnswers(browserStore(), userId, quiz.id)
+        setAlreadySubmitted(true)
+      } else {
+        setSubmitError(
+          `${err instanceof TypeError ? "Couldn't reach the server." : message} Your answers weren't sent, and they're still here. Press Submit to try again.`,
+        )
+      }
     } finally {
       setSubmitting(false)
     }
   }
 
   if (result) {
-    return <ResultPanel quiz={quiz} result={result} />
+    return <ResultPanel quiz={quiz} result={result} answers={answers} />
+  }
+
+  if (alreadySubmitted && chosenClass) {
+    return (
+      <Panel>
+        <PanelMessage
+          title="Already submitted"
+          body={`This quiz was already submitted for ${chosenClass.name}. Your score is on the class page.`}
+          action={
+            <Link
+              to={`/classes/${chosenClass.id}`}
+              className={`inline-flex items-center rounded-app-sm bg-app-accent px-3 py-1.5 text-sm font-medium text-app-accent-foreground hover:opacity-90 ${FOCUS_RING}`}
+            >
+              Go to {chosenClass.name}
+            </Link>
+          }
+        />
+      </Panel>
+    )
   }
 
   return (
@@ -159,7 +236,21 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
           You&apos;ve already submitted this quiz for <span className="font-medium">{chosenClass.name}</span>.
         </p>
       ) : (
-        <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-6">
+        <form onSubmit={requestSubmit} noValidate className="flex flex-col gap-6">
+          {/* Said before the first question: the one attempt, and what happens to the work meanwhile. */}
+          <div className="flex flex-col gap-2">
+            <Alert tone="info">
+              {kept
+                ? 'You can submit this quiz once. Your answers are saved on this device as you go.'
+                : "You can submit this quiz once. This browser isn't saving your answers, so stay on this page until you submit."}
+            </Alert>
+            {restoredCount > 0 && (
+              <p className="text-xs text-app-muted">
+                We restored {restoredCount} {restoredCount === 1 ? 'answer' : 'answers'} from your last visit.
+              </p>
+            )}
+          </div>
+
           {/* Progress Tracker */}
           <div className="flex items-center justify-between text-xs text-app-muted">
             <span>
@@ -168,52 +259,67 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
             <span className="font-mono">{progressPercent}%</span>
           </div>
 
-          {groupBySection(quiz.sections, quiz.questions).map(({ section, index, questions }) => {
-            const words = quiz.wordBoxes[index]
-            return (
-              <section key={index} aria-labelledby={`quiz-test-${index}`} className="flex flex-col gap-4">
-                <div>
-                  <h2 id={`quiz-test-${index}`} className="text-base font-semibold text-app-foreground">
-                    {section.title}
-                  </h2>
-                  {section.instructions && <p className="mt-1 text-sm text-app-muted">{section.instructions}</p>}
-                </div>
-
-                {words && words.length > 0 && (
-                  <div className="rounded-app-sm border border-app-border bg-app-surface p-3">
-                    <p className="mb-2 text-xs font-medium text-app-muted">Word box</p>
-                    <ul className="flex flex-wrap gap-2">
-                      {words.map((word, i) => (
-                        <li
-                          key={i}
-                          className="rounded-app-sm border border-app-border bg-app-background px-2.5 py-1 text-sm text-app-foreground"
-                        >
-                          {word}
-                        </li>
-                      ))}
-                    </ul>
+          {/* Locked while the answers are in flight, so what is sent is what is on screen. */}
+          <fieldset disabled={submitting} className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0">
+            {groupBySection(quiz.sections, quiz.questions).map(({ section, index, questions }) => {
+              const words = quiz.wordBoxes[index]
+              return (
+                <section key={index} aria-labelledby={`quiz-test-${index}`} className="flex flex-col gap-4">
+                  <div>
+                    <h2 id={`quiz-test-${index}`} className="text-base font-semibold text-app-foreground">
+                      {section.title}
+                    </h2>
+                    {section.instructions && <p className="mt-1 text-sm text-app-muted">{section.instructions}</p>}
                   </div>
-                )}
 
-                <ol className="flex flex-col gap-4">
-                  {questions.map((q, i) => (
-                    <li
-                      key={q.id}
-                      className="rounded-app border border-app-border/80 bg-app-surface/20 p-4 sm:p-5 transition-colors hover:border-app-border"
-                    >
-                      <QuestionField
-                        index={i}
-                        question={q}
-                        config={section.config}
-                        answer={answers[q.id]}
-                        onAnswer={(value) => setAnswer(q.id, value)}
-                      />
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            )
-          })}
+                  {words && words.length > 0 && (
+                    <div className="rounded-app-sm border border-app-border bg-app-surface p-3">
+                      <p className="mb-2 text-xs font-medium text-app-muted">Word box</p>
+                      <ul className="flex flex-wrap gap-2">
+                        {words.map((word, i) => (
+                          <li
+                            key={i}
+                            className="rounded-app-sm border border-app-border bg-app-background px-2.5 py-1 text-sm text-app-foreground"
+                          >
+                            {word}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <ol className="flex flex-col gap-4">
+                    {questions.map((q, i) => {
+                      const missing = showMissing && !isAnswered(answers[q.id])
+                      return (
+                        <li
+                          key={q.id}
+                          id={questionItemId(q.id)}
+                          // Focusable only from script: the jump to the first unanswered question lands here, ringed when
+                          // the jump came from the keyboard.
+                          tabIndex={-1}
+                          className={`rounded-app border bg-app-surface/20 p-4 transition-colors sm:p-5 ${FOCUS_RING} ${
+                            missing ? 'border-amber-400' : 'border-app-border/80 hover:border-app-border'
+                          }`}
+                        >
+                          {missing && (
+                            <p className="mb-2 text-xs font-medium text-app-highlight-text">Not answered yet</p>
+                          )}
+                          <QuestionField
+                            index={i}
+                            question={q}
+                            config={section.config}
+                            answer={answers[q.id]}
+                            onAnswer={(value) => setAnswer(q.id, value)}
+                          />
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </section>
+              )
+            })}
+          </fieldset>
 
           {submitError && (
             <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
@@ -226,160 +332,53 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
               type="submit"
               variant="primary"
               loading={submitting}
-              disabled={!ready || submitting}
+              disabled={submitting}
               className="self-start px-6 py-2.5 font-semibold shadow-sm"
             >
               {submitting ? 'Submitting attempt…' : 'Submit quiz →'}
             </Button>
-            {!ready && (
-              <p className="text-xs text-app-muted">
-                Please complete all {totalCount} questions before submitting.
+            {showMissing && missingCount > 0 && (
+              <p role="alert" className="text-xs text-app-highlight-text">
+                {missingCount} {missingCount === 1 ? 'question still needs' : 'questions still need'} an answer.
+                They&apos;re marked &ldquo;Not answered yet&rdquo;.
               </p>
             )}
           </div>
         </form>
       )}
+
+      {confirming && chosenClass && (
+        <Modal title="Submit your answers?" onClose={() => setConfirming(false)}>
+          <p className="text-sm text-app-muted">
+            You&apos;ve answered all {totalCount} questions. You can&apos;t change your answers afterwards, and you can
+            submit this quiz once for <span className="font-medium text-app-foreground">{chosenClass.name}</span>.
+          </p>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirming(false)}>
+              Keep checking
+            </Button>
+            <Button variant="primary" onClick={() => void submit()}>
+              Submit
+            </Button>
+          </div>
+        </Modal>
+      )}
     </Panel>
   )
 }
 
-function QuestionField({
-  index,
-  question,
-  config,
-  answer,
-  onAnswer,
-}: {
-  index: number
-  question: TakeQuestion
-  config: QuizConfig
-  answer: number | string | boolean | undefined
-  onAnswer: (value: number | string | boolean) => void
-}) {
-  const promptId = `quiz-q-${question.id}`
-  const inputId = `${promptId}-input`
-
-  const prompt = (
-    <div id={promptId} className="flex flex-wrap items-center gap-2 mb-2">
-      <span className="font-mono text-xs font-bold text-app-muted">
-        Question {index + 1 < 10 ? `0${index + 1}` : index + 1}
-      </span>
-      {question.slideNumber > 0 && (
-        <span className="rounded-full border border-app-border bg-app-surface/80 px-2 py-0.2 font-mono text-[10px] text-app-muted">
-          Slide {question.slideNumber}
-        </span>
-      )}
-      <p className="w-full text-base font-medium text-app-foreground leading-snug whitespace-pre-wrap">
-        {question.prompt}
-      </p>
-    </div>
-  )
-
-  switch (question.type) {
-    case 'multiple_choice':
-      return (
-        <div role="radiogroup" aria-labelledby={promptId} className="flex flex-col gap-2">
-          {prompt}
-          <div className="mt-1 flex flex-col gap-2">
-            {question.choices.map((choice, ci) => {
-              const optionId = `${promptId}-${ci}`
-              const selected = answer === ci
-              return (
-                <label
-                  key={ci}
-                  htmlFor={optionId}
-                  className={`flex cursor-pointer items-start gap-3 rounded-app-sm border p-3 text-sm text-app-foreground transition-all duration-150 ${FOCUS_RING} ${
-                    selected
-                      ? 'border-app-accent bg-app-accent/10 font-medium ring-1 ring-app-accent/30'
-                      : 'border-app-border bg-app-surface/30 hover:border-app-border/90 hover:bg-app-surface/60'
-                  }`}
-                >
-                  <input
-                    id={optionId}
-                    type="radio"
-                    name={promptId}
-                    checked={selected}
-                    onChange={() => onAnswer(ci)}
-                    className="sr-only"
-                  />
-                  <span
-                    className={`grid size-6 shrink-0 place-items-center rounded font-mono text-xs font-bold transition-colors ${
-                      selected
-                        ? 'border border-app-accent bg-app-accent text-app-accent-foreground'
-                        : 'border border-app-border/80 bg-app-surface text-app-muted'
-                    }`}
-                  >
-                    {CHOICE_LETTERS[ci] ?? ci + 1}
-                  </span>
-                  <span className="flex-1 pt-0.5 leading-snug">{choice}</span>
-                </label>
-              )
-            })}
-          </div>
-        </div>
-      )
-
-    case 'fill_blank':
-      return (
-        <div className="flex flex-col gap-2">
-          <label htmlFor={inputId}>{prompt}</label>
-          <Input
-            id={inputId}
-            value={typeof answer === 'string' ? answer : ''}
-            onChange={(e) => onAnswer(e.target.value)}
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            placeholder="Type your answer here…"
-            className="max-w-md"
-          />
-        </div>
-      )
-
-    case 'true_false': {
-      const options: { value: boolean; label: string; spoken: string }[] =
-        config.type === 'true_false' && config.notation === 'letter'
-          ? [
-              { value: true, label: 'T', spoken: 'True' },
-              { value: false, label: 'F', spoken: 'False' },
-            ]
-          : [
-              { value: true, label: 'TRUE', spoken: 'True' },
-              { value: false, label: 'FALSE', spoken: 'False' },
-            ]
-      return (
-        <div role="radiogroup" aria-labelledby={promptId} className="flex flex-col gap-2">
-          {prompt}
-          <div className="mt-1 flex gap-2.5">
-            {options.map((o) => {
-              const selected = answer === o.value
-              return (
-                <button
-                  key={o.label}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  aria-label={o.spoken}
-                  onClick={() => onAnswer(o.value)}
-                  className={`min-w-24 cursor-pointer rounded-app-sm border px-5 py-2.5 text-sm font-semibold transition-all duration-150 ${FOCUS_RING} ${
-                    selected
-                      ? 'border-app-accent bg-app-accent text-app-accent-foreground shadow-sm'
-                      : 'border-app-border bg-app-surface/40 text-app-foreground hover:border-app-border/90 hover:bg-app-surface'
-                  }`}
-                >
-                  {o.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )
-    }
-  }
+/** The DOM id of a question's card, for the jump to the first unanswered one. */
+function questionItemId(questionId: string): string {
+  return `quiz-item-${questionId}`
 }
 
-/** Score and a right/wrong mark per question. Deliberately never the correct answers. */
-function ResultPanel({ quiz, result }: { quiz: TakeQuiz; result: AttemptResult }) {
+/**
+ * Score, and per question the student's own answer beside a right/wrong mark, so a wrong
+ * one can be learned from. Deliberately never the correct answers. The answers are the ones
+ * just sent, held in memory: the server keeps only the score, so the line at the bottom
+ * says they go when the page does.
+ */
+function ResultPanel({ quiz, result, answers }: { quiz: TakeQuiz; result: AttemptResult; answers: SubmittedAnswers }) {
   const navigate = useNavigate()
   const scorePercent = Math.round(result.score * 100)
   const positions = new Map(quiz.questions.map((q, i) => [q.id, i]))
@@ -409,6 +408,7 @@ function ResultPanel({ quiz, result }: { quiz: TakeQuiz; result: AttemptResult }
               <ol className="divide-y divide-app-border">
                 {questions.map((q, i) => {
                   const right = result.results[positions.get(q.id) ?? -1] === true
+                  const given = answerText(q, answers[q.id])
                   return (
                     <li key={q.id} className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
                       <span
@@ -427,6 +427,14 @@ function ResultPanel({ quiz, result }: { quiz: TakeQuiz; result: AttemptResult }
                           {q.slideNumber > 0 && <span>· Slide {q.slideNumber}</span>}
                         </div>
                         <p className="mt-1 text-sm text-app-foreground leading-snug">{q.prompt}</p>
+                        <p className="mt-1 text-sm text-app-muted">
+                          Your answer:{' '}
+                          {given === null ? (
+                            <span className="italic">No answer</span>
+                          ) : (
+                            <span className="font-medium text-app-foreground">{given}</span>
+                          )}
+                        </p>
                       </div>
                     </li>
                   )
@@ -436,7 +444,10 @@ function ResultPanel({ quiz, result }: { quiz: TakeQuiz; result: AttemptResult }
           ))}
         </div>
 
-        <div className="mt-8 flex justify-end border-t border-app-border pt-4">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-app-border pt-4">
+          <p className="text-xs text-app-muted">
+            Your answers aren&apos;t kept after you leave this page. Your score is on the class page.
+          </p>
           <Button variant="secondary" onClick={() => void navigate('/classes')}>
             Back to my classes
           </Button>

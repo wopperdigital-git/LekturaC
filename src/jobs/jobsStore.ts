@@ -4,7 +4,7 @@ import { markNew } from './newItems'
 import type { StageEntry } from './timelines'
 
 /*
-  Background jobs: one deck, one quiz and one video at a time, each running from a `JobSpec`
+  Background jobs: one deck, one quiz, one video and one set of narration scripts at a time, each running from a `JobSpec`
   whose `run` holds the work. The store owns the promise and its AbortController, so a job
   outlives the page that started it; pages only start, cancel and read.
 
@@ -14,7 +14,7 @@ import type { StageEntry } from './timelines'
   account's result landing in the next.
 */
 
-export type JobKind = 'deck' | 'quiz' | 'video'
+export type JobKind = 'deck' | 'quiz' | 'video' | 'narration'
 export type JobStatus = 'running' | 'done' | 'failed'
 
 export interface Job {
@@ -72,8 +72,8 @@ interface Run {
 }
 
 const runs = new Map<JobKind, Run>()
-const KINDS: JobKind[] = ['deck', 'quiz', 'video']
-const NO_JOBS: Record<JobKind, Job | null> = { deck: null, quiz: null, video: null }
+const KINDS: JobKind[] = ['deck', 'quiz', 'video', 'narration']
+const NO_JOBS: Record<JobKind, Job | null> = { deck: null, quiz: null, video: null, narration: null }
 
 export function abortError(): DOMException {
   return new DOMException('Aborted', 'AbortError')
@@ -118,7 +118,8 @@ export const useJobsStore = create<JobsState>()((set, get) => {
     try {
       const { deckId } = await spec.run(ctx)
       if (!current()) return
-      markNew(deckId, kind)
+      // Scripts land in the tab the user is writing them in: no dot on the dashboard card.
+      if (kind !== 'narration') markNew(deckId, kind)
       patch(kind, id, {
         status: 'done',
         progress: 1,

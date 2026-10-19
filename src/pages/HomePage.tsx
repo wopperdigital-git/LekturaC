@@ -134,8 +134,9 @@ export function HomePage() {
           onCancel={() => setDeckPendingDelete(null)}
           onConfirm={async () => {
             useJobsStore.getState().abortForDeck(deckPendingDelete.id)
-            clearDeck(deckPendingDelete.id)
+            // A failure throws to the dialog, which says so and offers Try again.
             await deleteDeck(deckPendingDelete.id)
+            clearDeck(deckPendingDelete.id)
             setDeckPendingDelete(null)
             await refresh()
           }}

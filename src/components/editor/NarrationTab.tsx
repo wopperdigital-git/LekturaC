@@ -1,19 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { describeError, usePresentationStore } from '@/store/presentationStore'
-import { FallbackProvider, PROVIDER_CHAIN } from '@/ai/fallbackProvider'
-import { narrationSlides } from '@/ai/narrationPrompt'
-import {
-  hasValidTargets,
-  isResettable,
-  narrationStatus,
-  sameSlides,
-  type NarrationStatus,
-} from '@/engine/narration'
+import { useEffect, useState, type ReactNode } from 'react'
+import { usePresentationStore } from '@/store/presentationStore'
+import { PROVIDER_CHAIN } from '@/ai/fallbackProvider'
+import { hasValidTargets, isResettable, narrationStatus, type NarrationStatus } from '@/engine/narration'
+import { startNarrationJob } from '@/jobs/start'
+import { useJobsStore } from '@/jobs/jobsStore'
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
 import { Button } from '@/components/ui/Button'
 import { GenerateScriptsModal } from '@/components/narrate/GenerateScriptsModal'
 import { CloneVoiceModal } from '@/components/voice/CloneVoiceModal'
 import { isCartesiaConfigured } from '@/voice/cartesia'
+import { AI_NOT_SET_UP, VOICE_NOT_SET_UP, warnMissingKey } from '@/lib/setupCopy'
 import type { Card } from '@/engine/contentBlocks'
 
 const STATUS_LABEL: Record<NarrationStatus, string> = {
@@ -28,24 +24,17 @@ const STATUS_CLASS: Record<NarrationStatus, string> = {
   edited: 'text-app-highlight-text',
 }
 
-/** The slide ids in deck order, read fresh from the store (not from a render's closure). */
-function currentSlideIds(): string[] {
-  return [...usePresentationStore.getState().cards]
-    .sort((a, b) => a.orderIndex - b.orderIndex)
-    .map((c) => c.id)
-}
-
 /**
  * The Narration tab of the editor's right panel: one slide's spoken script, an AI icon
- * that opens the slide picker, and a Clone voice button. It writes for the slide the
+ * that opens the slide picker, and a Voice & video button. It writes for the slide the
  * editor is on (`cardId`), so there is no slide stepper here — the canvas beside it is
  * the viewer.
  *
- * It owns everything the old narration page owned: the generation request and its
- * `AbortController`, and the choose-slides dialog (which asks before overwriting a
- * hand-edited script). It must stay mounted while the panel shows another tab
- * (`ToolsPanel` keeps it mounted, hidden), or switching tabs would abort a request the
- * user only looked away from.
+ * Writing scripts is a background job (`jobs/narrationJob.ts`), so leaving the editor or
+ * switching tabs never cancels it; this tab starts it, shows it while it runs on this deck
+ * (the corner panel leaves it to the tab here) with Cancel, and shows a failure with Try
+ * again. It still owns the choose-slides dialog, which asks before overwriting a
+ * hand-edited script.
  *
  * `cards` must already be sorted by `orderIndex`.
  */
@@ -54,14 +43,12 @@ export function NarrationTab({
   cardId,
   openVoice,
   onVoiceOpened,
-  onVideoStarted,
 }: {
   cards: Card[]
   cardId: string | null
-  /** True when the page asks for the voice dialog (the corner panel's "View Video"). */
+  /** True when the page asks for the video dialog (the Create & export menu, or the corner panel's "View Video"). */
   openVoice?: boolean
   onVoiceOpened?: () => void
-  onVideoStarted?: () => void
 }) {
   const presentationId = usePresentationStore((s) => s.presentationId)
   const theme = usePresentationStore((s) => s.theme)
@@ -71,25 +58,24 @@ export function NarrationTab({
   const errorMessage = usePresentationStore((s) => s.errorMessage)
   const setNarrationText = usePresentationStore((s) => s.setNarrationText)
   const resetNarration = usePresentationStore((s) => s.resetNarration)
-  const applyGeneratedNarration = usePresentationStore((s) => s.applyGeneratedNarration)
+  // The scripts job, when it is this deck's: running, or failed with its reason.
+  const job = useJobsStore((s) => (s.jobs.narration && s.jobs.narration.deckId === presentationId ? s.jobs.narration : null))
+  const generating = job?.status === 'running'
 
-  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
-  const abortRef = useRef<AbortController | null>(null)
+
+  // Finished scripts are already in the boxes; the job has nothing more to say here.
+  useEffect(() => {
+    if (job?.status === 'done') useJobsStore.getState().dismiss('narration')
+  }, [job?.status])
 
   useEffect(() => {
     if (!openVoice) return
     setVoiceOpen(true)
     onVoiceOpened?.()
   }, [openVoice, onVoiceOpened])
-
-  // Cancelling has to stop the request, not just stop listening to it —
-  // otherwise scripts the user walked away from land and overwrite the deck.
-  useEffect(() => {
-    return () => abortRef.current?.abort()
-  }, [])
 
   const index = cardId === null ? -1 : cards.findIndex((c) => c.id === cardId)
   const card = index >= 0 ? cards[index] : undefined
@@ -100,57 +86,22 @@ export function NarrationTab({
   const voiceReady = isCartesiaConfigured()
 
   /**
-   * Runs one generation over an explicit set of 0-based slide positions.
-   *
-   * The set is the whole of the user's intent and travels all the way through:
-   * `narrationSlides` marks everything outside it SKIP so the model still sees
-   * the deck for continuity but is asked for nothing else, and
-   * `applyGeneratedNarration` refuses to write outside it whatever comes back.
-   * One slide or twenty is the same code path — the only difference is the size
-   * of the set.
-   *
-   * The editor stays live while this runs, and the set is *positions*. If a slide
-   * is added, deleted or moved before the reply lands, position N is no longer the
-   * slide the model was asked about, so nothing is applied (see `sameSlides`).
+   * Starts the scripts job over an explicit set of 0-based slide positions, handed to the
+   * job as card ids (see `narrationJob.ts`). The set is the whole of the user's intent:
+   * the job asks the model only about those slides and writes nowhere else.
    */
-  async function runGeneration(targets: Set<number>) {
+  function runGeneration(targets: Set<number>) {
     // A position can go stale between the click and here (an undo behind an open dialog).
-    if (!hasValidTargets(targets, cards.length)) return
+    if (!hasValidTargets(targets, cards.length) || !presentationId) return
     if (PROVIDER_CHAIN.length === 0) {
-      setError(
-        'No AI provider is configured. Add VITE_ANTHROPIC_API_KEY, VITE_GROQ_API_KEY, or VITE_GEMINI_API_KEY to your .env file.',
-      )
+      warnMissingKey('Script writing', 'VITE_ANTHROPIC_API_KEY, VITE_GROQ_API_KEY or VITE_GEMINI_API_KEY')
+      setError(AI_NOT_SET_UP)
       return
     }
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    const startIds = cards.map((c) => c.id)
-    setGenerating(true)
     setError(null)
-
-    try {
-      const provider = new FallbackProvider(PROVIDER_CHAIN)
-      const response = await provider.generateNarration(
-        title,
-        narrationSlides(cards, targets),
-        controller.signal,
-      )
-      if (controller.signal.aborted) return
-      if (!sameSlides(startIds, currentSlideIds())) {
-        setError(
-          'Slides were added, removed or reordered while the scripts were being written, so nothing was applied. Try again.',
-        )
-        return
-      }
-      applyGeneratedNarration(response.scripts, targets)
-    } catch (err) {
-      // A cancel is a return to the panel, not a failure to report.
-      if (controller.signal.aborted) return
-      setError(describeError(err))
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null
-      setGenerating(false)
+    const targetIds = cards.filter((_, i) => targets.has(i)).map((c) => c.id)
+    if (!startNarrationJob({ presentationId, title, targetIds })) {
+      setError('Scripts are already being written for another deck. Wait for them to finish, then try again.')
     }
   }
 
@@ -161,7 +112,8 @@ export function NarrationTab({
   // work already done and unrecoverable, so it outranks a stale generation error
   // (`error` is only cleared when the NEXT generation starts).
   const saveError = status === 'error' ? (errorMessage ?? 'Your changes could not be saved.') : null
-  const shownError = saveError ?? error
+  const jobError = job?.status === 'failed' ? job.error : null
+  const shownError = saveError ?? jobError ?? error
 
   return (
     <div className="flex h-full flex-col">
@@ -169,16 +121,33 @@ export function NarrationTab({
         <div className="border-b border-app-border px-3 py-2.5">
           {generating && (
             <>
-              <Button variant="secondary" onClick={() => abortRef.current?.abort()} className="w-full">
+              <Button
+                variant="secondary"
+                onClick={() => useJobsStore.getState().cancel('narration')}
+                disabled={!job?.cancellable}
+                className="w-full"
+              >
                 Cancel
               </Button>
-              <p className="mt-2 text-xs text-app-muted">Writing narration…</p>
+              <p className="mt-2 text-xs text-app-muted">
+                Writing narration… You can leave the editor; it keeps going.
+              </p>
             </>
           )}
           {shownError && (
             <p className={`text-xs font-medium text-red-600 dark:text-red-400 ${generating ? 'mt-2' : ''}`}>
               {shownError}
             </p>
+          )}
+          {jobError && !saveError && (
+            <div className="mt-2 flex gap-2">
+              <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => useJobsStore.getState().retry('narration')}>
+                Try again
+              </Button>
+              <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => useJobsStore.getState().dismiss('narration')}>
+                Dismiss
+              </Button>
+            </div>
           )}
         </div>
       )}
@@ -219,7 +188,7 @@ export function NarrationTab({
         </p>
       )}
 
-      {/* The AI icon on the left and Clone voice on the right, under the script box. Neither
+      {/* The AI icon on the left and Voice & video on the right, under the script box. Neither
           depends on the selected slide: the icon opens a picker over the whole deck, and the
           voice belongs to the user. */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-app-border px-3 py-2">
@@ -233,13 +202,13 @@ export function NarrationTab({
           <SparkleIcon />
         </FooterButton>
         <FooterButton
-          label="Clone voice"
-          title={voiceReady ? 'Set up a narration voice' : 'Add VITE_CARTESIA_API_KEY to enable voice cloning'}
+          label="Voice & video"
+          title={voiceReady ? 'Pick a voice and make a narrated video of the deck' : VOICE_NOT_SET_UP}
           disabled={!voiceReady}
           onClick={() => setVoiceOpen(true)}
         >
           <MicIcon />
-          Clone voice
+          Voice &amp; video
         </FooterButton>
       </div>
 
@@ -249,7 +218,7 @@ export function NarrationTab({
           onClose={() => setChoosing(false)}
           onGenerate={(targets) => {
             setChoosing(false)
-            void runGeneration(targets)
+            runGeneration(targets)
           }}
         />
       )}
@@ -258,7 +227,6 @@ export function NarrationTab({
         <CloneVoiceModal
           deck={{ presentationId, title, cards, theme, textStyle }}
           onClose={() => setVoiceOpen(false)}
-          onVideoStarted={onVideoStarted}
         />
       )}
     </div>

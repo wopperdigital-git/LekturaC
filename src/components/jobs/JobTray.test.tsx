@@ -44,6 +44,12 @@ describe('JobTrayView', () => {
     expect(html).toContain('Edit brief')
     expect(html).toContain('Try again')
   })
+  it('a running narration job says it is writing scripts and can be cancelled', () => {
+    const html = render([{ ...base, kind: 'narration', title: 'Deck' }])
+    expect(html).toContain('Writing scripts')
+    expect(html).toContain('Cancel')
+  })
+
   it('a failed quiz job offers only Try again', () => {
     const html = render([{ ...base, kind: 'quiz', status: 'failed', error: 'x', editHref: null }])
     expect(html).not.toContain('Edit brief')
@@ -78,6 +84,7 @@ describe('viewHref', () => {
     expect(viewHref({ ...base, status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1')
     expect(viewHref({ ...base, kind: 'quiz', status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1?quiz=list')
     expect(viewHref({ ...base, kind: 'video', status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1?video=1')
+    expect(viewHref({ ...base, kind: 'narration', status: 'done', resultDeckId: 'd1' })).toBe('/deck/d1?narrate=1')
   })
 })
 

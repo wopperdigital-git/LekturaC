@@ -45,7 +45,7 @@ function tagLabelled(html: string, label: string): string {
 }
 
 const AI = 'Generate scripts with AI'
-const CLONE = 'Clone voice'
+const VOICE = 'Voice &amp; video'
 
 describe('NarrationTab', () => {
   it('says so when the deck has no slides, and offers no generation', () => {
@@ -110,24 +110,26 @@ describe('NarrationTab', () => {
     expect(html).not.toContain('Writing narration')
   })
 
-  it('offers the AI icon and Clone voice in the footer with or without a slide selected', () => {
+  it('offers the AI icon and Voice & video in the footer with or without a slide selected', () => {
     for (const cardId of ['a', null]) {
       const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={cardId} />)
       expect(tagLabelled(html, AI)).toContain('type="button"')
-      expect(tagLabelled(html, CLONE)).toContain('type="button"')
+      expect(tagLabelled(html, VOICE)).toContain('type="button"')
     }
   })
 
-  it('enables Clone voice when a Cartesia key is set', () => {
+  it('enables Voice & video when a Cartesia key is set', () => {
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="a" />)
-    expect(tagLabelled(html, CLONE)).not.toContain('disabled=""')
+    expect(tagLabelled(html, VOICE)).not.toContain('disabled=""')
   })
 
-  it('disables Clone voice, saying why, when no Cartesia key is set', () => {
+  // In words a teacher can act on: the key's variable name is for whoever runs the site.
+  it('disables Voice & video, saying why without naming a key variable, when no Cartesia key is set', () => {
     vi.stubEnv('VITE_CARTESIA_API_KEY', '')
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="a" />)
-    const tag = tagLabelled(html, CLONE)
+    const tag = tagLabelled(html, VOICE)
     expect(tag).toContain('disabled=""')
-    expect(tag).toContain('VITE_CARTESIA_API_KEY')
+    expect(tag).toContain('Cartesia key')
+    expect(html).not.toContain('VITE_')
   })
 })

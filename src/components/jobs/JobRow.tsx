@@ -3,8 +3,8 @@ import { useState, type CSSProperties } from 'react'
 import type { Job } from '@/jobs/jobsStore'
 import type { JobActions } from './JobTray'
 
-const VIEW_LABEL = { deck: 'View Slide', quiz: 'View Quiz', video: 'View Video' } as const
-const KIND_LABEL = { deck: 'Generating slides', quiz: 'Generating quiz', video: 'Generating video' } as const
+const VIEW_LABEL = { deck: 'View Slide', quiz: 'View Quiz', video: 'View Video', narration: 'View Scripts' } as const
+const KIND_LABEL = { deck: 'Generating slides', quiz: 'Generating quiz', video: 'Generating video', narration: 'Writing scripts' } as const
 
 function Check() {
   return (

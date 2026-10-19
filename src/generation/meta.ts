@@ -5,9 +5,10 @@ import type { Claim, DeckBrief, QualityFlag, SlidePlan, Source } from './schemas
  * Everything the pipeline produced beside the deck itself, addressed by card
  * id rather than card index.
  *
- * Nothing reads this yet — it is stored purely so a later feature (citations
- * UI, a "why was this slide written this way" panel) has something to read
- * instead of needing the pipeline re-run. Keying by card id rather than array
+ * The editor's fact check reads `claims`, `sources` and `research` from it
+ * (`factCheck.ts`) and writes back `reviewed`, the ids of claims the teacher
+ * marked checked; nothing else reads it yet. It is stored so later features
+ * have something to read instead of needing the pipeline re-run. Keying by card id rather than array
  * position is what keeps it meaningful after cards are reordered or deleted:
  * an index would silently point at the wrong slide the moment the deck is
  * edited, while an id either still resolves or is harmlessly orphaned.
@@ -23,6 +24,8 @@ export interface GenerationMeta {
   flags: QualityFlag[]
   research: 'ok' | 'failed' | 'skipped'
   generatedAt: string
+  /** Claim ids the teacher marked checked in the fact check; absent until the first one. */
+  reviewed?: string[]
 }
 
 /**

@@ -9,6 +9,7 @@ import { ScaledSlide } from '@/components/theme/ScaledSlide'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle } from '@/engine/textStyle'
+import { DeckLoadError } from '@/components/editor/DeckLoadError'
 
 export function PresentPage() {
   const { id } = useParams<{ id: string }>()
@@ -74,6 +75,9 @@ export function PresentPage() {
     }
   }
 
+  if (id && store.loadError?.deckId === id) {
+    return <DeckLoadError error={store.loadError} onRetry={() => void store.loadDeck(id)} />
+  }
   if (!id || store.status === 'loading') {
     return <div className="p-8 text-app-muted">Loading…</div>
   }

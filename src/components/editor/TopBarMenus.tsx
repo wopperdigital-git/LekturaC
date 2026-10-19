@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Spinner } from '@/components/ui/Spinner'
 
 /*
-  The top bar's two dropdowns: Export (the things a deck can be turned into) and
+  The top bar's two dropdowns: Create & export (the things a deck can be turned into) and
   the account menu. Small popovers hung under their trigger, right-aligned since
   both sit at the bar's right end. They close on an outside press, on Escape and
   on a pick.
@@ -119,11 +119,25 @@ function MenuItem({
   )
 }
 
+/** A captioned run of menu items. The caption is for sight; the group's name carries it for a screen reader. */
+function MenuGroup({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <div role="group" aria-label={caption}>
+      <p aria-hidden="true" className="px-2 pt-1.5 pb-1 text-[11px] font-semibold text-app-muted">
+        {caption}
+      </p>
+      {children}
+    </div>
+  )
+}
+
 /**
- * What a deck can be turned into: a PowerPoint file, its narration as a text
- * script, or a quiz. Each item that cannot run right now is disabled with the
- * reason as its tooltip. The trigger's glyph becomes a spinner while the
- * PowerPoint file is built.
+ * Everything a deck turns into, under one labelled button: what can be made from it
+ * (a quiz, a narrated video) and then what can be downloaded (PowerPoint, the
+ * narration script). Making comes first because those were the hard ones to find
+ * when this was an icon-only "Export" menu. Each item that cannot run right now is
+ * disabled with the reason as its tooltip. The trigger's glyph becomes a spinner
+ * while the PowerPoint file is built.
  */
 export function ExportMenu({
   onExportPptx,
@@ -133,6 +147,8 @@ export function ExportMenu({
   scriptDisabledReason,
   onQuiz,
   quizDisabledReason,
+  onVideo,
+  videoDisabledReason,
   defaultOpen,
   highlight,
   highlightQuiz,
@@ -146,56 +162,84 @@ export function ExportMenu({
   onQuiz: () => void
   /** Why a quiz cannot be made right now, or `null` when it can. */
   quizDisabledReason: string | null
+  /** Opens the narrated video dialog. */
+  onVideo: () => void
+  /** Why a video cannot be made right now, or `null` when it can. */
+  videoDisabledReason: string | null
   defaultOpen?: boolean
   /** Rings the trigger: something new is inside. */
   highlight?: boolean
-  /** Marks the Generate Quiz item: a quiz finished and has not been opened. */
+  /** Marks the Quiz item: a quiz finished and has not been opened. */
   highlightQuiz?: boolean
 }) {
   return (
     <Dropdown
-      label="Export"
-      trigger={exporting ? <Spinner /> : <DownloadIcon />}
-      triggerClassName={`flex size-8 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10${highlight ? ' ring-2 ring-amber-400 ring-offset-1 ring-offset-app-background' : ''}`}
+      label="Create & export"
+      trigger={
+        <>
+          {exporting ? <Spinner /> : <DownloadIcon />}
+          Create &amp; export
+          <svg {...stroke} className="size-3.5 text-app-muted">
+            <path d="M5 8l5 5 5-5" />
+          </svg>
+        </>
+      }
+      triggerClassName={`flex h-8 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 text-sm font-medium whitespace-nowrap text-app-foreground/90 transition-colors hover:bg-app-foreground/10${highlight ? ' ring-2 ring-amber-400 ring-offset-1 ring-offset-app-background' : ''}`}
       defaultOpen={defaultOpen}
     >
       {(close) => (
         <>
-          <MenuItem
-            icon={<SlidesIcon />}
-            disabled={!canExport || exporting}
-            title={!canExport ? 'Nothing to export yet' : 'Download as PowerPoint (.pptx)'}
-            onClick={() => {
-              close()
-              onExportPptx()
-            }}
-          >
-            Export PPT
-          </MenuItem>
-          <MenuItem
-            icon={<ScriptIcon />}
-            disabled={scriptDisabledReason !== null}
-            title={scriptDisabledReason ?? 'Download the narration scripts as a text file'}
-            onClick={() => {
-              close()
-              onExportScript()
-            }}
-          >
-            Export Script
-          </MenuItem>
-          <MenuItem
-            icon={<QuizIcon />}
-            disabled={quizDisabledReason !== null}
-            title={quizDisabledReason ?? 'Make a quiz from these slides'}
-            className={highlightQuiz ? 'bg-amber-400/15 font-medium' : undefined}
-            onClick={() => {
-              close()
-              onQuiz()
-            }}
-          >
-            Generate Quiz
-            {highlightQuiz && <span aria-hidden className="ml-auto size-2 rounded-full bg-amber-400" />}
-          </MenuItem>
+          <MenuGroup caption="Make from this deck">
+            <MenuItem
+              icon={<QuizIcon />}
+              disabled={quizDisabledReason !== null}
+              title={quizDisabledReason ?? 'Make a quiz from these slides'}
+              className={highlightQuiz ? 'bg-amber-400/15 font-medium' : undefined}
+              onClick={() => {
+                close()
+                onQuiz()
+              }}
+            >
+              Quiz…
+              {highlightQuiz && <span aria-hidden className="ml-auto size-2 rounded-full bg-amber-400" />}
+            </MenuItem>
+            <MenuItem
+              icon={<VideoIcon />}
+              disabled={videoDisabledReason !== null}
+              title={videoDisabledReason ?? 'Pick a voice and make a video of the deck read aloud'}
+              onClick={() => {
+                close()
+                onVideo()
+              }}
+            >
+              Narrated video…
+            </MenuItem>
+          </MenuGroup>
+          <div aria-hidden="true" className="my-1 h-px bg-app-border" />
+          <MenuGroup caption="Download">
+            <MenuItem
+              icon={<SlidesIcon />}
+              disabled={!canExport || exporting}
+              title={!canExport ? 'Nothing to export yet' : 'Download as PowerPoint (.pptx)'}
+              onClick={() => {
+                close()
+                onExportPptx()
+              }}
+            >
+              PowerPoint (.pptx)
+            </MenuItem>
+            <MenuItem
+              icon={<ScriptIcon />}
+              disabled={scriptDisabledReason !== null}
+              title={scriptDisabledReason ?? 'Download the narration scripts as a text file'}
+              onClick={() => {
+                close()
+                onExportScript()
+              }}
+            >
+              Narration script (.txt)
+            </MenuItem>
+          </MenuGroup>
         </>
       )}
     </Dropdown>
@@ -312,6 +356,15 @@ function QuizIcon() {
     <svg {...stroke} className="size-4">
       <rect x="3.5" y="3" width="13" height="14" rx="2" />
       <path d="M7 7.5h6M7 10.5h6M7 13.5h3.5" />
+    </svg>
+  )
+}
+
+function VideoIcon() {
+  return (
+    <svg {...stroke} className="size-4">
+      <rect x="2.5" y="5" width="11" height="10" rx="1.5" />
+      <path d="M13.5 8.5l4-2.5v8l-4-2.5" />
     </svg>
   )
 }

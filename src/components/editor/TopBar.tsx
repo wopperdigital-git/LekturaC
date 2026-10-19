@@ -5,7 +5,7 @@ import { MAX_ZOOM, MIN_ZOOM } from '@/lib/zoom'
 import { AccountMenu, ExportMenu } from '@/components/editor/TopBarMenus'
 
 /**
- * The editor's top bar. Left: home and the deck title. Right: zoom, the Export menu (PowerPoint, script, quiz), Present and the account menu.
+ * The editor's top bar. Left: home and the deck title. Right: zoom, the Create & export menu (quiz, narrated video, PowerPoint, script), Present and the account menu.
  *
  * The Edit / Narrate modes are not here: they sit above the tools panel they
  * switch (`ModeTabs`). Undo and redo are not here either: they lead the
@@ -25,6 +25,8 @@ export function TopBar({
   presentHref,
   onQuiz,
   quizDisabledReason,
+  onVideo,
+  videoDisabledReason,
   accountName,
   accountType,
   onProfileSettings,
@@ -47,13 +49,17 @@ export function TopBar({
   onQuiz: () => void
   /** Why a quiz cannot be made right now, or `null` when it can. */
   quizDisabledReason: string | null
+  /** Opens the narrated video dialog. */
+  onVideo: () => void
+  /** Why a video cannot be made right now, or `null` when it can. */
+  videoDisabledReason: string | null
   accountName: string
   /** The account type in words, shown under the name. */
   accountType: string
   onProfileSettings: () => void
   /** The background quiz job's progress, drawn after the save status. */
   quizStrip?: ReactNode
-  /** A finished quiz the user has not opened yet: rings the Export trigger. */
+  /** A finished quiz the user has not opened yet: rings the Create & export trigger. */
   exportHighlight?: boolean
 }) {
   return (
@@ -155,6 +161,8 @@ export function TopBar({
           scriptDisabledReason={scriptDisabledReason}
           onQuiz={onQuiz}
           quizDisabledReason={quizDisabledReason}
+          onVideo={onVideo}
+          videoDisabledReason={videoDisabledReason}
           highlight={exportHighlight}
           highlightQuiz={exportHighlight}
         />
