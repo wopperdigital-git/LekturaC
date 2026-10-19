@@ -1,7 +1,14 @@
--- Hand-run checks for 0012_quizzes.sql.
+-- Hand-run checks for 0012_quizzes.sql, against the database as it is after
+-- 0016_quiz_sections.sql.
 --
 -- Paste into the Supabase SQL editor (runs as postgres) after applying
--- 0009-0012. Everything happens inside one transaction that rolls back, so no
+-- 0009-0016. 0016 replaced create_quiz with a version that takes the tests
+-- (p_sections), so every quiz made here is one test wrapping the questions;
+-- what is specific to tests (1-3 of them, mixed types, a word box per test)
+-- is checked in 0016_quiz_sections.sql. This file keeps the rest: question
+-- shapes, codes, RLS on answers, server scoring, one attempt, who may post.
+--
+-- Everything happens inside one transaction that rolls back, so no
 -- fixture survives. Any failed check raises and aborts with a message naming
 -- it; a clean run ends by printing "quiz RLS checks passed".
 --
@@ -78,6 +85,10 @@ do $$ begin
     raise exception 'migration: quiz_type / settings defaults are wrong';
   end if;
   delete from quizzes where id = '00000000-0000-4000-d000-000000000199';
+  -- 0016 dropped the six-argument create_quiz; only the p_sections one is left
+  if to_regprocedure('create_quiz(uuid,text,text,text,jsonb,jsonb)') is not null then
+    raise exception 'migration: the 0012 create_quiz is still installed (run 0016)';
+  end if;
 end $$;
 
 set local role authenticated;
@@ -93,8 +104,9 @@ declare
   good jsonb := '{"slide_number":2,"slide_heading":"Organelles","prompt":"Which organelle makes ATP?","choices":["Nucleus","Mitochondrion","Ribosome","Golgi"],"answer":1}';
   good2 jsonb := '{"slide_number":3,"slide_heading":"Protein","prompt":"Which organelle makes protein?","choices":["Nucleus","Golgi","Ribosome"],"answer":2}';
 begin
-  res := create_quiz('00000000-0000-4000-e000-000000000101', 'Cells quiz', 'Cells', 'multiple_choice',
-                     '{"choiceCount":4}', jsonb_build_array(good, good2));
+  res := create_quiz('00000000-0000-4000-e000-000000000101', 'Cells quiz', 'Cells', jsonb_build_array(
+           jsonb_build_object('title', 'Test 1', 'instructions', '', 'type', 'multiple_choice',
+                              'settings', '{"choiceCount":4}'::jsonb, 'questions', jsonb_build_array(good, good2))));
   if res->>'id' is null then raise exception 'teacher: create_quiz returned no id'; end if;
   if res->>'code' is null or res->>'code' !~ '^[A-HJKMNP-Z2-9]{8}$' then
     raise exception 'teacher: create_quiz returned a malformed code: %', res->>'code';
@@ -110,7 +122,7 @@ begin
     raise exception 'teacher: the stored code differs from the returned one';
   end if;
   if (select quiz_type from quizzes where id = qid) <> 'multiple_choice'
-     or (select settings from quizzes where id = qid) <> '{"choiceCount":4}'::jsonb
+     or (select settings->'sections'->0->'choiceCount' from quizzes where id = qid) <> '4'::jsonb
      or (select deck_title from quizzes where id = qid) <> 'Cells'
      or (select teacher_id from quizzes where id = qid) <> '00000000-0000-4000-a000-000000000101' then
     raise exception 'teacher: the created quiz row is wrong';
@@ -151,6 +163,7 @@ declare
   refused boolean;
   msg text;
 begin
+  -- each request below is one test holding the questions under check
   for rec in
     select * from (values
       ('zero questions',                    'multiple_choice', '[]'::jsonb,                                                                'between 1 and 20'),
@@ -187,7 +200,8 @@ begin
     refused := false;
     msg := null;
     begin
-      perform create_quiz(pres, 'Bad quiz', 'Cells', rec.qtype, '{}', rec.payload);
+      perform create_quiz(pres, 'Bad quiz', 'Cells', jsonb_build_array(jsonb_build_object(
+        'title', 'Test 1', 'instructions', '', 'type', rec.qtype, 'settings', '{}'::jsonb, 'questions', rec.payload)));
     exception when others then
       refused := true;
       msg := sqlerrm;
@@ -203,7 +217,8 @@ begin
   -- a blank title
   refused := false;
   begin
-    perform create_quiz(pres, '   ', 'Cells', 'true_false', '{}', jsonb_build_array(good_tf));
+    perform create_quiz(pres, '   ', 'Cells', jsonb_build_array(jsonb_build_object(
+      'title', 'Test 1', 'instructions', '', 'type', 'true_false', 'settings', '{}'::jsonb, 'questions', jsonb_build_array(good_tf))));
   exception when others then
     refused := true;
     msg := sqlerrm;
@@ -216,8 +231,9 @@ begin
   -- of a refused request is left behind
   refused := false;
   begin
-    perform create_quiz(pres, 'Bad quiz', 'Cells', 'multiple_choice', '{}',
-                        jsonb_build_array(good_mc, good_mc - 'answer'::text));
+    perform create_quiz(pres, 'Bad quiz', 'Cells', jsonb_build_array(jsonb_build_object(
+      'title', 'Test 1', 'instructions', '', 'type', 'multiple_choice', 'settings', '{}'::jsonb,
+      'questions', jsonb_build_array(good_mc, good_mc - 'answer'::text))));
   exception when others then
     refused := true;
   end;
@@ -234,7 +250,9 @@ declare
   res jsonb;
   fb jsonb := '{"slide_number":3,"slide_heading":"Energy","prompt":"The ___ makes ATP.","choices":["leak","leak two","leak three"],"answer":{"text":"mitochondrion","accepted":[]}}';
 begin
-  res := create_quiz('00000000-0000-4000-e000-000000000101', 'Blank choices quiz', 'Cells', 'fill_blank', '{}', jsonb_build_array(fb));
+  res := create_quiz('00000000-0000-4000-e000-000000000101', 'Blank choices quiz', 'Cells', jsonb_build_array(
+           jsonb_build_object('title', 'Test 1', 'instructions', '', 'type', 'fill_blank',
+                              'settings', '{}'::jsonb, 'questions', jsonb_build_array(fb))));
   if (select count(*) from quiz_questions where quiz_id = (res->>'id')::uuid) <> 1 then
     raise exception 'teacher: expected one fill-blank question';
   end if;
@@ -280,8 +298,9 @@ declare
   refused boolean := false;
   msg text;
 begin
-  res := create_quiz('00000000-0000-4000-e000-000000000104', 'General quiz', 'General deck', 'true_false',
-                     '{"notation":"word"}', jsonb_build_array(good_tf));
+  res := create_quiz('00000000-0000-4000-e000-000000000104', 'General quiz', 'General deck', jsonb_build_array(
+           jsonb_build_object('title', 'Test 1', 'instructions', '', 'type', 'true_false',
+                              'settings', '{"notation":"word"}'::jsonb, 'questions', jsonb_build_array(good_tf))));
   if res->>'code' is null or res->>'code' !~ '^[A-HJKMNP-Z2-9]{8}$' then
     raise exception 'general: create_quiz on their own deck returned a bad code';
   end if;
@@ -289,7 +308,9 @@ begin
   perform set_config('quiztest.general_code', res->>'code', true);
 
   begin
-    perform create_quiz('00000000-0000-4000-e000-000000000101', 'Stolen quiz', 'Cells', 'true_false', '{}', jsonb_build_array(good_tf));
+    perform create_quiz('00000000-0000-4000-e000-000000000101', 'Stolen quiz', 'Cells', jsonb_build_array(
+      jsonb_build_object('title', 'Test 1', 'instructions', '', 'type', 'true_false',
+                         'settings', '{}'::jsonb, 'questions', jsonb_build_array(good_tf))));
   exception when others then
     refused := true;
     msg := sqlerrm;
@@ -352,8 +373,8 @@ begin
      or (res->'classes'->0->>'attempted')::boolean is distinct from false then
     raise exception 'student: classes should list the one class, not yet attempted';
   end if;
-  if jsonb_typeof(res->'word_box') <> 'null' then
-    raise exception 'student: a multiple-choice quiz must have no word box';
+  if res->'word_boxes' is distinct from '{}'::jsonb then
+    raise exception 'student: a multiple-choice quiz must have no word box, got %', res->'word_boxes';
   end if;
 end $$;
 
@@ -434,10 +455,11 @@ do $$
 declare
   res jsonb;
 begin
-  -- the word box is on for this quiz: it lists the answers
+  -- the word box is on for this quiz (saved before 0016, so one test): it lists the answers
   res := get_quiz_for_taking('FXBKNK22');
-  if jsonb_typeof(res->'word_box') <> 'array' or not (res->'word_box' @> '["Mitochondria"]'::jsonb) then
-    raise exception 'blank quiz: word_box should list "Mitochondria", got %', res->'word_box';
+  if jsonb_typeof(res->'word_boxes'->'0') is distinct from 'array'
+     or not (res->'word_boxes'->'0' @> '["Mitochondria"]'::jsonb) then
+    raise exception 'blank quiz: word box 0 should list "Mitochondria", got %', res->'word_boxes';
   end if;
   if jsonb_path_exists(res, '$.questions[*].answer') or res::text like '%"accepted"%' then
     raise exception 'blank quiz: an answer leaked into the payload';
@@ -573,8 +595,9 @@ begin
 
   refused := false;
   begin
-    perform create_quiz('00000000-0000-4000-e000-000000000101', 'x', 'x', 'true_false', '{}',
-                        '[{"slide_number":1,"prompt":"p","choices":[],"answer":true}]');
+    perform create_quiz('00000000-0000-4000-e000-000000000101', 'x', 'x',
+      '[{"title":"Test 1","instructions":"","type":"true_false","settings":{},
+         "questions":[{"slide_number":1,"prompt":"p","choices":[],"answer":true}]}]');
   exception when others then refused := true; msg := sqlerrm;
   end;
   if not refused or msg <> 'Log in to create a quiz.' then raise exception 'no session: create_quiz (%)', msg; end if;
@@ -605,7 +628,7 @@ begin
 
   refused := false;
   begin
-    perform create_quiz('00000000-0000-4000-e000-000000000101', 'x', 'x', 'true_false', '{}', '[]');
+    perform create_quiz('00000000-0000-4000-e000-000000000101', 'x', 'x', '[]');
   exception when insufficient_privilege then refused := true;
   end;
   if not refused then raise exception 'anon: was allowed to call create_quiz'; end if;
