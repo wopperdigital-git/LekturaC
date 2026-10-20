@@ -37,6 +37,7 @@
   --color-app-accent: var(--app-accent);
   --color-app-accent-foreground: var(--app-accent-foreground);
   --color-app-accent-text: var(--app-accent-text);
+  --color-app-accent-on-foreground: var(--app-accent-on-foreground);
   --color-app-secondary: var(--app-secondary);
   --color-app-highlight: var(--app-highlight);
   --color-app-highlight-text: var(--app-highlight-text);
@@ -89,6 +90,9 @@
   --app-accent: #ff5a1f;
   --app-accent-foreground: #111111;
   --app-accent-text: #b8400f;
+  /* orange marks on a foreground fill (the active rail row, the active view
+     segment): ink here, so the fill orange holds (6.1:1) */
+  --app-accent-on-foreground: #ff5a1f;
   --app-secondary: #e3e3dd;
   --app-highlight: #00a6a6;
   /* teal text on white (5.7:1) */
@@ -164,6 +168,9 @@
   --app-accent-foreground: #111111;
   /* orange text on the dark ground (7.5:1) */
   --app-accent-text: #ff8a5c;
+  /* the foreground fill is near-white here; the bright orange would be 2.5:1
+     on it, under the 3:1 a state icon needs (4.9:1) */
+  --app-accent-on-foreground: #b8400f;
   --app-secondary: #2e2e2b;
   --app-highlight: #19b8b8;
   --app-highlight-text: #4fd1d1;

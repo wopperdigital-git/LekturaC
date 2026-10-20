@@ -221,7 +221,7 @@ export function SidebarLink({
       {icon && (
         <span
           className={`grid size-4 shrink-0 place-items-center transition-colors ${
-            active ? 'text-app-accent' : 'text-app-muted group-hover:text-app-foreground'
+            active ? 'text-app-accent-on-foreground' : 'text-app-muted group-hover:text-app-foreground'
           }`}
         >
           {icon}

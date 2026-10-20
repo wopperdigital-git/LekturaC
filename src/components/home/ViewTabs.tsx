@@ -74,7 +74,7 @@ export function ViewTabs({
             {view.label}
             {/* The active segment wears the programme's orange lanyard tab. */}
             {isActive && (
-              <span aria-hidden="true" className="absolute bottom-0 left-1/2 h-1 w-5 -translate-x-1/2 bg-app-accent" />
+              <span aria-hidden="true" className="absolute bottom-0 left-1/2 h-1 w-5 -translate-x-1/2 bg-app-accent-on-foreground" />
             )}
           </button>
         )

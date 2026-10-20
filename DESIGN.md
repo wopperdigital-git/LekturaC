@@ -6,6 +6,8 @@ colors:
   signal-orange-text: "#b8400f"
   signal-orange-night: "#ff6a33"
   signal-orange-text-night: "#ff8a5c"
+  signal-orange-on-ink: "#ff5a1f"
+  signal-orange-on-ink-night: "#b8400f"
   track-teal: "#00a6a6"
   track-teal-text: "#007274"
   track-teal-night: "#19b8b8"
@@ -201,6 +203,7 @@ A high-contrast event palette: neutral ink and badge white carry the structure, 
 - **Stock Secondary** (`--app-secondary`): secondary fills.
 - **Rule Grey** (`--app-border`): hairlines (rail edge, card frame at rest, dialog frame at 70%, panel dividers, scrollbar thumb). Decorative only (1.38:1 on white); never the only edge of a control.
 - **True Ink** (`--app-foreground`, `--app-on-track`): all text, the 1.5px control rule, the active nav row and view segment fill, text on every track fill in both modes.
+- **Orange on Ink** (`--app-accent-on-foreground`): orange marks drawn on the foreground fill (the active nav row's icon, the active view segment's lanyard bar). The fill orange in light; in dark the fill turns warm white, so it deepens to `#b8400f` to keep 3:1.
 - **Programme Grey** (`--app-muted`): captions, meta, inactive nav, placeholders.
 - **Night palette** (`[data-theme='dark']`): Night Stock, Night Hall, Night Surface, Night Secondary, Night Rule, Warm White Ink, Night Programme Grey. A separate palette, not the light one inverted; orange steps brighter, track fills stay, ink stays on orange and on every track.
 
@@ -219,6 +222,7 @@ Verified contrast (computed from the hex values, WCAG 2.x):
 | Danger text on page / on 10% tint | 7.16 / 6.03 | 7.94 |
 | Foreground on 25% sun tint | 16.94 | 8.25 |
 | Active nav row (page colour on ink) | 18.88 | 15.52 |
+| Orange mark on the ink fill (`--app-accent-on-foreground`: active nav icon, active view segment bar) | 6.06 | 4.95 |
 
 ### Named Rules
 **The Track Means Track Rule.** Orange, teal, sun and cobalt identify which track something belongs to (a deck's badge stripe, the band over page titles). They are never decoration beyond that, and never a second action colour.
@@ -360,4 +364,3 @@ Open items, stated as they stand in the build:
 3. The login panel's visual is still a constellation starfield, recoloured, on a literal `#111110`.
 4. JobTray rows are not yet restyled as ink-ruled badges (hairline frame, float shadow).
 5. Rounded utilities from earlier palettes remain outside the files listed (`rounded-md`/`lg`/`xl`/`2xl` in classroom rows, AnnouncementList, MyClassesPage, AppearanceSection), along with resting `shadow-2xs`/`shadow-sm` in classroom, settings, the Select trigger and the rail avatar, and `blue-500` utilities in StudentRow, ProfileSection and MyClassesPage.
-6. In dark mode the active nav row's orange icon on the warm-white fill is 2.54:1, under the 3:1 non-text minimum.
