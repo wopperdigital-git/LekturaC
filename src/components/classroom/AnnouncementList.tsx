@@ -133,12 +133,12 @@ export function AnnouncementList({
           ) : (
             <article
               key={a.id}
-              className="group relative overflow-hidden rounded-app border border-app-border bg-app-background p-4 sm:p-5 shadow-xs transition-all duration-150 hover:border-app-border/90 hover:shadow-sm"
+              className="group relative overflow-hidden rounded-app border border-app-border bg-app-background p-4 sm:p-5 transition-all duration-150 hover:border-app-border/90 hover:shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="grid size-6 place-items-center rounded-md bg-app-accent/10 text-app-accent">
+                    <span className="grid size-6 place-items-center rounded-app-sm bg-app-accent/10 text-app-accent">
                       <svg className="size-3.5" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M2.5 6.5h2l4.5-3.5v10l-4.5-3.5h-2a1 1 0 01-1-1v-1a1 1 0 011-1z" />
                         <path d="M12 5.5a4 4 0 010 5M13.5 3.5a7 7 0 010 9" />

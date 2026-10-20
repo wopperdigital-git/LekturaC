@@ -459,7 +459,7 @@ export function AppSidebar({
           <div className="flex items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-app-highlight text-sm font-semibold text-app-highlight-foreground shadow-2xs"
+              className="grid size-8 shrink-0 place-items-center rounded-full bg-app-highlight text-sm font-semibold text-app-highlight-foreground"
             >
               {name?.charAt(0).toUpperCase() ?? '?'}
             </span>

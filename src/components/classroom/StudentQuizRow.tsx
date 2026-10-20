@@ -27,7 +27,7 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
         <div className="flex items-start gap-3.5 min-w-0 flex-1">
           <div
             aria-hidden="true"
-            className={`grid size-10 shrink-0 place-items-center rounded-xl border shadow-2xs ${
+            className={`grid size-10 shrink-0 place-items-center rounded-app-sm border ${
               attempt
                 ? 'border-app-highlight/25 bg-app-highlight/10 text-app-highlight-text'
                 : 'border-app-accent/25 bg-app-accent/10 text-app-accent'
@@ -107,7 +107,7 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
         <div className="flex shrink-0 items-center sm:self-center">
           {attempt ? (
             <div
-              className={`flex items-center gap-2 rounded-app-sm border px-3.5 py-2 font-mono text-sm font-bold shadow-2xs ${
+              className={`flex items-center gap-2 rounded-app-sm border px-3.5 py-2 font-mono text-sm font-bold ${
                 isHigh
                   ? 'border-app-highlight/30 bg-app-highlight/10 text-app-highlight-text'
                   : isMid
@@ -123,7 +123,7 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
           ) : (
             <Link
               to={`/quiz/${quiz.code}`}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-app-sm bg-app-accent px-4 py-2 text-sm font-semibold text-app-accent-foreground shadow-sm transition-all duration-150 hover:brightness-110 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-app-sm bg-app-accent px-4 py-2 text-sm font-semibold text-app-accent-foreground transition-all duration-150 hover:brightness-110 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
             >
               <span>Take quiz</span>
               <svg className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

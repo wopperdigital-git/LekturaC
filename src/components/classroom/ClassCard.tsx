@@ -159,7 +159,7 @@ export function ClassCard({
   return (
     <article
       onClick={onOpen}
-      className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-app border border-app-border bg-app-background shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-app-accent/50 hover:shadow-md"
+      className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-app border border-app-border bg-app-background transition-all duration-200 hover:-translate-y-0.5 hover:border-app-accent/50 hover:shadow-md"
     >
       {/* Top subtle decorative gradient bar */}
       <div className="h-1.5 w-full bg-gradient-to-r from-app-accent/80 via-app-accent to-app-highlight" />
@@ -262,7 +262,7 @@ export function ClassListRow({
   return (
     <article
       onClick={onOpen}
-      className="group relative flex cursor-pointer flex-col gap-3 rounded-app-sm border border-app-border bg-app-background p-4 shadow-2xs transition-all duration-150 hover:border-app-accent/40 hover:bg-app-surface/30 sm:flex-row sm:items-center sm:justify-between"
+      className="group relative flex cursor-pointer flex-col gap-3 rounded-app-sm border border-app-border bg-app-background p-4 transition-all duration-150 hover:border-app-accent/40 hover:bg-app-surface/30 sm:flex-row sm:items-center sm:justify-between"
     >
       {/* Left: Class initials avatar, Name, Description */}
       <div className="flex items-center gap-3.5 min-w-0 flex-1">

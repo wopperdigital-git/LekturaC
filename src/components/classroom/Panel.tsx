@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 /** The dashboard's bordered working surface, with an optional toolbar strip. */
 export function Panel({ toolbar, children }: { toolbar?: ReactNode; children: ReactNode }) {
   return (
-    <section className="relative rounded-app border border-app-border bg-app-background shadow-md">
+    <section className="relative rounded-app border border-app-border bg-app-background">
       {toolbar && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-[calc(var(--app-radius)-1px)] border-b border-app-border bg-app-surface/20 px-4 py-3 sm:px-5">
           {toolbar}
@@ -31,7 +31,7 @@ export function PanelMessage({
   return (
     <div className="flex flex-col items-center px-6 py-14 text-center">
       {icon && (
-        <div className="mb-4 grid size-12 place-items-center rounded-full border border-app-border bg-app-surface/60 text-app-muted shadow-2xs">
+        <div className="mb-4 grid size-12 place-items-center rounded-full border border-app-border bg-app-surface/60 text-app-muted">
           {icon}
         </div>
       )}

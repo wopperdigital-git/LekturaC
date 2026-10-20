@@ -80,7 +80,7 @@ export function QuizRow({
   }))
 
   return (
-    <div className="group/quiz relative rounded-app border border-app-border bg-app-background shadow-xs transition-all duration-200 hover:border-app-accent/30 hover:shadow-sm">
+    <div className="group/quiz relative rounded-app border border-app-border bg-app-background transition-all duration-200 hover:border-app-accent/30 hover:shadow-sm">
       {/* Main Card Body */}
       <div className="flex flex-col gap-3.5 p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -88,7 +88,7 @@ export function QuizRow({
           <div className="flex items-start gap-3.5 min-w-0 flex-1">
             <div
               aria-hidden="true"
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-app-accent/20 bg-app-accent/10 text-app-accent shadow-2xs"
+              className="grid size-11 shrink-0 place-items-center rounded-app-sm border border-app-accent/20 bg-app-accent/10 text-app-accent"
             >
               <svg
                 className="size-5"
@@ -199,7 +199,7 @@ export function QuizRow({
         {/* Left: Code Voucher & Share Links */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Monospace Code Voucher */}
-          <div className="flex items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface/80 px-2.5 py-1 shadow-2xs">
+          <div className="flex items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface/80 px-2.5 py-1">
             <svg
               className="size-3.5 text-app-accent"
               viewBox="0 0 16 16"

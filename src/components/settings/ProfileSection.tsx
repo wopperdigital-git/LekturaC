@@ -49,7 +49,7 @@ export function ProfileSection() {
       <div className="flex items-center gap-4 rounded-app-sm border border-app-border bg-app-surface/40 p-4">
         <div
           aria-hidden="true"
-          className="grid size-14 shrink-0 place-items-center rounded-full bg-app-highlight text-lg font-bold text-app-highlight-foreground shadow-xs ring-2 ring-app-border/80"
+          className="grid size-14 shrink-0 place-items-center rounded-full bg-app-highlight text-lg font-bold text-app-highlight-foreground ring-2 ring-app-border/80"
         >
           {initial}
         </div>
@@ -63,7 +63,7 @@ export function ProfileSection() {
                 role === 'teacher'
                   ? 'border-app-accent/30 bg-app-accent/10 text-app-accent-text'
                   : role === 'student'
-                  ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                  ? 'border-app-foreground/40 bg-app-surface text-app-foreground'
                   : 'border-app-border bg-app-surface text-app-muted'
               }`}
             >

@@ -132,7 +132,7 @@ export function Select<T extends string = string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        className={`flex w-full cursor-pointer items-center justify-between rounded-app-sm border bg-app-surface/90 text-app-foreground shadow-2xs backdrop-blur-xs transition-all duration-150 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`flex w-full cursor-pointer items-center justify-between rounded-app-sm border bg-app-surface/90 text-app-foreground backdrop-blur-xs transition-all duration-150 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
           isSmall ? 'gap-2 px-2.5 py-1 text-xs font-medium' : 'gap-2.5 px-3 py-1.5 text-sm font-medium'
         } ${
           open

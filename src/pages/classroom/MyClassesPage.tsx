@@ -83,10 +83,10 @@ export function MyClassesPage() {
       {/* Executive Quick Access Portal: Side-by-Side Join Class & Quiz Entry */}
       <div className="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Card 1: Join Classroom */}
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-app border border-app-border bg-app-background p-5 shadow-sm transition-all duration-200 hover:border-app-accent/40 hover:shadow-md">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-app border border-app-border bg-app-background p-5 transition-all duration-200 hover:border-app-accent/40 hover:shadow-md">
           <div>
             <div className="flex items-center gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-app-accent/25 bg-app-accent/10 text-app-accent shadow-2xs">
+              <div className="grid size-10 shrink-0 place-items-center rounded-app-sm border border-app-accent/25 bg-app-accent/10 text-app-accent">
                 <svg
                   className="size-5"
                   viewBox="0 0 24 24"
@@ -170,10 +170,10 @@ export function MyClassesPage() {
         </div>
 
         {/* Card 2: Open Quiz */}
-        <div className="relative flex flex-col justify-between overflow-hidden rounded-app border border-app-border bg-app-background p-5 shadow-sm transition-all duration-200 hover:border-blue-500/40 hover:shadow-md">
+        <div className="relative flex flex-col justify-between overflow-hidden rounded-app border border-app-border bg-app-background p-5 transition-all duration-200 hover:border-app-foreground hover:shadow-md">
           <div>
             <div className="flex items-center gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-blue-500/25 bg-blue-500/10 text-blue-600 shadow-2xs dark:text-blue-400">
+              <div className="grid size-10 shrink-0 place-items-center rounded-app-sm border border-app-border bg-app-surface text-app-foreground">
                 <svg
                   className="size-5"
                   viewBox="0 0 24 24"
@@ -280,7 +280,7 @@ export function MyClassesPage() {
           <LoadError message={state.error} onRetry={reload} />
         ) : state.data.classes.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-app border border-dashed border-app-border/80 bg-app-surface/20 px-6 py-16 text-center">
-            <div className="mb-4 grid size-14 place-items-center rounded-2xl border border-app-accent/20 bg-app-accent/10 text-app-accent shadow-xs">
+            <div className="mb-4 grid size-14 place-items-center rounded-app border border-app-accent/20 bg-app-accent/10 text-app-accent">
               <svg
                 className="size-7"
                 viewBox="0 0 24 24"
@@ -329,7 +329,7 @@ export function MyClassesPage() {
                 <div
                   key={c.id}
                   onClick={() => void navigate(`/classes/${c.id}`)}
-                  className="group relative flex cursor-pointer flex-col overflow-hidden rounded-app border border-app-border bg-app-background shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-app-accent/40 hover:shadow-md focus-within:ring-2 focus-within:ring-app-accent"
+                  className="group relative flex cursor-pointer flex-col overflow-hidden rounded-app border border-app-border bg-app-background transition-all duration-200 hover:-translate-y-0.5 hover:border-app-accent/40 hover:shadow-md focus-within:ring-2 focus-within:ring-app-accent"
                 >
                   {/* Decorative top accent gradient bar */}
                   <div className="h-1 w-full bg-gradient-to-r from-app-accent/80 via-app-accent to-app-highlight" />
@@ -337,7 +337,7 @@ export function MyClassesPage() {
                   <div className="flex flex-1 flex-col p-5">
                     <div className="flex items-start gap-3">
                       {/* Monogram avatar */}
-                      <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-app-accent/20 bg-app-accent/10 font-mono text-sm font-bold text-app-accent shadow-2xs">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-app-sm border border-app-accent/20 bg-app-accent/10 font-mono text-sm font-bold text-app-accent-text">
                         {monogram}
                       </div>
 

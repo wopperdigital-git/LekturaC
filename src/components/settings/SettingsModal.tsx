@@ -119,7 +119,7 @@ export function SettingsModal({
       maxWidth="max-w-2xl"
       title={
         <div className="flex items-center gap-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-app-sm border border-app-accent/25 bg-app-accent/10 text-app-accent shadow-2xs">
+          <div className="grid size-9 shrink-0 place-items-center rounded-app-sm border border-app-accent/25 bg-app-accent/10 text-app-accent">
             <SettingsIcon className="size-5" />
           </div>
           <div>
@@ -155,7 +155,7 @@ export function SettingsModal({
                 onClick={() => setActiveTab(tab.key)}
                 className={`group flex cursor-pointer items-center justify-center gap-2 rounded-app-sm px-3 py-2 text-xs font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
                   active
-                    ? 'bg-app-accent text-app-accent-foreground shadow-2xs font-semibold'
+                    ? 'bg-app-accent text-app-accent-foreground font-semibold'
                     : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
                 }`}
               >

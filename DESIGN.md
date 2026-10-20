@@ -363,4 +363,3 @@ Open items, stated as they stand in the build:
 2. The editor carries little of the world beyond tabs, caps and buttons; the top bar, Create & export menu and floating toolbar are largely unrestyled.
 3. The login panel's visual is still a constellation starfield, recoloured, on a literal `#111110`.
 4. JobTray rows are not yet restyled as ink-ruled badges (hairline frame, float shadow).
-5. Rounded utilities from earlier palettes remain outside the files listed (`rounded-md`/`lg`/`xl`/`2xl` in classroom rows, AnnouncementList, MyClassesPage, AppearanceSection), along with resting `shadow-2xs`/`shadow-sm` in classroom, settings, the Select trigger and the rail avatar, and `blue-500` utilities in StudentRow, ProfileSection and MyClassesPage.

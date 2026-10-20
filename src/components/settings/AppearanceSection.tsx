@@ -18,7 +18,7 @@ const OPTIONS: ThemeOption[] = [
 function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
   if (mode === 'light') {
     return (
-      <div className="relative h-20 w-full overflow-hidden rounded-md border border-black/10 bg-[#ffffff] p-1.5 shadow-xs">
+      <div className="relative h-20 w-full overflow-hidden rounded-app-sm border border-black/10 bg-[#ffffff] p-1.5">
         {/* Left rail */}
         <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#efefeb] p-0.5 flex flex-col gap-1 border-r border-[#dcdcd6]/60">
           <div className="size-2 rounded-full bg-[#ff5a1f]" />
@@ -32,7 +32,7 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
             <div className="h-1 w-16 rounded bg-[#55554f]/60" />
           </div>
           {/* Mini card */}
-          <div className="rounded border border-[#dcdcd6] bg-white p-1 shadow-2xs">
+          <div className="rounded border border-[#dcdcd6] bg-white p-1">
             <div className="h-1 w-10 rounded bg-[#ff5a1f]/70" />
             <div className="mt-0.5 h-0.5 w-14 rounded bg-[#55554f]/40" />
           </div>
@@ -43,7 +43,7 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
 
   if (mode === 'dark') {
     return (
-      <div className="relative h-20 w-full overflow-hidden rounded-md border border-white/10 bg-[#111110] p-1.5 shadow-xs">
+      <div className="relative h-20 w-full overflow-hidden rounded-app-sm border border-white/10 bg-[#111110] p-1.5">
         {/* Left rail */}
         <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#1a1a19] p-0.5 flex flex-col gap-1 border-r border-[#34342f]/60">
           <div className="size-2 rounded-full bg-[#ff5a1f]" />
@@ -57,7 +57,7 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
             <div className="h-1 w-16 rounded bg-[#a8a8a0]/60" />
           </div>
           {/* Mini card */}
-          <div className="rounded border border-[#34342f] bg-[#1a1a19] p-1 shadow-2xs">
+          <div className="rounded border border-[#34342f] bg-[#1a1a19] p-1">
             <div className="h-1 w-10 rounded bg-[#ff5a1f]/70" />
             <div className="mt-0.5 h-0.5 w-14 rounded bg-[#a8a8a0]/40" />
           </div>
@@ -68,7 +68,7 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
 
   // System mode: split diagonal preview
   return (
-    <div className="relative h-20 w-full overflow-hidden rounded-md border border-app-border bg-[#ffffff] shadow-xs">
+    <div className="relative h-20 w-full overflow-hidden rounded-app-sm border border-app-border bg-[#ffffff]">
       {/* Light side (Left) */}
       <div className="absolute inset-0 p-1.5">
         <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#efefeb] p-0.5 flex flex-col gap-1 border-r border-[#dcdcd6]/60">
@@ -91,7 +91,7 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
             <div className="h-1.5 w-8 rounded bg-[#f2f2ee]/80" />
             <div className="h-1 w-6 rounded bg-[#a8a8a0]/60" />
           </div>
-          <div className="rounded border border-[#34342f] bg-[#1a1a19] p-1 shadow-2xs">
+          <div className="rounded border border-[#34342f] bg-[#1a1a19] p-1">
             <div className="h-1 w-8 rounded bg-[#ff5a1f]/80" />
           </div>
         </div>
@@ -135,7 +135,7 @@ export function AppearanceSection() {
               onClick={() => setMode(option.mode)}
               className={`group relative flex cursor-pointer flex-col gap-2.5 rounded-app-sm border p-2.5 text-left transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
                 selected
-                  ? 'border-app-accent bg-app-accent/8 ring-2 ring-app-accent/25 shadow-2xs'
+                  ? 'border-app-accent bg-app-accent/8 ring-2 ring-app-accent/25'
                   : 'border-app-border bg-app-surface/50 hover:border-app-border/90 hover:bg-app-surface'
               }`}
             >
@@ -146,7 +146,7 @@ export function AppearanceSection() {
                 <div
                   className={`absolute top-2 right-2 grid size-5 place-items-center rounded-full transition-transform duration-150 ${
                     selected
-                      ? 'scale-100 bg-app-accent text-app-accent-foreground shadow-xs'
+                      ? 'scale-100 bg-app-accent text-app-accent-foreground'
                       : 'scale-90 border border-app-border/80 bg-app-background/90 text-transparent opacity-40 group-hover:opacity-75'
                   }`}
                   aria-hidden="true"

@@ -37,7 +37,7 @@ export function DraftsPage() {
       query={query}
       onQueryChange={setQuery}
     >
-      <section className="overflow-hidden rounded-app border border-app-border bg-app-background shadow-md">
+      <section className="overflow-hidden rounded-app border border-app-border bg-app-background">
         <div className="p-4 sm:p-5">
           {!hasDrafts ? (
             <div className="flex flex-col items-center px-6 py-16 text-center">

@@ -145,13 +145,13 @@ export function ClassFolderPage() {
       </nav>
 
       {/* Executive Course Hero Card */}
-      <section className="mb-6 overflow-hidden rounded-app border border-app-border bg-app-background shadow-xs">
+      <section className="mb-6 overflow-hidden rounded-app border border-app-border bg-app-background">
         <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
           {/* Left: Class identity & summary pills */}
           <div className="flex items-start gap-4 min-w-0 flex-1">
             <span
               aria-hidden="true"
-              className="grid size-12 shrink-0 place-items-center rounded-app-sm border border-app-accent/25 bg-app-accent/10 font-mono text-base font-bold text-app-accent-text shadow-2xs"
+              className="grid size-12 shrink-0 place-items-center rounded-app-sm border border-app-accent/25 bg-app-accent/10 font-mono text-base font-bold text-app-accent-text"
             >
               {initials}
             </span>
@@ -231,7 +231,7 @@ export function ClassFolderPage() {
                   onClick={() => setParams({ tab: t.value }, { replace: true })}
                   className={`flex cursor-pointer items-center gap-2 rounded-[calc(var(--app-radius-sm)-2px)] px-3.5 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
                     active
-                      ? 'border border-app-border/80 bg-app-background text-app-foreground shadow-2xs'
+                      ? 'border border-app-border/80 bg-app-background text-app-foreground'
                       : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
                   }`}
                 >

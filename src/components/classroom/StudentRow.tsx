@@ -82,8 +82,8 @@ export function StudentRow({
     <div
       className={`overflow-hidden rounded-app border transition-all duration-200 ${
         expanded
-          ? 'border-app-accent/50 bg-app-background shadow-sm ring-1 ring-app-accent/20'
-          : 'border-app-border bg-app-background shadow-xs hover:border-app-accent/30 hover:shadow-sm'
+          ? 'border-app-accent/50 bg-app-background ring-1 ring-app-accent/20'
+          : 'border-app-border bg-app-background hover:border-app-accent/30 hover:shadow-sm'
       }`}
     >
       <div className="flex items-center justify-between gap-2 pr-2">
@@ -98,7 +98,7 @@ export function StudentRow({
           <div className="flex min-w-0 flex-1 basis-64 items-center gap-3.5">
             <div
               aria-hidden="true"
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-app-accent/20 bg-app-accent/10 font-mono text-sm font-bold text-app-accent shadow-2xs"
+              className="grid size-11 shrink-0 place-items-center rounded-app-sm border border-app-accent/20 bg-app-accent/10 font-mono text-sm font-bold text-app-accent-text"
             >
               {initial}
             </div>
@@ -179,7 +179,7 @@ export function StudentRow({
             {/* Section 1: Performance Trajectory */}
             <section className="flex flex-col gap-2.5">
               <div className="flex items-center gap-2">
-                <div className="grid size-6 place-items-center rounded-md bg-app-accent/10 text-app-accent">
+                <div className="grid size-6 place-items-center rounded-app-sm bg-app-accent/10 text-app-accent">
                   <svg
                     className="size-3.5"
                     viewBox="0 0 16 16"
@@ -197,7 +197,7 @@ export function StudentRow({
                 </h4>
               </div>
 
-              <div className="rounded-app-sm border border-app-border bg-app-background p-4 shadow-2xs">
+              <div className="rounded-app-sm border border-app-border bg-app-background p-4">
                 <ScoreChart points={stats.points} />
               </div>
             </section>
@@ -206,7 +206,7 @@ export function StudentRow({
             {showBreakdown && (
               <section className="flex flex-col gap-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="grid size-6 place-items-center rounded-md bg-app-accent/10 text-app-accent">
+                  <div className="grid size-6 place-items-center rounded-app-sm bg-app-accent/10 text-app-accent">
                     <svg
                       className="size-3.5"
                       viewBox="0 0 16 16"
@@ -224,7 +224,7 @@ export function StudentRow({
                   </h4>
                 </div>
 
-                <div className="overflow-x-auto rounded-app-sm border border-app-border bg-app-background shadow-2xs">
+                <div className="overflow-x-auto rounded-app-sm border border-app-border bg-app-background">
                   <table className="w-full min-w-[24rem] text-left text-sm">
                     <thead className="border-b border-app-border bg-app-surface/60 text-xs font-semibold uppercase tracking-wider text-app-muted">
                       <tr>
@@ -259,7 +259,7 @@ export function StudentRow({
             {/* Section 3: Quiz History */}
             <section className="flex flex-col gap-2.5">
               <div className="flex items-center gap-2">
-                <div className="grid size-6 place-items-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                <div className="grid size-6 place-items-center rounded-app-sm bg-app-surface text-app-foreground">
                   <svg
                     className="size-3.5"
                     viewBox="0 0 16 16"
@@ -280,7 +280,7 @@ export function StudentRow({
 
               {stats.history.length === 0 ? (
                 <div className="flex items-center gap-3.5 rounded-app-sm border border-dashed border-app-border bg-app-background p-5 text-sm">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-app-border bg-app-surface text-app-muted">
+                  <div className="grid size-10 shrink-0 place-items-center rounded-app-sm border border-app-border bg-app-surface text-app-muted">
                     <svg
                       className="size-5"
                       viewBox="0 0 16 16"
@@ -302,7 +302,7 @@ export function StudentRow({
                   </div>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-app-sm border border-app-border bg-app-background shadow-2xs">
+                <div className="overflow-x-auto rounded-app-sm border border-app-border bg-app-background">
                   <table className="w-full min-w-[36rem] text-left text-sm">
                     <thead className="border-b border-app-border bg-app-surface/60 text-xs font-semibold uppercase tracking-wider text-app-muted">
                       <tr>

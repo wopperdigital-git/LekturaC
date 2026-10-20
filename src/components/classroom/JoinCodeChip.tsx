@@ -34,7 +34,7 @@ export function JoinCodeChip({
       onClick={copy}
       title={copied ? 'Copied to clipboard!' : 'Click to copy join code'}
       aria-label={`Join code ${code}, ${copied ? 'copied' : 'click to copy'}`}
-      className={`group/code inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface/70 px-2.5 py-1 text-xs font-medium text-app-foreground shadow-2xs transition-all duration-150 hover:border-app-accent/50 hover:bg-app-surface hover:text-app-accent-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+      className={`group/code inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface/70 px-2.5 py-1 text-xs font-medium text-app-foreground transition-all duration-150 hover:border-app-accent/50 hover:bg-app-surface hover:text-app-accent-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
         copied ? 'border-app-accent/60 bg-app-accent/10 text-app-accent-text' : ''
       } ${className}`}
     >

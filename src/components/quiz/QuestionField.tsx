@@ -148,7 +148,7 @@ export function QuestionField({
                   }}
                   className={`min-w-24 cursor-pointer rounded-app-sm border px-5 py-2.5 text-sm font-semibold transition-all duration-150 ${FOCUS_RING} ${
                     selected
-                      ? 'border-app-accent bg-app-accent text-app-accent-foreground shadow-sm'
+                      ? 'border-app-accent bg-app-accent text-app-accent-foreground'
                       : 'border-app-border bg-app-surface/40 text-app-foreground hover:border-app-border/90 hover:bg-app-surface'
                   }`}
                 >

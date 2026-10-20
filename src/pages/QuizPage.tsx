@@ -330,7 +330,7 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
               variant="primary"
               loading={submitting}
               disabled={submitting}
-              className="self-start px-6 py-2.5 font-semibold shadow-sm"
+              className="self-start px-6 py-2.5 font-semibold"
             >
               {submitting ? 'Submitting attempt…' : 'Submit quiz →'}
             </Button>
