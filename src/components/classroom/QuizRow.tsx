@@ -137,13 +137,13 @@ export function QuizRow({
           {/* Right Status Badge & Creation Date */}
           <div className="flex flex-col items-start gap-1 sm:items-end shrink-0">
             {postedIn.length === 0 ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-app-track-sun/70 bg-app-track-sun/20 px-2.5 py-0.5 text-xs font-medium text-app-foreground">
+                <span className="size-1.5 rounded-full bg-app-track-sun" aria-hidden="true" />
                 <span>Draft · Not posted</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-app-highlight/25 bg-app-highlight/10 px-2.5 py-0.5 text-xs font-semibold text-app-highlight-text">
+                <span className="size-1.5 rounded-full bg-app-highlight" aria-hidden="true" />
                 <span>Active in {postedIn.length} {postedIn.length === 1 ? 'class' : 'classes'}</span>
               </span>
             )}
@@ -225,10 +225,10 @@ export function QuizRow({
           >
             {copied === 'code' ? (
               <>
-                <svg className="size-3 text-emerald-600 dark:text-emerald-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="size-3 text-app-highlight-text" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M2 6l3 3 5-5" />
                 </svg>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">Code copied</span>
+                <span className="font-semibold text-app-highlight-text">Code copied</span>
               </>
             ) : (
               <>
@@ -250,10 +250,10 @@ export function QuizRow({
           >
             {copied === 'link' ? (
               <>
-                <svg className="size-3 text-emerald-600 dark:text-emerald-400" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="size-3 text-app-highlight-text" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M2 6l3 3 5-5" />
                 </svg>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">Link copied</span>
+                <span className="font-semibold text-app-highlight-text">Link copied</span>
               </>
             ) : (
               <>
@@ -300,7 +300,7 @@ export function QuizRow({
             </div>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-xs text-app-muted">
-              <svg className="size-3.5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <svg className="size-3.5 text-app-highlight-text" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <circle cx="8" cy="8" r="6" />
                 <path d="M5.5 8l2 2 3.5-3.5" />
               </svg>

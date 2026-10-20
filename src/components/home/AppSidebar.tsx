@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LogoSlot } from '@/components/ui/LogoSlot'
-import { DetentCross } from '@/components/ui/Rubric'
 import { useDrafts } from '@/lib/briefDrafts'
 import { useAuthStore } from '@/store/authStore'
 import { useMyClasses } from '@/classroom/useMyClasses'
@@ -111,6 +110,68 @@ export function SettingsIcon({ className = 'size-4' }: { className?: string }) {
   )
 }
 
+/**
+ * Where the lanyard tab last stood. Every rail page renders its own
+ * `DashboardShell`, so a route change remounts the rail; starting the new tab
+ * here is what lets it slide from the old link instead of appearing in place.
+ */
+let lastLanyardTop: number | null = null
+
+/**
+ * The orange lanyard tab: one element per rail, sliding from the old active
+ * link to the new one rather than redrawing it. It sits in the nav's right
+ * padding (the nav is its offset parent), running from the active link out to
+ * the rail's edge, and scrolls with the links. Its position is written straight
+ * to the node: the old position has to be laid out once before the new one is
+ * set, or there is nothing for the transition to run from.
+ */
+function LanyardTab() {
+  const ref = useRef<HTMLSpanElement>(null)
+
+  // The nav is found through the tab's own node: a child's layout effect runs
+  // before its parent's ref is attached, so a ref passed down reads null here.
+  useLayoutEffect(() => {
+    const tab = ref.current
+    const nav = tab?.parentElement
+    if (!tab || !nav) return
+    const place = () => {
+      const link = nav.querySelector<HTMLElement>('[aria-current="page"]')
+      if (!link) {
+        tab.hidden = true
+        return
+      }
+      const top = link.offsetTop + link.offsetHeight / 2
+      if (tab.hidden && lastLanyardTop !== null && lastLanyardTop !== top) {
+        tab.hidden = false
+        tab.style.top = `${lastLanyardTop}px`
+        void tab.offsetTop // lay out the old position so the move transitions
+      }
+      tab.hidden = false
+      tab.style.top = `${top}px`
+      lastLanyardTop = top
+    }
+    place()
+    // Links come and go (a student's classes load in) and the active one moves.
+    const mutations = new MutationObserver(place)
+    mutations.observe(nav, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-current'] })
+    const resize = new ResizeObserver(place)
+    resize.observe(nav)
+    return () => {
+      mutations.disconnect()
+      resize.disconnect()
+    }
+  }, [])
+
+  return (
+    <span
+      ref={ref}
+      hidden
+      aria-hidden="true"
+      className="lanyard-tab pointer-events-none absolute right-0 h-1.5 w-4 -translate-y-1/2 bg-app-accent"
+    />
+  )
+}
+
 /** How many classes the student rail lists by name before "All classes". */
 const RAIL_CLASS_LIMIT = 5
 
@@ -121,16 +182,17 @@ const RAIL_CLASS_LIMIT = 5
 export function SidebarSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mt-7 first:mt-0">
-      <div className="apparatus flex items-center gap-2 px-3 pb-2 text-[0.9375rem] font-semibold text-app-accent-text">
-        <DetentCross />
-        {label}
-      </div>
+      <div className="caps px-3 pb-2 text-[0.6875rem] text-app-muted">{label}</div>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
   )
 }
 
-/** A single nav row — icon, label, optional count badge, optional active state. */
+/**
+ * A single nav row — icon, label, optional count badge, optional active state.
+ * The active row is filled in ink; the rail's one lanyard tab (`LanyardTab`)
+ * finds it by `aria-current` and slides to it.
+ */
 export function SidebarLink({
   icon,
   label,
@@ -149,16 +211,17 @@ export function SidebarLink({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={`group flex w-full cursor-pointer items-center gap-3 rounded-app-sm px-3 py-2 text-left text-[0.9375rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+      className={`group relative flex w-full cursor-pointer items-center gap-3 rounded-app-sm px-3 py-2 text-left text-[0.9375rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
         active
-          ? 'bg-app-surface font-semibold text-app-foreground shadow-[inset_0_-1px_0_var(--app-foreground)]'
+          ? 'bg-app-foreground font-semibold text-app-background'
           : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
       }`}
     >
+
       {icon && (
         <span
           className={`grid size-4 shrink-0 place-items-center transition-colors ${
-            active ? 'text-app-accent-text' : 'text-app-muted group-hover:text-app-foreground'
+            active ? 'text-app-accent' : 'text-app-muted group-hover:text-app-foreground'
           }`}
         >
           {icon}
@@ -167,8 +230,8 @@ export function SidebarLink({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge !== undefined && (
         <span
-          className={`grid min-w-5 shrink-0 place-items-center px-1 text-xs font-semibold tabular-nums ${
-            active ? 'text-app-accent-text' : 'border border-app-border text-app-muted'
+          className={`grid min-w-5 shrink-0 place-items-center rounded-[4px] px-1.5 text-xs font-bold tabular-nums ${
+            active ? 'bg-app-accent text-app-accent-foreground' : 'bg-app-track-sun text-app-on-track'
           }`}
         >
           {badge}
@@ -295,11 +358,11 @@ export function AppSidebar({
                 onChange={(e) => onQueryChange(e.target.value)}
                 placeholder="Search"
                 aria-label="Search"
-                className="w-full rounded-app-sm border border-app-border bg-app-surface/60 py-2.5 pr-14 pl-9 text-sm text-app-foreground outline-none transition-colors duration-150 placeholder:text-app-muted focus:border-app-accent focus:bg-app-background focus:ring-2 focus:ring-app-accent/25 [&::-webkit-search-cancel-button]:hidden"
+                className="w-full rounded-app-sm border-[1.5px] border-app-foreground bg-app-background py-2.5 pr-14 pl-9 text-sm text-app-foreground outline-none transition-shadow duration-150 placeholder:text-app-muted focus:ring-3 focus:ring-app-accent/35 [&::-webkit-search-cancel-button]:hidden"
               />
               <kbd
                 aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded border border-app-border bg-app-surface px-1.5 py-0.5 font-app text-[10px] font-medium text-app-muted"
+                className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 rounded-[4px] bg-app-surface px-1.5 py-0.5 font-app text-[10px] font-semibold text-app-muted"
               >
                 {isMac ? '⌘F' : 'Ctrl F'}
               </kbd>
@@ -307,7 +370,7 @@ export function AppSidebar({
           </div>
         )}
 
-        <nav className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto px-4 py-6">
+        <nav className="scrollbar-subtle relative min-h-0 flex-1 overflow-y-auto px-4 py-6">
           <SidebarSection label="Workspace">
             <SidebarLink
               label="Overview"
@@ -389,6 +452,7 @@ export function AppSidebar({
               />
             </SidebarSection>
           )}
+          <LanyardTab />
         </nav>
 
         <div className="mt-auto border-t border-app-border p-4">

@@ -215,7 +215,7 @@ export function QuizModal({
             >
               {t.label}
               {t.id === 'list' && quizIsNew && (
-                <span role="img" aria-label="New quiz" className="absolute -top-0.5 -right-1.5 size-2.5 rounded-full bg-amber-400" />
+                <span role="img" aria-label="New quiz" className="absolute -top-0.5 -right-1.5 size-2.5 rounded-full bg-app-track-sun" />
               )}
               {t.id === 'list' && previous && previous.length > 0 && (
                 <span className="ml-1.5 rounded-full bg-app-surface px-1.5 py-0.5 text-xs text-app-muted">

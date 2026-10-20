@@ -33,10 +33,10 @@ export function AuthLayout({
       <AuthVisualPanel>
         <LogoSlot onDark />
         <div>
-          <p className="max-w-sm text-3xl leading-snug font-semibold text-white">
+          <p className="display max-w-md text-4xl leading-[1.08] font-extrabold text-white">
             Describe a topic. Get a finished deck.
           </p>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/55">
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/70">
             Lektura turns a single brief into a complete, presentation-ready slide deck.
           </p>
         </div>
@@ -49,7 +49,7 @@ export function AuthLayout({
             <LogoSlot />
           </div>
 
-          <h1 className="text-3xl font-semibold tracking-tight text-app-foreground">{title}</h1>
+          <h1 className="display text-3xl font-extrabold text-app-foreground">{title}</h1>
           <p className="mt-2 text-sm text-app-muted">{subtitle}</p>
 
           <div className="mt-8">{children}</div>

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 
-/** Star tints from the palette: bone ink three times as often as the rubric. */
-const STAR_COLORS = ['236,230,218', '236,230,218', '236,230,218', '232,102,76']
+/** Star tints from the palette: warm white twice, then the orange, teal and sun tracks. */
+const STAR_COLORS = ['242,242,238', '242,242,238', '255,106,51', '25,184,184', '255,201,60']
 
 /** One star per this many px² of panel, clamped — keeps density even across screen sizes. */
 const AREA_PER_STAR = 14000
@@ -200,7 +200,7 @@ export function AuthVisualPanel({ children }: { children?: ReactNode }) {
           const distSq = dx * dx + dy * dy
           if (distSq > LINK_DISTANCE * LINK_DISTANCE) continue
           const alpha = (1 - Math.sqrt(distSq) / LINK_DISTANCE) * 0.22
-          ctx.strokeStyle = `rgba(236,230,218,${alpha})`
+          ctx.strokeStyle = `rgba(242,242,238,${alpha})`
           ctx.beginPath()
           ctx.moveTo(positions[i].x, positions[i].y)
           ctx.lineTo(positions[j].x, positions[j].y)
@@ -216,7 +216,7 @@ export function AuthVisualPanel({ children }: { children?: ReactNode }) {
           const distSq = dx * dx + dy * dy
           if (distSq > POINTER_RADIUS * POINTER_RADIUS) continue
           const alpha = (1 - Math.sqrt(distSq) / POINTER_RADIUS) * 0.4
-          ctx.strokeStyle = `rgba(232,102,76,${alpha})`
+          ctx.strokeStyle = `rgba(255,106,51,${alpha})`
           ctx.beginPath()
           ctx.moveTo(pointerX, pointerY)
           ctx.lineTo(p.x, p.y)
@@ -331,14 +331,14 @@ export function AuthVisualPanel({ children }: { children?: ReactNode }) {
   return (
     <div
       ref={containerRef}
-      className="relative isolate hidden overflow-hidden bg-[#161513] lg:flex lg:flex-col"
+      className="relative isolate hidden overflow-hidden bg-[#111110] lg:flex lg:flex-col"
     >
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0" />
 
       {/* keeps the copy legible over the stars beneath it */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-t from-[#161513] via-transparent to-transparent"
+        className="absolute inset-0 bg-gradient-to-t from-[#111110] via-transparent to-transparent"
       />
 
       <div className="pointer-events-none relative z-10 flex h-full flex-col justify-between p-12">

@@ -123,7 +123,7 @@ function CardThumbnail({
       <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
         {index + 1}
         {needsFactCheck && (
-          <span title="Claims to check on this slide" className="size-1.5 rounded-full bg-amber-400">
+          <span title="Claims to check on this slide" className="size-1.5 rounded-full bg-app-track-sun">
             <span className="sr-only">, claims to check</span>
           </span>
         )}

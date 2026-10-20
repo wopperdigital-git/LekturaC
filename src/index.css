@@ -46,6 +46,11 @@
   --color-app-muted: var(--app-muted);
   --color-app-border: var(--app-border);
   --color-app-surface: var(--app-surface);
+  --color-app-track-orange: var(--app-track-orange);
+  --color-app-track-teal: var(--app-track-teal);
+  --color-app-track-sun: var(--app-track-sun);
+  --color-app-track-cobalt: var(--app-track-cobalt);
+  --color-app-on-track: var(--app-on-track);
   --font-app: var(--app-font);
   --radius-app: var(--app-radius);
   --radius-app-sm: var(--app-radius-sm);
@@ -68,41 +73,46 @@
 
 :root {
   /*
-    App chrome: "Annotated Edition" (DESIGN.md). A reference edition's page —
-    unbleached bone in three steps, iron-black ink, slate apparatus, and one rubric
-    vermilion that marks where to act, keys and focus. Verdigris is the only other
-    hue, and only for success.
+    App chrome: "Conference Programme" (DESIGN.md). The chrome is the event
+    identity of the user's own conference: white badge stock on a pale wash,
+    true ink, one signal orange for action, and four track colours that always
+    mean "which track" (a deck's badge stripe, the band over page titles).
 
-    `--app-accent` is the vermilion fill (white on it: 5.3:1). `--app-accent-text`
-    is the same rubric darkened so vermilion *text* clears AA on every bone step
-    (the fill is 4.4:1 on the canvas, just under). Dark-mode overrides live in the
-    [data-theme='dark'] block below.
+    `--app-accent` is the orange fill; ink sits on it (6.1:1), white would not
+    (3.1:1). `--app-accent-text` is the orange darkened for text on white and the
+    wash (5.6:1 / 5.1:1). Teal is success; crimson is danger, cooler than the
+    orange so Delete never reads as "act here". Dark overrides are below.
   */
-  --app-background: #f7f3ea;
-  --app-canvas: #efe9dd;
-  --app-foreground: #1a1a1a;
-  --app-accent: #c23a2a;
-  --app-accent-foreground: #ffffff;
-  --app-accent-text: #a8301f;
-  --app-secondary: #ddd5c5;
-  --app-highlight: #3d6b4f;
-  /* verdigris text on bone (6.4:1 on the canvas) */
-  --app-highlight-text: #2f5a40;
-  /* text on a solid verdigris fill (an avatar badge): white clears AA at 6.2:1 */
-  --app-highlight-foreground: #ffffff;
-  /* Destructive actions and errors: a deep brick, darker than the rubric so a
-     Delete button never reads as the vermilion "act here" mark (8.4:1 on bone). */
-  --app-danger: #8a1c1c;
-  --app-danger-text: #8a1c1c;
-  --app-muted: #5f5a52;
-  --app-border: #cfc6b4;
-  --app-surface: #ebe4d6;
-  --app-font: 'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif;
-  /* No radius: a ruling engine draws square frames. Circles stay circles
-     (avatars, round icon buttons) through `rounded-full`, which these don't touch. */
-  --app-radius: 0px;
-  --app-radius-sm: 0px;
-  --app-shadow: 0 1px 2px rgba(26, 20, 12, 0.06), 0 10px 26px rgba(26, 20, 12, 0.12);
+  --app-background: #ffffff;
+  --app-canvas: #f4f4f2;
+  --app-foreground: #111111;
+  --app-accent: #ff5a1f;
+  --app-accent-foreground: #111111;
+  --app-accent-text: #b8400f;
+  --app-secondary: #e3e3dd;
+  --app-highlight: #00a6a6;
+  /* teal text on white (5.7:1) */
+  --app-highlight-text: #007274;
+  /* text on a solid teal fill: ink (6.3:1) */
+  --app-highlight-foreground: #111111;
+  --app-danger: #c8102e;
+  --app-danger-text: #b00d27;
+  --app-muted: #55554f;
+  --app-border: #dcdcd6;
+  --app-surface: #efefeb;
+  /* The four tracks. Fills only; the orange track is the accent itself. */
+  --app-track-orange: #ff5a1f;
+  --app-track-teal: #00a6a6;
+  --app-track-sun: #ffc93c;
+  --app-track-cobalt: #2b59ff;
+  /* Text on a solid track fill: ink in both modes (the warm white of dark mode
+     is 1.4:1 on the sun). */
+  --app-on-track: #111111;
+  --app-font: 'Archivo Variable', 'Archivo', system-ui, sans-serif;
+  /* Badge corners: cards and panels 10px, controls 6px. */
+  --app-radius: 10px;
+  --app-radius-sm: 6px;
+  --app-shadow: 0 2px 4px rgba(17, 17, 17, 0.06), 0 12px 30px rgba(17, 17, 17, 0.14);
 
   /* Slide theme fallback — used only where no ThemeProvider scope overrides it.
      Mirrors the Moonlight preset (the default theme) so an unscoped slide never
@@ -143,32 +153,29 @@
   Only the app-* namespace flips — slide-* deck themes are chosen per deck and
   stay exactly as authored, so a Minimal deck still renders light in dark mode.
 
-  This is NOT the light palette inverted — it's the same edition read at night:
-  an iron-black page with bone ink. The vermilion fill stays (white on it is
-  5.3:1; a lighter fill would drop under AA), and its text weight lightens so it
-  reads on the dark ground.
+  The same programme after the doors close: near-black badge stock, warm white
+  ink, the orange a step brighter. Track colours stay; ink stays on the orange.
 */
 [data-theme='dark'] {
-  --app-background: #1c1b19;
-  --app-canvas: #121110;
-  --app-foreground: #ece6da;
-  --app-accent: #c23a2a;
-  --app-accent-foreground: #ffffff;
-  /* lightened rubric — the fill as text on this ground is only 3.3:1 */
-  --app-accent-text: #e8664c;
-  --app-secondary: #3b3832;
-  --app-highlight: #3d6b4f;
-  /* lightened verdigris for text on the dark ground (6.1:1) */
-  --app-highlight-text: #7fb393;
-  --app-highlight-foreground: #ffffff;
-  /* same brick fill (white on it 9.3:1); its text lightens for the dark ground */
-  --app-danger: #8a1c1c;
-  --app-danger-text: #f19a8a;
-  --app-muted: #a59e90;
-  --app-border: #3b3832;
-  --app-surface: #26241f;
+  --app-background: #1a1a19;
+  --app-canvas: #111110;
+  --app-foreground: #f2f2ee;
+  --app-accent: #ff6a33;
+  --app-accent-foreground: #111111;
+  /* orange text on the dark ground (7.5:1) */
+  --app-accent-text: #ff8a5c;
+  --app-secondary: #2e2e2b;
+  --app-highlight: #19b8b8;
+  --app-highlight-text: #4fd1d1;
+  --app-highlight-foreground: #111111;
+  /* white on it 4.8:1; its text lightens for the dark ground */
+  --app-danger: #d6303a;
+  --app-danger-text: #ff8f8f;
+  --app-muted: #a8a8a0;
+  --app-border: #34342f;
+  --app-surface: #242422;
   --app-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.5);
+    0 2px 4px rgba(0, 0, 0, 0.4), 0 12px 30px rgba(0, 0, 0, 0.5);
 
   color-scheme: dark;
 }
@@ -194,20 +201,43 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* A selection is the rubric laid over the text, not the browser's blue. */
+/* A selection is a highlighter in the sun track over the text, not the browser's blue. */
 ::selection {
-  background: color-mix(in srgb, var(--app-accent) 22%, transparent);
+  background: color-mix(in srgb, var(--app-track-sun) 60%, transparent);
   color: inherit;
 }
 
 /*
-  Apparatus labels: section heads, captions over fields. Real small caps from the
-  face (all-small-caps keeps a typed capital from standing taller than the rest),
-  tracked open as small caps want to be.
+  Caps labels: rail section heads, captions over fields, badge kickers. Tracked
+  open as uppercase wants to be; the size is set where each label is used.
 */
-.apparatus {
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.08em;
+.caps {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+/*
+  The display cut: Archivo at its widest, for the wordmark and page and dialog
+  titles. Everything else stays at normal width.
+*/
+.display {
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+}
+
+/*
+  The lanyard tab on the active rail link (components/home/AppSidebar.tsx,
+  `LanyardTab`): one element that slides to whichever link is active.
+*/
+.lanyard-tab {
+  transition: top 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lanyard-tab {
+    transition: none;
+  }
 }
 
 /* Auth screen content (components/auth). */

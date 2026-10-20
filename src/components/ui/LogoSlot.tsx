@@ -1,8 +1,8 @@
-import { DetentCross } from './Rubric'
+import { BadgeMark } from './Programme'
 
 /**
  * The product's mark. Until there is a drawn logo it is the name set in the
- * chrome's serif, keyed by the rubric's detent cross; a logo file replaces the
+ * chrome's expanded cut beside a small drawn badge; a logo file replaces the
  * contents of this slot and nothing around it needs to change.
  *
  * `onDark` sets it in light ink for the auth panel's dark background;
@@ -10,15 +10,15 @@ import { DetentCross } from './Rubric'
  */
 export function LogoSlot({ onDark = false }: { onDark?: boolean }) {
   return (
-    <div className="flex h-10 items-center gap-2">
+    <div className="flex h-10 items-center gap-2.5">
+      <BadgeMark className={`h-[20px] w-[15px] ${onDark ? 'text-white' : 'text-app-foreground'}`} />
       <span
-        className={`font-app text-[1.375rem] leading-none font-semibold tracking-[-0.01em] ${
+        className={`display font-app text-[1.3125rem] leading-none font-extrabold uppercase ${
           onDark ? 'text-white' : 'text-app-foreground'
         }`}
       >
         Lektura
       </span>
-      <DetentCross className={`size-2.5 ${onDark ? 'text-[#e8664c]' : 'text-app-accent-text'}`} />
     </div>
   )
 }

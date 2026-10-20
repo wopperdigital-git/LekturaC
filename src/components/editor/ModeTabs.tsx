@@ -75,12 +75,16 @@ function ModeButton({
       // Radius: the tray's less its 2px padding, so the chip's corners follow the tray's.
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--app-radius)-2px)] px-2.5 text-sm font-medium transition-colors ${FOCUS_RING} ${
+      className={`relative flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-[calc(var(--app-radius)-2px)] px-2.5 text-sm font-semibold transition-colors ${FOCUS_RING} ${
         selected
           ? 'bg-app-background text-app-foreground ring-1 ring-app-border'
           : 'text-app-muted hover:text-app-foreground'
       }`}
     >
+      {/* The selected mode wears the programme's orange lanyard tab. */}
+      {selected && (
+        <span aria-hidden="true" className="absolute bottom-0 left-1/2 h-1 w-5 -translate-x-1/2 bg-app-accent" />
+      )}
       {icon}
       {children}
     </button>

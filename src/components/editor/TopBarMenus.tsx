@@ -191,7 +191,7 @@ export function ExportMenu({
           </svg>
         </>
       }
-      triggerClassName={`flex h-8 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 text-sm font-medium whitespace-nowrap text-app-foreground/90 transition-colors hover:bg-app-foreground/10${highlight ? ' ring-2 ring-amber-400 ring-offset-1 ring-offset-app-background' : ''}`}
+      triggerClassName={`flex h-8 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 text-sm font-medium whitespace-nowrap text-app-foreground/90 transition-colors hover:bg-app-foreground/10${highlight ? ' ring-2 ring-app-track-sun ring-offset-1 ring-offset-app-background' : ''}`}
       defaultOpen={defaultOpen}
     >
       {(close) => (
@@ -201,14 +201,14 @@ export function ExportMenu({
               icon={<QuizIcon />}
               disabled={quizDisabledReason !== null}
               title={quizDisabledReason ?? 'Make a quiz from these slides'}
-              className={highlightQuiz ? 'bg-amber-400/15 font-medium' : undefined}
+              className={highlightQuiz ? 'bg-app-track-sun/25 font-medium' : undefined}
               onClick={() => {
                 close()
                 onQuiz()
               }}
             >
               Quiz…
-              {highlightQuiz && <span aria-hidden className="ml-auto size-2 rounded-full bg-amber-400" />}
+              {highlightQuiz && <span aria-hidden className="ml-auto size-2 rounded-full bg-app-track-sun" />}
             </MenuItem>
             <MenuItem
               icon={<VideoIcon />}

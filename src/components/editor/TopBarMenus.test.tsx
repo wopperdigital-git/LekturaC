@@ -83,14 +83,14 @@ describe('ExportMenu', () => {
 describe('ExportMenu highlights', () => {
   it('highlights the Quiz item when a quiz is new', () => {
     const quiz = buttonWith(exportMenu({ highlightQuiz: true }), QUIZ)
-    expect(quiz).toContain('bg-amber-400/15')
-    expect(quiz).toContain('bg-amber-400')
-    expect(buttonWith(exportMenu(), QUIZ)).not.toContain('amber')
+    expect(quiz).toContain('bg-app-track-sun/25')
+    expect(quiz).toContain('bg-app-track-sun')
+    expect(buttonWith(exportMenu(), QUIZ)).not.toContain('track-sun')
   })
 
   it('rings the trigger with highlight', () => {
-    expect(exportMenu({ highlight: true, defaultOpen: false })).toContain('ring-amber-400')
-    expect(exportMenu({ defaultOpen: false })).not.toContain('ring-amber-400')
+    expect(exportMenu({ highlight: true, defaultOpen: false })).toContain('ring-app-track-sun')
+    expect(exportMenu({ defaultOpen: false })).not.toContain('ring-app-track-sun')
   })
 })
 

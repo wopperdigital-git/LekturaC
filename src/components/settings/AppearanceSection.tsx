@@ -18,23 +18,23 @@ const OPTIONS: ThemeOption[] = [
 function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
   if (mode === 'light') {
     return (
-      <div className="relative h-20 w-full overflow-hidden rounded-md border border-black/10 bg-[#f7f3ea] p-1.5 shadow-xs">
+      <div className="relative h-20 w-full overflow-hidden rounded-md border border-black/10 bg-[#ffffff] p-1.5 shadow-xs">
         {/* Left rail */}
-        <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#ebe4d6] p-0.5 flex flex-col gap-1 border-r border-[#cfc6b4]/60">
-          <div className="size-2 rounded-full bg-[#c23a2a]" />
-          <div className="h-1 w-full rounded bg-[#cfc6b4]" />
-          <div className="h-1 w-full rounded bg-[#cfc6b4]" />
+        <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#efefeb] p-0.5 flex flex-col gap-1 border-r border-[#dcdcd6]/60">
+          <div className="size-2 rounded-full bg-[#ff5a1f]" />
+          <div className="h-1 w-full rounded bg-[#dcdcd6]" />
+          <div className="h-1 w-full rounded bg-[#dcdcd6]" />
         </div>
         {/* Content body */}
         <div className="ml-7 flex h-full flex-col justify-between py-0.5">
           <div className="flex flex-col gap-1">
-            <div className="h-1.5 w-12 rounded bg-[#1a1a1a]/80" />
-            <div className="h-1 w-16 rounded bg-[#5f5a52]/60" />
+            <div className="h-1.5 w-12 rounded bg-[#111111]/80" />
+            <div className="h-1 w-16 rounded bg-[#55554f]/60" />
           </div>
           {/* Mini card */}
-          <div className="rounded border border-[#cfc6b4] bg-white p-1 shadow-2xs">
-            <div className="h-1 w-10 rounded bg-[#c23a2a]/70" />
-            <div className="mt-0.5 h-0.5 w-14 rounded bg-[#5f5a52]/40" />
+          <div className="rounded border border-[#dcdcd6] bg-white p-1 shadow-2xs">
+            <div className="h-1 w-10 rounded bg-[#ff5a1f]/70" />
+            <div className="mt-0.5 h-0.5 w-14 rounded bg-[#55554f]/40" />
           </div>
         </div>
       </div>
@@ -43,23 +43,23 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
 
   if (mode === 'dark') {
     return (
-      <div className="relative h-20 w-full overflow-hidden rounded-md border border-white/10 bg-[#121110] p-1.5 shadow-xs">
+      <div className="relative h-20 w-full overflow-hidden rounded-md border border-white/10 bg-[#111110] p-1.5 shadow-xs">
         {/* Left rail */}
-        <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#1c1b19] p-0.5 flex flex-col gap-1 border-r border-[#3b3832]/60">
-          <div className="size-2 rounded-full bg-[#c23a2a]" />
-          <div className="h-1 w-full rounded bg-[#3b3832]" />
-          <div className="h-1 w-full rounded bg-[#3b3832]" />
+        <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#1a1a19] p-0.5 flex flex-col gap-1 border-r border-[#34342f]/60">
+          <div className="size-2 rounded-full bg-[#ff5a1f]" />
+          <div className="h-1 w-full rounded bg-[#34342f]" />
+          <div className="h-1 w-full rounded bg-[#34342f]" />
         </div>
         {/* Content body */}
         <div className="ml-7 flex h-full flex-col justify-between py-0.5">
           <div className="flex flex-col gap-1">
-            <div className="h-1.5 w-12 rounded bg-[#ece6da]/80" />
-            <div className="h-1 w-16 rounded bg-[#a59e90]/60" />
+            <div className="h-1.5 w-12 rounded bg-[#f2f2ee]/80" />
+            <div className="h-1 w-16 rounded bg-[#a8a8a0]/60" />
           </div>
           {/* Mini card */}
-          <div className="rounded border border-[#3b3832] bg-[#1c1b19] p-1 shadow-2xs">
-            <div className="h-1 w-10 rounded bg-[#c23a2a]/70" />
-            <div className="mt-0.5 h-0.5 w-14 rounded bg-[#a59e90]/40" />
+          <div className="rounded border border-[#34342f] bg-[#1a1a19] p-1 shadow-2xs">
+            <div className="h-1 w-10 rounded bg-[#ff5a1f]/70" />
+            <div className="mt-0.5 h-0.5 w-14 rounded bg-[#a8a8a0]/40" />
           </div>
         </div>
       </div>
@@ -68,31 +68,31 @@ function ThemePreviewThumbnail({ mode }: { mode: AppThemeMode }) {
 
   // System mode: split diagonal preview
   return (
-    <div className="relative h-20 w-full overflow-hidden rounded-md border border-app-border bg-[#f7f3ea] shadow-xs">
+    <div className="relative h-20 w-full overflow-hidden rounded-md border border-app-border bg-[#ffffff] shadow-xs">
       {/* Light side (Left) */}
       <div className="absolute inset-0 p-1.5">
-        <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#ebe4d6] p-0.5 flex flex-col gap-1 border-r border-[#cfc6b4]/60">
-          <div className="size-2 rounded-full bg-[#c23a2a]" />
-          <div className="h-1 w-full rounded bg-[#cfc6b4]" />
+        <div className="absolute inset-y-1.5 left-1.5 w-6 rounded bg-[#efefeb] p-0.5 flex flex-col gap-1 border-r border-[#dcdcd6]/60">
+          <div className="size-2 rounded-full bg-[#ff5a1f]" />
+          <div className="h-1 w-full rounded bg-[#dcdcd6]" />
         </div>
         <div className="ml-7 flex h-full flex-col gap-1 py-0.5">
-          <div className="h-1.5 w-8 rounded bg-[#1a1a1a]/80" />
-          <div className="h-1 w-10 rounded bg-[#5f5a52]/60" />
+          <div className="h-1.5 w-8 rounded bg-[#111111]/80" />
+          <div className="h-1 w-10 rounded bg-[#55554f]/60" />
         </div>
       </div>
 
       {/* Dark side (Right, clipped diagonally) */}
       <div
-        className="absolute inset-0 bg-[#121110] p-1.5"
+        className="absolute inset-0 bg-[#111110] p-1.5"
         style={{ clipPath: 'polygon(60% 0, 100% 0, 100% 100%, 35% 100%)' }}
       >
         <div className="ml-auto mr-1 flex h-full w-14 flex-col justify-between py-0.5">
           <div className="flex flex-col items-end gap-1">
-            <div className="h-1.5 w-8 rounded bg-[#ece6da]/80" />
-            <div className="h-1 w-6 rounded bg-[#a59e90]/60" />
+            <div className="h-1.5 w-8 rounded bg-[#f2f2ee]/80" />
+            <div className="h-1 w-6 rounded bg-[#a8a8a0]/60" />
           </div>
-          <div className="rounded border border-[#3b3832] bg-[#1c1b19] p-1 shadow-2xs">
-            <div className="h-1 w-8 rounded bg-[#c23a2a]/80" />
+          <div className="rounded border border-[#34342f] bg-[#1a1a19] p-1 shadow-2xs">
+            <div className="h-1 w-8 rounded bg-[#ff5a1f]/80" />
           </div>
         </div>
       </div>

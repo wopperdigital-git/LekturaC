@@ -33,7 +33,7 @@ export function DeckListRow({
       >
         <span
           aria-hidden="true"
-          className="grid size-10 shrink-0 place-items-center rounded-app-sm text-lg font-semibold text-white/40"
+          className="grid size-10 shrink-0 place-items-center rounded-app-sm text-lg font-extrabold text-app-on-track/60"
           style={{ background: `linear-gradient(135deg, ${swatch.from}, ${swatch.to})` }}
         >
           {initial}

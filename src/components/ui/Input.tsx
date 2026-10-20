@@ -2,17 +2,17 @@ import { useId, useState } from 'react'
 import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
 
 /**
- * Shared field chrome. Focus is ruled in ink, not the rubric: a vermilion focus
- * ring read as an error beside the brick `invalid` border. Keyboard focus on
- * buttons keeps the vermilion outline.
+ * Shared field chrome: badge stock ruled in 1.5px ink like every other control,
+ * with a soft orange ring on focus. Invalid is crimson, a different hue from the
+ * orange, so a focused field never reads as an error.
  */
 function fieldClasses(invalid: boolean) {
   return [
-    'w-full rounded-app-sm border bg-app-background px-3 py-2 text-sm text-app-foreground',
+    'w-full rounded-app-sm border-[1.5px] bg-app-background px-3 py-2 text-sm text-app-foreground',
     'placeholder:text-app-muted outline-none transition-[border-color,box-shadow] duration-150',
     invalid
-      ? 'border-app-danger focus:ring-1 focus:ring-app-danger'
-      : 'border-app-border focus:border-app-foreground focus:ring-1 focus:ring-app-foreground',
+      ? 'border-app-danger focus:ring-3 focus:ring-app-danger/25'
+      : 'border-app-foreground focus:ring-3 focus:ring-app-accent/35',
   ].join(' ')
 }
 
@@ -96,7 +96,7 @@ export function Textarea({ className = '', ...props }: TextareaHTMLAttributes<HT
 
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="apparatus mb-1 block text-sm font-semibold text-app-muted">
+    <label htmlFor={htmlFor} className="caps mb-1.5 block text-[0.6875rem] text-app-muted">
       {children}
     </label>
   )

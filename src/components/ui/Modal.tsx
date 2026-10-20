@@ -1,5 +1,4 @@
 import { useEffect, type ReactNode } from 'react'
-import { RubricRule } from './Rubric'
 
 export function Modal({
   title,
@@ -37,7 +36,7 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">{typeof title === 'string' ? <h2 className="text-lg font-semibold tracking-tight text-app-foreground">{title}</h2> : title}</div>
+          <div className="min-w-0 flex-1">{typeof title === 'string' ? <h2 className="display text-lg font-extrabold text-app-foreground">{title}</h2> : title}</div>
           <button
             type="button"
             onClick={onClose}
@@ -57,7 +56,6 @@ export function Modal({
             </svg>
           </button>
         </div>
-        <RubricRule className="-mt-2 mb-5" />
         {children}
       </div>
     </div>

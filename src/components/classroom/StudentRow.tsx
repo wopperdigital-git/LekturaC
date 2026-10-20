@@ -332,11 +332,11 @@ export function StudentRow({
                             </td>
                             <td className="px-4 py-3">
                               {h.attempt ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-0.5 font-mono text-xs font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                                <span className="inline-flex items-center gap-1 rounded-full border border-app-highlight/25 bg-app-highlight/10 px-2.5 py-0.5 font-mono text-xs font-semibold tabular-nums text-app-highlight-text">
                                   {formatPercent(h.attempt.score)}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                <span className="inline-flex items-center gap-1 rounded-full border border-app-track-sun/70 bg-app-track-sun/20 px-2.5 py-0.5 text-xs font-medium text-app-foreground">
                                   Pending
                                 </span>
                               )}

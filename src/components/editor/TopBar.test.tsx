@@ -107,7 +107,7 @@ describe('TopBar', () => {
   })
 
   it('rings the Create & export trigger when a quiz is new', () => {
-    expect(render({ exportHighlight: true })).toContain('ring-amber-400')
-    expect(render()).not.toContain('ring-amber-400')
+    expect(render({ exportHighlight: true })).toContain('ring-app-track-sun')
+    expect(render()).not.toContain('ring-app-track-sun')
   })
 })

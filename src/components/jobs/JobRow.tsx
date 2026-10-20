@@ -8,7 +8,7 @@ const KIND_LABEL = { deck: 'Generating slides', quiz: 'Generating quiz', video: 
 
 function Check() {
   return (
-    <svg viewBox="0 0 16 16" className="job-check size-4 shrink-0 text-emerald-500" aria-hidden>
+    <svg viewBox="0 0 16 16" className="job-check size-4 shrink-0 text-app-highlight" aria-hidden>
       <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )

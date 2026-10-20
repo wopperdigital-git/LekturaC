@@ -353,7 +353,7 @@ function Section({
   return (
     <section className="border-t border-app-border px-3 py-2.5 first:border-t-0">
       <div className="flex h-7 items-center justify-between gap-2">
-        <h3 className="apparatus flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-app-foreground">
+        <h3 className="caps flex min-w-0 items-center gap-1.5 text-[11px] text-app-foreground">
           {icon}
           {title}
         </h3>
@@ -370,7 +370,7 @@ function Section({
 
 /** The short label above a field. */
 function Caption({ children }: { children: ReactNode }) {
-  return <p className="apparatus mb-1 truncate text-[12px] text-app-muted">{children}</p>
+  return <p className="mb-1 truncate text-[11px] font-medium text-app-muted">{children}</p>
 }
 
 /* --------------------------------------------------------------- inputs --- */

@@ -94,7 +94,7 @@ export function FilterMenu({
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
-        className="flex cursor-pointer items-center gap-2 rounded-app-sm border border-app-border bg-app-background px-3 py-2 text-sm text-app-foreground transition-colors duration-150 hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+        className="flex cursor-pointer items-center gap-2 rounded-app-sm border-[1.5px] border-app-foreground bg-app-background px-3 py-2 text-sm font-bold text-app-foreground transition-colors duration-150 hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
       >
         <svg
           className="size-4 text-app-muted"

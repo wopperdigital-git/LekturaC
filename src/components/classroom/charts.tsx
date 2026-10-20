@@ -136,7 +136,7 @@ export function ScoreChart({ points }: { points: ScorePoint[] }) {
 }
 
 const TREND_TONE = {
-  improving: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  improving: 'border-app-highlight/30 bg-app-highlight/10 text-app-highlight-text',
   steady: 'border-app-border bg-app-surface text-app-muted',
   slipping: 'border-app-danger/30 bg-app-danger/10 text-app-danger-text',
 } as const

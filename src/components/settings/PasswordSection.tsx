@@ -108,7 +108,7 @@ export function PasswordSection() {
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors ${
                 hasMinLength
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium'
+                  ? 'bg-app-highlight/10 text-app-highlight-text font-medium'
                   : 'bg-app-surface text-app-muted'
               }`}
             >
@@ -122,7 +122,7 @@ export function PasswordSection() {
               <span
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors ${
                   passwordsMatch
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium'
+                    ? 'bg-app-highlight/10 text-app-highlight-text font-medium'
                     : 'bg-app-danger/10 text-app-danger-text font-medium'
                 }`}
               >

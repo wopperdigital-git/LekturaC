@@ -122,7 +122,7 @@ export function StudentClassPage() {
                   <span className="text-app-muted">{plural(classQuizzes.length, 'quiz', 'quizzes')}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-app-sm border border-app-border/80 bg-app-surface/60 px-2.5 py-1 text-app-foreground">
-                  <svg className="size-3.5 text-emerald-600 dark:text-emerald-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <svg className="size-3.5 text-app-highlight-text" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
                   </svg>
                   <span className="font-semibold">{completedQuizzes.length}</span>

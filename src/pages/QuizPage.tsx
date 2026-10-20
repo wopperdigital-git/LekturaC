@@ -296,7 +296,7 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
                           // the jump came from the keyboard.
                           tabIndex={-1}
                           className={`rounded-app border bg-app-surface/20 p-4 transition-colors sm:p-5 ${FOCUS_RING} ${
-                            missing ? 'border-amber-400' : 'border-app-border/80 hover:border-app-border'
+                            missing ? 'border-app-track-sun' : 'border-app-border/80 hover:border-app-border'
                           }`}
                         >
                           {missing && (
@@ -411,7 +411,7 @@ function ResultPanel({ quiz, result, answers }: { quiz: TakeQuiz; result: Attemp
                       <span
                         className={`mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${
                           right
-                            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                            ? 'bg-app-highlight/15 text-app-highlight-text'
                             : 'bg-app-danger/15 text-app-danger-text'
                         }`}
                         aria-label={right ? 'Correct' : 'Incorrect'}

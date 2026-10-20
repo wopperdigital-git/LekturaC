@@ -29,7 +29,7 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
             aria-hidden="true"
             className={`grid size-10 shrink-0 place-items-center rounded-xl border shadow-2xs ${
               attempt
-                ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                ? 'border-app-highlight/25 bg-app-highlight/10 text-app-highlight-text'
                 : 'border-app-accent/25 bg-app-accent/10 text-app-accent'
             }`}
           >
@@ -66,13 +66,13 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
                 {quiz.title}
               </h3>
               {attempt ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-app-highlight/25 bg-app-highlight/10 px-2 py-0.5 text-[11px] font-semibold text-app-highlight-text">
+                  <span className="size-1.5 rounded-full bg-app-highlight" aria-hidden="true" />
                   <span>Submitted</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                  <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-app-track-sun/70 bg-app-track-sun/20 px-2 py-0.5 text-[11px] font-medium text-app-foreground">
+                  <span className="size-1.5 rounded-full bg-app-track-sun" aria-hidden="true" />
                   <span>Pending</span>
                 </span>
               )}
@@ -109,10 +109,10 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
             <div
               className={`flex items-center gap-2 rounded-app-sm border px-3.5 py-2 font-mono text-sm font-bold shadow-2xs ${
                 isHigh
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  ? 'border-app-highlight/30 bg-app-highlight/10 text-app-highlight-text'
                   : isMid
                     ? 'border-app-accent/30 bg-app-accent/10 text-app-accent-text'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'border-app-track-sun/70 bg-app-track-sun/20 text-app-foreground'
               }`}
             >
               <svg className="size-4 shrink-0" viewBox="0 0 16 16" fill="currentColor">

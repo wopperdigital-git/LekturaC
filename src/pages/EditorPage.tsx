@@ -34,7 +34,6 @@ import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
 import { Button } from '@/components/ui/Button'
-import { DetentCross } from '@/components/ui/Rubric'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
 import { elementLabel, firstEditableField, type ContentType } from '@/engine/newContent'
@@ -1112,7 +1111,7 @@ export function EditorPage() {
       {/* Ink is saved by its own best-effort update, so this is a warning, not the
           "Not saved" error above: the deck itself is fine. */}
       {store.overlayWarning && (
-        <p role="alert" className="bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <p role="alert" className="bg-app-track-sun/25 px-4 py-2 text-sm text-app-foreground">
           {store.overlayWarning}
         </p>
       )}
@@ -1124,14 +1123,12 @@ export function EditorPage() {
       {/* AI-written claims with no source: said once per visit, before the teacher presents them. */}
       {factNotice && !factNoticeHidden && (
         <div role="status" className="relative -mt-px border-b border-app-border bg-app-background px-4 pt-1 pb-2">
-          {/* Set as the top bar's marginal note, not a banner: `-mt-px` covers
-              the bar's rule and this draws it below, so bar and note read as one
-              head. Inside, a hairline in the margin keyed by the rubric's detent,
-              the way an edition keys its apparatus to the line it qualifies. */}
-          <div className="relative ml-1.5 flex max-w-3xl flex-wrap items-baseline gap-x-3 gap-y-1 border-l border-app-accent-text/60 py-0.5 pl-4 text-sm text-app-foreground">
-            <DetentCross className="absolute top-1/2 -left-[5.5px] size-2.5 -translate-y-1/2 bg-app-background text-app-accent-text" />
-            <span className="apparatus font-semibold text-app-accent-text">Note</span>
-            <span className="italic">{factNotice}</span>
+          {/* Set as part of the top bar's head, not a banner: `-mt-px` covers the
+              bar's rule and this draws it below, so bar and note read as one.
+              The sun-track tag is the programme's "check this" mark. */}
+          <div className="flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-1 text-sm text-app-foreground">
+            <span className="caps rounded-[4px] bg-app-track-sun px-1.5 py-0.5 text-[0.6875rem] text-app-on-track">Check sources</span>
+            <span>{factNotice}</span>
             <button
               type="button"
               onClick={() => setFactCheckOpen(true)}

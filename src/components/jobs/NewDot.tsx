@@ -17,7 +17,7 @@ export function NewDot({ kinds, className = '' }: { kinds: readonly NewKind[]; c
       role="img"
       aria-label={label}
       title={label}
-      className={`block size-2.5 rounded-full bg-amber-400 ring-2 ring-app-background ${className}`}
+      className={`block size-2.5 rounded-full bg-app-track-sun ring-2 ring-app-background ${className}`}
     />
   )
 }

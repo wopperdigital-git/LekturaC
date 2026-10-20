@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useAuthStore } from '@/store/authStore'
-import { RubricRule } from '@/components/ui/Rubric'
+import { TrackBand } from '@/components/ui/Programme'
 import { AppSidebar } from './AppSidebar'
 
 /**
@@ -43,6 +43,8 @@ export function DashboardShell({
 
       <main className="scrollbar-subtle min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
+          {/* The programme's track band heads every dashboard page. */}
+          <TrackBand className="mb-6 h-2" />
           <div className="mb-6 flex items-start gap-3">
             <button
               type="button"
@@ -64,11 +66,10 @@ export function DashboardShell({
             </button>
 
             <div className="min-w-0 flex-1">
-              <h1 className="text-[2rem] leading-tight font-semibold tracking-[-0.015em] text-app-foreground sm:text-[2.5rem]">
+              <h1 className="display text-[2rem] leading-[1.05] font-extrabold text-app-foreground sm:text-[2.75rem]">
                 {title}
               </h1>
-              {subtitle && <p className="mt-1.5 text-base text-app-muted italic">{subtitle}</p>}
-              <RubricRule className="mt-5" />
+              {subtitle && <p className="mt-2 text-base text-app-muted">{subtitle}</p>}
             </div>
           </div>
 

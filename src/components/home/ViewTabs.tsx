@@ -53,7 +53,7 @@ export function ViewTabs({
     <div
       role="group"
       aria-label="Deck view"
-      className="flex shrink-0 divide-x divide-app-foreground rounded-app-sm border border-app-foreground"
+      className="flex shrink-0 divide-x-[1.5px] divide-app-foreground overflow-hidden rounded-app-sm border-[1.5px] border-app-foreground bg-app-background"
     >
       {VIEWS.map((view) => {
         const isActive = view.value === value
@@ -64,14 +64,18 @@ export function ViewTabs({
             type="button"
             onClick={() => onChange(view.value)}
             aria-pressed={isActive}
-            className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+            className={`relative flex cursor-pointer items-center gap-2 px-3.5 py-1.5 text-sm font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
               isActive
-                ? 'bg-app-foreground font-semibold text-app-background'
+                ? 'bg-app-foreground font-bold text-app-background'
                 : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
             }`}
           >
             <Icon />
             {view.label}
+            {/* The active segment wears the programme's orange lanyard tab. */}
+            {isActive && (
+              <span aria-hidden="true" className="absolute bottom-0 left-1/2 h-1 w-5 -translate-x-1/2 bg-app-accent" />
+            )}
           </button>
         )
       })}
