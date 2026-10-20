@@ -4,8 +4,8 @@ import { ViewTabs } from './ViewTabs'
 import type { DeckFilters, DeckView } from './deckFilters'
 
 /**
- * The panel's header strip: view switcher on the left, Filter + primary action
- * on the right. Search lives in the sidebar, not here.
+ * The dashboard's header strip, ruled in ink underneath: view switcher on the
+ * left, Filter + primary action on the right. Search lives in the sidebar.
  */
 export function DeckToolbar({
   view,
@@ -21,7 +21,7 @@ export function DeckToolbar({
   onCreate: () => void
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-border px-4 py-3 sm:px-5">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-app-foreground pb-3">
       <ViewTabs value={view} onChange={onViewChange} />
 
       <div className="flex items-center gap-2">
@@ -29,7 +29,7 @@ export function DeckToolbar({
         <Button
           variant="primary"
           onClick={onCreate}
-          className="gap-1.5 hover:shadow-[0_0_24px_-4px_var(--app-highlight)]"
+          className="gap-1.5"
         >
           <svg
             className="size-4"

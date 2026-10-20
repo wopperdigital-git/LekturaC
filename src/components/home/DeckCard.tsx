@@ -1,8 +1,6 @@
-import type { CSSProperties } from 'react'
 import type { DeckSummary } from '@/store/presentationStore'
 import { useNewItems } from '@/jobs/newItems'
 import { NewDot } from '@/components/jobs/NewDot'
-import { deckSwatch } from './deckSwatch'
 import { DeckMenu } from './DeckMenu'
 import { DeckThumbnail } from './DeckThumbnail'
 import { relativeUpdatedAt } from './relativeTime'
@@ -22,18 +20,14 @@ export function DeckCard({
   onDelete: () => void
   exporting: boolean
 }) {
-  const swatch = deckSwatch(deck.id)
   const newKinds = useNewItems(deck.id)
 
   return (
     <div
-      // the ring color tracks each card's own swatch, so hover reinforces that card's identity
-      style={{ '--card-ring': swatch.from } as CSSProperties}
-      // sits inside the dashboard panel, so it leans on a border rather than the
-      // full shadow-app — the deep shadow reads as card-in-card against the panel
-      // no overflow-hidden: it would clip the action menu's dropdown against the
-      // card's own bounds. The cover clips and rounds its own top corners instead.
-      className="group relative rounded-app border border-app-border bg-app-background shadow-sm outline outline-2 outline-offset-2 outline-transparent transition-[transform,box-shadow,outline-color] duration-150 hover:-translate-y-0.5 hover:shadow-app hover:outline-[var(--card-ring)]"
+      // a hairline frame on the canvas, no shadow (only what floats casts one);
+      // hover rules the frame in ink. No overflow-hidden: it would clip the
+      // action menu's dropdown against the card's own bounds.
+      className="group relative rounded-app border border-app-border bg-app-background transition-colors duration-150 hover:border-app-foreground"
     >
       <button
         onClick={onOpen}

@@ -24,7 +24,7 @@ export function DeckMenu({
   onDelete: () => void
   exporting: boolean
   className?: string
-  /** True when the trigger sits on the card's coloured header rather than the panel surface. */
+  /** True when the trigger sits on a slide cover: it then wears its own bone chip so it reads on any theme. */
   onDark?: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -49,7 +49,7 @@ export function DeckMenu({
   }, [open])
 
   const triggerTone = onDark
-    ? 'bg-black/25 text-white backdrop-blur-sm hover:bg-black/40 focus-visible:outline-white'
+    ? 'border border-app-border bg-app-background text-app-foreground hover:border-app-foreground focus-visible:outline-app-accent'
     : 'text-app-muted hover:bg-app-surface hover:text-app-foreground focus-visible:outline-app-accent'
 
   return (
@@ -107,7 +107,7 @@ function Item({
       onClick={onClick}
       disabled={disabled}
       className={`block w-full cursor-pointer rounded-app-sm px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 ${
-        danger ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-950' : 'text-app-foreground hover:bg-app-surface'
+        danger ? 'text-app-danger-text hover:bg-app-danger/8' : 'text-app-foreground hover:bg-app-surface'
       }`}
     >
       {label}

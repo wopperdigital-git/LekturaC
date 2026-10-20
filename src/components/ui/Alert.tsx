@@ -3,13 +3,13 @@ import type { ReactNode } from 'react'
 type Tone = 'error' | 'success' | 'info'
 
 /*
-  Success uses the palette accent (#96cb67) as a tint, with `app-highlight-text`
+  Success uses the verdigris highlight as a tint, with `app-highlight-text`
   for the copy so it still clears AA in both themes. Error keeps a red — the
   five-color palette has no danger color, and recoloring failure states to fit
   the brand would cost more in clarity than it gains in consistency.
 */
 const TONE_CLASSES: Record<Tone, string> = {
-  error: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
+  error: 'border-app-danger/30 bg-app-danger/10 text-app-danger-text',
   success: 'border-app-highlight/40 bg-app-highlight/12 text-app-highlight-text',
   info: 'border-app-border bg-app-surface text-app-foreground',
 }

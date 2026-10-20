@@ -63,7 +63,7 @@ export function DraftRow({
         onClick={onDelete}
         aria-label={`Delete draft "${title}"`}
         title="Delete"
-        className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-app-sm text-app-muted transition-[opacity,color] duration-150 hover:text-red-600 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+        className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-app-sm text-app-muted transition-[opacity,color] duration-150 hover:text-app-danger-text focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
       >
         <svg
           className="size-4"

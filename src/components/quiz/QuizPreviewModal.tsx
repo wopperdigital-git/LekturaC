@@ -37,7 +37,7 @@ export function QuizPreviewBody({
       <div className="mt-3">
         {state.status === 'loading' && <p className="text-sm text-app-muted">Loading quiz…</p>}
         {state.status === 'error' && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="text-sm text-app-danger-text">
             Couldn&apos;t load this quiz: {state.message}
           </p>
         )}

@@ -123,7 +123,7 @@ export function PasswordSection() {
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors ${
                   passwordsMatch
                     ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium'
-                    : 'bg-red-500/10 text-red-600 dark:text-red-400 font-medium'
+                    : 'bg-app-danger/10 text-app-danger-text font-medium'
                 }`}
               >
                 <svg className="size-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">

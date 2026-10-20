@@ -102,7 +102,7 @@ function ActionButton({
       }}
       className={`pointer-events-auto absolute flex cursor-pointer items-center justify-center rounded-full border shadow-app transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
         danger
-          ? 'border-red-500/60 bg-app-background text-red-600 hover:bg-red-600 hover:text-white dark:text-red-400'
+          ? 'border-app-danger/60 bg-app-background text-app-danger-text hover:bg-app-danger hover:text-white'
           : 'border-app-accent bg-app-accent text-white hover:brightness-110'
       }`}
       style={{ width: BUTTON_PX, height: BUTTON_PX, ...style }}

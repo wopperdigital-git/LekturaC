@@ -189,7 +189,7 @@ export function ToolsPanel({
           <FontPicker value={activeFont} onChange={setFont} onPreview={onFontPreview} />
 
           <div className="mt-2.5 grid grid-cols-[1fr_auto] items-end gap-2">
-            <div>
+            <div className="min-w-0">
               <Caption>{onRun ? 'Size · selected text' : 'Size'}</Caption>
               {/* A size is a multiple of the theme's own scale, not a point size:
                   setting an absolute size would flatten the theme's heading and
@@ -353,7 +353,7 @@ function Section({
   return (
     <section className="border-t border-app-border px-3 py-2.5 first:border-t-0">
       <div className="flex h-7 items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-app-foreground">
+        <h3 className="apparatus flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-app-foreground">
           {icon}
           {title}
         </h3>
@@ -370,7 +370,7 @@ function Section({
 
 /** The short label above a field. */
 function Caption({ children }: { children: ReactNode }) {
-  return <p className="mb-1 truncate text-[11px] text-app-muted">{children}</p>
+  return <p className="apparatus mb-1 truncate text-[12px] text-app-muted">{children}</p>
 }
 
 /* --------------------------------------------------------------- inputs --- */
@@ -493,7 +493,7 @@ function FontPicker({
         aria-label={`Font — ${label}`}
         title={`Font — ${label}`}
         className={`${FIELD} w-full cursor-pointer justify-between gap-2 px-2 ${FOCUS_RING} ${
-          open ? 'bg-app-background ring-1 ring-app-accent' : ''
+          open ? 'bg-app-background ring-1 ring-app-foreground' : ''
         }`}
       >
         <span className="truncate" style={value ? { fontFamily: value } : undefined}>
@@ -645,7 +645,7 @@ function FontRow({
       onPointerEnter={onHover}
       onFocus={onHover}
       onClick={onPick}
-      className={`flex h-7 w-full cursor-pointer items-center gap-2 rounded-[4px] px-2 text-left text-[11px] text-app-foreground transition-colors hover:bg-app-accent hover:text-white ${FOCUS_RING}`}
+      className={`flex h-7 w-full cursor-pointer items-center gap-2 rounded-app-sm px-2 text-left text-[11px] text-app-foreground transition-colors hover:bg-app-surface ${FOCUS_RING}`}
     >
       <span aria-hidden="true" className="w-3 shrink-0">
         {active && <CheckIcon />}
@@ -696,7 +696,7 @@ function FillPicker({
         aria-label={`Fill colour — ${label}`}
         title={`Fill colour — ${label}`}
         className={`${FIELD} w-full cursor-pointer gap-2 px-1.5 ${FOCUS_RING} ${
-          open ? 'bg-app-background ring-1 ring-app-accent' : ''
+          open ? 'bg-app-background ring-1 ring-app-foreground' : ''
         }`}
       >
         <FillSwatch value={value} />
@@ -737,13 +737,13 @@ function FillPicker({
                     setOpen(false)
                   }}
                   className={`aspect-square cursor-pointer rounded-[4px] border transition-transform hover:scale-110 ${FOCUS_RING} ${
-                    value === color.value ? 'border-app-accent ring-2 ring-app-accent/40' : 'border-app-border'
+                    value === color.value ? 'border-app-foreground ring-1 ring-app-foreground' : 'border-app-border'
                   }`}
                   style={{ backgroundColor: color.value }}
                 />
               ))}
             </div>
-            <label className="relative mt-2 flex h-7 cursor-pointer items-center gap-2 rounded-[4px] px-1 text-[11px] text-app-foreground hover:bg-app-foreground/[0.06]">
+            <label className="relative mt-2 flex h-7 cursor-pointer items-center gap-2 rounded-app-sm px-1 text-[11px] text-app-foreground hover:bg-app-foreground/[0.06]">
               <FillSwatch value={named ? '' : value} custom />
               Custom…
               <input

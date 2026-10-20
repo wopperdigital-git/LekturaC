@@ -17,7 +17,7 @@ export function QuizJobStripView({ job, onCancel, onRetry, onDismiss, onView }: 
   if (job.status === 'failed') {
     return (
       <div className="flex shrink-0 items-center gap-2 text-xs">
-        <span className="font-medium text-red-600 dark:text-red-400">Quiz failed</span>
+        <span className="font-medium text-app-danger-text">Quiz failed</span>
         {job.error && <span className="max-w-48 truncate text-app-muted" title={job.error}>{job.error}</span>}
         <button type="button" onClick={onRetry} className="text-app-accent-text hover:underline">Try again</button>
         <button type="button" aria-label="Dismiss" onClick={onDismiss} className="text-app-muted hover:text-app-foreground">×</button>
@@ -34,7 +34,7 @@ export function QuizJobStripView({ job, onCancel, onRetry, onDismiss, onView }: 
       {confirming && job.cancellable ? (
         <>
           <span>Stop generating?</span>
-          <button type="button" onClick={onCancel} className="rounded-app px-1.5 py-0.5 font-medium text-red-600 hover:bg-red-500/10 dark:text-red-400">Stop</button>
+          <button type="button" onClick={onCancel} className="rounded-app px-1.5 py-0.5 font-medium text-app-danger-text hover:bg-app-danger/10">Stop</button>
           <button type="button" onClick={() => setConfirming(false)} className="rounded-app px-1.5 py-0.5 text-app-foreground hover:bg-app-muted/10">Keep going</button>
         </>
       ) : (

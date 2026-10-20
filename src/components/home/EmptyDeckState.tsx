@@ -46,7 +46,7 @@ export function EmptyDeckState({ onCreate }: { onCreate: () => void }) {
         Create your first presentation
       </h2>
       <p className="mt-2 max-w-sm text-sm text-app-muted">
-        Describe a topic and LekturaC turns it into a complete, presentation-ready slide deck in
+        Describe a topic and Lektura turns it into a complete, presentation-ready slide deck in
         one go.
       </p>
       <Button variant="primary" onClick={onCreate} className="mt-6">

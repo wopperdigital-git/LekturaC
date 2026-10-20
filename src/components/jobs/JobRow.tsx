@@ -47,7 +47,7 @@ export function JobRow({ job, actions }: { job: Job; actions: JobActions }) {
   const failed = job.status === 'failed'
   const drawing = job.kind === 'video' && job.timeline.some((e) => e.id === 'rendering' && e.state === 'active')
   return (
-    <div className={`rounded-app border bg-app-background p-3 shadow-app ${failed ? 'border-red-400' : 'border-app-border'}`}>
+    <div className={`rounded-app border bg-app-background p-3 shadow-app ${failed ? 'border-app-danger' : 'border-app-border'}`}>
       <div className="mb-2 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <div className="text-xs text-app-muted">{failed ? 'Failed' : KIND_LABEL[job.kind]}</div>
@@ -60,7 +60,7 @@ export function JobRow({ job, actions }: { job: Job; actions: JobActions }) {
         ) : confirming && job.cancellable ? (
           <div className="flex items-center gap-1 text-xs">
             <span className="text-app-muted">Stop generating?</span>
-            <button type="button" onClick={() => actions.cancel(job.kind)} className="rounded-app px-1.5 py-0.5 font-medium text-red-600 hover:bg-red-500/10 dark:text-red-400">
+            <button type="button" onClick={() => actions.cancel(job.kind)} className="rounded-app px-1.5 py-0.5 font-medium text-app-danger-text hover:bg-app-danger/10">
               Stop
             </button>
             <button type="button" onClick={() => setConfirming(false)} className="rounded-app px-1.5 py-0.5 text-app-foreground hover:bg-app-muted/10">
@@ -82,7 +82,7 @@ export function JobRow({ job, actions }: { job: Job; actions: JobActions }) {
       </div>
       {failed ? (
         <>
-          <p className="mb-2 text-xs font-medium text-red-600 dark:text-red-400">{job.error}</p>
+          <p className="mb-2 text-xs font-medium text-app-danger-text">{job.error}</p>
           <div className="flex gap-2">
             {job.editHref && (
               <button type="button" onClick={() => actions.editBrief(job)} className="rounded-app border border-app-border px-2 py-1 text-xs text-app-foreground hover:bg-app-muted/10">

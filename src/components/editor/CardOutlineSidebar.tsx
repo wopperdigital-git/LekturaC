@@ -158,7 +158,7 @@ function SortableRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
       className={`group relative overflow-hidden rounded-app-sm border-2 ${
-        isActive ? 'border-app-accent' : 'border-transparent hover:border-app-border'
+        isActive ? 'border-app-foreground' : 'border-transparent hover:border-app-border'
       }`}
     >
       {/* The whole thumbnail is the drag handle — press and hold to reorder,
@@ -183,7 +183,7 @@ function SortableRow({
           e.stopPropagation()
           onDelete()
         }}
-        className="absolute right-1 top-1 flex size-6 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="absolute right-1 top-1 flex size-6 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-app-danger group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         aria-label="Delete slide"
         title="Delete slide"
       >

@@ -12,7 +12,7 @@ export function RoleChoice({
 }) {
   return (
     <div role="radiogroup" aria-label="Account type" className="flex flex-col gap-2">
-      <span className="block text-xs font-medium text-app-muted">I'm using LekturaC as…</span>
+      <span className="block text-xs font-medium text-app-muted">I'm using Lektura as…</span>
       {ROLES.map((role) => {
         const selected = role === value
         return (

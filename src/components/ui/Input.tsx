@@ -1,14 +1,18 @@
 import { useId, useState } from 'react'
 import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
 
-/** Shared field chrome: border, focus ring, and the red variant used when `invalid` is set. */
+/**
+ * Shared field chrome. Focus is ruled in ink, not the rubric: a vermilion focus
+ * ring read as an error beside the brick `invalid` border. Keyboard focus on
+ * buttons keeps the vermilion outline.
+ */
 function fieldClasses(invalid: boolean) {
   return [
     'w-full rounded-app-sm border bg-app-background px-3 py-2 text-sm text-app-foreground',
-    'placeholder:text-app-muted/60 outline-none transition-[border-color,box-shadow] duration-150',
+    'placeholder:text-app-muted outline-none transition-[border-color,box-shadow] duration-150',
     invalid
-      ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/25'
-      : 'border-app-border focus:border-app-accent focus:ring-2 focus:ring-app-accent/25',
+      ? 'border-app-danger focus:ring-1 focus:ring-app-danger'
+      : 'border-app-border focus:border-app-foreground focus:ring-1 focus:ring-app-foreground',
   ].join(' ')
 }
 
@@ -92,7 +96,7 @@ export function Textarea({ className = '', ...props }: TextareaHTMLAttributes<HT
 
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1 block text-xs font-medium text-app-muted">
+    <label htmlFor={htmlFor} className="apparatus mb-1 block text-sm font-semibold text-app-muted">
       {children}
     </label>
   )
@@ -132,8 +136,22 @@ export function Field({
       {message && (
         <p
           id={messageId}
-          className={`mt-1 text-xs ${error ? 'text-red-600' : 'text-app-muted'}`}
+          className={`mt-1 flex items-start gap-1.5 text-xs ${error ? 'text-app-danger-text' : 'text-app-muted'}`}
         >
+          {error && (
+            <svg
+              className="mt-px size-3.5 shrink-0"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="6.25" />
+              <path d="M8 4.75v3.75M8 11v.01" />
+            </svg>
+          )}
           {message}
         </p>
       )}

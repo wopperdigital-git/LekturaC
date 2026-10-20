@@ -114,7 +114,7 @@ function ClassActionMenu({
               setOpen(false)
               onDelete()
             }}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-[calc(var(--app-radius-sm)-2px)] px-2.5 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 focus-visible:outline-2 focus-visible:outline-red-500"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-[calc(var(--app-radius-sm)-2px)] px-2.5 py-1.5 text-left text-xs font-medium text-app-danger-text transition-colors hover:bg-app-danger/10 focus-visible:outline-2 focus-visible:outline-app-danger"
           >
             Delete class
           </button>

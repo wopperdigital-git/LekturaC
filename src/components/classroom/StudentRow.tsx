@@ -164,7 +164,7 @@ export function StudentRow({
           <Button
             variant="ghost"
             onClick={onRemove}
-            className="px-2.5 py-1 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+            className="px-2.5 py-1 text-xs text-app-danger-text hover:bg-app-danger/10"
             aria-label={`Remove ${name}`}
           >
             Remove

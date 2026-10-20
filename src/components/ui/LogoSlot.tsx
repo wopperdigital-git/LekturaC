@@ -1,25 +1,24 @@
+import { DetentCross } from './Rubric'
+
 /**
- * Drop your logo in here.
+ * The product's mark. Until there is a drawn logo it is the name set in the
+ * chrome's serif, keyed by the rubric's detent cross; a logo file replaces the
+ * contents of this slot and nothing around it needs to change.
  *
- * Replace the placeholder block below with an <img>, e.g.
- *   <img src="/logo.svg" alt="LekturaC" className="h-8 w-auto" />
- * The surrounding slot is already positioned and sized — nothing else needs to change.
- *
- * `onDark` picks the outline color for use on the auth panel's dark background;
+ * `onDark` sets it in light ink for the auth panel's dark background;
  * everywhere else (light or dark app theme) omit it and it follows `app-*` tokens.
  */
 export function LogoSlot({ onDark = false }: { onDark?: boolean }) {
   return (
-    <div className="flex h-10 items-center">
-      {/* --- replace from here --- */}
-      <div
-        className={`flex h-10 w-32 items-center justify-center rounded-app-sm border border-dashed text-[10px] font-medium tracking-wide uppercase ${
-          onDark ? 'border-white/25 text-white/40' : 'border-app-border text-app-muted'
+    <div className="flex h-10 items-center gap-2">
+      <span
+        className={`font-app text-[1.375rem] leading-none font-semibold tracking-[-0.01em] ${
+          onDark ? 'text-white' : 'text-app-foreground'
         }`}
       >
-        Logo
-      </div>
-      {/* --- to here --- */}
+        Lektura
+      </span>
+      <DetentCross className={`size-2.5 ${onDark ? 'text-[#e8664c]' : 'text-app-accent-text'}`} />
     </div>
   )
 }

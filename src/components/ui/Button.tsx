@@ -5,10 +5,10 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
-    'bg-app-accent text-app-accent-foreground shadow-sm hover:brightness-110 active:brightness-95',
+    'bg-app-accent text-app-accent-foreground hover:brightness-110 active:brightness-95',
   secondary: 'bg-app-surface text-app-foreground border border-app-border hover:bg-app-border/40',
   ghost: 'bg-transparent text-app-foreground hover:bg-app-surface',
-  danger: 'bg-red-600 text-white shadow-sm hover:bg-red-700 active:bg-red-800',
+  danger: 'bg-app-danger text-white hover:brightness-110 active:brightness-95',
 }
 
 export function Button({

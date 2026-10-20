@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LogoSlot } from '@/components/ui/LogoSlot'
+import { DetentCross } from '@/components/ui/Rubric'
 import { useDrafts } from '@/lib/briefDrafts'
 import { useAuthStore } from '@/store/authStore'
 import { useMyClasses } from '@/classroom/useMyClasses'
@@ -120,7 +121,8 @@ const RAIL_CLASS_LIMIT = 5
 export function SidebarSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mt-7 first:mt-0">
-      <div className="px-3 pb-2 text-[11px] font-semibold tracking-[0.14em] text-app-muted uppercase">
+      <div className="apparatus flex items-center gap-2 px-3 pb-2 text-[0.9375rem] font-semibold text-app-accent-text">
+        <DetentCross />
         {label}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
@@ -147,16 +149,16 @@ export function SidebarLink({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={`group flex w-full cursor-pointer items-center gap-3 rounded-app-sm px-3 py-2 text-left text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+      className={`group flex w-full cursor-pointer items-center gap-3 rounded-app-sm px-3 py-2 text-left text-[0.9375rem] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
         active
-          ? 'bg-app-accent font-medium text-app-accent-foreground shadow-2xs'
+          ? 'bg-app-surface font-semibold text-app-foreground shadow-[inset_0_-1px_0_var(--app-foreground)]'
           : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
       }`}
     >
       {icon && (
         <span
           className={`grid size-4 shrink-0 place-items-center transition-colors ${
-            active ? 'text-app-accent-foreground' : 'text-app-muted group-hover:text-app-foreground'
+            active ? 'text-app-accent-text' : 'text-app-muted group-hover:text-app-foreground'
           }`}
         >
           {icon}
@@ -165,10 +167,8 @@ export function SidebarLink({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {badge !== undefined && (
         <span
-          className={`grid min-w-5 shrink-0 place-items-center rounded px-1 text-[11px] font-medium tabular-nums ${
-            active
-              ? 'bg-app-accent-foreground/20 text-app-accent-foreground'
-              : 'border border-app-border bg-app-surface text-app-muted'
+          className={`grid min-w-5 shrink-0 place-items-center px-1 text-xs font-semibold tabular-nums ${
+            active ? 'text-app-accent-text' : 'border border-app-border text-app-muted'
           }`}
         >
           {badge}

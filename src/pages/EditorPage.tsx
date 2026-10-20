@@ -34,6 +34,7 @@ import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
 import { Button } from '@/components/ui/Button'
+import { DetentCross } from '@/components/ui/Rubric'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
 import { elementLabel, firstEditableField, type ContentType } from '@/engine/newContent'
@@ -1017,7 +1018,7 @@ export function EditorPage() {
     return (
       <>
         {exportError && (
-          <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <p role="alert" className="bg-app-danger/8 px-4 py-2 text-sm text-app-danger-text">
             Export failed: {exportError}
           </p>
         )}
@@ -1103,7 +1104,7 @@ export function EditorPage() {
         user is looking.
       */}
       {store.status === 'error' && store.errorMessage && (
-        <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p role="alert" className="bg-app-danger/8 px-4 py-2 text-sm text-app-danger-text">
           Not saved — {store.errorMessage}. Your changes are on screen but have not reached the
           server; reloading this page will lose them.
         </p>
@@ -1116,31 +1117,36 @@ export function EditorPage() {
         </p>
       )}
       {exportError && (
-        <p role="alert" className="bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p role="alert" className="bg-app-danger/8 px-4 py-2 text-sm text-app-danger-text">
           Export failed: {exportError}
         </p>
       )}
       {/* AI-written claims with no source: said once per visit, before the teacher presents them. */}
       {factNotice && !factNoticeHidden && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
-        >
-          <span>{factNotice}</span>
-          <button
-            type="button"
-            onClick={() => setFactCheckOpen(true)}
-            className="cursor-pointer font-semibold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
-          >
-            Review
-          </button>
-          <button
-            type="button"
-            onClick={() => setFactNoticeHidden(true)}
-            className="ml-auto cursor-pointer text-xs underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
-          >
-            Hide for now
-          </button>
+        <div role="status" className="relative -mt-px border-b border-app-border bg-app-background px-4 pt-1 pb-2">
+          {/* Set as the top bar's marginal note, not a banner: `-mt-px` covers
+              the bar's rule and this draws it below, so bar and note read as one
+              head. Inside, a hairline in the margin keyed by the rubric's detent,
+              the way an edition keys its apparatus to the line it qualifies. */}
+          <div className="relative ml-1.5 flex max-w-3xl flex-wrap items-baseline gap-x-3 gap-y-1 border-l border-app-accent-text/60 py-0.5 pl-4 text-sm text-app-foreground">
+            <DetentCross className="absolute top-1/2 -left-[5.5px] size-2.5 -translate-y-1/2 bg-app-background text-app-accent-text" />
+            <span className="apparatus font-semibold text-app-accent-text">Note</span>
+            <span className="italic">{factNotice}</span>
+            <button
+              type="button"
+              onClick={() => setFactCheckOpen(true)}
+              className="cursor-pointer font-semibold text-app-accent-text underline underline-offset-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+            >
+              Review
+            </button>
+            <button
+              type="button"
+              onClick={() => setFactNoticeHidden(true)}
+              className="cursor-pointer text-xs text-app-muted underline-offset-3 hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+            >
+              Hide for now
+            </button>
+          </div>
         </div>
       )}
 

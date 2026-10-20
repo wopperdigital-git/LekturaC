@@ -313,7 +313,7 @@ export function QuizRow({
             onClick={() => setConfirmingDelete(true)}
             aria-label={`Delete ${quiz.title}`}
             title="Delete quiz"
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm px-2.5 py-1 text-xs font-medium text-app-danger-text transition-colors hover:bg-app-danger/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg className="size-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
               <path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4" />
@@ -324,7 +324,7 @@ export function QuizRow({
       </div>
 
       {error && (
-        <div className="border-t border-red-500/20 bg-red-500/5 px-4 py-2 text-xs font-medium text-red-600 dark:text-red-400">
+        <div className="border-t border-app-danger/20 bg-app-danger/5 px-4 py-2 text-xs font-medium text-app-danger-text">
           {error}
         </div>
       )}

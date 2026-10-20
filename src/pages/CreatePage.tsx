@@ -399,7 +399,7 @@ export function CreatePage() {
                           </Button>
                         </div>
                         {slideCountError && (
-                          <p id={`${uid}-slide-error`} className="text-xs text-red-600">
+                          <p id={`${uid}-slide-error`} className="text-xs text-app-danger-text">
                             {slideCountError}
                           </p>
                         )}

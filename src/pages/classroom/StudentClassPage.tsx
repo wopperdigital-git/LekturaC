@@ -145,7 +145,7 @@ export function StudentClassPage() {
             <button
               type="button"
               onClick={() => setConfirmLeave(true)}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-xs font-medium text-app-muted transition-colors hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 focus-visible:outline-2 focus-visible:outline-red-500"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-xs font-medium text-app-muted transition-colors hover:border-app-danger/30 hover:bg-app-danger/10 hover:text-app-danger-text focus-visible:outline-2 focus-visible:outline-app-danger"
               title="Leave this classroom"
             >
               <svg className="size-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

@@ -166,7 +166,7 @@ export function AnnouncementList({
                     </Button>
                     <Button
                       variant="ghost"
-                      className="px-2 py-1 text-xs text-red-600 dark:text-red-400"
+                      className="px-2 py-1 text-xs text-app-danger-text"
                       onClick={() => editable.onDelete(a)}
                     >
                       Delete

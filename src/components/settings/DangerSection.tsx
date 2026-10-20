@@ -31,16 +31,16 @@ export function DangerSection() {
 
   if (!armed) {
     return (
-      <div className="rounded-app-sm border border-red-500/25 bg-red-500/5 p-4 flex flex-col gap-3">
+      <div className="rounded-app-sm border border-app-danger/25 bg-app-danger/5 p-4 flex flex-col gap-3">
         <div className="flex items-start gap-3">
-          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
+          <div className="grid size-8 shrink-0 place-items-center rounded-full bg-app-danger/10 text-app-danger-text">
             <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
               <path d="M8 2.5l6 10.5H2L8 2.5z" />
               <path d="M8 6.5v3M8 11.5h.01" />
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="text-sm font-semibold text-red-600 dark:text-red-400">
+            <h4 className="text-sm font-semibold text-app-danger-text">
               Delete Account
             </h4>
             <p className="mt-0.5 text-xs text-app-muted">
@@ -63,7 +63,7 @@ export function DangerSection() {
   }
 
   return (
-    <div className="rounded-app-sm border border-red-500/40 bg-red-500/8 p-4 flex flex-col gap-4">
+    <div className="rounded-app-sm border border-app-danger/40 bg-app-danger/8 p-4 flex flex-col gap-4">
       <Alert tone="error">
         <span className="font-semibold">Irreversible action.</span> Deleting your account will immediately wipe your credentials, presentation library, and slide history.
         {role === 'teacher' && (

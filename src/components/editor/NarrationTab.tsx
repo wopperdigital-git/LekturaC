@@ -135,7 +135,7 @@ export function NarrationTab({
             </>
           )}
           {shownError && (
-            <p className={`text-xs font-medium text-red-600 dark:text-red-400 ${generating ? 'mt-2' : ''}`}>
+            <p className={`text-xs font-medium text-app-danger-text ${generating ? 'mt-2' : ''}`}>
               {shownError}
             </p>
           )}

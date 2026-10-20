@@ -75,7 +75,7 @@ export function DeckQuizList({
             </Button>
             <Button
               variant="ghost"
-              className="!px-2 !py-1 text-xs text-red-600 dark:text-red-400"
+              className="!px-2 !py-1 text-xs text-app-danger-text"
               disabled={busy}
               aria-label={`Delete ${q.title}`}
               onClick={(e) => {

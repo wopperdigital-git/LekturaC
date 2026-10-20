@@ -150,7 +150,7 @@ export function MyClassesPage() {
                 </div>
               </div>
 
-              {codeError && <p className="text-xs font-medium text-red-600">{codeError}</p>}
+              {codeError && <p className="text-xs font-medium text-app-danger-text">{codeError}</p>}
 
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] text-app-muted">Letters & numbers only</span>
@@ -240,7 +240,7 @@ export function MyClassesPage() {
                 </div>
               </div>
 
-              {quizCodeError && <p className="text-xs font-medium text-red-600">{quizCodeError}</p>}
+              {quizCodeError && <p className="text-xs font-medium text-app-danger-text">{quizCodeError}</p>}
 
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] text-app-muted">Direct assessment access</span>

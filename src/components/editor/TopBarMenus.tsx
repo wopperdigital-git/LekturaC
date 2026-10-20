@@ -313,7 +313,7 @@ function Avatar({ name }: { name: string }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-app-accent text-sm font-semibold text-white uppercase"
+      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-app-foreground text-sm font-semibold text-app-background uppercase"
     >
       {name.trim().charAt(0) || '?'}
     </span>

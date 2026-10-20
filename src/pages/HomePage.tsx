@@ -70,8 +70,8 @@ export function HomePage() {
       query={query}
       onQueryChange={setQuery}
     >
-      {/* the working surface — toolbar strip on top, decks below, one bordered panel */}
-      <section className="overflow-hidden rounded-app border border-app-border bg-app-background shadow-md">
+      {/* the working surface: a strip ruled in ink, then the decks straight on the canvas */}
+      <section>
         <DeckToolbar
           view={view}
           onViewChange={setView}
@@ -80,9 +80,9 @@ export function HomePage() {
           onCreate={() => navigate('/new')}
         />
 
-        <div className="p-4 sm:p-5">
+        <div className="pt-5">
           {exportError && (
-            <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
+            <p role="alert" className="mb-3 text-sm text-app-danger-text">
               Export failed: {exportError}
             </p>
           )}

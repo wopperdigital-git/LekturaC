@@ -186,7 +186,7 @@ export function Select<T extends string = string>({
                   isSmall ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm'
                 } ${
                   isSelected
-                    ? 'bg-app-accent/10 font-semibold text-app-accent-text dark:bg-app-accent/20'
+                    ? 'bg-app-surface font-semibold text-app-foreground'
                     : isHighlighted
                       ? 'bg-app-border/40 text-app-foreground'
                       : 'text-app-foreground hover:bg-app-border/25'

@@ -146,7 +146,7 @@ export function QuizModal({
         </p>
       )}
       {pdfError && (
-        <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="mt-3 text-sm text-app-danger-text">
           {pdfError}
         </p>
       )}
@@ -167,7 +167,7 @@ export function QuizModal({
         {!noKey && noContent && <p className="mt-4 text-xs text-app-muted">Add some slide content first.</p>}
         {quizRunning && <p className="mt-4 text-xs text-app-muted">A quiz is already generating.</p>}
         {startError && (
-          <p role="alert" className="mt-4 text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="mt-4 text-sm text-app-danger-text">
             {startError}
           </p>
         )}

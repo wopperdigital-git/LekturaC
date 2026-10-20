@@ -2,7 +2,7 @@ import type { DeckView } from './deckFilters'
 
 export function DeckCardSkeleton() {
   return (
-    <div className="overflow-hidden rounded-app border border-app-border bg-app-background shadow-sm">
+    <div className="overflow-hidden rounded-app border border-app-border bg-app-background">
       {/* Matches DeckThumbnail's 16:9 cover, so the grid does not jolt when
           the decks resolve. */}
       <div className="dash-skeleton aspect-video bg-app-surface" />

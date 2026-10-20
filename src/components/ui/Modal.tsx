@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { RubricRule } from './Rubric'
 
 export function Modal({
   title,
@@ -56,6 +57,7 @@ export function Modal({
             </svg>
           </button>
         </div>
+        <RubricRule className="-mt-2 mb-5" />
         {children}
       </div>
     </div>

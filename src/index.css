@@ -41,6 +41,8 @@
   --color-app-highlight: var(--app-highlight);
   --color-app-highlight-text: var(--app-highlight-text);
   --color-app-highlight-foreground: var(--app-highlight-foreground);
+  --color-app-danger: var(--app-danger);
+  --color-app-danger-text: var(--app-danger-text);
   --color-app-muted: var(--app-muted);
   --color-app-border: var(--app-border);
   --color-app-surface: var(--app-surface);
@@ -66,40 +68,41 @@
 
 :root {
   /*
-    App chrome. Source palette (realtimecolors.com):
-      text #13091b · background #faf4fb · primary #9f50c3 · secondary #dace95 · accent #96cb67
+    App chrome: "Annotated Edition" (DESIGN.md). A reference edition's page —
+    unbleached bone in three steps, iron-black ink, slate apparatus, and one rubric
+    vermilion that marks where to act, keys and focus. Verdigris is the only other
+    hue, and only for success.
 
-    `--app-accent` is the primary (#9f50c3) and stays the button/interactive fill.
-    `--app-accent-text` is that same primary nudged darker purely so accent-colored
-    *text* clears WCAG AA on the background (#9f50c3 lands at 4.40:1, just under).
-    Dark-mode overrides live in the [data-theme='dark'] block below.
+    `--app-accent` is the vermilion fill (white on it: 5.3:1). `--app-accent-text`
+    is the same rubric darkened so vermilion *text* clears AA on every bone step
+    (the fill is 4.4:1 on the canvas, just under). Dark-mode overrides live in the
+    [data-theme='dark'] block below.
   */
-  --app-background: #faf4fb;
-  /* barely-tinted near-white — the previous darken(background, 5) formula produced a
-     visibly pink/lavender canvas because this background sits near-white in HSL, where
-     saturation swings hard on any lightness change. Hand-tuned instead: same hue, far
-     less saturation, so the page reads as white with cards floating via shadow, not tint. */
-  --app-canvas: #f7f5f8;
-  --app-foreground: #13091b;
-  --app-accent: #9f50c3;
+  --app-background: #f7f3ea;
+  --app-canvas: #efe9dd;
+  --app-foreground: #1a1a1a;
+  --app-accent: #c23a2a;
   --app-accent-foreground: #ffffff;
-  --app-accent-text: #9449b8;
-  --app-secondary: #dace95;
-  --app-highlight: #96cb67;
-  /* same accent, darkened for text/icon contrast (#96cb67 is 1.76:1 on the background) */
-  --app-highlight-text: #4f752c;
-  /* dark text for use ON TOP of a solid --app-highlight fill (e.g. an avatar badge) —
-     distinct from --app-highlight-text, which is for highlight-colored text on the
-     page background. Ink already clears AA here (10.19:1), same value the dark
-     theme lands on independently below, so this isn't a coincidence of the math. */
-  --app-highlight-foreground: #13091b;
-  --app-muted: #726080;
-  --app-border: #e6e0eb;
-  --app-surface: #f5f0f8;
-  --app-font: 'Inter', system-ui, sans-serif;
-  --app-radius: 1rem;
-  --app-radius-sm: 0.5rem;
-  --app-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
+  --app-accent-text: #a8301f;
+  --app-secondary: #ddd5c5;
+  --app-highlight: #3d6b4f;
+  /* verdigris text on bone (6.4:1 on the canvas) */
+  --app-highlight-text: #2f5a40;
+  /* text on a solid verdigris fill (an avatar badge): white clears AA at 6.2:1 */
+  --app-highlight-foreground: #ffffff;
+  /* Destructive actions and errors: a deep brick, darker than the rubric so a
+     Delete button never reads as the vermilion "act here" mark (8.4:1 on bone). */
+  --app-danger: #8a1c1c;
+  --app-danger-text: #8a1c1c;
+  --app-muted: #5f5a52;
+  --app-border: #cfc6b4;
+  --app-surface: #ebe4d6;
+  --app-font: 'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif;
+  /* No radius: a ruling engine draws square frames. Circles stay circles
+     (avatars, round icon buttons) through `rounded-full`, which these don't touch. */
+  --app-radius: 0px;
+  --app-radius-sm: 0px;
+  --app-shadow: 0 1px 2px rgba(26, 20, 12, 0.06), 0 10px 26px rgba(26, 20, 12, 0.12);
 
   /* Slide theme fallback — used only where no ThemeProvider scope overrides it.
      Mirrors the Moonlight preset (the default theme) so an unscoped slide never
@@ -140,34 +143,32 @@
   Only the app-* namespace flips — slide-* deck themes are chosen per deck and
   stay exactly as authored, so a Minimal deck still renders light in dark mode.
 
-  This is NOT the light palette darkened — it's a separate, purpose-built dark
-  palette (realtimecolors.com: text #eee4f6, background #0a040b, primary #8a3caf,
-  secondary #6a5e25, accent #639834). Reusing the light palette's own colors here
-  read as visibly purple even at low lightness, because #13091b/#f2e1f4-style
-  darkening keeps real chroma; this palette's background is a near-neutral black
-  instead (only ~3% lightness, so its HSL saturation number doesn't read as color
-  to the eye the way it does near white).
+  This is NOT the light palette inverted — it's the same edition read at night:
+  an iron-black page with bone ink. The vermilion fill stays (white on it is
+  5.3:1; a lighter fill would drop under AA), and its text weight lightens so it
+  reads on the dark ground.
 */
 [data-theme='dark'] {
-  --app-background: #17131b;
-  --app-canvas: #0a040b;
-  --app-foreground: #eee4f6;
-  --app-accent: #8a3caf;
+  --app-background: #1c1b19;
+  --app-canvas: #121110;
+  --app-foreground: #ece6da;
+  --app-accent: #c23a2a;
   --app-accent-foreground: #ffffff;
-  /* lightened primary — #8a3caf as text on this ground is only 3.23:1 */
-  --app-accent-text: #a75fc8;
-  --app-secondary: #6a5e25;
-  --app-highlight: #639834;
-  /* on this ground the accent already clears AA at 5.87:1, so use it as-is */
-  --app-highlight-text: #639834;
-  /* dark text for a solid --app-highlight fill — #eee4f6 (the theme's own
-     foreground) only reaches 2.81:1 on this green, so it can't be reused here */
-  --app-highlight-foreground: #0a040b;
-  --app-muted: #a18eb4;
-  --app-border: #332a3c;
-  --app-surface: #211c26;
+  /* lightened rubric — the fill as text on this ground is only 3.3:1 */
+  --app-accent-text: #e8664c;
+  --app-secondary: #3b3832;
+  --app-highlight: #3d6b4f;
+  /* lightened verdigris for text on the dark ground (6.1:1) */
+  --app-highlight-text: #7fb393;
+  --app-highlight-foreground: #ffffff;
+  /* same brick fill (white on it 9.3:1); its text lightens for the dark ground */
+  --app-danger: #8a1c1c;
+  --app-danger-text: #f19a8a;
+  --app-muted: #a59e90;
+  --app-border: #3b3832;
+  --app-surface: #26241f;
   --app-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.5);
+    0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px rgba(0, 0, 0, 0.5);
 
   color-scheme: dark;
 }
@@ -178,47 +179,38 @@ body,
   height: 100%;
 }
 
+/* Every scroller's bar in the chrome's own paper and rule colours (the property
+   inherits); `.scrollbar-subtle` and friends narrow it where a panel needs to. */
+html {
+  scrollbar-color: var(--app-border) var(--app-canvas);
+}
+
 body {
   margin: 0;
   background: var(--color-app-canvas);
   color: var(--color-app-foreground);
   font-family: var(--font-app);
+  caret-color: var(--app-accent);
   -webkit-font-smoothing: antialiased;
 }
 
+/* A selection is the rubric laid over the text, not the browser's blue. */
+::selection {
+  background: color-mix(in srgb, var(--app-accent) 22%, transparent);
+  color: inherit;
+}
+
 /*
-  Auth screen decoration (components/auth/AuthVisualPanel.tsx).
-  Only `transform` and `opacity` are animated, so these stay on the compositor
-  and never trigger layout or paint on the main thread.
+  Apparatus labels: section heads, captions over fields. Real small caps from the
+  face (all-small-caps keeps a typed capital from standing taller than the rest),
+  tracked open as small caps want to be.
 */
-@keyframes auth-blob-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  33% {
-    transform: translate3d(6%, -8%, 0) scale(1.08);
-  }
-  66% {
-    transform: translate3d(-5%, 6%, 0) scale(0.95);
-  }
+.apparatus {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
 }
 
-.auth-blob {
-  animation: auth-blob-drift 18s ease-in-out infinite;
-  will-change: transform;
-}
-
-.auth-blob-delayed {
-  animation-duration: 24s;
-  animation-delay: -6s;
-}
-
-.auth-blob-slow {
-  animation-duration: 30s;
-  animation-delay: -12s;
-}
-
+/* Auth screen content (components/auth). */
 @keyframes auth-fade-in {
   from {
     opacity: 0;
@@ -266,7 +258,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-blob,
   .auth-fade-in,
   .dash-skeleton,
   .create-step-in {

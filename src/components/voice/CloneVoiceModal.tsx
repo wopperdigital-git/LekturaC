@@ -460,7 +460,7 @@ export function CloneVoiceModal({
     <Modal title="Narrated video" onClose={onClose}>
       <div className="flex flex-col gap-5">
         <p className="text-sm text-app-muted">Pick a voice, then make a video of the whole deck read aloud.</p>
-        {!configured && <p className="text-sm text-red-600 dark:text-red-400">{VOICE_NOT_SET_UP}</p>}
+        {!configured && <p className="text-sm text-app-danger-text">{VOICE_NOT_SET_UP}</p>}
         {warning && <p className="text-xs text-app-highlight-text">{warning}</p>}
 
         {/* ---- Voice ---- */}
@@ -501,7 +501,7 @@ export function CloneVoiceModal({
                 <Spinner /> Loading voices…
               </p>
             )}
-            {lists?.error && !loadingVoices && <p className="p-3 text-xs text-red-600 dark:text-red-400">{lists.error}</p>}
+            {lists?.error && !loadingVoices && <p className="p-3 text-xs text-app-danger-text">{lists.error}</p>}
             {lists && !loadingVoices && !lists.error && (
               <>
                 <VoiceGroup title="Your voices" voices={mineShown} selectedId={choice.voiceId} onPick={(v) => pick(v, 'cloned')} />
@@ -524,7 +524,7 @@ export function CloneVoiceModal({
                   setConfirmDelete(selectedOwn)
                 }}
                 disabled={disabledAll}
-                className="cursor-pointer text-xs font-medium text-red-600 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400"
+                className="cursor-pointer text-xs font-medium text-app-danger-text underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Delete this voice
               </button>
@@ -540,7 +540,7 @@ export function CloneVoiceModal({
                 Delete <span className="font-medium">“{confirmDelete.name}”</span>? It&apos;s removed from Cartesia for
                 good. Videos you already made keep their sound.
               </p>
-              {deleteError && <p className="text-xs text-red-600 dark:text-red-400">{deleteError}</p>}
+              {deleteError && <p className="text-xs text-app-danger-text">{deleteError}</p>}
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={() => setConfirmDelete(null)} disabled={deletingVoice}>
                   Keep
@@ -563,10 +563,10 @@ export function CloneVoiceModal({
             <ul className="mt-1.5 list-disc space-y-1 pl-4">
               <li>Your recording goes to Cartesia, the voice service this site uses, to make a copy of your voice.</li>
               <li>
-                The copy is kept in this site&apos;s Cartesia account until you delete it here. Deleting your LekturaC
+                The copy is kept in this site&apos;s Cartesia account until you delete it here. Deleting your Lektura
                 account deletes it too.
               </li>
-              <li>Only you can pick it in LekturaC. Whoever runs this site can also see it in their Cartesia account.</li>
+              <li>Only you can pick it in Lektura. Whoever runs this site can also see it in their Cartesia account.</li>
             </ul>
             <label className="mt-2.5 flex cursor-pointer items-start gap-2 text-app-foreground">
               <input
@@ -613,7 +613,7 @@ export function CloneVoiceModal({
             {clipUrl && <audio controls src={clipUrl} className="h-8 max-w-full" aria-label="Your recording" />}
           </div>
           {!support.supported && <p className="text-xs text-app-muted">{support.message}</p>}
-          {recError && <p className="text-xs text-red-600 dark:text-red-400">{recError}</p>}
+          {recError && <p className="text-xs text-app-danger-text">{recError}</p>}
           {clip && clipLanguage !== null && clipLanguage !== draft.language && (
             <p className="text-xs text-app-muted">
               Recorded in {VOICE_LANGUAGES.find((l) => l.code === clipLanguage)?.label}; this clip will be cloned as{' '}
@@ -647,7 +647,7 @@ export function CloneVoiceModal({
               Clone voice
             </Button>
           </div>
-          {cloneError && <p className="text-xs text-red-600 dark:text-red-400">{cloneError}</p>}
+          {cloneError && <p className="text-xs text-app-danger-text">{cloneError}</p>}
         </section>
 
         {/* ---- Settings ---- */}
@@ -727,7 +727,7 @@ export function CloneVoiceModal({
             )}
             {choice.voiceId === null && <span className="text-xs text-app-muted">Choose a voice first.</span>}
           </div>
-          {previewError && <p className="text-xs text-red-600 dark:text-red-400">{previewError}</p>}
+          {previewError && <p className="text-xs text-app-danger-text">{previewError}</p>}
         </section>
 
         {/* ---- The video ---- */}
@@ -758,7 +758,7 @@ export function CloneVoiceModal({
             <p className="text-xs text-app-muted">No video yet.</p>
           )}
 
-          {videoError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{videoError}</p>}
+          {videoError && <p className="text-xs font-medium text-app-danger-text">{videoError}</p>}
         </section>
 
         {ready && !savedVoiceKnown && (
@@ -766,7 +766,7 @@ export function CloneVoiceModal({
             Your saved voice could not be read, so generating is turned off. Close this and open it again to retry.
           </p>
         )}
-        {saveError && <p className="text-xs font-medium text-red-600 dark:text-red-400">{saveError}</p>}
+        {saveError && <p className="text-xs font-medium text-app-danger-text">{saveError}</p>}
         {blocker && configured && <p className="text-xs text-app-muted">{blocker}</p>}
         {generating && <p className="text-xs text-app-muted">A video is already generating.</p>}
         <p className="text-xs text-app-muted">

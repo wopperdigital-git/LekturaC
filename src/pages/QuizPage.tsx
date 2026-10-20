@@ -319,7 +319,7 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
           </fieldset>
 
           {submitError && (
-            <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">
+            <p role="alert" className="text-sm font-medium text-app-danger-text">
               {submitError}
             </p>
           )}
@@ -412,7 +412,7 @@ function ResultPanel({ quiz, result, answers }: { quiz: TakeQuiz; result: Attemp
                         className={`mt-0.5 inline-grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${
                           right
                             ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-red-500/15 text-red-600 dark:text-red-400'
+                            : 'bg-app-danger/15 text-app-danger-text'
                         }`}
                         aria-label={right ? 'Correct' : 'Incorrect'}
                       >

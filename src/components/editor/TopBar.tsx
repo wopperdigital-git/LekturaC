@@ -76,7 +76,7 @@ export function TopBar({
           to="/"
           aria-label="Back to home"
           title="Back to home"
-          className="group flex size-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-surface text-app-foreground/80 transition-colors hover:border-app-accent/50 hover:bg-app-accent/15 hover:text-app-accent-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
+          className="group flex size-9 shrink-0 items-center justify-center rounded-full border border-app-border bg-app-surface text-app-foreground/80 transition-colors hover:border-app-foreground hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
         >
           <svg {...stroke} className="size-[18px] transition-transform duration-150 group-hover:-translate-x-0.5">
             <path d="M16 10H4.5M9.5 4.5L4 10l5.5 5.5" />
@@ -111,14 +111,14 @@ export function TopBar({
             }}
             aria-label="Presentation title"
             title={title}
-            className="absolute inset-0 size-full resize-none overflow-hidden rounded-app-sm border border-transparent bg-transparent px-2 py-1 break-words whitespace-pre-wrap text-app-foreground outline-none transition-colors hover:border-app-border focus:border-app-accent"
+            className="absolute inset-0 size-full resize-none overflow-hidden rounded-app-sm border border-transparent bg-transparent px-2 py-1 break-words whitespace-pre-wrap text-app-foreground outline-none transition-colors hover:border-app-border focus:border-app-foreground"
           />
         </div>
 
         {/* The failed case is red rather than muted grey: it is the one value
             here that is not a progress note. The reason is on the banner below. */}
         <span
-          className={`shrink-0 text-xs ${saveStatus === 'error' ? 'font-medium text-red-600 dark:text-red-400' : 'text-app-muted'}`}
+          className={`shrink-0 text-xs ${saveStatus === 'error' ? 'font-medium text-app-danger-text' : 'text-app-muted'}`}
         >
           {saveStatus === 'saving' && 'Saving…'}
           {saveStatus === 'error' && 'Not saved'}

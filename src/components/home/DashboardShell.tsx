@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { RubricRule } from '@/components/ui/Rubric'
 import { AppSidebar } from './AppSidebar'
 
 /**
@@ -62,11 +63,12 @@ export function DashboardShell({
               </svg>
             </button>
 
-            <div className="min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight text-app-foreground sm:text-3xl">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-[2rem] leading-tight font-semibold tracking-[-0.015em] text-app-foreground sm:text-[2.5rem]">
                 {title}
               </h1>
-              {subtitle && <p className="mt-1.5 text-sm text-app-muted">{subtitle}</p>}
+              {subtitle && <p className="mt-1.5 text-base text-app-muted italic">{subtitle}</p>}
+              <RubricRule className="mt-5" />
             </div>
           </div>
 

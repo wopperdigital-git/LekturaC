@@ -50,7 +50,7 @@ function CardActionButton({
       }}
       className={`flex size-8 cursor-pointer pointer-coarse:size-11 items-center justify-center rounded-full border bg-app-background shadow-app transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
         danger
-          ? 'border-red-500/60 text-red-600 hover:bg-red-600 hover:text-white dark:text-red-400'
+          ? 'border-app-danger/60 text-app-danger-text hover:bg-app-danger hover:text-white'
           : 'border-app-border text-app-foreground hover:border-app-accent hover:text-app-accent-text'
       }`}
     >

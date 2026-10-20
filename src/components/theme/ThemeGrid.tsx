@@ -51,7 +51,7 @@ export function ThemeGrid({
             title={t.name}
             className={`flex min-w-0 cursor-pointer flex-col items-stretch gap-1 rounded-app-sm border p-1 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
               isActive
-                ? 'border-app-accent bg-app-accent/10'
+                ? 'border-app-foreground bg-app-surface'
                 : 'border-transparent hover:bg-app-foreground/5'
             }`}
           >

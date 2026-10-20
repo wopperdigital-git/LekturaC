@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 
-/** Star tints, straight from the palette: background, primary, accent, secondary. */
-const STAR_COLORS = ['250,244,251', '159,80,195', '150,203,103', '218,206,149']
+/** Star tints from the palette: bone ink three times as often as the rubric. */
+const STAR_COLORS = ['236,230,218', '236,230,218', '236,230,218', '232,102,76']
 
 /** One star per this many px² of panel, clamped — keeps density even across screen sizes. */
 const AREA_PER_STAR = 14000
@@ -200,7 +200,7 @@ export function AuthVisualPanel({ children }: { children?: ReactNode }) {
           const distSq = dx * dx + dy * dy
           if (distSq > LINK_DISTANCE * LINK_DISTANCE) continue
           const alpha = (1 - Math.sqrt(distSq) / LINK_DISTANCE) * 0.22
-          ctx.strokeStyle = `rgba(159,80,195,${alpha})`
+          ctx.strokeStyle = `rgba(236,230,218,${alpha})`
           ctx.beginPath()
           ctx.moveTo(positions[i].x, positions[i].y)
           ctx.lineTo(positions[j].x, positions[j].y)
@@ -216,7 +216,7 @@ export function AuthVisualPanel({ children }: { children?: ReactNode }) {
           const distSq = dx * dx + dy * dy
           if (distSq > POINTER_RADIUS * POINTER_RADIUS) continue
           const alpha = (1 - Math.sqrt(distSq) / POINTER_RADIUS) * 0.4
-          ctx.strokeStyle = `rgba(150,203,103,${alpha})`
+          ctx.strokeStyle = `rgba(232,102,76,${alpha})`
           ctx.beginPath()
           ctx.moveTo(pointerX, pointerY)
           ctx.lineTo(p.x, p.y)
@@ -331,31 +331,14 @@ export function AuthVisualPanel({ children }: { children?: ReactNode }) {
   return (
     <div
       ref={containerRef}
-      className="relative isolate hidden overflow-hidden bg-[#13091b] lg:flex lg:flex-col"
+      className="relative isolate hidden overflow-hidden bg-[#161513] lg:flex lg:flex-col"
     >
-      {/* soft gradient blobs — transform/opacity only, so they stay off the layout path */}
-      <div
-        aria-hidden="true"
-        className="auth-blob absolute -top-32 -left-24 size-[32rem] rounded-full opacity-60 blur-3xl"
-        style={{ background: 'radial-gradient(circle, #9f50c3 0%, transparent 68%)' }}
-      />
-      <div
-        aria-hidden="true"
-        className="auth-blob auth-blob-delayed absolute -right-28 bottom-[-8rem] size-[28rem] rounded-full opacity-40 blur-3xl"
-        style={{ background: 'radial-gradient(circle, #96cb67 0%, transparent 70%)' }}
-      />
-      <div
-        aria-hidden="true"
-        className="auth-blob auth-blob-slow absolute top-1/3 right-1/4 size-[22rem] rounded-full opacity-25 blur-3xl"
-        style={{ background: 'radial-gradient(circle, #dace95 0%, transparent 72%)' }}
-      />
-
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0" />
 
-      {/* keeps text legible over whatever the blobs are doing underneath */}
+      {/* keeps the copy legible over the stars beneath it */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-gradient-to-t from-[#13091b] via-transparent to-transparent"
+        className="absolute inset-0 bg-gradient-to-t from-[#161513] via-transparent to-transparent"
       />
 
       <div className="pointer-events-none relative z-10 flex h-full flex-col justify-between p-12">

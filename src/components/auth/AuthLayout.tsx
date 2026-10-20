@@ -37,7 +37,7 @@ export function AuthLayout({
             Describe a topic. Get a finished deck.
           </p>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/55">
-            LekturaC turns a single brief into a complete, presentation-ready slide deck.
+            Lektura turns a single brief into a complete, presentation-ready slide deck.
           </p>
         </div>
       </AuthVisualPanel>

@@ -12,10 +12,10 @@ function GridIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="2" y="2" width="5" height="5" rx="1.2" />
-      <rect x="9" y="2" width="5" height="5" rx="1.2" />
-      <rect x="2" y="9" width="5" height="5" rx="1.2" />
-      <rect x="9" y="9" width="5" height="5" rx="1.2" />
+      <rect x="2" y="2" width="5" height="5" />
+      <rect x="9" y="2" width="5" height="5" />
+      <rect x="2" y="9" width="5" height="5" />
+      <rect x="9" y="9" width="5" height="5" />
     </svg>
   )
 }
@@ -41,7 +41,7 @@ const VIEWS: { value: DeckView; label: string; icon: () => ReactElement }[] = [
   { value: 'list', label: 'List', icon: ListIcon },
 ]
 
-/** Segmented view switcher — the active tab lifts out of the track as a solid pill. */
+/** Segmented view switcher: ink-bordered segments, the active one filled in ink. */
 export function ViewTabs({
   value,
   onChange,
@@ -53,7 +53,7 @@ export function ViewTabs({
     <div
       role="group"
       aria-label="Deck view"
-      className="flex shrink-0 gap-1 rounded-app-sm bg-app-surface p-1"
+      className="flex shrink-0 divide-x divide-app-foreground rounded-app-sm border border-app-foreground"
     >
       {VIEWS.map((view) => {
         const isActive = view.value === value
@@ -64,10 +64,10 @@ export function ViewTabs({
             type="button"
             onClick={() => onChange(view.value)}
             aria-pressed={isActive}
-            className={`flex cursor-pointer items-center gap-2 rounded-[calc(var(--app-radius-sm)-2px)] px-3 py-1.5 text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
+            className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent ${
               isActive
-                ? 'bg-app-background font-medium text-app-foreground shadow-sm'
-                : 'text-app-muted hover:text-app-foreground'
+                ? 'bg-app-foreground font-semibold text-app-background'
+                : 'text-app-muted hover:bg-app-surface hover:text-app-foreground'
             }`}
           >
             <Icon />
