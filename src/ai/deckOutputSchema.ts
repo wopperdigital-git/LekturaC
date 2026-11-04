@@ -80,7 +80,10 @@ const deckBriefOutputSchema = z.object({
 export const generatedCardOutputSchema = z.object({
   plan: slidePlanOutputSchema,
   role: z.string().optional(),
-  imageQuery: z.string().min(2).max(80).optional(),
+  // Deliberately unconstrained: `messages.parse` validates against this mirror
+  // and a failure there throws (kind `response`, no failover), so a short or
+  // long query would cost the deck. The real schema's `.catch(undefined)` drops it.
+  imageQuery: z.string().optional(),
   blocks: z.array(contentBlockSchema).min(1),
   visualStyle: visualStyleSchema,
   speakerNotes: z.string(),

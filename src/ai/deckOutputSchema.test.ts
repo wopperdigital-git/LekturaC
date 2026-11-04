@@ -56,3 +56,35 @@ describe('deckOutputSchema mirrors generatedDeckSchema', () => {
     assertSameKeys(deckOutputSchema, generatedDeckSchema, 'deck')
   })
 })
+
+describe('deckOutputSchema leniency', () => {
+  // `messages.parse` validates the model's reply against this mirror and throws
+  // on failure (kind `response`, no failover). A bad imageQuery must therefore
+  // pass here and be dropped by the real schema's `.catch(undefined)`.
+  function deckWith(imageQuery: unknown) {
+    return {
+      title: 'T',
+      blueprint: 'inform',
+      brief: { objective: 'O', audienceKnowledgeLevel: 'beginner', presentationType: 'other', freshnessRequired: false, keyQuestions: [] },
+      cards: [
+        {
+          plan: { purpose: 'hook', audienceQuestion: 'q', keyMessage: 'k', visualType: 'text', layoutFamily: 'list', transition: '', importance: 'essential' },
+          imageQuery,
+          blocks: [{ type: 'heading', text: 'H' }],
+          visualStyle: 'structured',
+          speakerNotes: 'n',
+          claims: [],
+        },
+      ],
+    }
+  }
+
+  it.each([['empty', ''], ['one character', 'a'], ['120 characters', 'x'.repeat(120)]])(
+    'accepts a %s imageQuery, which the real schema then drops',
+    (_label, value) => {
+      expect(deckOutputSchema.safeParse(deckWith(value)).success).toBe(true)
+      const real = generatedDeckSchema.parse(deckWith(value))
+      expect(real.cards[0].imageQuery).toBeUndefined()
+    },
+  )
+})

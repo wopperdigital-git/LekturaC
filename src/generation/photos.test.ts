@@ -109,6 +109,18 @@ describe('addPhotos', () => {
     expect(out.cards[2].blocks.at(-1)).toMatchObject({ type: 'image', url: photo(3).url })
   })
 
+  it('treats a search that throws synchronously as that card failing, not the stage', async () => {
+    const input = deck([card('Throws', { imageQuery: 'ab' }), card('Works', { imageQuery: 'cd' })])
+    const search = (q: string): Promise<Photo[]> => {
+      if (q === 'ab') throw new Error('sync boom')
+      return Promise.resolve([photo(2)])
+    }
+    const out = await addPhotos(input, search)
+
+    expect(out.cards[0].blocks).toEqual(input.cards[0].blocks)
+    expect(out.cards[1].blocks.at(-1)).toMatchObject({ url: photo(2).url })
+  })
+
   it('gives the second of two cards that found the same first photo the next unused one', async () => {
     const input = deck([card('One', { imageQuery: 'forest' }), card('Two', { imageQuery: 'woods' })])
     const out = await addPhotos(input, async () => [photo(1), photo(2)])

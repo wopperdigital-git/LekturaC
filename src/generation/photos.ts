@@ -35,7 +35,10 @@ export async function addPhotos(
 
   const settled = await Promise.allSettled(
     deck.cards.map((card) =>
-      card.imageQuery === undefined ? Promise.resolve<Photo[]>([]) : search(card.imageQuery, signal),
+      card.imageQuery === undefined
+        ? Promise.resolve<Photo[]>([])
+        : // `async` so a synchronous throw from `search` is that card's failure.
+          (async () => search(card.imageQuery as string, signal))(),
     ),
   )
 
