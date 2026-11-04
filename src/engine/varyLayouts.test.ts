@@ -21,14 +21,39 @@ function resolved(cards: { blocks: ContentBlock[]; layout: LayoutType }[], out: 
 }
 
 describe('varyLayouts', () => {
-  it('gives the second of two consecutive short-list cards a list variety other than iconGrid', () => {
-    const cards = [listCard, listCard]
+  it('gives the second of two consecutive icon-grid cards a checklist', () => {
     expect(chooseLayout(listCard.blocks)).toBe('iconGrid')
-    const out = varyLayouts(cards)
-    expect(out[0]).toBe('auto')
-    expect(out[1]).not.toBe('auto')
-    expect(out[1]).not.toBe('iconGrid')
-    expect(componentsForKind('list', listCard.blocks)).toContain(out[1])
+    expect(varyLayouts([listCard, listCard])).toEqual(['auto', 'checklist'])
+  })
+
+  it('gives the second of two numbered-list cards a checklist', () => {
+    const longItems: ContentBlock = {
+      type: 'bulletList',
+      items: ['A fairly long item that is well past the short chip limit of forty characters', 'Another long one, also over the limit for the compact grid layout'],
+    }
+    const numbered = { blocks: [heading, longItems], layout: 'auto' as LayoutType }
+    expect(chooseLayout(numbered.blocks)).toBe('numberedList')
+    expect(varyLayouts([numbered, numbered])).toEqual(['auto', 'checklist'])
+  })
+
+  it('gives the second of two stat-grid cards a statList, not a statHero', () => {
+    const stat = (v: string): ContentBlock => ({ type: 'stat', value: v, label: 'x' })
+    const grid = { blocks: [heading, stat('1'), stat('2'), stat('3')], layout: 'auto' as LayoutType }
+    expect(chooseLayout(grid.blocks)).toBe('statGrid')
+    expect(varyLayouts([grid, grid])).toEqual(['auto', 'statList'])
+  })
+
+  it('gives the second of two comparison cards a comparisonTable', () => {
+    const group = (h: string): ContentBlock => ({ type: 'comparisonGroup', heading: h, items: ['a'] })
+    const cmp = { blocks: [heading, group('A'), group('B')], layout: 'auto' as LayoutType }
+    expect(chooseLayout(cmp.blocks)).toBe('comparison')
+    expect(varyLayouts([cmp, cmp])).toEqual(['auto', 'comparisonTable'])
+  })
+
+  it('leaves a quote-plus-list card on auto when its kind (quote) cannot hold the list layout', () => {
+    const mixed = { blocks: [heading, quote, shortList], layout: 'auto' as LayoutType }
+    expect(chooseLayout(mixed.blocks)).toBe('iconGrid')
+    expect(varyLayouts([listCard, mixed])).toEqual(['auto', 'auto'])
   })
 
   it('alternates timeline / timelineRow / timeline across three timeline cards', () => {
