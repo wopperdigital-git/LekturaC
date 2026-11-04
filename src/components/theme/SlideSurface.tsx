@@ -14,13 +14,25 @@ import type { CSSProperties, ReactNode } from 'react'
  * half-applied in one of them.
  *
  * `isolate` gives the card its own stacking context so it composites cleanly
- * over the stage's decoration, and `overflow-hidden` clips content to the
- * theme's corner radius.
+ * over the stage's decoration.
+ *
+ * The card is presentation-shaped: a 16:9 FLOOR, not a fixed box. `aspect-video`
+ * sets the ratio and the height stays `auto`, so a short slide is 16:9 with its
+ * content centred (`flex flex-col justify-center`). A taller slide must grow, not
+ * clip, and that rests on one CSS detail: with an aspect-ratio and `height:
+ * auto`, the box's automatic minimum height is its content height *unless it is
+ * a scroll container*. `overflow: hidden` is a scroll container, so it would pin
+ * the box to 16:9 and cut the content off; `overflow: clip` is not, so the
+ * content still sets the floor and the theme's corner radius still clips. Do not
+ * change `overflow-clip` back to `overflow-hidden`.
  *
  * Radius, shadow and padding stay with the caller: the canvas and presenter
  * cards want `rounded-slide`/`shadow-slide-card`, while a thumbnail is clipped
  * by its own scaled frame.
  */
+export const SLIDE_SURFACE_CLASS =
+  'relative isolate flex aspect-video flex-col justify-center overflow-clip bg-slide-background'
+
 export function SlideSurface({
   className = '',
   style,
@@ -31,7 +43,7 @@ export function SlideSurface({
   children: ReactNode
 }) {
   return (
-    <div className={`relative isolate overflow-hidden bg-slide-background ${className}`} style={style}>
+    <div className={`${SLIDE_SURFACE_CLASS} ${className}`} style={style}>
       {children}
     </div>
   )

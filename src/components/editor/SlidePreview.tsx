@@ -25,6 +25,11 @@ const STAGE_PADDING_PX = 40
 const BASE_WIDTH = SLIDE_WIDTH_PX + 2 * STAGE_PADDING_PX
 // Unlike the outline rail, this assumes 16:9 — see the crop note below.
 const BASE_HEIGHT = (BASE_WIDTH * 9) / 16
+// The card is itself a 16:9 floor (`SlideSurface`), so with the stage's full
+// `p-10` above and below it a short slide is taller than this frame and the
+// frame would crop its bottom margin. Trimming the stage's vertical padding to
+// what is left over keeps a short card centred, margins equal, in the frame.
+const STAGE_PADDING_Y_PX = (BASE_HEIGHT - (SLIDE_WIDTH_PX * 9) / 16) / 2
 
 /**
  * A card in the given theme, fitted to its container's *width* inside a fixed
@@ -34,8 +39,8 @@ const BASE_HEIGHT = (BASE_WIDTH * 9) / 16
  * is deliberate: the outline rail is a map of the whole deck and must show every
  * card whole, while a cover or a picker option is an identity — a row of tiles all
  * the same size reads as a row, and nothing is legible at this size anyway.
- * Cards still have no aspect ratio of their own; this is a fixed *viewport onto*
- * one, not a card forced into a shape.
+ * A card is a 16:9 floor that grows with its content (`SlideSurface`); this is a
+ * fixed *viewport onto* one, not a card forced into a shape.
  */
 export function SlidePreview({
   card,
@@ -85,8 +90,8 @@ export function SlidePreview({
                 colour and nothing else. `items-center` centres a short card
                 instead of stranding it at the top of the frame. */}
             <SlideStage
-              className="flex w-full items-center justify-center p-10"
-              style={{ minHeight: BASE_HEIGHT }}
+              className="flex w-full items-center justify-center px-10"
+              style={{ minHeight: BASE_HEIGHT, paddingBlock: STAGE_PADDING_Y_PX }}
             >
               <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
                 <SlideSurface className="w-full rounded-slide p-10 shadow-slide-card">

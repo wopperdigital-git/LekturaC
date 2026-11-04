@@ -20,8 +20,8 @@ import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
 // The card at the editor's own width plus the stage's `p-10` either side, so text wraps as it
 // does on the canvas (see `lib/slideSize.ts`).
 const THUMB_BASE_WIDTH = SLIDE_WIDTH_PX + 2 * 40
-// Cards size to their content (no fixed aspect ratio — see CardCanvas), so the
-// thumbnail can't assume 16:9 either. This is only the pre-measurement guess
+// Cards are a 16:9 floor that grows with its content (see `SlideSurface`), so the
+// thumbnail can't assume 16:9. This is only the pre-measurement guess
 // used for the very first layout pass.
 const THUMB_FALLBACK_HEIGHT = (THUMB_BASE_WIDTH * 9) / 16
 // A long card would otherwise tower over its neighbours in the rail, so past
