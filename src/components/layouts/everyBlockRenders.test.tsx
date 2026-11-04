@@ -269,6 +269,12 @@ describe('a card with one photo', () => {
     }
   }
 
+  it('the credit is plain text: no link, nothing focusable', () => {
+    const html = renderToStaticMarkup(<LayoutRenderer card={card(ONE_PHOTO_SINK, 'hero', 'structured')} />)
+    expect(creditCount(html)).toBe(1)
+    expect(html).not.toMatch(/<a[ >]/)
+  })
+
   it('a credit from a pasted link has no credit line', () => {
     const blocks: ContentBlock[] = [
       { type: 'heading', text: 'MARKHEAD' },
@@ -308,11 +314,12 @@ describe('a card with one photo', () => {
       expect(html).toContain('from-black/75')
     })
 
-    it('a quote slide does the same', () => {
+    it('a quote slide does the same, under an even scrim (its text is mid-slide, not in the dark band)', () => {
       const blocks: ContentBlock[] = [{ type: 'quote', text: 'MARKQ' }, PHOTO]
       const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'quote', 'expressive')} />)
       expect(html).toContain('data-on-photo')
-      expect(html).toContain('from-black/75')
+      expect(html).toContain('bg-black/60')
+      expect(html).not.toContain('from-black/75')
     })
 
     it('a slide with no photo never puts text on one', () => {
@@ -340,7 +347,7 @@ describe('a card with one photo', () => {
       const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'bulletList', items: ['MARKI1'] }, PHOTO]
       const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', 'structured')} />)
       expect(html.indexOf(`src="`)).toBeLessThan(html.indexOf('MARKHEAD'))
-      expect(html).toContain('aspect-[21/6]')
+      expect(html).toContain('aspect-[6/1]')
     })
   })
 })

@@ -22,7 +22,20 @@ import { PhotoCredit } from './PhotoCredit'
  * title sits. It is a fixed set of classes rather than a theme colour because a
  * photo has no theme.
  */
-export function BackgroundPhoto({ block, index }: { block: ImageBlock; index: number }) {
+export function BackgroundPhoto({
+  block,
+  index,
+  scrim = 'gradient',
+}: {
+  block: ImageBlock
+  index: number
+  /**
+   * `gradient` darkens toward the bottom, where a title sits (the hero). `even` is one flat
+   * 60% black for text anywhere on the picture (the centred quote): white over 60% black on
+   * pure white is about 5.7:1, where the gradient's mid-height would be about 2.9:1.
+   */
+  scrim?: 'gradient' | 'even'
+}) {
   return (
     <Adjustable index={index} fixed>
       <div
@@ -32,7 +45,9 @@ export function BackgroundPhoto({ block, index }: { block: ImageBlock; index: nu
         <img src={block.url} alt={block.alt ?? ''} className="h-full w-full object-cover" />
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/40 to-black/20"
+          className={`pointer-events-none absolute inset-0 ${
+            scrim === 'even' ? 'bg-black/60' : 'bg-gradient-to-t from-black/75 via-black/40 to-black/20'
+          }`}
         />
         <PhotoCredit credit={block.credit} />
       </div>

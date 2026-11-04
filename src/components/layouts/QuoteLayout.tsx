@@ -37,7 +37,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
   const onPhoto = (content: ReactNode) =>
     photo ? (
       <>
-        <BackgroundPhoto block={photo.block} index={photo.index} />
+        <BackgroundPhoto block={photo.block} index={photo.index} scrim="even" />
         <PhotoStage justify="center">{content}</PhotoStage>
       </>
     ) : (

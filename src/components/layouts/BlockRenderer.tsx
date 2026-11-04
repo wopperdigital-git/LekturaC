@@ -196,7 +196,7 @@ function PhotoFigure({
   className?: string
 }) {
   return (
-    <figure className="relative overflow-hidden rounded-slide-sm border border-slide-border">
+    <figure className="relative w-full overflow-hidden rounded-slide-sm border border-slide-border">
       <img src={block.url} alt={block.alt ?? ''} className={`block w-full object-cover ${className}`} />
       <PhotoCredit credit={block.credit} />
     </figure>

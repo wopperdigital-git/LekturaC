@@ -1,10 +1,13 @@
 import type { PhotoCredit as PhotoCreditData } from '@/images/types'
 import { SLIDE_BODY_FONT } from '@/lib/theme-tokens'
-import { useBlockAdjusting } from './adjustContext'
 
 /**
  * The photographer's credit Pexels asks for, drawn small on a photo's bottom
- * edge: "Photo: <name> / Pexels", linking the photographer.
+ * edge: "Photo: <name> / Pexels". Plain text, not a link: a slide is drawn inside
+ * `aria-hidden` previews and `<button>`s (dashboard covers, outline thumbnails), where
+ * a link would be an invisible tab stop and invalid HTML, and in the presenter a click
+ * on it would be a click on the slide. The photographer's link lives in the image
+ * picker.
  *
  * It is part of the layout JSX of every photo, so it shows wherever a slide is
  * drawn (canvas, presenter, thumbnails, cover, video) with no surface having to
@@ -23,20 +26,14 @@ export function PhotoCredit({
   credit?: PhotoCreditData
   className?: string
 }) {
-  const adjusting = useBlockAdjusting()
   if (!credit || credit.source !== 'pexels') return null
   return (
-    <a
+    <span
       data-photo-credit=""
-      href={credit.url}
-      target="_blank"
-      rel="noreferrer noopener"
-      // In the editor a click on the credit is a click on the slide, not a trip to Pexels.
-      onClick={adjusting ? (event) => event.preventDefault() : undefined}
-      className={`absolute z-[1] max-w-[85%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[0.65rem] font-medium leading-tight text-white no-underline ${className}`}
+      className={`absolute z-[1] max-w-[85%] truncate rounded-full bg-black/55 px-2 py-0.5 text-[0.65rem] font-medium leading-tight text-white ${className}`}
       style={{ fontFamily: SLIDE_BODY_FONT }}
     >
       {`Photo: ${credit.name} / Pexels`}
-    </a>
+    </span>
   )
 }

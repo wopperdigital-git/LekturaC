@@ -35,15 +35,24 @@ describe('BackgroundPhoto', () => {
     expect(html).toContain('data-photo-credit')
     expect(html).toContain('Photo: Ada / Pexels')
   })
+
+  it('can take an even scrim instead of the gradient', () => {
+    const even = renderToStaticMarkup(
+      <BackgroundPhoto index={0} scrim="even" block={{ type: 'image', url: 'https://example.test/bg.png' }} />,
+    )
+    expect(even).toContain('bg-black/60')
+    expect(even).not.toContain('from-black/75')
+  })
 })
 
 describe('PhotoCredit', () => {
-  it('links the photographer, naming Pexels', () => {
+  it('names the photographer and Pexels as plain text, with no link to tab to', () => {
     const html = renderToStaticMarkup(
       <PhotoCredit credit={{ name: 'Ada', url: 'https://www.pexels.com/@ada', source: 'pexels' }} />,
     )
-    expect(html).toContain('href="https://www.pexels.com/@ada"')
     expect(html).toContain('Photo: Ada / Pexels')
+    expect(html).not.toContain('<a')
+    expect(html).not.toContain('href')
   })
 
   it('draws nothing for a pasted link or no credit', () => {

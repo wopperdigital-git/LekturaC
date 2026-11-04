@@ -39,7 +39,7 @@ export function FlowLayout({
   return (
     <div className="flex flex-col gap-6">
       {photo && (
-        <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[21/6]" />
+        <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[6/1]" />
       )}
       {nodes.map((node) =>
         node.kind === 'leaf' && photo && node.index === photo.index ? null : node.kind === 'leaf' ? (
