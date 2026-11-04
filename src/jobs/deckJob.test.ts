@@ -99,9 +99,16 @@ describe('deckJobSpec', () => {
   })
 
   it('inserts the un-photographed deck when addPhotos fails for any other reason', async () => {
-    const { spec, deps, ctx } = setup({ addPhotos: vi.fn(async () => { throw new Error('boom') }) })
-    await expect(spec.run(ctx)).resolves.toEqual({ deckId: 'deck-1' })
-    expect(deps.insert).toHaveBeenCalledWith(result.deck, 5, result)
+    const boom = new Error('boom')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { spec, deps, ctx } = setup({ addPhotos: vi.fn(async () => { throw boom }) })
+      await expect(spec.run(ctx)).resolves.toEqual({ deckId: 'deck-1' })
+      expect(deps.insert).toHaveBeenCalledWith(result.deck, 5, result)
+      expect(warn).toHaveBeenCalledWith(expect.any(String), boom)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('keeps the draft when generation fails, with the provider message', async () => {

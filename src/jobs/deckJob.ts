@@ -52,6 +52,7 @@ export function deckJobSpec(input: DeckJobInput, deps: DeckJobDeps): JobSpec {
       } catch (err) {
         // Cancel stops the job; any other failure costs the photos, never the deck.
         if (signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) throw abortError()
+        console.warn('Finding photos failed; the deck continues without them.', err)
       }
       if (signal.aborted) throw abortError()
       report({ ...deckTimeline('save', repairSlides), cancellable: false })
