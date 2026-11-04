@@ -2,7 +2,9 @@ import type { Card } from '@/engine/contentBlocks'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { TextStyle } from '@/engine/textStyle'
 import { mergeTextStyle } from '@/engine/textStyle'
+import { resolveLayout } from '@/engine/layoutEngine'
 import { slideGroup } from './slideGroup'
+import { prefetchDeckImages } from './imageData'
 import { RENDERERS, type PptxSlide } from './slideRenderers'
 import { backdropPng } from './backdrop/rasterize'
 import { hex } from './textRun'
@@ -71,6 +73,14 @@ export async function exportDeckToPptx(deck: ExportableDeck): Promise<void> {
 
   const ordered = [...deck.cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
+  /*
+    Every photo on the deck, fetched once before any slide is drawn, so the
+    renderers stay pure (they are handed the map and never touch the network).
+    A picture that cannot be fetched is simply absent and its slide draws the
+    alt text it always did; this step cannot fail the export.
+  */
+  const images = await prefetchDeckImages(ordered)
+
   // Built once, not once per slide/re-measured word: the canvas, the loaded
   // fonts, and the per-(font,text) cache are all shared across every slide in
   // the deck.
@@ -79,7 +89,11 @@ export async function exportDeckToPptx(deck: ExportableDeck): Promise<void> {
   ordered.forEach((card, index) => {
     const slide = pptx.addSlide({ masterName: MASTER })
     const style = mergeTextStyle(deck.textStyle, card.textStyle)
-    RENDERERS[slideGroup(card, index === 0)](slide as unknown as PptxSlide, card, deck.theme, style, measure)
+    const layout = resolveLayout(card.layout, card.blocks, { isFirstCard: index === 0 })
+    RENDERERS[slideGroup(card, index === 0)](slide as unknown as PptxSlide, card, deck.theme, style, measure, {
+      images,
+      layout,
+    })
   })
 
   await pptx.writeFile({ fileName: pptxFileName(deck.title) })

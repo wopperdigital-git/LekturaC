@@ -178,6 +178,8 @@ Each is `(slide, card, theme, style) => void`, placing text boxes on the
   `comparisonGroup` to its heading plus indented items, `stat` to
   `value — label`, `image` to its `alt` as a placeholder line — an image with no
   `alt` is skipped, since a bullet reading "image" is worse than no bullet.
+  (Superseded where a photo has a place: see "Photos" in the fit design's
+  implementation invariants. The alt-text line is now only the fallback.)
 - **stat** — the value large and centred in `accent`, label beneath in `muted`.
   `statGrid`'s stats lay out in a row of at most four columns, wrapping to
   further rows beyond that.

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { RENDERERS, fitCard, fittedPointSize, type PptxSlide } from './slideRenderers'
+import { RENDERERS, fitCard, fittedPointSize, type PptxSlide, type RenderContext } from './slideRenderers'
 import { slideGroup } from './slideGroup'
 import { cardBoxes } from './blockBoxes'
+import { resolveLayout } from '@/engine/layoutEngine'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { CREATABLE_KINDS, layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
@@ -42,19 +43,35 @@ interface Captured {
 function fakeSlide() {
   const texts: Captured[] = []
   const shapes: { shape: string; options: Record<string, unknown> }[] = []
+  const images: Record<string, unknown>[] = []
+  /** Every call in the order made, so a test can check what sits above what. */
+  const order: ('text' | 'shape' | 'image')[] = []
 
-  const slide: PptxSlide & { texts: Captured[]; shapes: typeof shapes } = {
+  const slide: PptxSlide & {
+    texts: Captured[]
+    shapes: typeof shapes
+    images: typeof images
+    order: typeof order
+  } = {
     texts,
     shapes,
+    images,
+    order,
+    addImage(options) {
+      images.push(options)
+      order.push('image')
+    },
     addText(value, options) {
       // A box's runs are concatenated: the split into runs is a formatting
       // detail (one run per mark), not something a reader sees.
       const runs = typeof value === 'string' ? [{ text: value, options: {} }] : value
       const text = runs.map((run) => run.text).join('')
       texts.push({ text, options, runs })
+      order.push('text')
     },
     addShape(shape, options) {
       shapes.push({ shape, options })
+      order.push('shape')
     },
   }
   return slide
@@ -953,5 +970,254 @@ describe('starter cards as stored data', () => {
     for (const block of starter(kind)) {
       expect(contentBlockSchema.safeParse(block).success).toBe(true)
     }
+  })
+})
+
+
+/*
+  Photos in the exported file. The renderers are handed the already-fetched
+  pictures (url -> data URL) and the card's resolved layout, and place a lone
+  photo the way the screen does where the arrangement has room for it.
+*/
+describe('photos in the exported file', () => {
+  const URL_A = 'https://images.pexels.com/photos/9/lake.jpeg'
+  // A 4:3 JPEG header (SOF0, 800 x 600) is all the placement reads.
+  const JPEG_800x600 =
+    'data:image/jpeg;base64,' +
+    btoa(String.fromCharCode(0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1))
+  const credit = { name: 'Ada Lens', url: 'https://www.pexels.com/@ada', source: 'pexels' as const }
+  const photo = (extra: Partial<Extract<ContentBlock, { type: 'image' }>> = {}): ContentBlock => ({
+    type: 'image',
+    url: URL_A,
+    alt: 'A mountain lake',
+    credit,
+    ...extra,
+  })
+
+  function renderPhoto(card: Card, options: { isFirstCard?: boolean; images?: Map<string, string> } = {}) {
+    const isFirstCard = options.isFirstCard ?? false
+    const context: RenderContext = {
+      images: options.images ?? new Map([[URL_A, JPEG_800x600]]),
+      layout: resolveLayout(card.layout, card.blocks, { isFirstCard }),
+    }
+    const slide = fakeSlide()
+    RENDERERS[slideGroup(card, isFirstCard)](slide, card, DEFAULT_THEME, {}, estimateMeasurer, context)
+    return slide
+  }
+
+  const colorsOf = (slide: ReturnType<typeof fakeSlide>) =>
+    slide.texts.flatMap((t) => [t.options.color, ...t.runs.map((r) => r.options.color)]).filter(Boolean)
+
+  const CREDIT_TEXT = 'Photo: Ada Lens / Pexels'
+  type Img = { data: string; x: number; y: number; w: number; h: number; sizing: { type: string; w: number; h: number } }
+  const imageOf = (slide: ReturnType<typeof fakeSlide>) => slide.images[0] as unknown as Img
+  const nonCredit = (slide: ReturnType<typeof fakeSlide>) => slide.texts.filter((t) => !t.text.startsWith('Photo:'))
+
+  describe('a hero slide', () => {
+    const hero = () =>
+      cardOf([{ type: 'heading', text: 'Mountains' }, { type: 'paragraph', text: 'A quiet lake' }, photo()], 'hero')
+
+    it('lays the photo over the whole slide, cropped to fill, under everything else', () => {
+      const slide = renderPhoto(hero(), { isFirstCard: true })
+      expect(slide.images).toHaveLength(1)
+      const image = imageOf(slide)
+      expect(image.data).toBe(JPEG_800x600)
+      expect(image.x).toBe(0)
+      expect(image.y).toBe(0)
+      expect(image.sizing).toEqual({ type: 'cover', w: 10, h: 5.625 })
+      // The picture's own aspect rides on w/h so the crop is worked out for the real picture.
+      expect(image.h / image.w).toBeCloseTo(600 / 800, 3)
+      expect(slide.order[0]).toBe('image')
+    })
+
+    it('darkens it with a black 45% scrim before any text', () => {
+      const slide = renderPhoto(hero(), { isFirstCard: true })
+      expect(slide.shapes[0].shape).toBe('rect')
+      expect(slide.shapes[0].options).toMatchObject({
+        x: 0,
+        y: 0,
+        w: 10,
+        h: 5.625,
+        fill: { color: '000000', transparency: 45 },
+      })
+      expect(slide.order.slice(0, 2)).toEqual(['image', 'shape'])
+    })
+
+    it('sets every word in white whatever the theme or the user picked', () => {
+      const card = hero()
+      card.textStyle = { color: '#ff0000' }
+      const colors = colorsOf(renderPhoto(card, { isFirstCard: true }))
+      expect(colors.length).toBeGreaterThan(0)
+      for (const color of colors) expect(String(color).toUpperCase()).toBe('FFFFFF')
+    })
+
+    it('credits the photographer at 8pt in the bottom right corner', () => {
+      const slide = renderPhoto(hero(), { isFirstCard: true })
+      const found = slide.texts.find((t) => t.text === CREDIT_TEXT)
+      expect(found).toBeDefined()
+      const o = found!.options as { x: number; y: number; w: number; h: number; fontSize: number; align: string }
+      expect(o.fontSize).toBe(8)
+      expect(o.align).toBe('right')
+      expect(o.x + o.w).toBeLessThanOrEqual(10)
+      expect(o.x + o.w).toBeGreaterThan(9)
+      expect(o.y + o.h).toBeGreaterThan(5)
+      expect(o.y + o.h).toBeLessThanOrEqual(5.626)
+    })
+
+    it('gives a photo from a pasted link no credit', () => {
+      const card = cardOf(
+        [{ type: 'heading', text: 'Mountains' }, photo({ credit: { name: 'x', url: 'https://x.test', source: 'url' } })],
+        'hero',
+      )
+      const slide = renderPhoto(card, { isFirstCard: true })
+      expect(slide.images).toHaveLength(1)
+      expect(slide.texts.some((t) => t.text.startsWith('Photo:'))).toBe(false)
+    })
+
+    it('exports as it did before when the picture could not be fetched', () => {
+      const slide = renderPhoto(hero(), { isFirstCard: true, images: new Map() })
+      expect(slide.images).toHaveLength(0)
+      expect(slide.shapes).toHaveLength(0)
+      expect(slide.texts.map((t) => t.text)).toEqual(['Mountains', 'A quiet lake'])
+      for (const color of colorsOf(slide)) expect(String(color).toUpperCase()).not.toBe('FFFFFF')
+    })
+
+    it('does not treat two photos as a background', () => {
+      const card = cardOf(
+        [{ type: 'heading', text: 'Mountains' }, photo(), photo({ url: 'https://x.test/b.jpg' })],
+        'hero',
+      )
+      expect(renderPhoto(card, { isFirstCard: true }).images).toHaveLength(0)
+    })
+  })
+
+  describe('a quote slide', () => {
+    it('takes the photo as its ground under a 40% scrim with white text', () => {
+      const card = cardOf([
+        { type: 'heading', text: 'Words' },
+        { type: 'quote', text: 'Look up', attribution: 'Someone' },
+        photo(),
+      ])
+      expect(resolveLayout(card.layout, card.blocks, {})).toBe('quote')
+      const slide = renderPhoto(card)
+      expect(slide.images).toHaveLength(1)
+      expect(slide.shapes[0].options).toMatchObject({ fill: { color: '000000', transparency: 40 } })
+      expect(slide.order.slice(0, 2)).toEqual(['image', 'shape'])
+      for (const color of colorsOf(slide)) expect(String(color).toUpperCase()).toBe('FFFFFF')
+      expect(slide.texts.some((t) => t.text === CREDIT_TEXT)).toBe(true)
+    })
+  })
+
+  describe('a text slide beside a photo', () => {
+    const split = (orderIndex: number): Card => ({
+      ...cardOf([{ type: 'heading', text: 'Lake life' }, { type: 'paragraph', text: 'Quiet mornings.' }, photo()]),
+      orderIndex,
+    })
+
+    it('puts the photo on the right on an even position, in its own box, cropped to fill', () => {
+      const slide = renderPhoto(split(0))
+      const image = imageOf(slide)
+      expect(image.sizing.type).toBe('cover')
+      expect(image.x).toBeGreaterThan(5)
+      expect(image.x + image.sizing.w).toBeLessThanOrEqual(10)
+      for (const t of nonCredit(slide)) {
+        const o = t.options as { x: number; w: number }
+        expect(o.x + o.w).toBeLessThanOrEqual(image.x + 0.001)
+      }
+    })
+
+    it('puts it on the left on an odd position', () => {
+      const slide = renderPhoto(split(1))
+      const image = imageOf(slide)
+      expect(image.x).toBeLessThan(1)
+      for (const t of nonCredit(slide)) {
+        expect((t.options as { x: number }).x).toBeGreaterThanOrEqual(image.x + image.sizing.w - 0.001)
+      }
+    })
+
+    it('does not also write the alt text as a bullet', () => {
+      expect(renderPhoto(split(0)).texts.some((t) => t.text.includes('A mountain lake'))).toBe(false)
+    })
+
+    it('credits it inside the photo box, bottom right', () => {
+      const slide = renderPhoto(split(0))
+      const image = imageOf(slide)
+      const o = slide.texts.find((t) => t.text === CREDIT_TEXT)!.options as {
+        x: number
+        y: number
+        w: number
+        h: number
+        fontSize: number
+      }
+      expect(o.fontSize).toBe(8)
+      expect(o.x).toBeGreaterThanOrEqual(image.x)
+      expect(o.x + o.w).toBeLessThanOrEqual(image.x + image.sizing.w + 0.001)
+      expect(o.y + o.h).toBeLessThanOrEqual(image.y + image.sizing.h + 0.001)
+      expect(o.y + o.h).toBeGreaterThan(image.y + image.sizing.h - 0.5)
+    })
+
+    it('keeps the old full-width layout, alt text and all, when the picture is missing', () => {
+      const slide = renderPhoto(split(0), { images: new Map() })
+      expect(slide.images).toHaveLength(0)
+      expect(slide.texts.some((t) => t.text.includes('A mountain lake'))).toBe(true)
+      const heading = slide.texts.find((t) => t.text === 'Lake life')!.options as { w: number }
+      expect(heading.w).toBeCloseTo(8.8, 1)
+    })
+  })
+
+  describe('an image slide', () => {
+    it('gives the photo about three fifths of the width on the left, heading beside it', () => {
+      const card = cardOf([{ type: 'heading', text: 'The lake' }, photo()])
+      expect(resolveLayout(card.layout, card.blocks, {})).toBe('imageFocus')
+      const slide = renderPhoto(card)
+      const image = imageOf(slide)
+      expect(image.x).toBeLessThan(1)
+      expect(image.sizing.w / 8.8).toBeGreaterThan(0.5)
+      expect(image.sizing.w / 8.8).toBeLessThan(0.7)
+      const heading = slide.texts.find((t) => t.text === 'The lake')!.options as { x: number }
+      expect(heading.x).toBeGreaterThanOrEqual(image.x + image.sizing.w)
+    })
+  })
+
+  describe('a list or other arrangement with a photo', () => {
+    it('keeps the alt-text bullet: those arrangements have no room for a picture box', () => {
+      const card = cardOf([
+        { type: 'heading', text: 'Steps' },
+        { type: 'bulletList', items: ['One', 'Two'] },
+        photo(),
+      ])
+      const slide = renderPhoto(card)
+      expect(slide.images).toHaveLength(0)
+      expect(slide.texts.some((t) => t.text.includes('A mountain lake'))).toBe(true)
+    })
+  })
+
+  describe('a card with nudged elements', () => {
+    const nudged = (): Card => ({
+      ...cardOf([{ type: 'heading', text: 'Moved' }, photo()]),
+      adjusts: { '1': { dx: 0.05, dy: 0, rotation: 0 } },
+    })
+
+    it('puts the picture in the box the user left it in, cropped to fill', () => {
+      const card = nudged()
+      const slide = renderPhoto(card)
+      expect(slide.images).toHaveLength(1)
+      const image = imageOf(slide)
+      const { boxes, height } = cardBoxes(card, DEFAULT_THEME.typography.scale)
+      const fit = fitCard(height)
+      const box = boxes['1']
+      expect(image.x).toBeCloseTo(box.x * fit.scale + fit.offsetX, 5)
+      expect(image.y).toBeCloseTo(box.y * fit.scale + fit.offsetY, 5)
+      expect(image.sizing.type).toBe('cover')
+      expect(image.sizing.w).toBeCloseTo(box.w * fit.scale, 5)
+      expect(image.sizing.h).toBeCloseTo(box.h * fit.scale, 5)
+      expect(slide.texts.some((t) => t.text === CREDIT_TEXT)).toBe(true)
+    })
+
+    it('falls back to the alt text in that box when the picture is missing', () => {
+      const slide = renderPhoto(nudged(), { images: new Map() })
+      expect(slide.images).toHaveLength(0)
+      expect(slide.texts.some((t) => t.text === 'A mountain lake')).toBe(true)
+    })
   })
 })

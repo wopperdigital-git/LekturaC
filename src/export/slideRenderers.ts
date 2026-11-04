@@ -1,4 +1,5 @@
-import type { Card, ContentBlock } from '@/engine/contentBlocks'
+import type { Card, ContentBlock, ImageBlock, LayoutType } from '@/engine/contentBlocks'
+import { singlePhoto } from '@/engine/blockPartition'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { TextStyle } from '@/engine/textStyle'
 import { textRef } from '@/engine/marks'
@@ -7,6 +8,7 @@ import { cardBoxes, type Box } from './blockBoxes'
 import type { PptxTextRun } from './textRun'
 import { SIZE_SCALE_KEY, faceName, hex, markedRuns, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
+import { addCredit, addPhoto, addScrim, whiteText, type PhotoBox } from './photoPlacement'
 import type { FitParagraph, FitSizing, SizeRole, TextMeasurer } from './textFit'
 import {
   BULLET_INDENT_IN,
@@ -29,7 +31,21 @@ import {
 export interface PptxSlide {
   addText(text: string | PptxTextRun[], options: Record<string, unknown>): void
   addShape(shape: string, options: Record<string, unknown>): void
+  addImage(options: Record<string, unknown>): void
 }
+
+/**
+ * What a renderer is told beyond the card: the pictures the export has already
+ * fetched (url -> data URL; a url missing from it means "draw the alt text") and the
+ * card's resolved layout, which decides where a lone photo goes. Renderers never
+ * fetch, so they stay pure and testable with a map passed in.
+ */
+export interface RenderContext {
+  images: ReadonlyMap<string, string>
+  layout?: Exclude<LayoutType, 'auto'>
+}
+
+const NO_CONTEXT: RenderContext = { images: new Map() }
 
 export type SlideRenderer = (
   slide: PptxSlide,
@@ -39,6 +55,7 @@ export type SlideRenderer = (
   style: TextStyle,
   /** Measures text width in inches for a given `FontSpec`. Every renderer uses it to fit its own text via `textFit.ts`'s `fitText` (see the design doc's "4. Plumbing"). */
   measure: TextMeasurer,
+  context?: RenderContext,
 ) => void
 
 /* LAYOUT_16x9 in inches. */
@@ -59,6 +76,13 @@ const HEADING_MAX_H = 1.5
 const RULE_GAP = 0.08
 const RULE_H = 0.045
 const CONTENT_GAP = 0.22
+
+/** The horizontal band a heading and body text may use; the whole content width unless a photo takes a side. */
+interface Column {
+  x: number
+  w: number
+}
+const FULL_COLUMN: Column = { x: MARGIN, w: CONTENT_W }
 
 /** Index into `theme.typography.scale`. */
 const H1 = 0
@@ -177,6 +201,7 @@ function addHeading(
   theme: ThemeTokens,
   style: TextStyle,
   measure: TextMeasurer,
+  column: Column = FULL_COLUMN,
 ): number {
   const ref = textRef(0, 'text')
   const runStyle = styleFor(card, ref, style)
@@ -189,15 +214,15 @@ function addHeading(
   }
   const { sizePt, heightIn } = fitText(
     [{ text: headingText(card), bold: markBold(card, ref), scale: markScale(card, ref) }],
-    { widthIn: CONTENT_W, maxHeightIn: HEADING_MAX_H },
+    { widthIn: column.w, maxHeightIn: HEADING_MAX_H },
     sizing,
     measure,
   )
 
   slide.addText(markedRuns(headingText(card), marksFor(card, ref)), {
-    x: MARGIN,
+    x: column.x,
     y: TOP,
-    w: CONTENT_W,
+    w: column.w,
     h: heightIn,
     fontFace: headingFace(theme, runStyle),
     fontSize: sizePt,
@@ -215,7 +240,7 @@ function addHeading(
 
   const ruleY = TOP + heightIn + RULE_GAP
   slide.addShape('rect', {
-    x: MARGIN,
+    x: column.x,
     y: ruleY,
     w: 1.2,
     h: RULE_H,
@@ -375,11 +400,12 @@ interface BulletLine {
  * the arrangement that survives translation without inventing structure the
  * card does not have.
  */
-function flattenBlocks(card: Card): BulletLine[] {
+function flattenBlocks(card: Card, skip?: number): BulletLine[] {
   const lines: BulletLine[] = []
 
   card.blocks.forEach((block, i) => {
     if (i === 0 && block.type === 'heading') return // rendered by addHeading
+    if (i === skip) return // a photo drawn in its own box
 
     switch (block.type) {
       case 'heading':
@@ -469,10 +495,60 @@ function lineIndent(line: BulletLine): number | undefined {
   return line.indent >= 1 ? 2 * BULLET_INDENT_IN : BULLET_INDENT_IN
 }
 
-const renderBody: SlideRenderer = (slide, card, theme, style, measure) => {
-  const contentTop = addHeading(slide, card, theme, style, measure)
+/*
+  A photo beside the text, for the two layouts that give a lone photo a side of the
+  slide: `standardSplit` (half and half, the photo on the right on an even position
+  and the left on an odd, as on screen) and `imageFocus` (the photo three fifths wide
+  on the left). The text keeps the rest of the width in one column. The arrangements
+  that are lists, grids or tables of text have no such room (the body is one flowing
+  text box), so a photo there keeps the alt-text fallback.
+*/
+const PHOTO_GAP = 0.35
+const PHOTO_ASPECT = 3 / 4
 
-  const lines = flattenBlocks(card)
+interface PhotoSide {
+  block: ImageBlock
+  index: number
+  data: string
+  box: PhotoBox
+  column: Column
+}
+
+function photoSide(card: Card, context: RenderContext): PhotoSide | null {
+  const layout = context.layout
+  if (layout !== 'standardSplit' && layout !== 'imageFocus') return null
+  const photo = singlePhoto(card.blocks)
+  const data = photo ? context.images.get(photo.block.url) : undefined
+  if (!photo || !data) return null
+
+  const room = CONTENT_W - PHOTO_GAP
+  const photoW = layout === 'imageFocus' ? room * 0.6 : room / 2
+  const photoH = Math.min(photoW * PHOTO_ASPECT, BOTTOM - TOP)
+  const onLeft = layout === 'imageFocus' || card.orderIndex % 2 === 1
+  const photoX = onLeft ? MARGIN : MARGIN + CONTENT_W - photoW
+  const column: Column = {
+    x: onLeft ? MARGIN + photoW + PHOTO_GAP : MARGIN,
+    w: CONTENT_W - photoW - PHOTO_GAP,
+  }
+  return {
+    block: photo.block,
+    index: photo.index,
+    data,
+    box: { x: photoX, y: TOP + (BOTTOM - TOP - photoH) / 2, w: photoW, h: photoH },
+    column,
+  }
+}
+
+const renderBody: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
+  const side = photoSide(card, context)
+  if (side) {
+    addPhoto(slide, side.data, side.box, side.block.alt)
+    addCredit(slide, side.block, side.box, bodyFace(theme, style), { pill: true })
+  }
+  const column = side ? side.column : FULL_COLUMN
+  const contentTop = addHeading(slide, card, theme, style, measure, column)
+
+  const lines = flattenBlocks(card, side?.index)
   if (lines.length === 0) return
 
   const runs = lines.flatMap((line, i) => runsForLine(line, card, i === lines.length - 1))
@@ -491,12 +567,12 @@ const renderBody: SlideRenderer = (slide, card, theme, style, measure) => {
     italic: style.italic,
     lineSpacing: theme.typography.lineHeight,
   }
-  const { sizePt } = fitText(paragraphs, { widthIn: CONTENT_W, maxHeightIn: areaH }, sizing, measure)
+  const { sizePt } = fitText(paragraphs, { widthIn: column.w, maxHeightIn: areaH }, sizing, measure)
 
   slide.addText(runs, {
-    x: MARGIN,
+    x: column.x,
     y: contentTop,
-    w: CONTENT_W,
+    w: column.w,
     h: areaH,
     fontFace: bodyFace(theme, style),
     fontSize: sizePt,
@@ -1040,6 +1116,7 @@ function renderAdjustedBlock(
   theme: ThemeTokens,
   style: TextStyle,
   measure: TextMeasurer,
+  images: ReadonlyMap<string, string>,
 ) {
   const block = card.blocks[index]
 
@@ -1424,14 +1501,20 @@ function renderAdjustedBlock(
     }
 
     /*
-      Images are not embedded, here or anywhere else in the export: the block
-      holds a URL, and fetching it would make the export depend on the network
-      and on the host's CORS policy. The alt text stands in, inside the frame
-      the user drew, so the slide keeps the space rather than silently closing
-      the gap. A block with no alt leaves an empty box, which is still the
-      truthful shape of the slide.
+      The picture goes in the frame the user drew, cropped to fill it. When it
+      could not be fetched (the export prefetches every picture once and leaves out
+      the ones that failed: a dead link, a host without CORS headers) the alt text
+      stands in inside the same frame, so the slide keeps the space rather than
+      silently closing the gap. A block with no alt leaves an empty box, which is
+      still the truthful shape of the slide.
     */
     case 'image': {
+      const data = images.get(block.url)
+      if (data) {
+        addPhoto(slide, data, box, block.alt)
+        addCredit(slide, block, box, bodyFace(theme, style), { pill: true })
+        return
+      }
       if (!block.alt) return
       const face = bodyFace(theme, style)
       const preferredPt = fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit)
@@ -1467,12 +1550,12 @@ function listRuns(card: Card, index: number, field: string, items: string[]): Pp
 }
 
 /** A card carrying element nudges: every block in the box the user left it in. */
-const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure) => {
+const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
   const { boxes, height } = cardBoxes(card, theme.typography.scale)
   const fit = fitCard(height)
   card.blocks.forEach((_, index) => {
     const box = boxes[String(index)]
-    if (box) renderAdjustedBlock(slide, card, index, placed(box, fit), fit, theme, style, measure)
+    if (box) renderAdjustedBlock(slide, card, index, placed(box, fit), fit, theme, style, measure, context.images)
   })
 }
 
@@ -1486,6 +1569,7 @@ const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure) => {
 function withRunSizes(slide: PptxSlide): PptxSlide {
   return {
     addShape: (shape, options) => slide.addShape(shape, options),
+    addImage: (options) => slide.addImage(options),
     addText(text, options) {
       if (typeof text === 'string' || typeof options.fontSize !== 'number') return slide.addText(text, options)
       const boxPt = options.fontSize
@@ -1506,11 +1590,35 @@ const sized =
   (slide, ...rest) =>
     render(withRunSizes(slide), ...rest)
 
+/*
+  A photo as the slide's ground: the picture over the whole slide, a black scrim
+  over it, then the slide's own text in white (on screen, text on a photo is white
+  whatever colour was picked), and the photographer's credit last so it sits on top.
+
+  Only for a layout that draws its lone photo this way on screen (`hero`, `quote`),
+  and only when the picture was fetched; otherwise the slide renders as it always did.
+  The scrim is the screen's, simplified to one flat veil: the screen fades from dark
+  at the foot to light at the top for the title, which a single rectangle cannot.
+*/
+const onPhotoGround =
+  (render: SlideRenderer, layout: 'hero' | 'quote', transparency: number): SlideRenderer =>
+  (slide, card, theme, style, measure, context = NO_CONTEXT) => {
+    const photo = context.layout === layout ? singlePhoto(card.blocks) : null
+    const data = photo ? context.images.get(photo.block.url) : undefined
+    if (!photo || !data) return render(slide, card, theme, style, measure, context)
+
+    const whole: PhotoBox = { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H }
+    addPhoto(slide, data, whole, photo.block.alt)
+    addScrim(slide, transparency)
+    render(whiteText(slide), card, theme, style, measure, context)
+    addCredit(slide, photo.block, whole, bodyFace(theme, style), { pill: false })
+  }
+
 export const RENDERERS: Record<PptxGroup, SlideRenderer> = {
-  title: sized(renderTitle),
+  title: sized(onPhotoGround(renderTitle, 'hero', 45)),
   body: sized(renderBody),
   stat: sized(renderStat),
   twoCol: sized(renderTwoCol),
-  quote: sized(renderQuote),
+  quote: sized(onPhotoGround(renderQuote, 'quote', 40)),
   adjusted: sized(renderAdjusted),
 }
