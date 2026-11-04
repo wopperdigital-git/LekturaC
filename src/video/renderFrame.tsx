@@ -32,9 +32,15 @@ import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
     hidden tab throttles. (It is not `SlideBody`: that measures `clientWidth` synchronously in a
     `useLayoutEffect`, and forced layout works in a background tab, so nudges and ink do not
     depend on its ResizeObserver for the first render.)
-  - The app loads no web fonts, so `skipFonts` is on: nothing needs embedding, and it saves scanning
-    every stylesheet for every slide. If a web font is ever added, the video will silently use a
-    fallback until this is revisited (spec: "Pipeline").
+  - Theme web fonts are embedded, not skipped. html-to-image rasterises through an SVG
+    <foreignObject>, which cannot see the page's @font-face rules, so without the CSS inlined a
+    Chalkboard video would show Arial for its Caveat. The CSS is built once per video
+    (`getFontEmbedCSS`, a scan of the stylesheets plus a base64 fetch of every file of the families
+    in use) and passed to every frame as `fontEmbedCSS`. It is built from a probe holding the
+    theme's two fonts rather than from the first slide, because the library keeps only the families
+    the node uses and a title slide with no body text would drop the body font for the whole video.
+    The toolbar's own fonts are system fonts, which need no embedding; a web font added there must
+    join the probe.
 */
 
 /** Lets layout settle after the synchronous render, and any late resize callback run, before the capture. */
@@ -127,7 +133,7 @@ export async function createSlideRenderer(o: {
   target: HTMLCanvasElement
 }): Promise<SlideRenderer> {
   // Lazy: the library is only fetched when a video is actually made.
-  const { toCanvas } = await import('html-to-image')
+  const { toCanvas, getFontEmbedCSS } = await import('html-to-image')
 
   const context = o.target.getContext('2d')
   if (!context) throw new Error('the canvas has no 2d context')
@@ -145,6 +151,27 @@ export async function createSlideRenderer(o: {
   })
   document.body.appendChild(host)
   const root = createRoot(host)
+
+  // Once per video: scanning every stylesheet and fetching every font file is the slow part.
+  let fontEmbedCSS: Promise<string> | null = null
+  const embeddedFonts = () => {
+    fontEmbedCSS ??= (async () => {
+      const probe = document.createElement('div')
+      for (const family of [o.theme.typography.headingFont, o.theme.typography.bodyFont]) {
+        const span = document.createElement('span')
+        span.style.fontFamily = family
+        span.textContent = 'x'
+        probe.appendChild(span)
+      }
+      host.appendChild(probe)
+      try {
+        return await getFontEmbedCSS(probe)
+      } finally {
+        probe.remove()
+      }
+    })()
+    return fontEmbedCSS
+  }
 
   return {
     async draw(index, signal) {
@@ -185,7 +212,12 @@ export async function createSlideRenderer(o: {
       )
       fit.style.transform = scale !== 1 ? `scale(${scale})` : ''
 
-      const picture = await toCanvas(stage, { width: FRAME_WIDTH, height: FRAME_HEIGHT, pixelRatio: 1, skipFonts: true })
+      const picture = await toCanvas(stage, {
+        width: FRAME_WIDTH,
+        height: FRAME_HEIGHT,
+        pixelRatio: 1,
+        fontEmbedCSS: await embeddedFonts(),
+      })
       context.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
       context.drawImage(picture, 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
     },

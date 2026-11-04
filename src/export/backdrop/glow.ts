@@ -1,11 +1,14 @@
 /*
   `celestial.glow` is an opaque CSS string authored per theme, and the export
-  needs it as SVG. Rather than approximate it, this parses it: all seventeen
-  gradient layers across the five built-in themes share one grammar —
+  needs it as SVG. Rather than approximate it, this parses it: every radial layer
+  of every built-in theme shares one grammar —
 
     radial-gradient(W% H% at X% Y%, rgba(r,g,b,a) P%, rgba(r,g,b,0) Q%)
 
-  which is narrow enough to read exactly. `glow.test.ts` asserts every built-in
+  which is narrow enough to read exactly. The newer themes also use
+  `linear-gradient` / `repeating-linear-gradient` for ruled lines; those are
+  not this grammar, are dropped like any unreadable layer, and so appear on
+  screen only. `glow.test.ts` asserts every built-in
   theme parses, which is also what catches a future glow authored in a shape
   this cannot read.
 

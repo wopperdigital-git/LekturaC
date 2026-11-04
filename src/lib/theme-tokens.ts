@@ -233,7 +233,7 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
 }
 
 /*
-  Five celestial themes. Each owns a distinct palette, a distinct atmospheric
+  Ten themes: five celestial, then five that are not (see below). Each celestial one owns a distinct palette, a distinct atmospheric
   treatment, and its own two or three decorative elements — the restraint is the
   design. A theme carrying stars *and* constellations *and* orbits *and* a grid
   would stop being distinguishable from its neighbours.
@@ -472,6 +472,185 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       ],
       // The atmosphere itself, as a hairline just above the limb.
       orbits: [{ cx: 50, cy: 172, size: 198, color: '#86bfa2', opacity: 0.5, widthPx: 1 }],
+    },
+  },
+  /*
+    The second five are not celestial: each is a different kind of surface (a
+    ruled page, a board, a drawing, a poster, a handout). They carry their mood
+    in `glow` layers, which is the one field every export path already reads
+    (the PPTX backdrop parses its radial layers and drops the rest, so a
+    stripe or a ruled line is screen-only there and nothing breaks).
+
+    Their fonts are web fonts, loaded by `main.tsx`. The stack puts the real
+    family first and Fontsource's "<Family> Variable" alias second: the browser
+    finds the alias, and the PPTX export, which names a face by the first
+    family, asks PowerPoint for a font it can actually have.
+  */
+  {
+    id: 'paper',
+    name: 'Paper',
+    typography: {
+      headingFont: "'Source Serif 4', 'Source Serif 4 Variable', Georgia, serif",
+      bodyFont: "'Source Serif 4', 'Source Serif 4 Variable', Georgia, serif",
+      scale: [3.5, 2.5, 1.625, 1.25],
+      lineHeight: 1.6,
+      letterSpacing: -0.1,
+    },
+    colors: {
+      background: '#f6f1e7',
+      foreground: '#1b1a17',
+      accent: '#b3261e',
+      accentForeground: '#ffffff',
+      accentSoft: '#d98f89',
+      muted: '#6b6458',
+      border: '#ddd3bf',
+      surface: '#fbf8f1',
+    },
+    spacing: { unit: 0.3 },
+    shape: { radius: 0.125, radiusSm: 0.0625, shadow: 'soft' },
+    // Ruled notebook paper: faint blue-grey lines every 40px (the card is laid
+    // out at one width, so a pixel pitch is stable), one red margin line left
+    // of the text, and a warm vignette that darkens the corners like an old page.
+    celestial: {
+      glow: [
+        'linear-gradient(to right, transparent 0, transparent 4.2%, rgba(179,38,30,0.42) 4.2%, rgba(179,38,30,0.42) calc(4.2% + 1.5px), transparent calc(4.2% + 1.5px))',
+        'repeating-linear-gradient(to bottom, transparent 0, transparent 39px, rgba(70,90,120,0.13) 39px, rgba(70,90,120,0.13) 40px)',
+        'radial-gradient(140% 110% at 50% 50%, rgba(246,241,231,0) 55%, rgba(120,95,50,0.1) 100%)',
+      ].join(', '),
+    },
+  },
+  {
+    id: 'chalk',
+    name: 'Chalkboard',
+    typography: {
+      // Caveat is a handwriting face: it carries headings only. Body copy in it
+      // stops being legible at a few lines, so the body is Atkinson Hyperlegible.
+      headingFont: "'Caveat', cursive",
+      bodyFont: "'Atkinson Hyperlegible', system-ui, sans-serif",
+      // Caveat sets small for its size, so its steps run larger than the others.
+      scale: [4.5, 3.25, 2, 1.3],
+      lineHeight: 1.5,
+      letterSpacing: 0,
+    },
+    colors: {
+      background: '#1f2a24',
+      foreground: '#f2f0e6',
+      accent: '#f2c94c',
+      accentForeground: '#1b1a0e',
+      accentSoft: '#8fc9a0',
+      muted: '#b4bfb4',
+      border: '#3a4a40',
+      surface: '#28362e',
+    },
+    spacing: { unit: 0.28 },
+    shape: { radius: 0.5, radiusSm: 0.25, shadow: 'none' },
+    // A slate that has been wiped: two broad smears of lighter dust, and a field
+    // of fine chalk specks (the seeded star generator, in chalk colour, so the
+    // dust is the same on every surface and in the export).
+    celestial: {
+      glow: [
+        'radial-gradient(90% 45% at 22% 8%, rgba(242,240,230,0.07) 0%, rgba(242,240,230,0) 100%)',
+        'radial-gradient(80% 40% at 78% 96%, rgba(242,240,230,0.06) 0%, rgba(242,240,230,0) 100%)',
+        'radial-gradient(140% 110% at 50% 50%, rgba(0,0,0,0) 58%, rgba(0,0,0,0.22) 100%)',
+      ].join(', '),
+      stars: { count: 70, color: '#f2f0e6', maxRadiusPx: 1.6, opacity: 0.3, avoidCenter: true },
+    },
+  },
+  {
+    id: 'blueprint',
+    name: 'Blueprint',
+    typography: {
+      headingFont: "'JetBrains Mono', 'JetBrains Mono Variable', ui-monospace, monospace",
+      bodyFont: "'Atkinson Hyperlegible', system-ui, sans-serif",
+      // A monospace sets wide, so the heading steps stay at the floor.
+      scale: [3.25, 2.25, 1.5, 1.25],
+      lineHeight: 1.55,
+      letterSpacing: -0.4,
+    },
+    colors: {
+      background: '#0f3057',
+      foreground: '#eaf2ff',
+      accent: '#7fd1ff',
+      accentForeground: '#06203c',
+      accentSoft: '#4a9fd8',
+      muted: '#a9c3e0',
+      border: '#2a5588',
+      surface: '#163e6c',
+    },
+    spacing: { unit: 0.26 },
+    shape: { radius: 0.25, radiusSm: 0.125, shadow: 'none' },
+    // Drafting paper: a fine 24px grid (the shared `grid`, which the export
+    // draws too) with a heavier line every fifth cell (120px), drawn as glow
+    // layers because a grid declares one pitch.
+    celestial: {
+      glow: [
+        'repeating-linear-gradient(to bottom, transparent 0, transparent 119px, rgba(234,242,255,0.12) 119px, rgba(234,242,255,0.12) 120px)',
+        'repeating-linear-gradient(to right, transparent 0, transparent 119px, rgba(234,242,255,0.12) 119px, rgba(234,242,255,0.12) 120px)',
+        'radial-gradient(110% 80% at 50% 0%, rgba(127,209,255,0.14) 0%, rgba(127,209,255,0) 70%)',
+      ].join(', '),
+      grid: { color: '#eaf2ff', opacity: 0.07, sizePx: 24 },
+    },
+  },
+  {
+    id: 'pop',
+    name: 'Pop',
+    typography: {
+      headingFont: "'Bricolage Grotesque', 'Bricolage Grotesque Variable', system-ui, sans-serif",
+      bodyFont: "'Bricolage Grotesque', 'Bricolage Grotesque Variable', system-ui, sans-serif",
+      scale: [3.75, 2.5, 1.75, 1.25],
+      lineHeight: 1.45,
+      letterSpacing: -0.8,
+    },
+    colors: {
+      background: '#ffffff',
+      foreground: '#111111',
+      accent: '#ff4f1f',
+      accentForeground: '#111111',
+      accentSoft: '#ffd23f',
+      muted: '#4a4a4a',
+      border: '#111111',
+      surface: '#fff7e0',
+    },
+    spacing: { unit: 0.28 },
+    shape: { radius: 0.75, radiusSm: 0.375, shadow: 'hard' },
+    // Two flat colour blocks pushed into opposite corners. Each is a radial
+    // gradient whose stops sit two points apart, which is a hard edge (and a
+    // shape the PPTX backdrop parser reads, so it exports as a block too).
+    celestial: {
+      glow: [
+        'radial-gradient(21% 38% at 104% -6%, rgba(255,79,31,1) 98%, rgba(255,79,31,0) 100%)',
+        'radial-gradient(14% 26% at -4% 108%, rgba(255,210,63,1) 98%, rgba(255,210,63,0) 100%)',
+      ].join(', '),
+    },
+  },
+  {
+    id: 'boardroom',
+    name: 'Boardroom',
+    typography: {
+      headingFont: "'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif",
+      bodyFont: "'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif",
+      scale: [3.5, 2.5, 1.625, 1.25],
+      lineHeight: 1.55,
+      letterSpacing: -0.2,
+    },
+    colors: {
+      background: '#f4f5f7',
+      foreground: '#16202c',
+      accent: '#1f4e8c',
+      accentForeground: '#ffffff',
+      accentSoft: '#8fb0d9',
+      muted: '#5b6675',
+      border: '#d9dde3',
+      surface: '#ffffff',
+    },
+    spacing: { unit: 0.28 },
+    shape: { radius: 0.375, radiusSm: 0.1875, shadow: 'soft' },
+    // Nothing beyond a faint rule across the top and a breath of light behind it.
+    celestial: {
+      glow: [
+        'linear-gradient(to bottom, rgba(31,78,140,0.55) 0, rgba(31,78,140,0.55) 4px, transparent 4px)',
+        'radial-gradient(120% 60% at 50% -10%, rgba(31,78,140,0.07) 0%, rgba(31,78,140,0) 70%)',
+      ].join(', '),
     },
   },
 ]

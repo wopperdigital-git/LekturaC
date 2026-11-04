@@ -95,7 +95,86 @@ describe('resolveTheme', () => {
   })
 })
 
+function firstFamily(stack: string): string {
+  return stack.split(',')[0].trim().replace(/^['"]|['"]$/g, '')
+}
+
+const SPACE_THEME_IDS = ['minimal', 'editorial', 'midnight', 'bold', 'sage']
+const NEW_THEME_IDS = ['paper', 'chalk', 'blueprint', 'pop', 'boardroom']
+
 describe('built-in themes', () => {
+  it('ships the five space themes first, then paper, chalk, blueprint, pop and boardroom', () => {
+    expect(BUILTIN_THEMES.map((t) => t.id)).toEqual([...SPACE_THEME_IDS, ...NEW_THEME_IDS])
+    expect(BUILTIN_THEMES.map((t) => t.name).slice(5)).toEqual([
+      'Paper',
+      'Chalkboard',
+      'Blueprint',
+      'Pop',
+      'Boardroom',
+    ])
+    expect(new Set(BUILTIN_THEMES.map((t) => t.id)).size).toBe(10)
+  })
+
+  // Text on the slide: body copy and the muted second voice must clear AA
+  // against the ground, and ink on a solid accent fill must too. The accent
+  // itself is a mark and a large-heading colour, so it needs the 3:1 of large
+  // text rather than 4.5.
+  it('keeps the text pairings of every new theme at AA', () => {
+    for (const id of NEW_THEME_IDS) {
+      const { colors } = BUILTIN_THEMES.find((t) => t.id === id)!
+      expect(contrastRatio(colors.foreground, colors.background), `${id} foreground`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.muted, colors.background), `${id} muted`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.foreground, colors.surface), `${id} foreground on surface`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.accentForeground, colors.accent), `${id} on accent`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.accent, colors.background), `${id} accent`).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('gives each new theme its own web font, named by a stack whose first family is the real face', () => {
+    const faces = Object.fromEntries(
+      NEW_THEME_IDS.map((id) => {
+        const { typography } = BUILTIN_THEMES.find((t) => t.id === id)!
+        return [id, [firstFamily(typography.headingFont), firstFamily(typography.bodyFont)]]
+      }),
+    )
+    // The PPTX export names a face by the first family, so it has to be the
+    // family PowerPoint knows, not Fontsource's "... Variable" alias.
+    expect(faces).toEqual({
+      paper: ['Source Serif 4', 'Source Serif 4'],
+      chalk: ['Caveat', 'Atkinson Hyperlegible'],
+      blueprint: ['JetBrains Mono', 'Atkinson Hyperlegible'],
+      pop: ['Bricolage Grotesque', 'Bricolage Grotesque'],
+      boardroom: ['Hanken Grotesk', 'Hanken Grotesk'],
+    })
+  })
+
+  // A theme naming a face nothing loads falls back silently to the next family
+  // in its stack, which is exactly the "why does Chalkboard look like Arial"
+  // bug. Every web font a new theme names must be imported by the entry.
+  it('loads every web font a new theme names', () => {
+    const entry = (import.meta.glob('../main.tsx', { query: '?raw', import: 'default', eager: true }) as Record<
+      string,
+      string
+    >)['../main.tsx']
+    const packageFor: Record<string, string> = {
+      'Source Serif 4': '@fontsource-variable/source-serif-4',
+      Caveat: '@fontsource/caveat',
+      'Atkinson Hyperlegible': '@fontsource/atkinson-hyperlegible',
+      'JetBrains Mono': '@fontsource-variable/jetbrains-mono',
+      'Bricolage Grotesque': '@fontsource-variable/bricolage-grotesque',
+      'Hanken Grotesk': '@fontsource-variable/hanken-grotesk',
+    }
+    for (const id of NEW_THEME_IDS) {
+      const { typography } = BUILTIN_THEMES.find((t) => t.id === id)!
+      for (const stack of [typography.headingFont, typography.bodyFont]) {
+        const family = firstFamily(stack)
+        expect(entry, `${id}: ${family}`).toContain(`'${packageFor[family]}`)
+        // The variable packages register "<Family> Variable"; the stack must name it.
+        if (packageFor[family].includes('-variable/')) expect(stack).toContain(`${family} Variable`)
+      }
+    }
+  })
+
   it('gives every theme a complete palette and a celestial identity', () => {
     for (const theme of BUILTIN_THEMES) {
       expect(theme.celestial.glow).toContain('gradient')
@@ -119,12 +198,21 @@ describe('built-in themes', () => {
 
   // The restraint rule: a theme picks the two or three elements that carry its
   // mood. One that reached for all of them would collapse the distinction
-  // between the five themes.
-  it('never stacks every decorative element into one theme', () => {
-    for (const theme of BUILTIN_THEMES) {
+  // between the five space themes. The later five (paper, chalk, blueprint,
+  // pop, boardroom) are not celestial and say what they are in glow layers, so
+  // the rule is about the original five.
+  it('never stacks every decorative element into one space theme', () => {
+    for (const theme of BUILTIN_THEMES.filter((t) => SPACE_THEME_IDS.includes(t.id))) {
       const used = DECOR_KINDS.filter((key) => theme.celestial[key] !== undefined)
       expect(used.length).toBeGreaterThan(0)
       expect(used.length).toBeLessThan(DECOR_KINDS.length)
+    }
+  })
+
+  it('never stacks every decorative element into any theme', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const used = DECOR_KINDS.filter((key) => theme.celestial[key] !== undefined)
+      expect(used.length, theme.id).toBeLessThan(DECOR_KINDS.length)
     }
   })
 
