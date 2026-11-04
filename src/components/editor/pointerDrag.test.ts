@@ -28,7 +28,12 @@ describe('drag gestures with more than one pointer', () => {
     vi.stubGlobal('window', Object.assign(target, { getSelection: () => null }))
     vi.stubGlobal('document', { body: { style: { userSelect: '' } } })
   })
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(async () => {
+    // A release schedules `swallowNextClick`'s cleanup on the next task; let it run
+    // against the stand-in before the globals go, or it throws "window is not defined".
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    vi.unstubAllGlobals()
+  })
 
   const press = (pointerId: number, x = 0, y = 0) => ({ pointerId, clientX: x, clientY: y }) as unknown as ReactPointerEvent
   const fire = (type: string, pointerId: number, x = 0, y = 0) =>
