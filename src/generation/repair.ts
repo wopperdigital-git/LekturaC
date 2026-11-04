@@ -41,9 +41,16 @@ export function applyRepairs(
     // the repair prompt asks the model to fix a slide's problems, not to
     // decide from scratch whether it still fills a blueprint row.
     const original = cards[index]
-    const card = parsed.data.role === undefined && original.role !== undefined
-      ? { ...parsed.data, role: original.role }
-      : parsed.data
+    // `imageQuery` follows the same rule: the repair prompt fixes a slide's
+    // text problems, and a replacement that forgot the photo search must not
+    // silently strip the slide's photo.
+    let card = parsed.data
+    if (card.role === undefined && original.role !== undefined) {
+      card = { ...card, role: original.role }
+    }
+    if (card.imageQuery === undefined && original.imageQuery !== undefined) {
+      card = { ...card, imageQuery: original.imageQuery }
+    }
     cards[index] = card
     repaired.add(index)
   }

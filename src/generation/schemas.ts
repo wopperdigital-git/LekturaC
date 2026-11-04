@@ -88,6 +88,13 @@ export const generatedCardSchema = z
     plan: slidePlanSchema,
     /** Blueprint row id when one fits; optional since blueprints became guidance. */
     role: z.string().optional(),
+    /**
+     * What a photograph on this slide should show (2-6 English words). The
+     * model never writes the image itself: `addPhotos` searches for it after
+     * validation and appends the block. A malformed value is dropped, never
+     * fatal. Not stored on the card.
+     */
+    imageQuery: z.string().trim().min(2).max(80).optional().catch(undefined),
     blocks: z.array(contentBlockSchema).min(1),
     visualStyle: visualStyleSchema,
     speakerNotes: z.string(),

@@ -80,6 +80,7 @@ const deckBriefOutputSchema = z.object({
 export const generatedCardOutputSchema = z.object({
   plan: slidePlanOutputSchema,
   role: z.string().optional(),
+  imageQuery: z.string().min(2).max(80).optional(),
   blocks: z.array(contentBlockSchema).min(1),
   visualStyle: visualStyleSchema,
   speakerNotes: z.string(),

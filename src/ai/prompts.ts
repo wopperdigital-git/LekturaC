@@ -91,6 +91,7 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
         "importance": "essential" | "supporting" | "optional"
       },
       "role"?: string,
+      "imageQuery"?: string,
       "blocks": ContentBlock[],
       "visualStyle": "structured" | "expressive",
       "speakerNotes": string,
@@ -99,7 +100,7 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
   ]
 }
 
-"role" is optional — set it only when this card fills a row from the STRUCTURE section below, and omit it otherwise. "claims" lists every factual claim the card makes (see EVIDENCE below); an empty array is correct for a card with no factual claims. "transition" is one short phrase from the previous slide into this one ('' on the first card).
+"role" is optional — set it only when this card fills a row from the STRUCTURE section below, and omit it otherwise. "imageQuery" is optional — see IMAGES below. "claims" lists every factual claim the card makes (see EVIDENCE below); an empty array is correct for a card with no factual claims. "transition" is one short phrase from the previous slide into this one ('' on the first card).
 
 Each ContentBlock is one of these EXACT shapes (field names matter, do not rename or omit fields):
 - { "type": "heading", "text": string }
@@ -110,7 +111,7 @@ Each ContentBlock is one of these EXACT shapes (field names matter, do not renam
 - { "type": "timelineStep", "label": string, "text": string }
 - { "type": "comparisonGroup", "heading": string, "items": string[] }
 
-Do not use any block type other than the ones listed above (in particular, do not include "image" blocks — we don't have a reliable image source right now, so text/data layouts only). Every card's "blocks" array MUST start with exactly one "heading" block — this is the card's title and is required, not optional.
+Do not use any block type other than the ones listed above (in particular, never write an "image" block yourself: photos are found and added afterwards from "imageQuery", see IMAGES below). Every card's "blocks" array MUST start with exactly one "heading" block — this is the card's title and is required, not optional.
 
 HEADINGS
 - 3-10 words, never more than 14.
@@ -156,7 +157,7 @@ Choose each slide's information structure before you choose its wording. Ask wha
 - One explanatory idea → a single short "paragraph".
 - A thesis or a verbatim quotation → a "quote" block.
 - Only 3-5 parallel items where order does not matter (categories, features, criteria) → a short "bulletList".
-- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList". We cannot draw charts, maps, diagrams, photos or illustrations, so never plan one of those as the visualType. A trend or a set of numbers is "metric_cards" — but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
+- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList". We cannot draw charts, maps or diagrams, so never plan one of those as the visualType. A photo is never a visualType either: it arrives only through "imageQuery", and the slide's visualType still names the structure its blocks deliver. A trend or a set of numbers is "metric_cards" — but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
 - Vary the structure across the deck on purpose. In a deck of 5 or more slides no more than about 40% of the slides should be "bulletList" slides, never put two "bulletList" slides next to each other, and use at least three different block structures across the deck when the subject supports it. Avoid three consecutive cards using the same block-type pattern:
   - Use a single "stat" block for a card that leads with one striking number (market size, growth rate, performance metric, savings, etc).
   - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta) — this reads far better as one card than as several single-stat cards in a row.
@@ -165,6 +166,13 @@ Choose each slide's information structure before you choose its wording. Ask wha
   - Use a single "quote" block for the deck's own unattributed thesis or mission line, or for a verbatim quotation from the evidence pack attributed to a real person or organization (cite it in "claims" — see EVIDENCE above). Omit "attribution" for the deck's own thesis/mission line; set it whenever the line is someone else's words.
   - Use "bulletList" for scannable lists: 3-5 items by default, never more than 6 on one card. Short items (each under ~6 words) read as a compact grid; longer or more detailed items read as a clean numbered list. This cap is never a reason to drop or blur a real item — a genuinely longer sequence is chronological (use "timelineStep" instead) or belongs split across two cards, which likely changes the slide's purpose too.
   - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven — a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" of 35 words or fewer, and only when no more specific block type fits.
+
+IMAGES
+- Add "imageQuery" to a card only when the slide's point is something a photograph can show: a place, an object, people doing something, a natural scene. Otherwise omit it.
+- Write 2-6 concrete English words naming what is in the frame, e.g. "wind turbines on a hill" or "students in a laboratory". Never ask for text, logos, charts or named real people.
+- ALWAYS give the title slide an "imageQuery".
+- Aim for roughly a third to a half of the slides. Skip definitions, comparisons of abstract ideas and dense lists.
+- The photo is found and added to the slide after you finish, so never write an "image" block yourself and never put a URL in the deck.
 
 CONTENT QUALITY
 - Be concrete and specific, never generic. Ground claims in named entities, real-world comparables, timeframes, or examples — not vague qualities.

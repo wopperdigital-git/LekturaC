@@ -126,6 +126,24 @@ describe('applyRepairs', () => {
     expect(result.deck.cards[0].role).toBe('closing-line')
   })
 
+  it("carries the original card's imageQuery over when the replacement omits it", () => {
+    const original = deck([validCard('Original slide one', { imageQuery: 'mountain lake' })])
+    const response: RepairResponse = {
+      repairs: [{ slide: 1, card: validCard('Repaired slide one') }],
+    }
+    const result = applyRepairs(original, response, [0])
+    expect(result.deck.cards[0].imageQuery).toBe('mountain lake')
+  })
+
+  it("keeps the replacement's own imageQuery when it names one", () => {
+    const original = deck([validCard('Original slide one', { imageQuery: 'mountain lake' })])
+    const response: RepairResponse = {
+      repairs: [{ slide: 1, card: validCard('Repaired slide one', { imageQuery: 'city skyline' }) }],
+    }
+    const result = applyRepairs(original, response, [0])
+    expect(result.deck.cards[0].imageQuery).toBe('city skyline')
+  })
+
   it('leaves role undefined when neither the original nor the replacement has one', () => {
     const original = deck([validCard('Original slide one')])
     const response: RepairResponse = {

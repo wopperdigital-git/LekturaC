@@ -110,6 +110,18 @@ describe('DECK_SYSTEM_PROMPT (v2)', () => {
     expect(DECK_SYSTEM_PROMPT).toMatch(/cannot draw charts/)
   })
 
+  it('no longer says photos or illustrations cannot be drawn; photos arrive through imageQuery', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toContain('photos or illustrations')
+    expect(DECK_SYSTEM_PROMPT).toContain('"imageQuery"')
+  })
+
+  it('has an IMAGES section with the query rules, and still forbids writing image blocks', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/\nIMAGES\n/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/2-6 concrete English words/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/title slide/i)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/never write an "image" block/i)
+  })
+
   it('no longer asks for layoutFamily, which nothing read', () => {
     expect(DECK_SYSTEM_PROMPT).not.toContain('layoutFamily')
   })
