@@ -1027,7 +1027,7 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
   nudge on top of it. See that module for what survives the translation exactly
   (the nudges) and what does not (the twelve hand-designed arrangements).
 
-  The card's own aspect ratio is whatever its content came to, so it is fitted
+  The card is a 16:9 floor but a taller one grows with its content, so its aspect ratio is whatever its content came to; it is fitted
   into the 16:9 slide and centred rather than stretched. Stretching would
   distort every nudge the user made, which is the one thing this path exists to
   preserve.

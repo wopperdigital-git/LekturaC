@@ -8,8 +8,8 @@
   thumbnails for free.
 
   Positions are percentages of the card, so a backdrop works at any card size —
-  which matters because cards size to their content and have no fixed aspect
-  ratio.
+  which matters because a card is a 16:9 floor that grows with its content, so
+  its height is not fixed.
 */
 
 /** A field of stars, rendered as one element. Omit from a theme that shouldn't have stars. */

@@ -19,7 +19,7 @@ import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
   It is the one implementation behind the dashboard's deck covers and the
   editor's layout picker, so both show a slide exactly as the canvas would.
 */
-/** The stage's padding around the card (`p-10`), either side. */
+/** The stage's side padding around the card (`px-10`), either side; the vertical padding is computed below. */
 const STAGE_PADDING_PX = 40
 // The card at the editor's own width, with the stage around it: text wraps as it does on the canvas.
 const BASE_WIDTH = SLIDE_WIDTH_PX + 2 * STAGE_PADDING_PX

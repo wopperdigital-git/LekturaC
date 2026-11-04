@@ -17,9 +17,10 @@ import { PhotoCredit } from './PhotoCredit'
  * or resize), like any other element so it can be removed or, later, replaced.
  * Its scrim and credit live inside the one node the selection measures.
  *
- * The scrim is what the text's readability rests on: white text over a gradient
- * that is never lighter than 20% black, and 75% black at the bottom where a
- * title sits. It is a fixed set of classes rather than a theme colour because a
+ * The scrim is what the text's readability rests on, in one of two forms (`scrim`):
+ * the default gradient, never lighter than 20% black and 75% black at the bottom
+ * where a title sits, or `even`, a flat 60% black for text anywhere on the
+ * picture. It is a fixed set of classes rather than a theme colour because a
  * photo has no theme.
  */
 export function BackgroundPhoto({
