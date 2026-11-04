@@ -43,6 +43,7 @@ export const imageBlockSchema = z.object({
   url: z.string().min(1),
   alt: z.string().optional(),
   prompt: z.string().optional(),
+  credit: z.object({ name: z.string(), url: z.string(), source: z.enum(['pexels', 'url']) }).optional(),
 })
 
 export const quoteBlockSchema = z.object({

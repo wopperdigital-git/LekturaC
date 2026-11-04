@@ -11,6 +11,8 @@ export const QUIZ_NOT_SET_UP = "Quizzes aren't set up on this site yet. Whoever 
 
 export const VOICE_NOT_SET_UP = "Voices aren't set up on this site yet. Whoever runs it needs to add a Cartesia key."
 
+export const PHOTOS_NOT_SET_UP = "Photo search isn't set up on this site yet. Whoever runs it needs to add a Pexels key."
+
 export const AI_NOT_SET_UP = 'No AI service is set up on this site yet. Whoever runs it needs to add an AI key.'
 
 /** The variable names, for whoever runs the site. */
