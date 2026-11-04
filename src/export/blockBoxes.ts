@@ -1,5 +1,6 @@
 import type { Card, ContentBlock } from '@/engine/contentBlocks'
 import { NO_ADJUST, type BlockAdjust } from '@/engine/blockAdjust'
+import type { ThemeTokens } from '@/lib/theme-tokens'
 
 /*
   Where each element of a card sits, for the export's benefit only.
@@ -41,10 +42,40 @@ const ROW_GAP = 0.017
 const COLUMN_GAP = 0.017
 const CONTENT_W = 1 - MARGIN * 2
 
+type TypeScale = ThemeTokens['typography']['scale']
+
+/**
+ * The type scale the constants below were read off (the original presets').
+ * Every height and line length here follows the theme's scale relative to this
+ * one, so a theme with larger type gets proportionally taller boxes and shorter
+ * lines — without it `fitText` shrinks nudged cards' text to boxes sized for the
+ * old, smaller type. Passing this scale (or none) reproduces the constants.
+ */
+export const CALIBRATION_SCALE: TypeScale = [2.75, 1.875, 1.375, 1]
+
+/** How much larger each of the theme's steps is than the calibration's. */
+interface Steps {
+  h1: number
+  h2: number
+  h3: number
+  body: number
+}
+
+function stepsOf(scale: TypeScale): Steps {
+  const [h1, h2, h3, body] = scale
+  return {
+    h1: h1 / CALIBRATION_SCALE[0],
+    h2: h2 / CALIBRATION_SCALE[1],
+    h3: h3 / CALIBRATION_SCALE[2],
+    body: body / CALIBRATION_SCALE[3],
+  }
+}
+
 /*
   Text height is estimated from character count rather than measured — it only
   has to be roughly right, and an estimate keeps this pure. The constants are
-  proportions of the card's width, read off a typical rendered card.
+  proportions of the card's width, read off a typical rendered card at the
+  calibration scale; `naturalHeight` scales them by the theme's own steps.
 */
 const BODY_LINE_H = 0.028
 const CHARS_PER_LINE = 62
@@ -58,24 +89,29 @@ function lines(text: string, charsPerLine: number): number {
   return Math.max(1, Math.ceil(text.length / charsPerLine))
 }
 
-function naturalHeight(block: ContentBlock): number {
+function naturalHeight(block: ContentBlock, step: Steps): number {
   switch (block.type) {
     case 'heading':
-      return 0.078
+      return 0.078 * step.h2
     case 'paragraph':
-      return lines(block.text, CHARS_PER_LINE) * BODY_LINE_H
+      // A larger body is taller and fits fewer characters on a line.
+      return lines(block.text, CHARS_PER_LINE / step.body) * BODY_LINE_H * step.body
     case 'bulletList':
-      return block.items.length * 0.033
+      return block.items.length * 0.033 * step.body
     case 'stat':
-      return 0.099
+      // The figure follows h1, its label the body.
+      return 0.07 * step.h1 + 0.029 * step.body
     case 'image':
       return 0.198
     case 'quote':
-      return lines(block.text, QUOTE_CHARS_PER_LINE) * QUOTE_LINE_H + (block.attribution ? 0.023 : 0)
+      return (
+        lines(block.text, QUOTE_CHARS_PER_LINE / step.h3) * QUOTE_LINE_H * step.h3 +
+        (block.attribution ? 0.023 * step.body : 0)
+      )
     case 'timelineStep':
-      return 0.062
+      return 0.062 * step.body
     case 'comparisonGroup':
-      return 0.047 + block.items.length * 0.027
+      return (0.047 + block.items.length * 0.027) * step.body
   }
 }
 
@@ -90,7 +126,7 @@ interface Row {
   their siblings: four stats stacked read as four unrelated numbers, and a
   comparison whose sides are stacked is no longer a comparison.
 */
-function buildRows(blocks: ContentBlock[]): Row[] {
+function buildRows(blocks: ContentBlock[], step: Steps): Row[] {
   const rows: Row[] = []
   let i = 0
 
@@ -104,7 +140,7 @@ function buildRows(blocks: ContentBlock[]): Row[] {
       i++
     } while (groups && i < blocks.length && blocks[i].type === type && entries.length < MAX_COLUMNS)
 
-    rows.push({ entries, height: Math.max(...entries.map((e) => naturalHeight(e.block))) })
+    rows.push({ entries, height: Math.max(...entries.map((e) => naturalHeight(e.block, step))) })
   }
 
   return rows
@@ -123,9 +159,15 @@ export interface CardBoxes {
  * The baseline stack is computed first and the nudges are added on top, in that
  * order, for the same reason the on-screen renderer works that way: the nudge
  * is a delta, so it has to be applied to a position rather than replace one.
+ *
+ * `scale` is the theme's type scale: text heights and line lengths follow it
+ * (see `CALIBRATION_SCALE`).
  */
-export function cardBoxes(card: Pick<Card, 'blocks' | 'adjusts'>): CardBoxes {
-  const rows = buildRows(card.blocks)
+export function cardBoxes(
+  card: Pick<Card, 'blocks' | 'adjusts'>,
+  scale: TypeScale = CALIBRATION_SCALE,
+): CardBoxes {
+  const rows = buildRows(card.blocks, stepsOf(scale))
   const boxes: Record<string, Box> = {}
   let y = MARGIN
 

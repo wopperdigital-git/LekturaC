@@ -1468,7 +1468,7 @@ function listRuns(card: Card, index: number, field: string, items: string[]): Pp
 
 /** A card carrying element nudges: every block in the box the user left it in. */
 const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure) => {
-  const { boxes, height } = cardBoxes(card)
+  const { boxes, height } = cardBoxes(card, theme.typography.scale)
   const fit = fitCard(height)
   card.blocks.forEach((_, index) => {
     const box = boxes[String(index)]
