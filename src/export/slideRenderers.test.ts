@@ -1237,6 +1237,41 @@ describe('photos in the exported file', () => {
     })
   })
 
+  describe('a hero slide with a nudged element', () => {
+    const nudgedHero = (): Card => ({
+      ...cardOf([{ type: 'heading', text: 'Mountains' }, { type: 'paragraph', text: 'A quiet lake' }, photo()], 'hero'),
+      adjusts: { '1': { dx: 0.05, dy: 0, rotation: 0 } },
+    })
+
+    it('keeps the photo as the whole-slide ground under the scrim, with white text and the credit', () => {
+      const slide = renderPhoto(nudgedHero(), { isFirstCard: true })
+      expect(slideGroup(nudgedHero(), true)).toBe('adjusted')
+      expect(slide.images).toHaveLength(1)
+      const image = imageOf(slide)
+      expect([image.x, image.y]).toEqual([0, 0])
+      expect(image.sizing).toEqual({ type: 'cover', w: 10, h: 5.625 })
+      expect(slide.shapes[0].options).toMatchObject({ fill: { color: '000000', transparency: 45 } })
+      expect(slide.order.slice(0, 2)).toEqual(['image', 'shape'])
+      const colors = colorsOf(slide)
+      expect(colors.length).toBeGreaterThan(0)
+      for (const color of colors) expect(String(color).toUpperCase()).toBe('FFFFFF')
+      expect(slide.texts.some((t) => t.text === CREDIT_TEXT)).toBe(true)
+    })
+
+    it('does not also stack the photo as a box, nor write its alt text', () => {
+      const slide = renderPhoto(nudgedHero(), { isFirstCard: true })
+      expect(slide.images).toHaveLength(1)
+      expect(slide.texts.some((t) => t.text.includes('A mountain lake'))).toBe(false)
+    })
+
+    it('draws the old nudged stack when the picture could not be fetched', () => {
+      const slide = renderPhoto(nudgedHero(), { isFirstCard: true, images: new Map() })
+      expect(slide.images).toHaveLength(0)
+      expect(slide.shapes).toHaveLength(0)
+      expect(slide.texts.some((t) => t.text === 'A mountain lake')).toBe(true)
+    })
+  })
+
   describe('the credit', () => {
     const block = photo() as Extract<ContentBlock, { type: 'image' }>
     const draw = (box: { w: number }, measure = estimateMeasurer) => {

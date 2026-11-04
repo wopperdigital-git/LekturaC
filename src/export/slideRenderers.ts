@@ -1547,14 +1547,32 @@ function listRuns(card: Card, index: number, field: string, items: string[]): Pp
   })
 }
 
-/** A card carrying element nudges: every block in the box the user left it in. */
+/**
+ * A card carrying element nudges: every block in the box the user left it in.
+ *
+ * A hero or quote slide with a lone photo draws that photo as its ground on screen (and
+ * its own `fixed` element can't be nudged), so here too it is the whole slide under the
+ * same scrim as `onPhotoGround`, the remaining text is white, and the photo's index is
+ * left out of the stack. Without the picture's data the card renders as plain nudges.
+ */
 const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
+  const ground = context.layout === 'hero' || context.layout === 'quote' ? singlePhoto(card.blocks) : null
+  const data = ground ? usablePhoto(context.images, ground.block.url) : undefined
+  const onGround = ground && data ? { ...ground, data } : null
+  const whole: PhotoBox = { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H }
+  if (onGround) {
+    addPhoto(slide, onGround.data, whole, onGround.block.alt)
+    addScrim(slide, context.layout === 'hero' ? 45 : 40)
+  }
+  const target = onGround ? whiteText(slide) : slide
   const { boxes, height } = cardBoxes(card, theme.typography.scale)
   const fit = fitCard(height)
   card.blocks.forEach((_, index) => {
+    if (onGround && index === onGround.index) return
     const box = boxes[String(index)]
-    if (box) renderAdjustedBlock(slide, card, index, placed(box, fit), fit, theme, style, measure, context.images)
+    if (box) renderAdjustedBlock(target, card, index, placed(box, fit), fit, theme, style, measure, context.images)
   })
+  if (onGround) addCredit(slide, onGround.block, whole, bodyFace(theme, style), measure, { pill: false })
 }
 
 /**
