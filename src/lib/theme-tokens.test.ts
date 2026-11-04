@@ -115,7 +115,7 @@ describe('built-in themes', () => {
     }
   })
 
-  const DECOR_KINDS =['stars', 'orbits', 'bodies', 'constellation', 'grid'] as const
+  const DECOR_KINDS = ['stars', 'orbits', 'bodies', 'constellation', 'grid'] as const
 
   // The restraint rule: a theme picks the two or three elements that carry its
   // mood. One that reached for all of them would collapse the distinction
