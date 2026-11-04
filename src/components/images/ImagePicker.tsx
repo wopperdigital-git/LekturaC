@@ -154,7 +154,7 @@ function PickerBody({ onPick, initialQuery }: { onPick: (photo: Photo) => void; 
           </Button>
         </div>
         {linkInvalid && (
-          <p id="photo-link-error" role="alert" className="mt-1.5 text-xs text-app-danger">
+          <p id="photo-link-error" role="alert" className="mt-1.5 text-xs text-app-danger-text">
             That does not look like an image link. It should start with http:// or https://.
           </p>
         )}
@@ -174,7 +174,7 @@ function SearchResults({ search, onPick }: { search: Search; onPick: (photo: Pho
   }
   if (search.state === 'error') {
     return (
-      <p role="alert" className="mt-4 text-sm text-app-danger">
+      <p role="alert" className="mt-4 text-sm text-app-danger-text">
         {search.message}
       </p>
     )

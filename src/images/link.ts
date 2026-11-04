@@ -16,5 +16,6 @@ export function photoFromLink(text: string): Photo | null {
     return null
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-  return { url: trimmed, alt: '', credit: { name: '', url: '', source: 'url' } }
+  // The normalised address (escaped spaces, lower-cased host), not the raw paste.
+  return { url: parsed.href, alt: '', credit: { name: '', url: '', source: 'url' } }
 }

@@ -14,6 +14,10 @@ describe('photoFromLink', () => {
     expect(photoFromLink('  http://x.example/a.png \n')?.url).toBe('http://x.example/a.png')
   })
 
+  it('stores the normalised address rather than the raw paste', () => {
+    expect(photoFromLink('https://X.Example/a b.jpg')?.url).toBe('https://x.example/a%20b.jpg')
+  })
+
   it('rejects other schemes, plain words and empty input', () => {
     expect(photoFromLink('javascript:alert(1)')).toBeNull()
     expect(photoFromLink('ftp://x.example/y.jpg')).toBeNull()
