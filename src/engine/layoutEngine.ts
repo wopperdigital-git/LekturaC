@@ -235,7 +235,7 @@ const TREATMENTS: VisualStyle[] = ['structured', 'expressive']
  * this is filtered against the card in `layoutVarieties` rather than being a
  * plain constant lookup.
  */
-function componentsForKind(kind: CardKind, blocks: ContentBlock[]): Exclude<LayoutType, 'auto'>[] {
+export function componentsForKind(kind: CardKind, blocks: ContentBlock[]): Exclude<LayoutType, 'auto'>[] {
   switch (kind) {
     case 'title':
       return ['hero']

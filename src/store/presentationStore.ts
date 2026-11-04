@@ -21,6 +21,7 @@ import { isNeutral, parseAdjusts, type BlockAdjust } from '@/engine/blockAdjust'
 import { applyEmphasis } from '@/engine/emphasis'
 import { overlayChanged, parseOverlay, type OverlayItem } from '@/engine/overlay'
 import { generatedLayout } from '@/engine/roleLayout'
+import { varyLayouts } from '@/engine/varyLayouts'
 import { sequenceFor, sequenceMismatch, type BlueprintId } from '@/ai/slideBlueprints'
 import { capScriptLength, isResettable, mergeNarration, parseNarration, type GeneratedScript } from '@/engine/narration'
 import { layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
@@ -773,7 +774,7 @@ export async function insertGeneratedDeck(
     }
   }
 
-  const cards: Card[] = deck.cards.map((c, i) => {
+  const mapped: Card[] = deck.cards.map((c, i) => {
     // The one moment a deck's text is written, and so the only place the
     // model's `*asterisks*` can be turned into real bold without the stored
     // string and the drawn string disagreeing about character offsets.
@@ -795,6 +796,10 @@ export async function insertGeneratedDeck(
       narration,
     }
   })
+  // Neighbouring slides never share an arrangement: only cards still on
+  // 'auto' can change, and only their layout (never blocks).
+  const varied = varyLayouts(mapped)
+  const cards: Card[] = mapped.map((card, i) => ({ ...card, layout: varied[i] }))
 
   if (supabaseConfigured && supabase) {
     await ensureSession()
