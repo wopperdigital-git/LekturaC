@@ -73,18 +73,15 @@ export async function exportDeckToPptx(deck: ExportableDeck): Promise<void> {
 
   const ordered = [...deck.cards].sort((a, b) => a.orderIndex - b.orderIndex)
 
-  /*
-    Every photo on the deck, fetched once before any slide is drawn, so the
-    renderers stay pure (they are handed the map and never touch the network).
-    A picture that cannot be fetched is simply absent and its slide draws the
-    alt text it always did; this step cannot fail the export.
-  */
-  const images = await prefetchDeckImages(ordered)
-
   // Built once, not once per slide/re-measured word: the canvas, the loaded
   // fonts, and the per-(font,text) cache are all shared across every slide in
   // the deck.
-  const measure = await createCanvasMeasurer()
+  //
+  // The photos the export can place are fetched in the same wait, once, before any
+  // slide is drawn, so the renderers stay pure (they are handed the map and never touch
+  // the network). A picture that cannot be fetched is simply absent and its slide draws
+  // the alt text it always did; this step cannot fail the export.
+  const [measure, images] = await Promise.all([createCanvasMeasurer(), prefetchDeckImages(ordered)])
 
   ordered.forEach((card, index) => {
     const slide = pptx.addSlide({ masterName: MASTER })

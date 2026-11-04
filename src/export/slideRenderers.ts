@@ -8,7 +8,7 @@ import { cardBoxes, type Box } from './blockBoxes'
 import type { PptxTextRun } from './textRun'
 import { SIZE_SCALE_KEY, faceName, hex, markedRuns, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
-import { addCredit, addPhoto, addScrim, whiteText, type PhotoBox } from './photoPlacement'
+import { SLIDE_H, SLIDE_W, addCredit, addPhoto, addScrim, usablePhoto, whiteText, type PhotoBox } from './photoPlacement'
 import type { FitParagraph, FitSizing, SizeRole, TextMeasurer } from './textFit'
 import {
   BULLET_INDENT_IN,
@@ -58,9 +58,7 @@ export type SlideRenderer = (
   context?: RenderContext,
 ) => void
 
-/* LAYOUT_16x9 in inches. */
-const SLIDE_W = 10
-const SLIDE_H = 5.625
+/* Page geometry: SLIDE_W/SLIDE_H (LAYOUT_16x9, inches) come from photoPlacement.ts. */
 const MARGIN = 0.6
 const CONTENT_W = SLIDE_W - MARGIN * 2
 
@@ -518,7 +516,7 @@ function photoSide(card: Card, context: RenderContext): PhotoSide | null {
   const layout = context.layout
   if (layout !== 'standardSplit' && layout !== 'imageFocus') return null
   const photo = singlePhoto(card.blocks)
-  const data = photo ? context.images.get(photo.block.url) : undefined
+  const data = photo ? usablePhoto(context.images, photo.block.url) : undefined
   if (!photo || !data) return null
 
   const room = CONTENT_W - PHOTO_GAP
@@ -543,7 +541,7 @@ const renderBody: SlideRenderer = (slide, card, theme, style, measure, context =
   const side = photoSide(card, context)
   if (side) {
     addPhoto(slide, side.data, side.box, side.block.alt)
-    addCredit(slide, side.block, side.box, bodyFace(theme, style), { pill: true })
+    addCredit(slide, side.block, side.box, bodyFace(theme, style), measure, { pill: true })
   }
   const column = side ? side.column : FULL_COLUMN
   const contentTop = addHeading(slide, card, theme, style, measure, column)
@@ -1509,10 +1507,10 @@ function renderAdjustedBlock(
       still the truthful shape of the slide.
     */
     case 'image': {
-      const data = images.get(block.url)
+      const data = usablePhoto(images, block.url)
       if (data) {
         addPhoto(slide, data, box, block.alt)
-        addCredit(slide, block, box, bodyFace(theme, style), { pill: true })
+        addCredit(slide, block, box, bodyFace(theme, style), measure, { pill: true })
         return
       }
       if (!block.alt) return
@@ -1604,14 +1602,14 @@ const onPhotoGround =
   (render: SlideRenderer, layout: 'hero' | 'quote', transparency: number): SlideRenderer =>
   (slide, card, theme, style, measure, context = NO_CONTEXT) => {
     const photo = context.layout === layout ? singlePhoto(card.blocks) : null
-    const data = photo ? context.images.get(photo.block.url) : undefined
+    const data = photo ? usablePhoto(context.images, photo.block.url) : undefined
     if (!photo || !data) return render(slide, card, theme, style, measure, context)
 
     const whole: PhotoBox = { x: 0, y: 0, w: SLIDE_W, h: SLIDE_H }
     addPhoto(slide, data, whole, photo.block.alt)
     addScrim(slide, transparency)
     render(whiteText(slide), card, theme, style, measure, context)
-    addCredit(slide, photo.block, whole, bodyFace(theme, style), { pill: false })
+    addCredit(slide, photo.block, whole, bodyFace(theme, style), measure, { pill: false })
   }
 
 export const RENDERERS: Record<PptxGroup, SlideRenderer> = {

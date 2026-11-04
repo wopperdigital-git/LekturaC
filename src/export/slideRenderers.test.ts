@@ -3,6 +3,7 @@ import { RENDERERS, fitCard, fittedPointSize, type PptxSlide, type RenderContext
 import { slideGroup } from './slideGroup'
 import { cardBoxes } from './blockBoxes'
 import { resolveLayout } from '@/engine/layoutEngine'
+import { addCredit } from './photoPlacement'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
 import { CREATABLE_KINDS, layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
@@ -1218,6 +1219,47 @@ describe('photos in the exported file', () => {
       const slide = renderPhoto(nudged(), { images: new Map() })
       expect(slide.images).toHaveLength(0)
       expect(slide.texts.some((t) => t.text === 'A mountain lake')).toBe(true)
+    })
+
+    it('falls back to the alt text rather than stretch a picture whose shape is unknown', () => {
+      const unreadable = 'data:image/jpeg;base64,' + btoa(String.fromCharCode(0xff, 0xd8, 0xff, 0xe0, 0, 0x10))
+      const slide = renderPhoto(nudged(), { images: new Map([[URL_A, unreadable]]) })
+      expect(slide.images).toHaveLength(0)
+      expect(slide.texts.some((t) => t.text === 'A mountain lake')).toBe(true)
+    })
+
+    it('leaves the credit off a rotated photo, which it could not follow', () => {
+      const card: Card = { ...nudged(), adjusts: { '1': { dx: 0, dy: 0, rotation: 30 } } }
+      const slide = renderPhoto(card)
+      expect(slide.images).toHaveLength(1)
+      expect((slide.images[0] as { rotate?: number }).rotate).toBe(30)
+      expect(slide.texts.some((t) => t.text === CREDIT_TEXT)).toBe(false)
+    })
+  })
+
+  describe('the credit', () => {
+    const block = photo() as Extract<ContentBlock, { type: 'image' }>
+    const draw = (box: { w: number }, measure = estimateMeasurer) => {
+      const slide = fakeSlide()
+      addCredit(slide, block, { x: 1, y: 1, h: 2, ...box }, 'Arial', measure, { pill: true })
+      return slide
+    }
+
+    it('is drawn when the words fit the photo box on one line', () => {
+      const slide = draw({ w: 4 })
+      expect(slide.texts.map((t) => t.text)).toEqual([CREDIT_TEXT])
+      expect(slide.shapes).toHaveLength(1)
+    })
+
+    it('is left out, pill and all, when the box is too narrow to hold it on one line', () => {
+      const slide = draw({ w: 0.9 })
+      expect(slide.texts).toHaveLength(0)
+      expect(slide.shapes).toHaveLength(0)
+    })
+
+    it('is sized by the renderer measurer, not a guess', () => {
+      const wide = () => 10
+      expect(draw({ w: 4 }, wide).texts).toHaveLength(0)
     })
   })
 })
