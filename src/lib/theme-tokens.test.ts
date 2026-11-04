@@ -127,6 +127,9 @@ describe('built-in themes', () => {
       expect(contrastRatio(colors.foreground, colors.surface), `${id} foreground on surface`).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(colors.accentForeground, colors.accent), `${id} on accent`).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(colors.accent, colors.background), `${id} accent`).toBeGreaterThanOrEqual(3)
+      // The numbered badges are a gradient from accent to accentSoft carrying
+      // accentForeground, so the soft end has to hold the ink too.
+      expect(contrastRatio(colors.accentForeground, colors.accentSoft), `${id} on accentSoft`).toBeGreaterThanOrEqual(4.5)
     }
   })
 

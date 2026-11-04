@@ -152,12 +152,18 @@ export async function createSlideRenderer(o: {
   document.body.appendChild(host)
   const root = createRoot(host)
 
-  // Once per video: scanning every stylesheet and fetching every font file is the slow part.
+  const themeFonts = [o.theme.typography.headingFont, o.theme.typography.bodyFont]
+
+  // Once per video: scanning every stylesheet and fetching every font file is the slow part. A
+  // failure costs fidelity (fallback fonts), never the video, so it settles to no extra CSS.
   let fontEmbedCSS: Promise<string> | null = null
   const embeddedFonts = () => {
     fontEmbedCSS ??= (async () => {
       const probe = document.createElement('div')
-      for (const family of [o.theme.typography.headingFont, o.theme.typography.bodyFont]) {
+      // The root would otherwise inherit the chrome font (Archivo) from <body>, and the library
+      // would embed that family into every frame too.
+      probe.style.fontFamily = o.theme.typography.bodyFont
+      for (const family of themeFonts) {
         const span = document.createElement('span')
         span.style.fontFamily = family
         span.textContent = 'x'
@@ -169,13 +175,27 @@ export async function createSlideRenderer(o: {
       } finally {
         probe.remove()
       }
-    })()
+    })().catch((error: unknown) => {
+      console.warn('Could not embed the theme fonts in the video; slides use fallback fonts.', error)
+      return ''
+    })
     return fontEmbedCSS
+  }
+
+  // Once per video: a web font loads on first use, so make sure the first frame is not measured
+  // (and `frameScale` not computed) against a fallback face. Failures are ignored.
+  let fontsLoaded: Promise<unknown> | null = null
+  const loadThemeFonts = () => {
+    fontsLoaded ??= Promise.all(themeFonts.map((family) => document.fonts.load(`700 16px ${family}`))).catch(
+      () => undefined,
+    )
+    return fontsLoaded
   }
 
   return {
     async draw(index, signal) {
       await whenVisible(signal)
+      await loadThemeFonts()
       const card = o.cards[index]
       const refs: Refs = { stage: null, fit: null }
 
