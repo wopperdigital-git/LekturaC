@@ -618,10 +618,12 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     shape: { radius: 0.75, radiusSm: 0.375, shadow: 'hard' },
     // Two flat colour blocks pushed into opposite corners. Each is a radial
     // gradient whose stops sit two points apart, which is a hard edge (and a
-    // shape the PPTX backdrop parser reads, so it exports as a block too).
+    // shape the PPTX backdrop parser reads, so it exports as a block too). The
+    // orange block keeps the bright orange, not the darker accent: dark text over
+    // it stays above 4.5:1.
     celestial: {
       glow: [
-        'radial-gradient(21% 38% at 104% -6%, rgba(207,53,10,1) 98%, rgba(207,53,10,0) 100%)',
+        'radial-gradient(21% 38% at 104% -6%, rgba(255,79,31,1) 98%, rgba(255,79,31,0) 100%)',
         'radial-gradient(14% 26% at -4% 108%, rgba(255,210,63,1) 98%, rgba(255,210,63,0) 100%)',
       ].join(', '),
     },
