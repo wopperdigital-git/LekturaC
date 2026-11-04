@@ -139,10 +139,17 @@ function structured(layout: LayoutType): ReactNode {
           {[118, 110, 122, 74].map((w, i) => <Line key={i} x={21} y={28 + i * 9} w={w} />)}
         </>
       )
-    // imageFocus mirrors standardSplit for now; Task 8 replaces it with ImageFocusLayout's own wireframe.
     case 'imageFocus':
+      // The picture takes about three fifths on the left, heading and caption beside it.
+      return (
+        <>
+          <Picture x={12} y={14} w={90} h={62} />
+          <Title x={110} y={26} w={38} />
+          {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={40 + i * 8} w={w} />)}
+        </>
+      )
     case 'standardSplit':
-      // Text on the left, the picture on the right.
+      // Text on one half, the picture on the other (the side alternates down the deck; the first slide's is drawn).
       return (
         <>
           <Title y={24} w={58} />
@@ -402,13 +409,22 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'imageFocus':
-    case 'standardSplit':
-      // The picture on the left, text on the right.
+      // The picture, accent-framed, about three fifths on the left; the heading panel and caption beside it.
       return (
         <>
-          <Picture x={12} y={14} w={64} h={62} />
-          <HeadPanel x={88} y={22} w={60} h={12} />
-          {[60, 54, 58, 38].map((w, i) => <Line key={i} x={88} y={42 + i * 8} w={w} />)}
+          <Picture x={12} y={14} w={90} h={62} />
+          <rect x={15} y={17} width={84} height={56} rx={1.5} fill="none" stroke={ACCENT} strokeWidth={2} />
+          <HeadPanel x={110} y={24} w={38} h={12} bar={false} />
+          {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={44 + i * 8} w={w} />)}
+        </>
+      )
+    case 'standardSplit':
+      // The lead heading on an accent panel and text on one half, the picture on the other.
+      return (
+        <>
+          <HeadPanel x={12} y={22} w={60} h={12} />
+          {[60, 54, 58, 38].map((w, i) => <Line key={i} x={12} y={42 + i * 8} w={w} />)}
+          <Picture x={84} y={14} w={64} h={62} />
         </>
       )
     case 'statHero':

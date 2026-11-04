@@ -3,6 +3,7 @@ import type { GroupNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 import { Adjustable } from './Adjustable'
+import { PhotoCredit } from './PhotoCredit'
 import { StatBlockView } from './BlockRenderer'
 import { EditableText } from './EditableText'
 import { useItemProps } from './adjustContext'
@@ -473,19 +474,21 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
               <Adjustable index={featured.index}>
-                <figure className="row-span-2 overflow-hidden rounded-slide-sm border border-slide-border">
+                <figure className="relative row-span-2 overflow-hidden rounded-slide-sm border border-slide-border">
                   <img
                     src={featured.block.url}
                     alt={featured.block.alt ?? ''}
                     className="h-full w-full object-cover"
                   />
+                  <PhotoCredit credit={featured.block.credit} />
                 </figure>
               </Adjustable>
               <div className="grid grid-rows-2 gap-3">
                 {rest.slice(0, 2).map((img) => (
                   <Adjustable key={img.index} index={img.index}>
-                    <figure className="overflow-hidden rounded-slide-sm border border-slide-border">
+                    <figure className="relative overflow-hidden rounded-slide-sm border border-slide-border">
                       <img src={img.block.url} alt={img.block.alt ?? ''} className="aspect-square w-full object-cover" />
+                      <PhotoCredit credit={img.block.credit} />
                     </figure>
                   </Adjustable>
                 ))}
@@ -495,8 +498,9 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
               <div className="grid grid-cols-3 gap-3">
                 {overflow.map((img) => (
                   <Adjustable key={img.index} index={img.index}>
-                    <figure className="overflow-hidden rounded-slide-sm border border-slide-border">
+                    <figure className="relative overflow-hidden rounded-slide-sm border border-slide-border">
                       <img src={img.block.url} alt={img.block.alt ?? ''} className="aspect-square w-full object-cover" />
+                      <PhotoCredit credit={img.block.credit} />
                     </figure>
                   </Adjustable>
                 ))}
@@ -509,8 +513,9 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
         <div className="grid grid-cols-2 gap-3 @min-[640px]:grid-cols-3">
           {node.items.map((img) => (
             <Adjustable key={img.index} index={img.index}>
-              <figure className="overflow-hidden rounded-slide-sm border border-slide-border">
+              <figure className="relative overflow-hidden rounded-slide-sm border border-slide-border">
                 <img src={img.block.url} alt={img.block.alt ?? ''} className="aspect-square w-full object-cover" />
+                <PhotoCredit credit={img.block.credit} />
               </figure>
             </Adjustable>
           ))}

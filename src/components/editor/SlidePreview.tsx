@@ -94,7 +94,7 @@ export function SlidePreview({
               style={{ minHeight: BASE_HEIGHT, paddingBlock: STAGE_PADDING_Y_PX }}
             >
               <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-                <SlideSurface className="w-full rounded-slide p-10 shadow-slide-card">
+                <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card">
                   {/* `SlideBody` is what makes a nudged element sit where the
                       user put it here as well — it carries the card's width
                       into the coordinate space the nudges are stored in. */}

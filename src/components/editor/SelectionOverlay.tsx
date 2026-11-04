@@ -226,6 +226,29 @@ export function SelectionOverlay({
   )
 }
 
+/**
+ * The box on a fixed element (the background photo): the outline only, inside the
+ * frame, with no handles, edges to drag or rotation. Click-through, so the photo
+ * underneath is still the thing pressed.
+ */
+export function FixedOutline({ frame }: { frame: Frame }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute z-20 outline-app-accent"
+      style={{
+        left: frame.x,
+        top: frame.y,
+        width: frame.w,
+        height: frame.h,
+        outlineStyle: 'solid',
+        outlineWidth: BORDER_PX * 2,
+        outlineOffset: -BORDER_PX * 2,
+      }}
+    />
+  )
+}
+
 /** Keeps rotation in (-180, 180], snapping to a fixed step while shift is held. */
 function snap(degrees: number, shift: boolean): number {
   const stepped = shift ? Math.round(degrees / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG : degrees

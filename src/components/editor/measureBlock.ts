@@ -2,7 +2,7 @@ import { normalizeAdjust, type BlockAdjust } from '@/engine/blockAdjust'
 import type { Frame } from '@/engine/frame'
 import type { Container } from '@/engine/frameGeometry'
 import type { TextAlign } from '@/engine/textStyle'
-import { BLOCK_INDEX_ATTR, measurableNode } from '@/components/layouts/adjustContext'
+import { BLOCK_INDEX_ATTR, FIXED_ELEMENT_ATTR, measurableNode } from '@/components/layouts/adjustContext'
 
 /*
   Turning what the browser laid out into what gets stored, and back.
@@ -20,6 +20,8 @@ export interface Measured {
   /** The laid-out node, kept so a gesture can re-measure it mid-drag. */
   node: HTMLElement
   cardNode: HTMLElement
+  /** A fixed element (the background photo): selectable, but never moved, resized or rotated. */
+  fixed: boolean
 }
 
 /**
@@ -101,6 +103,7 @@ export function measureBlock(cardNode: HTMLElement, index: number): Measured | n
     card: { w: cardNode.clientWidth, h: cardNode.clientHeight },
     node,
     cardNode,
+    fixed: holder.hasAttribute(FIXED_ELEMENT_ATTR),
   }
 }
 

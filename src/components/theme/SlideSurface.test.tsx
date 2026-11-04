@@ -25,9 +25,20 @@ describe('SlideSurface', () => {
   })
 
   it("keeps the caller's classes", () => {
-    expect(renderToStaticMarkup(<SlideSurface className="p-8 rounded-slide">x</SlideSurface>)).toContain(
-      'p-8 rounded-slide',
+    expect(renderToStaticMarkup(<SlideSurface className="w-full rounded-slide">x</SlideSurface>)).toContain(
+      'w-full rounded-slide',
     )
+  })
+
+  // A background photo bleeds through the padding by its negative (`BackgroundPhoto`), so the
+  // padding must BE the variable, on every surface.
+  it('pads itself with --slide-pad, fluid by default and fixed when roomy', () => {
+    expect(html).toContain('p-[var(--slide-pad)]')
+    expect(html).toContain('[--slide-pad:2rem]')
+    expect(html).toContain('sm:[--slide-pad:2.5rem]')
+    const roomy = renderToStaticMarkup(<SlideSurface padding="roomy">x</SlideSurface>)
+    expect(roomy).toContain('[--slide-pad:2.5rem]')
+    expect(roomy).not.toContain('sm:[--slide-pad')
   })
 
   it('has SlideBody fill the floor and centre the layout inside itself', () => {

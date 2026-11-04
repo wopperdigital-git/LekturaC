@@ -2,7 +2,20 @@ import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engi
 import { BlockRenderer, Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 
-export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
+/**
+ * Text on one half, the photo on the other. The photo's side alternates down the
+ * deck (the right on the first slide, the left on the next), so neighbouring
+ * splits do not look alike; stacked below the slide's 768px.
+ */
+export function StandardSplitLayout({
+  blocks,
+  variant,
+  position,
+}: {
+  blocks: ContentBlock[]
+  variant: VisualStyle
+  position: number
+}) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const images = blocksOfTypeIndexed(blocks, 'image')
   /*
@@ -32,7 +45,12 @@ export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[
       ))}
     </div>
   )
-  const image = <div>{images[0] && <BlockRenderer block={images[0].block} index={images[0].index} />}</div>
+  const image = (
+    <div>
+      {images[0] && <BlockRenderer block={images[0].block} index={images[0].index} photoClass="aspect-[4/3]" />}
+    </div>
+  )
+  const photoOnLeft = position % 2 === 1
 
   // This layout draws every non-image block already; the one thing it leaves
   // out is a SECOND image, since the split has exactly one image slot.
@@ -41,7 +59,7 @@ export function StandardSplitLayout({ blocks, variant }: { blocks: ContentBlock[
   return (
     <div className="flex flex-col gap-8">
       <div className="grid grid-cols-1 gap-8 @min-[768px]:grid-cols-2 @min-[768px]:items-center">
-        {variant === 'expressive' ? (
+        {photoOnLeft ? (
           <>
             {image}
             {text}

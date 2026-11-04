@@ -103,7 +103,7 @@ export function PresentPage() {
                   `max-w-5xl`), so text wraps exactly as it does in the editor. */}
               <ScaledSlide maxDisplayWidth={1024}>
                 <TextStyleScope style={mergeTextStyle(store.textStyle, card.textStyle)}>
-                  <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
+                  <SlideSurface className="w-full rounded-slide shadow-slide-card">
                     {/* Provides the card width every stored element nudge is a
                         fraction of, so the presenter shows the same arrangement
                         the editor does. */}

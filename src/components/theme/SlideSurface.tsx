@@ -26,24 +26,39 @@ import type { CSSProperties, ReactNode } from 'react'
  * content still sets the floor and the theme's corner radius still clips. Do not
  * change `overflow-clip` back to `overflow-hidden`.
  *
- * Radius, shadow and padding stay with the caller: the canvas and presenter
- * cards want `rounded-slide`/`shadow-slide-card`, while a thumbnail is clipped
- * by its own scaled frame.
+ * Radius and shadow stay with the caller: the canvas and presenter cards want
+ * `rounded-slide`/`shadow-slide-card`, while a thumbnail is clipped by its own
+ * scaled frame.
+ *
+ * Padding is the surface's own, held in a custom property, because a background
+ * photo has to bleed through it: `--slide-pad` IS the padding (`BackgroundPhoto`
+ * insets itself by its negative), so the two cannot disagree on any surface. The
+ * canvas, presenter and outline pad `fluid` (2rem, 2.5rem from a 640px screen);
+ * the cover, the phone view and the video pad `roomy` (2.5rem always).
  */
 export const SLIDE_SURFACE_CLASS =
-  'relative isolate flex aspect-video flex-col justify-center overflow-clip bg-slide-background'
+  'relative isolate flex aspect-video flex-col justify-center overflow-clip bg-slide-background p-[var(--slide-pad)]'
+
+export type SlidePadding = 'fluid' | 'roomy'
+
+const PADDING_CLASS: Record<SlidePadding, string> = {
+  fluid: '[--slide-pad:2rem] sm:[--slide-pad:2.5rem]',
+  roomy: '[--slide-pad:2.5rem]',
+}
 
 export function SlideSurface({
   className = '',
+  padding = 'fluid',
   style,
   children,
 }: {
   className?: string
+  padding?: SlidePadding
   style?: CSSProperties
   children: ReactNode
 }) {
   return (
-    <div className={`${SLIDE_SURFACE_CLASS} ${className}`} style={style}>
+    <div className={`${SLIDE_SURFACE_CLASS} ${PADDING_CLASS[padding]} ${className}`} style={style}>
       {children}
     </div>
   )

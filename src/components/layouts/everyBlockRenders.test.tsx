@@ -146,12 +146,18 @@ const LAYOUTS: LayoutType[] = [
   'quote',
   'textFocus',
   'gallery',
+  'imageFocus',
 ]
 
 const VARIANTS: VisualStyle[] = ['structured', 'expressive']
 
-function card(blocks: ContentBlock[], layout: LayoutType, visualStyle: VisualStyle): Card {
-  return { id: 'card', orderIndex: 0, blocks, layout, visualStyle }
+function card(
+  blocks: ContentBlock[],
+  layout: LayoutType,
+  visualStyle: VisualStyle,
+  orderIndex = 0,
+): Card {
+  return { id: 'card', orderIndex, blocks, layout, visualStyle }
 }
 
 function expectEveryBlockDrawn(html: string, blocks: ContentBlock[]) {
@@ -181,6 +187,162 @@ describe('every block on a card reaches the screen', () => {
       })
     }
   }
+})
+
+/*
+  A card with exactly ONE photo: the photo is part of the arrangement (a background, half a
+  split, beside a figure, a band over a list, an image slide), and every layout must still
+  draw each other block once, draw the photo once, and show the photographer's credit once.
+*/
+const PHOTO_URL = 'https://example.test/MARKPHOTO.png'
+const PHOTO: ContentBlock = {
+  type: 'image',
+  url: PHOTO_URL,
+  alt: 'a photo',
+  credit: { name: 'MARKPHOTOGRAPHER', url: 'https://www.pexels.com/@markphotographer', source: 'pexels' },
+}
+const ONE_PHOTO_SINK: ContentBlock[] = [...KITCHEN_SINK.filter((block) => block.type !== 'image'), PHOTO]
+
+function creditCount(html: string): number {
+  return html.split('data-photo-credit').length - 1
+}
+
+describe('a card with one photo', () => {
+  for (const layout of LAYOUTS) {
+    for (const variant of VARIANTS) {
+      it(`${layout} (${variant}) draws every block, the photo and its credit once`, () => {
+        const html = renderToStaticMarkup(<LayoutRenderer card={card(ONE_PHOTO_SINK, layout, variant)} />)
+        expectEveryBlockDrawn(html, ONE_PHOTO_SINK)
+        expect(creditCount(html), 'the credit should be drawn exactly once').toBe(1)
+        expect(html.split('MARKPHOTOGRAPHER').length - 1, 'the photographer is named once').toBe(1)
+      })
+    }
+  }
+
+  // The shapes a model actually produces with a photo, routed by the classifier.
+  const REALISTIC_PHOTO: { name: string; blocks: ContentBlock[] }[] = [
+    {
+      name: 'a title with a photo',
+      blocks: [{ type: 'heading', text: 'MARKHEAD' }, { type: 'paragraph', text: 'MARKSUB' }, PHOTO],
+    },
+    {
+      name: 'a text slide with a photo',
+      blocks: [
+        { type: 'heading', text: 'MARKHEAD' },
+        { type: 'paragraph', text: 'MARKBODY' },
+        { type: 'paragraph', text: 'MARKSECONDPARA' },
+        PHOTO,
+      ],
+    },
+    {
+      name: 'a stat with a photo',
+      blocks: [{ type: 'heading', text: 'MARKHEAD' }, { type: 'stat', value: 'MARKV', label: 'MARKL' }, PHOTO],
+    },
+    {
+      name: 'a list with a photo',
+      blocks: [{ type: 'heading', text: 'MARKHEAD' }, { type: 'bulletList', items: ['MARKI1', 'MARKI2'] }, PHOTO],
+    },
+    {
+      name: 'a timeline with a photo',
+      blocks: [
+        { type: 'heading', text: 'MARKHEAD' },
+        { type: 'timelineStep', label: 'MARKS1', text: 'MARKT1' },
+        { type: 'timelineStep', label: 'MARKS2', text: 'MARKT2' },
+        PHOTO,
+      ],
+    },
+    {
+      name: 'an image slide',
+      blocks: [{ type: 'heading', text: 'MARKHEAD' }, PHOTO, { type: 'paragraph', text: 'MARKCAPTION' }],
+    },
+    { name: 'a heading and a photo only', blocks: [{ type: 'heading', text: 'MARKHEAD' }, PHOTO] },
+  ]
+  for (const { name, blocks } of REALISTIC_PHOTO) {
+    for (const variant of VARIANTS) {
+      for (const position of [0, 1]) {
+        it(`${name} (${variant}, slide ${position + 1}, automatic layout)`, () => {
+          const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant, position)} />)
+          expectEveryBlockDrawn(html, blocks)
+          expect(creditCount(html)).toBe(1)
+        })
+      }
+    }
+  }
+
+  it('a credit from a pasted link has no credit line', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'MARKHEAD' },
+      { type: 'paragraph', text: 'MARKBODY' },
+      { type: 'image', url: PHOTO_URL, credit: { name: 'x', url: 'https://example.test', source: 'url' } },
+    ]
+    const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', 'structured')} />)
+    expect(creditCount(html)).toBe(0)
+  })
+
+  it('every photo in a gallery carries its own credit', () => {
+    const shot = (n: number): ContentBlock => ({
+      type: 'image',
+      url: `https://example.test/MARKGAL${n}.png`,
+      credit: { name: `Gal${n}`, url: 'https://www.pexels.com/@x', source: 'pexels' },
+    })
+    const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, shot(1), shot(2), shot(3), shot(4)]
+    for (const variant of VARIANTS) {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant)} />)
+      expect(creditCount(html)).toBe(4)
+    }
+  })
+
+  it('a photo with no credit at all draws without one', () => {
+    const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'image', url: PHOTO_URL }]
+    const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', 'structured')} />)
+    expect(creditCount(html)).toBe(0)
+    expect(html).toContain(`src="${PHOTO_URL}"`)
+  })
+
+  describe('where the photo goes', () => {
+    const title: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'paragraph', text: 'MARKSUB' }, PHOTO]
+
+    it('a title slide puts it behind the text, under a dark scrim, with white text', () => {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(title, 'hero', 'structured')} />)
+      expect(html).toContain('data-on-photo')
+      expect(html).toContain('from-black/75')
+    })
+
+    it('a quote slide does the same', () => {
+      const blocks: ContentBlock[] = [{ type: 'quote', text: 'MARKQ' }, PHOTO]
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'quote', 'expressive')} />)
+      expect(html).toContain('data-on-photo')
+      expect(html).toContain('from-black/75')
+    })
+
+    it('a slide with no photo never puts text on one', () => {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(title.slice(0, 2), 'hero', 'structured')} />)
+      expect(html).not.toContain('data-on-photo')
+    })
+
+    it('two photos are not a background: the hero draws them as leftovers', () => {
+      const two: ContentBlock[] = [...title, { ...PHOTO, url: 'https://example.test/MARKSECOND.png' } as ContentBlock]
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(two, 'hero', 'structured')} />)
+      expect(html).not.toContain('data-on-photo')
+    })
+
+    it('a split alternates sides with the slide position', () => {
+      const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'paragraph', text: 'MARKBODY' }, PHOTO]
+      for (const variant of VARIANTS) {
+        const first = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant, 0)} />)
+        const second = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', variant, 1)} />)
+        expect(first.indexOf('MARKBODY'), 'slide 1: text first, photo on the right').toBeLessThan(first.indexOf(`src="`))
+        expect(second.indexOf(`src="`), 'slide 2: photo first, on the left').toBeLessThan(second.indexOf('MARKBODY'))
+      }
+    })
+
+    it('a list gets the photo as a band above its content', () => {
+      const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'bulletList', items: ['MARKI1'] }, PHOTO]
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', 'structured')} />)
+      expect(html.indexOf(`src="`)).toBeLessThan(html.indexOf('MARKHEAD'))
+      expect(html).toContain('aspect-[21/6]')
+    })
+  })
 })
 
 describe('a blank card', () => {

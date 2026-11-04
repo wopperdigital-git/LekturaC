@@ -38,3 +38,21 @@ export function leftoverBlocks(
   })
   return out
 }
+
+/**
+ * The card's one photo, with its index, or `null` unless it holds exactly one.
+ *
+ * Exactly one is the rule the classifier uses (`chooseLayout` sets a single photo
+ * aside and places it by what else the card holds); two or more are a gallery and
+ * are not "the photo" of anything. The layouts that place a photo themselves
+ * (background, split, beside a figure, band, image slide) ask this, so a card
+ * with several images never has one of them promoted to a background.
+ */
+export function singlePhoto(
+  blocks: ContentBlock[],
+): { block: Extract<ContentBlock, { type: 'image' }>; index: number } | null {
+  const found = blocks
+    .map((block, index) => ({ block, index }))
+    .filter((entry): entry is { block: Extract<ContentBlock, { type: 'image' }>; index: number } => entry.block.type === 'image')
+  return found.length === 1 ? found[0] : null
+}

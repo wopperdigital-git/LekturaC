@@ -9,6 +9,8 @@ import {
   BlockAdjustContext,
   BlockDataContext,
   CardBoxContext,
+  FIXED_ELEMENT_ATTR,
+  ON_PHOTO_ATTR,
   blockStyleKey,
   canGrab,
   measurableNode,
@@ -40,7 +42,20 @@ import { useTextEditing } from './textEditingContext'
   it, which is all the selection handler needs.
 */
 
-export function Adjustable({ index, children }: { index: number; children: ReactNode }) {
+export function Adjustable({
+  index,
+  fixed = false,
+  children,
+}: {
+  index: number
+  /**
+   * A fixed element is selectable (a box, the bin) but never nudged: no move,
+   * resize or rotate, not draggable from its body, and a stored nudge is ignored.
+   * The background photo is one — it is the slide's ground, not a thing on it.
+   */
+  fixed?: boolean
+  children: ReactNode
+}) {
   const data = useContext(BlockDataContext)
   const adjusting = useContext(BlockAdjustContext)
   const cardBox = useContext(CardBoxContext)
@@ -49,7 +64,7 @@ export function Adjustable({ index, children }: { index: number; children: React
   const activeRef = useTextEditing()?.activeRef
   const holder = useRef<HTMLDivElement>(null)
   // Selected and not being typed into: a press anywhere on it grabs it to move.
-  const grabbable = adjusting ? canGrab(adjusting, activeRef, index, { button: 0 }) : false
+  const grabbable = adjusting && !fixed ? canGrab(adjusting, activeRef, index, { button: 0 }) : false
 
   const adjust = data?.adjusts?.[String(index)]
   const style = data?.inline?.[blockStyleKey(index)]?.style
@@ -69,7 +84,7 @@ export function Adjustable({ index, children }: { index: number; children: React
     stale transform on screen.
   */
   useLayoutEffect(() => {
-    if (nested) return
+    if (nested || fixed) return
     const node = holder.current && measurableNode(holder.current)
     if (!node) return
 
@@ -85,7 +100,7 @@ export function Adjustable({ index, children }: { index: number; children: React
     node.style.maxWidth = geometry.maxWidth ?? ''
     node.style.maxHeight = geometry.maxHeight ?? ''
 
-    applyTextStyle(node, style, theme)
+    applyTextStyle(node, style, theme, node.closest(`[${ON_PHOTO_ATTR}]`) !== null)
     // The move cursor over the whole element while it can be grabbed (see `index.css`).
     if (grabbable) node.setAttribute('data-element-grabbable', '')
     else node.removeAttribute('data-element-grabbable')
@@ -98,6 +113,7 @@ export function Adjustable({ index, children }: { index: number; children: React
       ref={holder}
       style={{ display: 'contents' }}
       {...{ [BLOCK_INDEX_ATTR]: index }}
+      {...(fixed ? { [FIXED_ELEMENT_ATTR]: '' } : {})}
       onPointerDown={
         adjusting
           ? (event) => {
@@ -110,7 +126,7 @@ export function Adjustable({ index, children }: { index: number; children: React
                 while its text is open: a press there places a caret.
               */
               event.stopPropagation()
-              const grab = canGrab(adjusting, activeRef, index, event)
+              const grab = !fixed && canGrab(adjusting, activeRef, index, event)
               adjusting.select(index)
               if (grab) adjusting.startMove?.(event)
             }
@@ -142,7 +158,7 @@ export function Adjustable({ index, children }: { index: number; children: React
   are preserved and only the multiplier changes, exactly as `TextStyleScope`
   does it one level up.
 */
-function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: ThemeTokens) {
+function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: ThemeTokens, onPhoto: boolean) {
   node.style.textAlign = style?.align ?? ''
   // Room to align *in* — see `stretchesInFlexColumn`. Only for an element
   // somebody has explicitly aligned, so an untouched one keeps the exact size
@@ -160,10 +176,12 @@ function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: 
     reaches the descendants — a layout colours a stat's label or a list item with
     its own utility class, and an inherited colour loses to that.
   */
-  node.style.color = style?.color ?? ''
-  if (style?.color) {
+  // Text on a photo is always white on its scrim (see the on-photo rule in index.css), whatever was picked.
+  const color = onPhoto ? undefined : style?.color
+  node.style.color = color ?? ''
+  if (color) {
     node.setAttribute('data-deck-color', 'true')
-    node.style.setProperty('--slide-user-color', style.color)
+    node.style.setProperty('--slide-user-color', color)
   } else {
     node.removeAttribute('data-deck-color')
     node.style.removeProperty('--slide-user-color')

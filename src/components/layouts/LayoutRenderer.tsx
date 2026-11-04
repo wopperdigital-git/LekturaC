@@ -8,6 +8,7 @@ import { HeroLayout } from './HeroLayout'
 import { StatHeroLayout } from './StatHeroLayout'
 import { QuoteLayout } from './QuoteLayout'
 import { TextFocusLayout } from './TextFocusLayout'
+import { ImageFocusLayout } from './ImageFocusLayout'
 
 /*
   The layouts now drawn by `FlowLayout` rather than a component of their own.
@@ -15,7 +16,7 @@ import { TextFocusLayout } from './TextFocusLayout'
   These are the "families" — layouts describing how a run of items looks. Each
   one moves here as its arrangement is ported into `GroupRenderer`, and its old
   component is deleted in the same change. The frames that describe a whole
-  card (hero, statHero, quote, textFocus, standard, standardSplit) keep their
+  card (hero, statHero, quote, textFocus, standard, standardSplit, imageFocus) keep their
   components.
 
   `LAYOUT_COMPONENTS` below is typed to exclude exactly these names, so moving a
@@ -43,12 +44,11 @@ function rendersAsFlow(layout: Exclude<LayoutType, 'auto'>): layout is FlowLayou
 
 const LAYOUT_COMPONENTS: Record<
   Exclude<LayoutType, 'auto' | FlowLayoutName>,
-  ComponentType<{ blocks: ContentBlock[]; variant: VisualStyle }>
+  ComponentType<{ blocks: ContentBlock[]; variant: VisualStyle; position: number }>
 > = {
   standard: StandardLayout,
   standardSplit: StandardSplitLayout,
-  // Stands in until Task 8 adds ImageFocusLayout (the classifier already awards it).
-  imageFocus: StandardSplitLayout,
+  imageFocus: ImageFocusLayout,
   hero: HeroLayout,
   statHero: StatHeroLayout,
   quote: QuoteLayout,
@@ -79,5 +79,6 @@ export function LayoutRenderer({ card, context }: { card: Card; context?: Layout
     return <FlowLayout blocks={card.blocks} variant={card.visualStyle} hint={card.layout} />
   }
   const Component = LAYOUT_COMPONENTS[resolved]
-  return <Component blocks={card.blocks} variant={card.visualStyle} />
+  // `position` is where the card sits in the deck: a split alternates its photo's side by it.
+  return <Component blocks={card.blocks} variant={card.visualStyle} position={card.orderIndex} />
 }

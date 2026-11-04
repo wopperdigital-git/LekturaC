@@ -463,8 +463,31 @@ body {
   for contrast against the fill, and forcing the picked colour onto it would make
   it unreadable.
 */
-[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *) {
+[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-on-photo] *) {
   color: var(--slide-user-color);
+}
+
+/*
+  Text drawn over a background photo (`PhotoStage`, `data-on-photo`) is white, on the
+  photo's dark scrim, whatever colour was picked at any scope: a photo has no one
+  background for a pick to be checked against, so the scrim decides. `!important`
+  because the colour has to win over the element's own inline colour (an element
+  pick) and a character colour mark, not only over layered utilities. An accent panel
+  keeps its accent-foreground ink, like the rule above.
+
+  The stage lets presses through (the photo behind it is a selectable element), and
+  takes them back only on the elements themselves.
+*/
+[data-on-photo] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *) {
+  color: #fff !important;
+}
+
+[data-on-photo] {
+  pointer-events: none;
+}
+
+[data-on-photo] [data-block-index] > * {
+  pointer-events: auto;
 }
 
 [data-deck-align='left'] :is(h1, h2, h3, h4, p, li, blockquote, figcaption) {

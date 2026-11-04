@@ -228,3 +228,17 @@ export const CardBoxContext = createContext<{ width: number } | null>(null)
  * its three call sites with no ref threaded through any of them.
  */
 export const SLIDE_BODY_ATTR = 'data-slide-body'
+
+/**
+ * Stamped on the holder of a `fixed` element (the background photo): selectable,
+ * but with no move, resize or rotate. The selection layer reads it off the
+ * element it measures to draw a plain outline and put the bin inside the frame.
+ */
+export const FIXED_ELEMENT_ATTR = 'data-fixed-element'
+
+/**
+ * Stamped on the wrapper of text drawn over a background photo. `index.css` makes
+ * everything inside it white, over the scrim, whatever colour anyone picked — a
+ * photo has no single background colour for a pick to be checked against.
+ */
+export const ON_PHOTO_ATTR = 'data-on-photo'

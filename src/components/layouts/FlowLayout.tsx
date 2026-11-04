@@ -1,5 +1,6 @@
 import type { ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { inferGroups, nodeKey } from '@/engine/groups'
+import { singlePhoto } from '@/engine/blockPartition'
 import { BlockRenderer } from './BlockRenderer'
 import { GroupRenderer } from './GroupRenderer'
 
@@ -13,6 +14,12 @@ import { GroupRenderer } from './GroupRenderer'
  * that family used to give the whole card. Nothing can be dropped, because
  * `inferGroups` accounts for every block and this draws every node it returns.
  *
+ * A card with exactly one photo draws it as a band across the top, ahead of the
+ * rest, so every variety of every family keeps working with a photo. Its leaf is
+ * skipped where it sits (by block index) rather than `inferGroups` knowing about
+ * photos: grouping is untouched, and the band is drawn from the same block at the
+ * same index, so nudges and formatting still address it.
+ *
  * `hint` is the card's stored `layout`, forwarded so an explicit choice from the
  * Level 2 picker still decides how a bullet list is arranged.
  */
@@ -25,13 +32,17 @@ export function FlowLayout({
   variant: VisualStyle
   hint: LayoutType
 }) {
+  const photo = singlePhoto(blocks)
   const nodes = inferGroups(blocks, hint)
   // The expressive treatment sets the card's lead heading on an accent panel.
   const lead = nodes.find((node) => node.kind === 'leaf' && node.block.type === 'heading')
   return (
     <div className="flex flex-col gap-6">
+      {photo && (
+        <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[21/6]" />
+      )}
       {nodes.map((node) =>
-        node.kind === 'leaf' ? (
+        node.kind === 'leaf' && photo && node.index === photo.index ? null : node.kind === 'leaf' ? (
           <BlockRenderer
             key={nodeKey(node)}
             block={node.block}

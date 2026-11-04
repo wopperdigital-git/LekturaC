@@ -99,7 +99,7 @@ function videoSlide(o: {
           style={{ width: SLIDE_WIDTH_PX, transformOrigin: 'center center' }}
         >
           <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-            <SlideSurface className="w-full rounded-slide p-10 shadow-slide-card">
+            <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card">
               <SlideBody card={card}>
                 <LayoutRenderer card={card} context={{ isFirstCard }} />
               </SlideBody>

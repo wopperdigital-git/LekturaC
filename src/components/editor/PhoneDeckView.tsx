@@ -94,7 +94,7 @@ export function PhoneDeckView({
                   </h2>
                   <ScaledSlide>
                     <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-                      <SlideSurface className="w-full rounded-slide p-10 shadow-slide-card">
+                      <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card">
                         <SlideBody card={card}>
                           <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
                         </SlideBody>

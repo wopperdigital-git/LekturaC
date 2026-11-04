@@ -146,7 +146,7 @@ export function CardCanvas({
                     it on cannot be expressed by an inner CSS scope. See TextStyleScope.
                   */}
                   <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
-                    <SlideSurface className="w-full rounded-slide p-8 shadow-slide-card sm:p-10">
+                    <SlideSurface className="w-full rounded-slide shadow-slide-card">
                       {/*
                         Only the selected card gets the *text* editing provider, so a
                         stray click can't start typing into a card nobody chose. That

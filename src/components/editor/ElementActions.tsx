@@ -18,15 +18,20 @@ import type { Frame } from '@/engine/frame'
 const BUTTON_PX = 24
 /** Gap between the element's box and the button, so it clears the resize handles. */
 const GAP_PX = 8
+/** Inset from a frame's corner for a button drawn inside it. */
+const INSIDE_PX = 12
 
 export function ElementActions({
   frame,
   removeLabel,
   onRemove,
   onAddItem,
+  inside = false,
 }: {
   frame: Frame
   removeLabel: string
+  /** Draws the bin inside the frame's top-right corner, for an element whose frame is the whole slide. */
+  inside?: boolean
   onRemove?: () => void
   /** Present only for a list that can take another item. */
   onAddItem?: () => void
@@ -50,7 +55,11 @@ export function ElementActions({
           label={removeLabel}
           onClick={onRemove}
           danger
-          style={{ left: frame.w + GAP_PX, top: -BUTTON_PX - GAP_PX / 2 }}
+          style={
+            inside
+              ? { left: frame.w - BUTTON_PX - INSIDE_PX, top: INSIDE_PX }
+              : { left: frame.w + GAP_PX, top: -BUTTON_PX - GAP_PX / 2 }
+          }
         >
           <BinIcon />
         </ActionButton>

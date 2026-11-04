@@ -4,6 +4,7 @@ import { leftoverBlocks } from '@/engine/blockPartition'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { PhotoCredit } from './PhotoCredit'
 import { blockIndexOf, useItemProps } from './adjustContext'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
@@ -21,6 +22,7 @@ export function BlockRenderer({
   index,
   variant,
   headingPanel,
+  photoClass,
 }: {
   block: ContentBlock
   index: number
@@ -28,10 +30,12 @@ export function BlockRenderer({
   variant?: VisualStyle
   /** A heading drawn on the accent panel (the expressive lead heading). */
   headingPanel?: boolean
+  /** Only a photo reads it: how it is cropped and framed (an aspect ratio, a ring). */
+  photoClass?: string
 }) {
   return (
     <Adjustable index={index}>
-      <BlockBody block={block} index={index} variant={variant} headingPanel={headingPanel} />
+      <BlockBody block={block} index={index} variant={variant} headingPanel={headingPanel} photoClass={photoClass} />
     </Adjustable>
   )
 }
@@ -84,11 +88,13 @@ function BlockBody({
   index,
   variant,
   headingPanel,
+  photoClass,
 }: {
   block: ContentBlock
   index: number
   variant?: VisualStyle
   headingPanel?: boolean
+  photoClass?: string
 }) {
   const itemProps = useItemProps()
   switch (block.type) {
@@ -132,13 +138,7 @@ function BlockBody({
         />
       )
     case 'image':
-      return (
-        <img
-          src={block.url}
-          alt={block.alt ?? ''}
-          className="w-full rounded-slide-sm border border-slide-border object-cover"
-        />
-      )
+      return <PhotoFigure block={block} className={photoClass} />
     case 'quote':
       return (
         <blockquote
@@ -180,6 +180,27 @@ function BlockBody({
         </div>
       )
   }
+}
+
+/**
+ * A photo with its credit on its bottom edge. The figure is the one box the
+ * `Adjustable` around it measures, so the credit travels with the picture and is
+ * not an element of its own. `className` crops and frames the picture (the
+ * default keeps its own shape).
+ */
+function PhotoFigure({
+  block,
+  className = '',
+}: {
+  block: Extract<ContentBlock, { type: 'image' }>
+  className?: string
+}) {
+  return (
+    <figure className="relative overflow-hidden rounded-slide-sm border border-slide-border">
+      <img src={block.url} alt={block.alt ?? ''} className={`block w-full object-cover ${className}`} />
+      <PhotoCredit credit={block.credit} />
+    </figure>
+  )
 }
 
 /**

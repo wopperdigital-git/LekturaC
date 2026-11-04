@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from './contentBlocks'
-import { leftoverBlocks } from './blockPartition'
+import { leftoverBlocks, singlePhoto } from './blockPartition'
 
 /**
  * The guard on the defect this module exists for.
@@ -81,5 +81,18 @@ describe('leftoverBlocks', () => {
 
   it('handles an empty card', () => {
     expect(leftoverBlocks([], [])).toEqual([])
+  })
+})
+
+describe('singlePhoto', () => {
+  const photo: ContentBlock = { type: 'image', url: 'https://example.test/a.png' }
+
+  it('finds the one photo with its index', () => {
+    expect(singlePhoto([heading, photo, para])).toEqual({ block: photo, index: 1 })
+  })
+
+  it('is null with no photo, and with two or more', () => {
+    expect(singlePhoto([heading, para])).toBeNull()
+    expect(singlePhoto([heading, photo, para, photo])).toBeNull()
   })
 })

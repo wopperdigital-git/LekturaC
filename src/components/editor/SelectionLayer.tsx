@@ -7,7 +7,7 @@ import { gridCell, snapMove, snapResize } from '@/engine/gridSnap'
 import { useEditorGrid } from './gridContext'
 import { BlockAdjustContext, BlockDataContext } from '@/components/layouts/adjustContext'
 import { currentFrame, measureAt, measureBlock, toAdjust, type Measured } from './measureBlock'
-import { SelectionOverlay, type GestureKind } from './SelectionOverlay'
+import { FixedOutline, SelectionOverlay, type GestureKind } from './SelectionOverlay'
 import { ElementActions } from './ElementActions'
 import { startPendingDrag } from './pointerDrag'
 import { useCanvasZoom } from './zoomContext'
@@ -131,7 +131,7 @@ export function SelectionLayer({
   }, [])
 
   const zoom = useCanvasZoom()
-  const frame = measured && selected !== null ? currentFrame(measured.natural, adjust, measured.card) : null
+  const frame = measured && selected !== null ? currentFrame(measured.natural, measured.fixed ? undefined : adjust, measured.card) : null
 
   /*
     A press on the element's body moves it, through the same `onChange` and
@@ -140,7 +140,7 @@ export function SelectionLayer({
   */
   useLayoutEffect(() => {
     onMoveReady?.(
-      frame
+      frame && !measured?.fixed
       ? (event, onTap) => {
           const start = frame
           startPendingDrag(event, {
@@ -155,6 +155,20 @@ export function SelectionLayer({
   useEffect(() => () => onMoveReady?.(null), [onMoveReady])
 
   if (!measured || selected === null || !frame) return null
+
+  /*
+    A fixed element (the background photo) is selected like any other, but there is
+    nothing to move: an outline round the slide and the bin tucked inside its corner
+    (its frame is the whole slide, so a bin outside it would be clipped away).
+  */
+  if (measured.fixed) {
+    return (
+      <>
+        <FixedOutline frame={frame} />
+        <ElementActions frame={frame} inside removeLabel="Remove photo" onRemove={adjusting?.remove} />
+      </>
+    )
+  }
 
   return (
     <>

@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react'
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
+import { singlePhoto } from '@/engine/blockPartition'
 import { Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
+import { BackgroundPhoto, PhotoStage } from './BackgroundPhoto'
 
 /*
   The quote is a multiple of the theme's h2 step rather than a bare rem, so the
@@ -13,19 +16,36 @@ import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 const STRUCTURED_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 0.9)'
 const EXPRESSIVE_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 1.1)'
 
-/** Cinematic pull-quote treatment for a card built around one verbatim line. */
+/**
+ * Cinematic pull-quote treatment for a card built around one verbatim line. With one
+ * photo, the photo is the slide's ground under a scrim and the quote sits on it, white.
+ */
 export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
   const quote = blocksOfTypeIndexed(blocks, 'quote')[0]
   const paragraph = blocksOfTypeIndexed(blocks, 'paragraph')[0]
   // Only the first quote and first paragraph are drawn here, so a second of
   // either is a leftover rather than content that disappears.
-  const consumed = [...headings, ...(quote ? [quote] : []), ...(paragraph ? [paragraph] : [])].map(
-    (entry) => entry.index,
-  )
+  const photo = singlePhoto(blocks)
+  const consumed = [
+    ...headings,
+    ...(quote ? [quote] : []),
+    ...(paragraph ? [paragraph] : []),
+    ...(photo ? [photo] : []),
+  ].map((entry) => entry.index)
+  // The photo is positioned against the slide, so it is a sibling of the text.
+  const onPhoto = (content: ReactNode) =>
+    photo ? (
+      <>
+        <BackgroundPhoto block={photo.block} index={photo.index} />
+        <PhotoStage justify="center">{content}</PhotoStage>
+      </>
+    ) : (
+      content
+    )
 
   if (variant === 'expressive') {
-    return (
+    return onPhoto(
       <div className="flex flex-col gap-6 py-4">
         {headings.map(({ block, index }, i) => (
           <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} variant="expressive" panel={i === 0} />
@@ -77,11 +97,11 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
           </Adjustable>
         )}
         <Leftovers blocks={blocks} consumed={consumed} />
-      </div>
+      </div>,
     )
   }
 
-  return (
+  return onPhoto(
     <div className="flex flex-col items-center gap-6 py-8 text-center">
       {headings.map(({ block, index }) => (
         <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
@@ -129,6 +149,6 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
         </Adjustable>
       )}
       <Leftovers blocks={blocks} consumed={consumed} />
-    </div>
+    </div>,
   )
 }
