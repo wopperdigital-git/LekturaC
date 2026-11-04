@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { SlideBody } from '@/components/layouts/SlideBody'
 import { SlideSurface, SLIDE_SURFACE_CLASS } from './SlideSurface'
 
 /**
@@ -27,5 +28,22 @@ describe('SlideSurface', () => {
     expect(renderToStaticMarkup(<SlideSurface className="p-8 rounded-slide">x</SlideSurface>)).toContain(
       'p-8 rounded-slide',
     )
+  })
+
+  it('has SlideBody fill the floor and centre the layout inside itself', () => {
+    // Ink, grid and the drawing tools are children of SlideBody, so it must span
+    // the whole slide, not shrink to the content and be centred by the surface.
+    const body = renderToStaticMarkup(
+      <SlideSurface>
+        <SlideBody card={{ adjusts: undefined, inline: undefined, overlay: undefined }}>
+          <p>content</p>
+        </SlideBody>
+      </SlideSurface>,
+    )
+    const bodyTag = body.match(/<div[^>]*data-slide-body[^>]*>/)?.[0] ?? ''
+    expect(bodyTag).toContain('flex-1')
+    expect(bodyTag).toContain('flex-col')
+    expect(bodyTag).toContain('justify-center')
+    expect(bodyTag).toContain('@container')
   })
 })

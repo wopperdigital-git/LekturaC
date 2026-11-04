@@ -32,10 +32,19 @@ const NO_FADING: ReadonlySet<string> = new Set()
  * on a desktop, narrower on a laptop, 800px in a thumbnail, wider again in the
  * presenter. A fraction reproduces the same arrangement at all of them.
  *
- * The wrapper is a plain full-width block, so inserting it changes no layout,
- * and `relative` makes it the origin the selection box measures and positions
+ * `relative` makes it the origin the selection box measures and positions
  * against. It sits *inside* the card's padding, so the coordinate space is the
  * content box — which is what "align this element left" should mean.
+ *
+ * It fills the whole slide, not just the layout's own height. `SlideSurface` is
+ * a 16:9 floor, so a short slide is taller than its content; `flex-1` makes this
+ * box grow to the surface's full content area and the layout is centred inside
+ * it (the inner wrapper), rather than this box shrinking to the content and being
+ * centred by the surface. That matters because everything that draws over the
+ * slide — grid, ink, the pen and shape tools, the selection layers — is a child
+ * of this box, so it spans the empty bands above and below short content, and
+ * its top-left (the grid's and ink's origin) is the slide's, which no longer
+ * moves by half the difference when text grows or shrinks.
  */
 export function SlideBody({
   card,
@@ -91,12 +100,18 @@ export function SlideBody({
   return (
     // `@container`: a layout that changes with width asks this box (the slide's content
     // width), never the screen, so a slide looks the same on every surface and screen
-    // (`slideWidthOnly.test.ts`). Safe because this box always fills a block of set width.
-    <div ref={ref} className="@container relative" {...{ [SLIDE_BODY_ATTR]: true }}>
+    // (`slideWidthOnly.test.ts`). Safe because this box always fills a block of set width
+    // (inline-size containment never affects its height, so the floor can grow it).
+    <div
+      ref={ref}
+      className="@container relative flex flex-1 flex-col justify-center"
+      {...{ [SLIDE_BODY_ATTR]: true }}
+    >
       <CardBoxContext.Provider value={{ width }}>
         <BlockDataContext.Provider value={{ adjusts: card.adjusts, inline: card.inline }}>
           <BlockAdjustContext.Provider value={adjusting}>
-          {children}
+          {/* The layout itself, centred in the full-height box. */}
+          <div>{children}</div>
           {/* The editor's graph paper, in this same content-box space. Gated on
               the interaction context so no other surface can ever show it. */}
           {outer && grid.show && <GridOverlay contentWidth={width} />}
