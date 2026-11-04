@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Photo } from '@/images/types'
-import { addPhotos } from './photos'
+import { addPhotos, withPhotoTimeout, type PhotoSearch } from './photos'
 import { generatedDeckSchema, type GeneratedCard, type GeneratedDeck } from './schemas'
 
 function photo(n: number): Photo {
@@ -208,5 +208,49 @@ describe('generatedCardSchema imageQuery', () => {
   it('still parses a deck without imageQuery', () => {
     const result = generatedDeckSchema.parse(raw())
     expect(result.cards[0].imageQuery).toBeUndefined()
+  })
+})
+
+describe('withPhotoTimeout', () => {
+  it('turns a search that never settles into that card\'s failure, so the deck still arrives photo-less', async () => {
+    vi.useFakeTimers()
+    try {
+      const never: PhotoSearch = () => new Promise<Photo[]>(() => {})
+      const run = addPhotos(deck([card('One', { imageQuery: 'sea' }), card('Two')]), withPhotoTimeout(never, 8000), new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(8001)
+      const out = await run
+      expect(out.cards[0].blocks.some((b) => b.type === 'image')).toBe(false)
+      expect(out.cards).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('passes the search a signal that fires on timeout and on the job signal', async () => {
+    let seen: AbortSignal | undefined
+    const search: PhotoSearch = async (_q, s) => {
+      seen = s
+      return [photo(1)]
+    }
+    const job = new AbortController()
+    const out = await withPhotoTimeout(search, 8000)('sea', job.signal)
+    expect(out).toHaveLength(1)
+    expect(seen?.aborted).toBe(false)
+    job.abort()
+    expect(seen?.aborted).toBe(true)
+  })
+
+  it('leaves a timeout out of cancellation: the job signal stays unaborted', async () => {
+    vi.useFakeTimers()
+    try {
+      const job = new AbortController()
+      const never: PhotoSearch = () => new Promise<Photo[]>(() => {})
+      const p = withPhotoTimeout(never, 100)('sea', job.signal).catch((e) => e)
+      await vi.advanceTimersByTimeAsync(101)
+      expect(await p).toBeInstanceOf(Error)
+      expect(job.signal.aborted).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

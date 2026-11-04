@@ -5,6 +5,30 @@ import type { GeneratedCard, GeneratedDeck } from './schemas'
 /** The search the stage runs for each card; the deck job injects `searchPhotos`. */
 export type PhotoSearch = (query: string, signal?: AbortSignal) => Promise<Photo[]>
 
+/** How long one card's photo search may take before that card goes without a photo. */
+export const PHOTO_SEARCH_TIMEOUT_MS = 8000
+
+/**
+ * Bounds each search: it gets a signal that fires on the job's signal OR the timeout, and the
+ * call itself rejects at the timeout even if the search ignores its signal. The job signal is
+ * never touched, so a timeout is one card's failure (addPhotos decides cancel from the job
+ * signal only), never a cancel.
+ */
+export function withPhotoTimeout(search: PhotoSearch, ms: number = PHOTO_SEARCH_TIMEOUT_MS): PhotoSearch {
+  return (query, signal) => {
+    // A plain timer rather than AbortSignal.timeout: it can be cleared and driven by fake timers.
+    const timer = new AbortController()
+    const combined = signal ? AbortSignal.any([signal, timer.signal]) : timer.signal
+    return new Promise<Photo[]>((resolve, reject) => {
+      const id = setTimeout(() => {
+        reject(new Error('The photo search took too long.'))
+        timer.abort()
+      }, ms)
+      search(query, combined).then(resolve, reject).finally(() => clearTimeout(id))
+    })
+  }
+}
+
 function abortError(): DOMException {
   return new DOMException('Finding photos was cancelled.', 'AbortError')
 }

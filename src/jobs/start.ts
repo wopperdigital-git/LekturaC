@@ -2,7 +2,7 @@ import { FallbackProvider, PROVIDER_CHAIN, QUIZ_CHAIN, generateQuizWithFallback 
 import { quizSlides } from '@/ai/quizPrompt'
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { generatePresentation } from '@/generation/pipeline'
-import { addPhotos } from '@/generation/photos'
+import { addPhotos, withPhotoTimeout } from '@/generation/photos'
 import { imagesConfigured, searchPhotos } from '@/images/pexels'
 import { deleteDraft } from '@/lib/briefDrafts'
 import { warnMissingKey } from '@/lib/setupCopy'
@@ -32,7 +32,7 @@ export function startDeckJob(input: DeckJobInput): boolean {
   return useJobsStore.getState().start(
     deckJobSpec(input, {
       generate: (topic, brief, options) => generatePresentation(new FallbackProvider(PROVIDER_CHAIN), topic, brief, options),
-      addPhotos: (deck, signal) => addPhotos(deck, searchForJob(signal), signal),
+      addPhotos: (deck, signal) => addPhotos(deck, withPhotoTimeout(searchForJob(signal)), signal),
       insert: async (deck, requestedCount, result) => (await insertGeneratedDeck(deck, requestedCount, result)).id,
       deleteDraft,
     }),
