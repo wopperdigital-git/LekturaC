@@ -30,7 +30,8 @@ import type { PipelineResult } from '@/generation/pipeline'
 import { deleteDeckWithVideo, supabasePorts } from '@/video/storage'
 import { inOrder, withCardAfter, withDuplicate, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
-import { withBlockAppended, type ContentType } from '@/engine/newContent'
+import { imageBlock, withBlockAdded, withBlockAppended, withImageReplaced, type ContentType } from '@/engine/newContent'
+import type { Photo } from '@/images/types'
 import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
 
 export interface DeckSummary {
@@ -172,7 +173,18 @@ interface PresentationState {
    * address for marks, nudges and typography, so an insertion would slide every
    * later element's formatting onto its neighbour.
    */
-  addBlock: (cardId: string, type: ContentType) => number | null
+  addBlock: (cardId: string, type: Exclude<ContentType, 'image'>) => number | null
+  /**
+   * Appends a picked photo to the end of a card as an image block and returns its
+   * index — `null` when the card is full. Append-only, like `addBlock`.
+   */
+  addImage: (cardId: string, photo: Photo) => number | null
+  /**
+   * Shows `photo` in the image block at `blockIndex`: url, alt and credit change,
+   * every other block and the card's marks and nudges stay as they are. One undo
+   * step, written immediately. Does nothing when that block is not an image.
+   */
+  replaceImage: (cardId: string, blockIndex: number, photo: Photo) => void
   /**
    * Removes one element from a card outright. Every later element's formatting
    * and nudges are renumbered to follow it. Returns false when there was nothing
@@ -215,9 +227,9 @@ interface PresentationState {
    * layout — see `engine/cardTemplates.ts`. Nothing here calls the AI: a card
    * arrives with placeholder text the user edits in place, which is the only
    * way to add a slide that does not reopen the "content is generated once"
-   * question.
+   * question. An `image` slide is built around `photo`, which it requires.
    */
-  addCard: (kind: CreatableKind, afterCardId: string | null) => string
+  addCard: (kind: CreatableKind, afterCardId: string | null, photo?: Photo) => string
   /** Copies a slide in full and puts the copy right after it. Returns the copy's id, or `null` if there was no such card. */
   duplicateCard: (cardId: string) => string | null
   deleteCard: (cardId: string) => void
@@ -666,6 +678,25 @@ function commitRemoval(set: StatusSetter, get: Getter, cardId: string, removal: 
       adjusts: removal.adjusts ?? {},
     }),
   )
+}
+
+/*
+  Writes a card's new `blocks` as one undo step, immediately, with the card's
+  pending text saves dropped first — each of them captured `blocks` as they were,
+  and one landing afterwards would take the change back out. `inline` goes with
+  `blocks` for the reason `toggleTextMark` gives. `inline` and `adjusts` are not
+  changed: an append or a swap keeps every block at its index.
+*/
+function commitBlocks(set: StatusSetter, get: Getter, cardId: string, blocks: ContentBlock[]) {
+  const card = get().cards.find((c) => c.id === cardId)
+  pushHistory(set, get)
+  set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, blocks } : c)) })
+
+  const id = get().presentationId
+  if (!id) return
+  clearScheduledSave(`blockText:${cardId}`)
+  clearScheduledSave(`inline:${cardId}`)
+  void runSave(set, () => persistCardPatch(cardId, { blocks, inline: card?.inline ?? {} }))
 }
 
 function pushHistory(set: StatusSetter, get: Getter, coalesceKey?: string) {
@@ -1199,6 +1230,23 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     return added.blockIndex
   },
 
+  addImage(cardId, photo) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return null
+    const added = withBlockAdded(card.blocks, imageBlock(photo))
+    if (!added) return null
+    commitBlocks(set, get, cardId, added.blocks)
+    return added.blockIndex
+  },
+
+  replaceImage(cardId, blockIndex, photo) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return
+    const blocks = withImageReplaced(card.blocks, blockIndex, photo)
+    if (!blocks) return
+    commitBlocks(set, get, cardId, blocks)
+  },
+
   removeBlock(cardId, blockIndex) {
     const card = get().cards.find((c) => c.id === cardId)
     if (!card) return false
@@ -1362,7 +1410,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     }
   },
 
-  addCard(kind, afterCardId) {
+  addCard(kind, afterCardId, photo) {
     const previous = get().cards
     pushHistory(set, get)
 
@@ -1371,7 +1419,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       // Placeholder: `withCardAfter` re-derives every index from position, so
       // the value here is overwritten before it is ever read.
       orderIndex: 0,
-      blocks: starterBlocks(kind),
+      blocks: starterBlocks(kind, photo),
       layout: layoutForKind(kind),
       visualStyle: 'structured',
     }

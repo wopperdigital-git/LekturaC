@@ -90,6 +90,10 @@ export interface BlockAdjusting {
   canAddItem?: (blockIndex: number) => boolean
   /** Appends an item to the list at this block index. Behind the plus under a selected list. */
   addItem?: (blockIndex: number) => void
+  /** Whether the block at this index is a photo that Replace can swap. */
+  canReplaceImage?: (blockIndex: number) => boolean
+  /** Opens the photo picker for the image at this block index. Behind Replace beside the bin. */
+  replaceImage?: (blockIndex: number) => void
   /**
    * Starts moving the selected element from a press anywhere on it. It stays a
    * tap (and `onTap` runs) unless the pointer travels far enough to be a drag.

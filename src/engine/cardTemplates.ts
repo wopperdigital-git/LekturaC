@@ -1,5 +1,7 @@
 import type { ContentBlock, LayoutType } from './contentBlocks'
 import type { CardKind } from './layoutEngine'
+import { imageBlock } from './newContent'
+import type { Photo } from '@/images/types'
 
 /*
   The card types a user can *create*.
@@ -25,9 +27,9 @@ import type { CardKind } from './layoutEngine'
  * The types offered in the picker, in the order they appear.
  *
  * `gallery` is deliberately absent, and it is the one type a user cannot create:
- * an image block needs a `url`, and this app has no way to supply one —
- * images arrive only from generation. Offering it would hand the user a card of
- * broken images with no way to fix them.
+ * it holds several photos and the picker chooses one at a time. `image` is a
+ * heading, one photo and a caption; choosing it opens the photo picker, and the
+ * card exists only once a photo has been picked (`starterBlocks` needs it).
  */
 export const CREATABLE_KINDS = [
   'title',
@@ -37,6 +39,7 @@ export const CREATABLE_KINDS = [
   'timeline',
   'comparison',
   'quote',
+  'image',
 ] as const satisfies readonly CardKind[]
 
 export type CreatableKind = (typeof CREATABLE_KINDS)[number]
@@ -50,6 +53,7 @@ export const KIND_DESCRIPTIONS: Record<CreatableKind, string> = {
   timeline: 'Ordered steps or stages, each with a label',
   comparison: 'Two or more sets of points, side by side',
   quote: 'One quotation, with who said it',
+  image: 'A photo with a title and a caption',
 }
 
 /*
@@ -60,7 +64,7 @@ export const KIND_DESCRIPTIONS: Record<CreatableKind, string> = {
   "Label" does not. Every one of these is editable in place, so the text a card
   starts with is the only guidance the user gets.
 */
-const STARTERS: Record<CreatableKind, ContentBlock[]> = {
+const STARTERS: Record<Exclude<CreatableKind, 'image'>, ContentBlock[]> = {
   title: [
     { type: 'heading', text: 'Slide title' },
     { type: 'paragraph', text: 'One line on what this section covers' },
@@ -97,8 +101,19 @@ const STARTERS: Record<CreatableKind, ContentBlock[]> = {
   ],
 }
 
-/** The blocks a newly added card of this type starts with. */
-export function starterBlocks(kind: CreatableKind): ContentBlock[] {
+/**
+ * The blocks a newly added card of this type starts with. An `image` card is built
+ * around a photo the user has already picked, so it requires one.
+ */
+export function starterBlocks(kind: CreatableKind, photo?: Photo): ContentBlock[] {
+  if (kind === 'image') {
+    if (!photo) throw new Error('An image slide is created from a picked photo.')
+    return [
+      { type: 'heading', text: 'Image title' },
+      imageBlock(photo),
+      { type: 'paragraph', text: 'Add a caption' },
+    ]
+  }
   // Deep-copied: the constant above would otherwise be shared by every card
   // created in the session, and editing one card's text would edit them all.
   return STARTERS[kind].map((block) => structuredClone(block))
@@ -115,7 +130,8 @@ export function starterBlocks(kind: CreatableKind): ContentBlock[] {
  * picker's Automatic option hands it straight back to the classifier.
  */
 export function layoutForKind(kind: CreatableKind): LayoutType {
-  return kind === 'title' ? 'hero' : 'auto'
+  if (kind === 'title') return 'hero'
+  return kind === 'image' ? 'imageFocus' : 'auto'
 }
 
 /**

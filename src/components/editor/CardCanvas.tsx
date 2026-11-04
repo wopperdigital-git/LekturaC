@@ -46,6 +46,7 @@ export function CardCanvas({
   onChangeAdjust,
   onRemoveSelected,
   onAddItem,
+  onReplaceImage,
   onDuplicateCard,
   onDeleteCard,
   zoom = 1,
@@ -72,6 +73,8 @@ export function CardCanvas({
   onRemoveSelected: () => void
   /** The plus under a selected list: appends an item to the list at this block index. */
   onAddItem: (blockIndex: number) => void
+  /** Replace on a selected photo: opens the picker for the image at this block index. */
+  onReplaceImage: (blockIndex: number) => void
   /** The buttons above the selected slide's top-right corner. */
   onDuplicateCard: (cardId: string) => void
   onDeleteCard: (cardId: string) => void
@@ -189,6 +192,8 @@ export function CardCanvas({
                           remove: onRemoveSelected,
                           canAddItem: (blockIndex) => listTarget(card.blocks, blockIndex) === blockIndex,
                           addItem: onAddItem,
+                          canReplaceImage: (blockIndex) => card.blocks[blockIndex]?.type === 'image',
+                          replaceImage: onReplaceImage,
                         }}
                       >
                         {isSelected ? (

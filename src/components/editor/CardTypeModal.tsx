@@ -148,6 +148,16 @@ const SHAPES: Record<CreatableKind, ReactNode> = {
       ))}
     </>
   ),
+  // A framed photo: a sun and a ridge, with a caption bar under it.
+  image: (
+    <>
+      <rect x={6} y={3.5} width={36} height={14} rx={1.5} fill="currentColor" fillOpacity={0.12} stroke="currentColor" strokeOpacity={0.3} strokeWidth={0.6} />
+      <circle cx={13} cy={8} r={1.7} fill="currentColor" fillOpacity={0.55} />
+      <path d="M6 16l9-5 6 3.5 5-3.5 16 5.5v.5a1.5 1.5 0 0 1-1.5 1.5H7.5A1.5 1.5 0 0 1 6 17.5V16Z" fill="currentColor" fillOpacity={0.3} />
+      {bar(6, 21, 22, 2.4, 0.75)}
+      {bar(6, 25, 14, 1.4, 0.3)}
+    </>
+  ),
   // Oversized quote mark beside the words.
   quote: (
     <>

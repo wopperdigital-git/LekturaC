@@ -1,4 +1,5 @@
-import type { ContentBlock } from './contentBlocks'
+import type { ContentBlock, ImageBlock } from './contentBlocks'
+import type { Photo } from '@/images/types'
 import { NEW_ITEM_TEXT } from './listItems'
 
 /*
@@ -26,14 +27,15 @@ export const CONTENT_TYPES = [
   'quote',
   'step',
   'group',
+  'image',
 ] as const
 
 export type ContentType = (typeof CONTENT_TYPES)[number]
 
 /**
  * What the toolbar's Insert menu shows for each type, in the order it shows them.
- * `image` is deliberately absent for the reason it is absent from the slide-type
- * picker: an image block needs a `url` and nothing in the app can supply one.
+ * `image` opens the photo picker: the block is added only once a photo is picked,
+ * because an image block needs a `url`.
  */
 export const CONTENT_OPTIONS: readonly { type: ContentType; label: string; description: string }[] = [
   { type: 'h1', label: 'Heading 1', description: 'Largest heading' },
@@ -45,6 +47,7 @@ export const CONTENT_OPTIONS: readonly { type: ContentType; label: string; descr
   { type: 'quote', label: 'Quote', description: 'A quotation' },
   { type: 'step', label: 'Timeline step', description: 'A labelled stage in a sequence' },
   { type: 'group', label: 'Comparison group', description: 'A titled set of points' },
+  { type: 'image', label: 'Image', description: 'A photo you search for or paste a link to' },
 ]
 
 const CONTENT_TYPE_OF: Record<Exclude<ContentBlock['type'], 'heading' | 'image'>, ContentType> = {
@@ -109,8 +112,26 @@ export function isPlaceholderText(text: string): boolean {
   return PLACEHOLDERS.has(text)
 }
 
+/** An image block for a picked photo, with the credit the slide shows. */
+export function imageBlock(photo: Photo): ImageBlock {
+  return { type: 'image', url: photo.url, alt: photo.alt, credit: { ...photo.credit } }
+}
+
+/**
+ * `blocks` with the image at `blockIndex` showing `photo` instead: url, alt and
+ * credit are rewritten, every other field and every other block is kept (the
+ * block keeps its index, so nothing keyed by it moves). `null` when that block is
+ * not an image. The input is never mutated.
+ */
+export function withImageReplaced(blocks: ContentBlock[], blockIndex: number, photo: Photo): ContentBlock[] | null {
+  const block = blocks[blockIndex]
+  if (!block || block.type !== 'image') return null
+  const next: ImageBlock = { ...block, url: photo.url, alt: photo.alt, credit: { ...photo.credit } }
+  return blocks.map((b, i) => (i === blockIndex ? next : b))
+}
+
 /** A fresh block of this type, carrying placeholder text. */
-export function newBlock(type: ContentType): ContentBlock {
+export function newBlock(type: Exclude<ContentType, 'image'>): ContentBlock {
   switch (type) {
     case 'h1':
     case 'h2':
@@ -137,10 +158,18 @@ export function newBlock(type: ContentType): ContentBlock {
  */
 export function withBlockAppended(
   blocks: ContentBlock[],
-  type: ContentType,
+  type: Exclude<ContentType, 'image'>,
+): { blocks: ContentBlock[]; blockIndex: number } | null {
+  return withBlockAdded(blocks, newBlock(type))
+}
+
+/** The same append for a block that is already built (an image, which needs its photo). */
+export function withBlockAdded(
+  blocks: ContentBlock[],
+  block: ContentBlock,
 ): { blocks: ContentBlock[]; blockIndex: number } | null {
   if (blocks.length >= MAX_BLOCKS) return null
-  return { blocks: [...blocks, newBlock(type)], blockIndex: blocks.length }
+  return { blocks: [...blocks, block], blockIndex: blocks.length }
 }
 
 /**
@@ -163,7 +192,7 @@ export function firstEditableField(block: ContentBlock): { field: string; item?:
     case 'comparisonGroup':
       return { field: 'heading' }
     case 'image':
-      // Never created here; named only so the switch stays exhaustive.
+      // Never opened for typing (a photo has no text run); named only so the switch stays exhaustive.
       return { field: 'text' }
   }
 }

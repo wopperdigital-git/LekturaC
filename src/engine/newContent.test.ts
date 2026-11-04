@@ -7,12 +7,21 @@ import {
   MAX_BLOCKS,
   elementLabel,
   firstEditableField,
+  imageBlock,
+  withImageReplaced,
   isPlaceholderText,
   newBlock,
   withBlockAppended,
 } from './newContent'
 import { blockFieldText, parseTextRef } from './blockText'
 import { textRef } from './marks'
+import type { Photo } from '@/images/types'
+
+const PHOTO: Photo = {
+  url: 'https://images.pexels.com/photos/1/photo.jpeg',
+  alt: 'A mountain lake',
+  credit: { name: 'Ada Lens', url: 'https://www.pexels.com/@ada', source: 'pexels' },
+}
 
 const HEADING: ContentBlock = { type: 'heading', text: 'Title' }
 const BODY: ContentBlock = { type: 'paragraph', text: 'Body' }
@@ -20,7 +29,7 @@ const BODY: ContentBlock = { type: 'paragraph', text: 'Body' }
 describe('newBlock', () => {
   // A block the schema rejects would be stored, fail to parse on the next read,
   // and take the card with it.
-  it.each(CONTENT_TYPES)('%s produces a block the content schema accepts', (type) => {
+  it.each(CONTENT_TYPES.filter((t) => t !== 'image'))('%s produces a block the content schema accepts', (type) => {
     expect(contentBlockSchema.safeParse(newBlock(type)).success).toBe(true)
   })
 
@@ -36,6 +45,13 @@ describe('newBlock', () => {
     expect(first).not.toBe(second)
     if (first.type === 'bulletList') first.items[0] = 'Edited'
     expect(second).toMatchObject({ items: [NEW_ITEM_TEXT] })
+  })
+
+  it('an image is built from a photo, never from placeholder text', () => {
+    expect(imageBlock(PHOTO)).toEqual({ type: 'image', url: PHOTO.url, alt: PHOTO.alt, credit: PHOTO.credit })
+    expect(contentBlockSchema.safeParse(imageBlock(PHOTO)).success).toBe(true)
+    // Its credit is its own copy: editing a block must not edit the picker's result.
+    expect(imageBlock(PHOTO).credit).not.toBe(PHOTO.credit)
   })
 
   it('offers every type in the menu exactly once', () => {
@@ -74,7 +90,7 @@ describe('withBlockAppended', () => {
 describe('firstEditableField', () => {
   // The caret is opened at this address straight after adding, so it has to name
   // a run that actually exists on the new block — otherwise nothing opens.
-  it.each(CONTENT_TYPES)('%s points at a real, placeholder-filled run', (type) => {
+  it.each(CONTENT_TYPES.filter((t) => t !== 'image'))('%s points at a real, placeholder-filled run', (type) => {
     const block = newBlock(type)
     const { field, item } = firstEditableField(block)
     const ref = parseTextRef(textRef(0, field, item))!
@@ -99,7 +115,8 @@ describe('isPlaceholderText', () => {
 describe('elementLabel', () => {
   it('names every insertable type as the Insert menu does', () => {
     for (const option of CONTENT_OPTIONS) {
-      expect(elementLabel(newBlock(option.type))).toBe(option.label)
+      const block = option.type === 'image' ? imageBlock(PHOTO) : newBlock(option.type)
+      expect(elementLabel(block)).toBe(option.label)
     }
   })
 
@@ -112,5 +129,33 @@ describe('elementLabel', () => {
     expect(elementLabel({ type: 'bulletList', items: ['a'] }, 0)).toBe('List item')
     expect(elementLabel({ type: 'comparisonGroup', heading: 'H', items: ['a'] }, 0)).toBe('Group item')
     expect(elementLabel({ type: 'bulletList', items: ['a'] })).toBe('Bullet list')
+  })
+})
+
+describe('withImageReplaced', () => {
+  const OLD: ContentBlock = {
+    type: 'image',
+    url: 'https://old.example/a.jpg',
+    alt: 'Old',
+    prompt: 'a lake at dawn',
+    credit: { name: 'Old', url: 'https://old.example', source: 'url' },
+  }
+
+  it('rewrites url, alt and credit and leaves every other block alone', () => {
+    const blocks = [HEADING, OLD, BODY]
+    const next = withImageReplaced(blocks, 1, PHOTO)!
+    expect(next[1]).toMatchObject({ type: 'image', url: PHOTO.url, alt: PHOTO.alt, credit: PHOTO.credit })
+    expect(next[0]).toBe(blocks[0])
+    expect(next[2]).toBe(blocks[2])
+    expect(blocks[1]).toBe(OLD)
+  })
+
+  it('keeps the block prompt', () => {
+    expect((withImageReplaced([OLD], 0, PHOTO)![0] as { prompt?: string }).prompt).toBe('a lake at dawn')
+  })
+
+  it('is null for a block that is not an image', () => {
+    expect(withImageReplaced([HEADING, OLD], 0, PHOTO)).toBeNull()
+    expect(withImageReplaced([HEADING, OLD], 5, PHOTO)).toBeNull()
   })
 })

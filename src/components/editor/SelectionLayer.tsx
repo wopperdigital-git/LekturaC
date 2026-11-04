@@ -156,6 +156,13 @@ export function SelectionLayer({
 
   if (!measured || selected === null || !frame) return null
 
+  // Replace rides beside the bin whenever the selected element is a photo — including the
+  // background photo of a hero or quote slide, which is a fixed element.
+  const replace =
+    !itemPicked && adjusting?.canReplaceImage?.(selected) && adjusting.replaceImage
+      ? () => adjusting.replaceImage?.(selected)
+      : undefined
+
   /*
     A fixed element (the background photo) is selected like any other, but there is
     nothing to move: an outline round the slide and the bin tucked inside its corner
@@ -165,7 +172,13 @@ export function SelectionLayer({
     return (
       <>
         <FixedOutline frame={frame} />
-        <ElementActions frame={frame} inside removeLabel="Remove photo" onRemove={adjusting?.remove} />
+        <ElementActions
+          frame={frame}
+          inside
+          removeLabel="Remove photo"
+          onRemove={adjusting?.remove}
+          onReplace={replace}
+        />
       </>
     )
   }
@@ -177,6 +190,7 @@ export function SelectionLayer({
         frame={frame}
         removeLabel={itemPicked ? 'Remove item' : 'Remove element'}
         onRemove={adjusting?.remove}
+        onReplace={replace}
         onAddItem={
           adjusting?.canAddItem?.(selected) && adjusting.addItem
             ? () => adjusting.addItem?.(selected)

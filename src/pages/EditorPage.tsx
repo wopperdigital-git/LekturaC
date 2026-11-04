@@ -33,6 +33,8 @@ import { modalIsOpen } from '@/lib/modalOpen'
 import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
 import { CardTypeModal } from '@/components/editor/CardTypeModal'
+import { ImagePicker } from '@/components/images/ImagePicker'
+import type { Photo } from '@/images/types'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
@@ -71,6 +73,12 @@ import { editorLayout } from '@/lib/editorLayout'
 import { useEditorLayout } from '@/lib/useEditorLayout'
 
 const SIDEBAR_WIDTH_PX = 160
+
+/** What picking a photo does: start an image slide, add an image to a slide, or swap one. */
+type PhotoRequest =
+  | { kind: 'slide' }
+  | { kind: 'insert'; cardId: string }
+  | { kind: 'replace'; cardId: string; blockIndex: number }
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -124,6 +132,9 @@ export function EditorPage() {
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null)
   // Whether the add-a-slide type picker is open.
   const [addSlideOpen, setAddSlideOpen] = useState(false)
+  // The photo picker, and what a pick does: start a new image slide, add an image to the selected
+  // slide, or replace one. Nothing exists until a photo is picked; cancelling creates nothing.
+  const [photoRequest, setPhotoRequest] = useState<PhotoRequest | null>(null)
   // Whether the quiz generation dialog is open. Guarded like `addSlideOpen`.
   const [quizOpen, setQuizOpen] = useState(false)
   const [quizTab, setQuizTab] = useState<'create' | 'list'>('create')
@@ -625,7 +636,7 @@ export function EditorPage() {
       remove: removeSelected,
       // Escape leaves the pen before it steps the selection out.
       escape: () => (tool === 'pen' || tool === 'shape' ? setTool('select') : stepOut()),
-      dialogOpen: addSlideOpen || quizOpen || pendingDeleteId !== null,
+      dialogOpen: addSlideOpen || quizOpen || photoRequest !== null || pendingDeleteId !== null,
     }
   })
 
@@ -692,7 +703,7 @@ export function EditorPage() {
     Reports whether it removed anything so the key is only swallowed when it did.
   */
   function removeSelected(fromButton = false): boolean {
-    if (!fromButton && (activeTextRef || addSlideOpen || quizOpen)) return false
+    if (!fromButton && (activeTextRef || addSlideOpen || quizOpen || photoRequest)) return false
     // A selected shape is what Backspace removes while shapes are selectable.
     if (activeShape && tool === 'select') {
       removeShape(activeShape.cardId, activeShape.id, activeShape.keep)
@@ -723,7 +734,7 @@ export function EditorPage() {
 
   // One step back out: item to list, list to card.
   function stepOut() {
-    if (activeTextRef || addSlideOpen || quizOpen) return
+    if (activeTextRef || addSlideOpen || quizOpen || photoRequest) return
     if (activeShape) {
       setSelectedShape(null)
       return
@@ -888,6 +899,11 @@ export function EditorPage() {
   */
   function addContent(type: ContentType) {
     if (!selectedCard) return
+    // A photo is chosen first; the block exists only once one is picked.
+    if (type === 'image') {
+      setPhotoRequest({ kind: 'insert', cardId: selectedCard.id })
+      return
+    }
     const blockIndex = store.addBlock(selectedCard.id, type)
     if (blockIndex === null) return
     // Read back from the store rather than rebuilt here: the block was just
@@ -921,13 +937,42 @@ export function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCard, selectedBlockIndex, activeTextRef])
 
-  function addCardOfKind(kind: CreatableKind) {
+  function addCardOfKind(kind: CreatableKind, photo?: Photo) {
     // After the card the user is looking at — the selected one if there is one,
     // otherwise whichever the rail has highlighted.
-    const newCardId = store.addCard(kind, selectedCardId ?? activeCardId)
+    const newCardId = store.addCard(kind, selectedCardId ?? activeCardId, photo)
     setActiveCardId(newCardId)
     selectCard(newCardId)
     setPendingScrollId(newCardId)
+  }
+
+  /*
+    A photo was picked. Closes the picker here: it does not close itself on a pick.
+    The target card or block is read again from the store, since an undo may have
+    removed it while the picker was open.
+  */
+  function photoPicked(photo: Photo) {
+    const request = photoRequest
+    setPhotoRequest(null)
+    if (!request) return
+    if (request.kind === 'slide') {
+      addCardOfKind('image', photo)
+    } else if (request.kind === 'insert') {
+      const blockIndex = store.addImage(request.cardId, photo)
+      if (blockIndex === null) return
+      apply({ cardId: request.cardId, blockIndex, itemIndex: null })
+      setActiveTextRef(null)
+      setTextRange(null)
+    } else {
+      store.replaceImage(request.cardId, request.blockIndex, photo)
+    }
+  }
+
+  // The picker's starting search: the photo's own description when replacing one.
+  function photoSearchStart(request: PhotoRequest): string {
+    if (request.kind !== 'replace') return ''
+    const block = usePresentationStore.getState().cards.find((c) => c.id === request.cardId)?.blocks[request.blockIndex]
+    return block?.type === 'image' ? (block.alt ?? '') : ''
   }
 
   function duplicateCard(cardId: string) {
@@ -1304,6 +1349,9 @@ export function EditorPage() {
                 onChangeAdjust={store.setBlockAdjust}
                 onRemoveSelected={() => void removeSelected(true)}
                 onAddItem={addListItem}
+                onReplaceImage={(blockIndex) => {
+                  if (selectedCard) setPhotoRequest({ kind: 'replace', cardId: selectedCard.id, blockIndex })
+                }}
                 onDuplicateCard={duplicateCard}
                 onDeleteCard={setPendingDeleteId}
                 zoom={zoom}
@@ -1425,11 +1473,19 @@ export function EditorPage() {
         <CardTypeModal
           onClose={() => setAddSlideOpen(false)}
           onPick={(kind) => {
-            addCardOfKind(kind)
             setAddSlideOpen(false)
+            // An image slide waits for its photo; the others are created now.
+            if (kind === 'image') setPhotoRequest({ kind: 'slide' })
+            else addCardOfKind(kind)
           }}
         />
       )}
+      <ImagePicker
+        open={photoRequest !== null}
+        onClose={() => setPhotoRequest(null)}
+        onPick={photoPicked}
+        initialQuery={photoRequest ? photoSearchStart(photoRequest) : ''}
+      />
       {pendingDeleteId !== null &&
         (() => {
           const index = sortedCards.findIndex((c) => c.id === pendingDeleteId)

@@ -8,6 +8,7 @@ import {
 } from './cardTemplates'
 import { cardKind, layoutVarieties, resolveLayout } from './layoutEngine'
 import type { ContentBlock } from './contentBlocks'
+import type { Photo } from '@/images/types'
 
 /*
   The one promise the picker makes: the type you pick is the type you get.
@@ -20,15 +21,24 @@ import type { ContentBlock } from './contentBlocks'
 */
 
 /** The context a card of this kind sits in — `title` only classifies as one at the front. */
+const PHOTO: Photo = {
+  url: 'https://images.pexels.com/photos/1/photo.jpeg',
+  alt: 'A mountain lake',
+  credit: { name: 'Ada Lens', url: 'https://www.pexels.com/@ada', source: 'pexels' },
+}
+
+/** A kind's starter blocks; an image slide needs the photo it is created with. */
+const starter = (kind: CreatableKind) => starterBlocks(kind, PHOTO)
+
 const contextFor = (kind: CreatableKind) => ({ isFirstCard: kind === 'title' })
 
 describe('starterBlocks', () => {
   it.each(CREATABLE_KINDS)('a new %s card reads back as that type', (kind) => {
-    expect(cardKind(starterBlocks(kind), contextFor(kind))).toBe(kind)
+    expect(cardKind(starter(kind), contextFor(kind))).toBe(kind)
   })
 
   it.each(CREATABLE_KINDS)('a new %s card resolves to a layout its own picker offers', (kind) => {
-    const blocks = starterBlocks(kind)
+    const blocks = starter(kind)
     const resolved = resolveLayout(layoutForKind(kind), blocks, contextFor(kind))
     const offered = layoutVarieties(blocks, kind).map((v) => v.layout)
     expect(offered).toContain(resolved)
@@ -46,10 +56,26 @@ describe('starterBlocks', () => {
     expect(resolveLayout(layoutForKind('title'), blocks, { isFirstCard: false })).toBe('hero')
   })
 
-  it('leaves every other type on the classifier', () => {
-    for (const kind of CREATABLE_KINDS.filter((k) => k !== 'title')) {
+  it('leaves every other type on the classifier, except an image slide', () => {
+    for (const kind of CREATABLE_KINDS.filter((k) => k !== 'title' && k !== 'image')) {
       expect(layoutForKind(kind)).toBe('auto')
     }
+  })
+
+  it('names the photo layout for an image slide', () => {
+    expect(layoutForKind('image')).toBe('imageFocus')
+  })
+
+  it('builds an image slide from the photo: heading, the image with its credit, a caption', () => {
+    expect(starterBlocks('image', PHOTO)).toEqual([
+      { type: 'heading', text: 'Image title' },
+      { type: 'image', url: PHOTO.url, alt: PHOTO.alt, credit: PHOTO.credit },
+      { type: 'paragraph', text: 'Add a caption' },
+    ])
+  })
+
+  it('refuses to build an image slide without a photo', () => {
+    expect(() => starterBlocks('image')).toThrow()
   })
 
   /*

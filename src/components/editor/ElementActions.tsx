@@ -25,6 +25,7 @@ export function ElementActions({
   frame,
   removeLabel,
   onRemove,
+  onReplace,
   onAddItem,
   inside = false,
 }: {
@@ -33,6 +34,8 @@ export function ElementActions({
   /** Draws the bin inside the frame's top-right corner, for an element whose frame is the whole slide. */
   inside?: boolean
   onRemove?: () => void
+  /** Present only for a photo: opens the picker to swap it. Drawn beside the bin. */
+  onReplace?: () => void
   /** Present only for a list that can take another item. */
   onAddItem?: () => void
 }) {
@@ -62,6 +65,22 @@ export function ElementActions({
           }
         >
           <BinIcon />
+        </ActionButton>
+      )}
+
+      {onReplace && (
+        // Left of the bin, same row, so the pair reads as one set of actions on the photo
+        // (and further from the slide's edge than the bin is).
+        <ActionButton
+          label="Replace photo"
+          onClick={onReplace}
+          style={
+            inside
+              ? { left: frame.w - 2 * BUTTON_PX - INSIDE_PX - GAP_PX, top: INSIDE_PX }
+              : { left: frame.w - BUTTON_PX, top: -BUTTON_PX - GAP_PX / 2 }
+          }
+        >
+          <ReplaceIcon />
         </ActionButton>
       )}
 
@@ -136,6 +155,14 @@ export function BinIcon() {
   return (
     <svg {...stroke}>
       <path d="M4 6h12M8 6V4.2h4V6M5.5 6l.7 10a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9l.7-10M8.5 9.5v4.5M11.5 9.5v4.5" />
+    </svg>
+  )
+}
+
+function ReplaceIcon() {
+  return (
+    <svg {...stroke}>
+      <path d="M4 7.5h10.5M12 4.5l3 3-3 3M16 12.5H5.5M8 9.5l-3 3 3 3" />
     </svg>
   )
 }

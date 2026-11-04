@@ -3,7 +3,7 @@ import { RENDERERS, fitCard, fittedPointSize, type PptxSlide } from './slideRend
 import { slideGroup } from './slideGroup'
 import { cardBoxes } from './blockBoxes'
 import { DEFAULT_THEME } from '@/lib/theme-tokens'
-import { CREATABLE_KINDS, layoutForKind, starterBlocks } from '@/engine/cardTemplates'
+import { CREATABLE_KINDS, layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
 import { textRef } from '@/engine/marks'
 import {
@@ -228,9 +228,17 @@ describe('exporting a blank card', () => {
   )
 })
 
+/** A kind's starter blocks; an image slide is created from a picked photo. */
+const starter = (kind: CreatableKind) =>
+  starterBlocks(kind, {
+    url: 'https://images.pexels.com/photos/1/photo.jpeg',
+    alt: 'A mountain lake',
+    credit: { name: 'Ada Lens', url: 'https://www.pexels.com/@ada', source: 'pexels' },
+  })
+
 describe('exporting a card of each creatable type', () => {
   it.each(CREATABLE_KINDS)('carries every word of a new %s card onto the slide', (kind) => {
-    const blocks = starterBlocks(kind)
+    const blocks = starter(kind)
     const slide = render(cardOf(blocks, layoutForKind(kind)), kind === 'title')
     const written = slide.texts.map((t) => t.text).join('\n')
 
@@ -246,7 +254,7 @@ describe('exporting a card of each creatable type', () => {
   })
 
   it.each(CREATABLE_KINDS)('gives a new %s card at least one text box', (kind) => {
-    const slide = render(cardOf(starterBlocks(kind), layoutForKind(kind)), kind === 'title')
+    const slide = render(cardOf(starter(kind), layoutForKind(kind)), kind === 'title')
     expect(slide.texts.length).toBeGreaterThan(0)
   })
 
@@ -256,7 +264,7 @@ describe('exporting a card of each creatable type', () => {
     this notices.
   */
   it.each(CREATABLE_KINDS)('never writes an empty text box for a new %s card', (kind) => {
-    const slide = render(cardOf(starterBlocks(kind), layoutForKind(kind)), kind === 'title')
+    const slide = render(cardOf(starter(kind), layoutForKind(kind)), kind === 'title')
     for (const box of slide.texts) {
       expect(box.text.trim()).not.toBe('')
     }
@@ -277,7 +285,7 @@ describe('exporting a card of each creatable type', () => {
     // LAYOUT_16x9 is 10 x 5.625 inches. A box positioned off the canvas is
     // invisible in PowerPoint but perfectly valid in the file.
     for (const kind of CREATABLE_KINDS) {
-      const slide = render(cardOf(starterBlocks(kind), layoutForKind(kind)), kind === 'title')
+      const slide = render(cardOf(starter(kind), layoutForKind(kind)), kind === 'title')
       for (const box of [...slide.texts, ...slide.shapes]) {
         const { x, y, w, h } = box.options as { x: number; y: number; w: number; h: number }
         expect(x).toBeGreaterThanOrEqual(0)
@@ -942,7 +950,7 @@ describe('starter cards as stored data', () => {
     with no items — would be a row that cannot survive a round trip.
   */
   it.each(CREATABLE_KINDS)('a new %s card validates against the block schema', (kind) => {
-    for (const block of starterBlocks(kind)) {
+    for (const block of starter(kind)) {
       expect(contentBlockSchema.safeParse(block).success).toBe(true)
     }
   })

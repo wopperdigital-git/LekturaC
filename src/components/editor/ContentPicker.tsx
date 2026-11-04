@@ -87,6 +87,13 @@ const PICTURES: Record<ContentType, ReactNode> = {
       <Bar x={21} y={25} w={24} h={3} />
     </>
   ),
+  image: (
+    <>
+      <rect x={10} y={7} width={44} height={26} rx={3} fill={INK} fillOpacity={0.08} stroke={INK} strokeOpacity={0.25} />
+      <circle cx={21} cy={15} r={3} fill={ACCENT} />
+      <path d="M10 29l12-9 8 6 8-8 16 11v3a3 3 0 0 1-3 3H13a3 3 0 0 1-3-3v-3Z" fill={INK} fillOpacity={0.3} />
+    </>
+  ),
   group: (
     <>
       <rect x={8.5} y={6.5} width={47} height={27} rx={3} fill={INK} fillOpacity={0.05} stroke={INK} strokeOpacity={0.2} />
