@@ -2,7 +2,10 @@ import { FallbackProvider, PROVIDER_CHAIN, QUIZ_CHAIN, generateQuizWithFallback 
 import { quizSlides } from '@/ai/quizPrompt'
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { generatePresentation } from '@/generation/pipeline'
+import { addPhotos } from '@/generation/photos'
+import { imagesConfigured, searchPhotos } from '@/images/pexels'
 import { deleteDraft } from '@/lib/briefDrafts'
+import { warnMissingKey } from '@/lib/setupCopy'
 import { createQuiz } from '@/quiz/api'
 import { buildQuestions } from '@/quiz/build'
 import type { SectionRequest } from '@/quiz/sections'
@@ -15,10 +18,21 @@ import { videoJobSpec, type VideoJobInput } from './videoJob'
 
 /** The real dependencies for each job. Every start returns false when a job of that kind is running. */
 
+/** Without a key nothing is searched, but addPhotos still strips any image the model invented. */
+const searchForJob = (signal: AbortSignal) =>
+  imagesConfigured ? (query: string, s?: AbortSignal) => searchPhotos(query, { signal: s ?? signal }) : async () => []
+
+let warnedNoPhotos = false
+
 export function startDeckJob(input: DeckJobInput): boolean {
+  if (!imagesConfigured && !warnedNoPhotos) {
+    warnedNoPhotos = true
+    warnMissingKey('Photos', 'VITE_PEXELS_API_KEY')
+  }
   return useJobsStore.getState().start(
     deckJobSpec(input, {
       generate: (topic, brief, options) => generatePresentation(new FallbackProvider(PROVIDER_CHAIN), topic, brief, options),
+      addPhotos: (deck, signal) => addPhotos(deck, searchForJob(signal), signal),
       insert: async (deck, requestedCount, result) => (await insertGeneratedDeck(deck, requestedCount, result)).id,
       deleteDraft,
     }),

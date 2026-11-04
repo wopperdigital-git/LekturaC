@@ -6,7 +6,8 @@ import { deckTimeline } from './timelines'
 /*
   A deck from a brief, in the background: the work CreatePage used to do in place. The brief
   stays a draft until the deck exists, so a failure can always go back to it ("Edit brief").
-  Once the insert starts the job cannot be cancelled: the rows are being written.
+  Photos are found between the pipeline and the insert; a failure there costs the photos, not the
+  deck. Once the insert starts the job cannot be cancelled: the rows are being written.
 */
 
 export interface DeckJobInput {
@@ -18,6 +19,8 @@ export interface DeckJobInput {
 
 export interface DeckJobDeps {
   generate(topic: string, brief: GenerationBrief, options: PipelineOptions): Promise<PipelineResult>
+  /** Replaces the model's images with found photos. Rejects with an AbortError on cancel. */
+  addPhotos(deck: PipelineResult['deck'], signal: AbortSignal): Promise<PipelineResult['deck']>
   insert(deck: PipelineResult['deck'], requestedCount: number | 'auto', result: PipelineResult): Promise<string>
   deleteDraft(id: string): void
 }
@@ -41,8 +44,18 @@ export function deckJobSpec(input: DeckJobInput, deps: DeckJobDeps): JobSpec {
       })
       // Cancel landed while the pipeline was resolving: Cancel promises no deck.
       if (signal.aborted) throw abortError()
+      // Photos come before the non-cancellable insert, so Cancel still works here.
+      report(deckTimeline('photos', repairSlides))
+      let deck = result.deck
+      try {
+        deck = await deps.addPhotos(result.deck, signal)
+      } catch (err) {
+        // Cancel stops the job; any other failure costs the photos, never the deck.
+        if (signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) throw abortError()
+      }
+      if (signal.aborted) throw abortError()
       report({ ...deckTimeline('save', repairSlides), cancellable: false })
-      const deckId = await deps.insert(result.deck, input.requestedCount, result)
+      const deckId = await deps.insert(deck, input.requestedCount, result)
       deps.deleteDraft(input.draftId)
       return { deckId }
     },

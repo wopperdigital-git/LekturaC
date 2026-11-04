@@ -22,15 +22,16 @@ function entries(rows: { id: string; label: string }[], active: number): StageEn
   return rows.map((r, i) => ({ ...r, state: i < active ? 'done' : i === active ? 'active' : 'pending' }))
 }
 
-const DECK_PROGRESS: Record<GenerationStage | 'save', number> = {
+const DECK_PROGRESS: Record<GenerationStage | 'photos' | 'save', number> = {
   research: 0.08,
   write: 0.25,
   validate: 0.7,
   repair: 0.8,
+  photos: 0.88,
   save: 0.95,
 }
 
-export function deckTimeline(stage: GenerationStage | 'save', repairSlides: number | null): TimelineReport {
+export function deckTimeline(stage: GenerationStage | 'photos' | 'save', repairSlides: number | null): TimelineReport {
   const rows = [
     { id: 'research', label: 'Researching sources' },
     { id: 'write', label: 'Writing slides' },
@@ -39,7 +40,7 @@ export function deckTimeline(stage: GenerationStage | 'save', repairSlides: numb
   if (repairSlides !== null) {
     rows.push({ id: 'repair', label: `Tightening ${repairSlides} slide${repairSlides === 1 ? '' : 's'}` })
   }
-  rows.push({ id: 'save', label: 'Saving' })
+  rows.push({ id: 'photos', label: 'Finding photos' }, { id: 'save', label: 'Saving' })
   return { timeline: entries(rows, rows.findIndex((r) => r.id === stage)), progress: DECK_PROGRESS[stage] }
 }
 

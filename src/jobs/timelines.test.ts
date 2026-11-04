@@ -6,7 +6,7 @@ const states = (r: { timeline: { id: string; state: string }[] }) => r.timeline.
 describe('deckTimeline', () => {
   it('marks earlier stages done, the current active and the rest pending', () => {
     expect(states(deckTimeline('validate', null))).toEqual([
-      'research:done', 'write:done', 'validate:active', 'save:pending',
+      'research:done', 'write:done', 'validate:active', 'photos:pending', 'save:pending',
     ])
   })
   it('shows research as done when it was skipped and writing starts', () => {
@@ -17,11 +17,19 @@ describe('deckTimeline', () => {
     expect(r.timeline.map((e) => e.label)).toContain('Tightening 3 slides')
     expect(deckTimeline('repair', 1).timeline.map((e) => e.label)).toContain('Tightening 1 slide')
     expect(states(deckTimeline('save', 3))).toEqual([
-      'research:done', 'write:done', 'validate:done', 'repair:done', 'save:active',
+      'research:done', 'write:done', 'validate:done', 'repair:done', 'photos:done', 'save:active',
     ])
   })
+  it('shows Finding photos active between repair and saving', () => {
+    const r = deckTimeline('photos', 2)
+    expect(states(r)).toEqual([
+      'research:done', 'write:done', 'validate:done', 'repair:done', 'photos:active', 'save:pending',
+    ])
+    expect(r.timeline.find((e) => e.id === 'photos')!.label).toBe('Finding photos')
+    expect(r.progress).toBe(0.88)
+  })
   it('progress rises through the stages and stays below 1', () => {
-    const order = (['research', 'write', 'validate', 'repair', 'save'] as const).map((s) => deckTimeline(s, 2).progress)
+    const order = (['research', 'write', 'validate', 'repair', 'photos', 'save'] as const).map((s) => deckTimeline(s, 2).progress)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
     expect(Math.max(...order)).toBeLessThan(1)
   })
