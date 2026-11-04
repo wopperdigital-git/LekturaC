@@ -133,6 +133,14 @@ describe('built-in themes', () => {
     }
   })
 
+  // Pop's accent is set as small semibold label text, so it needs the 4.5:1 of body text
+  // on both the ground and the surface, not the 3:1 the other themes' large marks need.
+  it("keeps Pop's accent readable as small text on its ground and its surface", () => {
+    const { colors } = BUILTIN_THEMES.find((t) => t.id === 'pop')!
+    expect(contrastRatio(colors.accent, colors.background)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(colors.accent, colors.surface)).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('gives each new theme its own web font, named by a stack whose first family is the real face', () => {
     const faces = Object.fromEntries(
       NEW_THEME_IDS.map((id) => {

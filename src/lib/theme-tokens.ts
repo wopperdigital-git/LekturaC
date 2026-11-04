@@ -604,9 +604,12 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     colors: {
       background: '#ffffff',
       foreground: '#111111',
-      accent: '#ff4f1f',
-      accentForeground: '#111111',
-      accentSoft: '#ffd23f',
+      // Darkened from #ff4f1f (3.3:1) so the accent reads as small label text on the ground and
+      // the surface (4.5:1+); ink on it is therefore white, and the soft end of the badge
+      // gradient is a deep amber that holds white too. The yellow lives on in the corner block.
+      accent: '#cf350a',
+      accentForeground: '#ffffff',
+      accentSoft: '#b45309',
       muted: '#4a4a4a',
       border: '#111111',
       surface: '#fff7e0',
@@ -618,7 +621,7 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     // shape the PPTX backdrop parser reads, so it exports as a block too).
     celestial: {
       glow: [
-        'radial-gradient(21% 38% at 104% -6%, rgba(255,79,31,1) 98%, rgba(255,79,31,0) 100%)',
+        'radial-gradient(21% 38% at 104% -6%, rgba(207,53,10,1) 98%, rgba(207,53,10,0) 100%)',
         'radial-gradient(14% 26% at -4% 108%, rgba(255,210,63,1) 98%, rgba(255,210,63,0) 100%)',
       ].join(', '),
     },
