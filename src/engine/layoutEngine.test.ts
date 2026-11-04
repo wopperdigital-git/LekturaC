@@ -105,3 +105,42 @@ describe('resolveLayout', () => {
     expect(resolveLayout('gallery', [heading()])).toBe('gallery')
   })
 })
+
+describe('chooseLayout with a single photo set aside', () => {
+  it('keeps the title treatment for the opening card', () => {
+    expect(chooseLayout([heading(), paragraph(), image()], { isFirstCard: true })).toBe('hero')
+    expect(chooseLayout([heading(), image()], { isFirstCard: true })).toBe('hero')
+  })
+
+  it('keeps a quote a quote', () => {
+    expect(chooseLayout([heading(), quote(), image()])).toBe('quote')
+  })
+
+  it('keeps one stat a statHero', () => {
+    expect(chooseLayout([heading(), stat(), image()])).toBe('statHero')
+  })
+
+  it('keeps a short list an iconGrid', () => {
+    expect(chooseLayout([heading(), bulletList(['a', 'b', 'c']), image()])).toBe('iconGrid')
+  })
+
+  it('keeps heading + paragraph + photo a standardSplit', () => {
+    expect(chooseLayout([heading(), paragraph(), image()])).toBe('standardSplit')
+  })
+
+  it('sends two paragraphs and a photo to standardSplit rather than textFocus', () => {
+    expect(chooseLayout([heading(), paragraph(), paragraph(), image()])).toBe('standardSplit')
+  })
+
+  it('makes a heading and a photo an image slide', () => {
+    expect(chooseLayout([heading(), image()])).toBe('imageFocus')
+  })
+
+  it('makes a photo on its own an image slide', () => {
+    expect(chooseLayout([image()])).toBe('imageFocus')
+  })
+
+  it('keeps two photos with no paragraph a gallery', () => {
+    expect(chooseLayout([heading(), image(), image()])).toBe('gallery')
+  })
+})

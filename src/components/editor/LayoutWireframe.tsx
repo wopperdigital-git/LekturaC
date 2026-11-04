@@ -139,6 +139,8 @@ function structured(layout: LayoutType): ReactNode {
           {[118, 110, 122, 74].map((w, i) => <Line key={i} x={21} y={28 + i * 9} w={w} />)}
         </>
       )
+    // imageFocus mirrors standardSplit for now; Task 8 replaces it with ImageFocusLayout's own wireframe.
+    case 'imageFocus':
     case 'standardSplit':
       // Text on the left, the picture on the right.
       return (
@@ -399,6 +401,7 @@ function expressive(layout: LayoutType): ReactNode {
           {[126, 118, 130, 80].map((w, i) => <Line key={i} x={12} y={34 + i * 10} w={w} />)}
         </>
       )
+    case 'imageFocus':
     case 'standardSplit':
       // The picture on the left, text on the right.
       return (

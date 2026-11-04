@@ -89,6 +89,7 @@ export const layoutTypeSchema = z.enum([
   'auto',
   'standard',
   'standardSplit',
+  'imageFocus',
   'hero',
   'statHero',
   'statGrid',

@@ -17,7 +17,29 @@ export interface LayoutContext {
   isFirstCard?: boolean
 }
 
+/**
+ * A card with exactly one photo is classified on its other blocks (the `core`):
+ * the photo is set aside, then placed by whichever arrangement the core earns.
+ * Two or more photos are not set aside: they keep the gallery rules below.
+ */
+function setAsidePhoto(blocks: ContentBlock[]): ContentBlock[] | null {
+  const images = blocksOfType(blocks, 'image')
+  return images.length === 1 ? blocks.filter((b) => b.type !== 'image') : null
+}
+
 export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}): LayoutType {
+  const core = setAsidePhoto(blocks)
+  if (core) {
+    const layout = chooseLayout(core, context)
+    // Plain prose beside a photo splits the slide; a bare heading (or nothing)
+    // beside it is an image slide. Every other arrangement (hero, quote, stat,
+    // list, timeline, comparison) keeps its own and draws the photo itself.
+    if (layout === 'standard' || layout === 'textFocus') {
+      return blocksOfType(core, 'paragraph').length >= 1 ? 'standardSplit' : 'imageFocus'
+    }
+    return layout
+  }
+
   const stats = blocksOfType(blocks, 'stat')
   const comparisonGroups = blocksOfType(blocks, 'comparisonGroup')
   const timelineSteps = blocksOfType(blocks, 'timelineStep')
@@ -138,6 +160,7 @@ export type CardKind =
   | 'quote'
   | 'list'
   | 'gallery'
+  | 'image'
   | 'text'
 
 const CARD_KIND_LABELS: Record<CardKind, string> = {
@@ -148,6 +171,7 @@ const CARD_KIND_LABELS: Record<CardKind, string> = {
   quote: 'Quote',
   list: 'List',
   gallery: 'Gallery',
+  image: 'Image',
   text: 'Text',
 }
 
@@ -160,6 +184,12 @@ export function cardKindLabel(kind: CardKind): string {
  * uses, so the label a user sees agrees with the layout they actually got.
  */
 export function cardKind(blocks: ContentBlock[], context: LayoutContext = {}): CardKind {
+  const core = setAsidePhoto(blocks)
+  if (core) {
+    const kind = cardKind(core, context)
+    return kind === 'text' ? 'image' : kind
+  }
+
   const stats = blocksOfType(blocks, 'stat')
   const comparisonGroups = blocksOfType(blocks, 'comparisonGroup')
   const timelineSteps = blocksOfType(blocks, 'timelineStep')
@@ -192,7 +222,8 @@ const KIND_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, CardKind> = {
   hero: 'title',
   textFocus: 'text',
   standard: 'text',
-  standardSplit: 'text',
+  standardSplit: 'image',
+  imageFocus: 'image',
   statHero: 'stats',
   statGrid: 'stats',
   comparison: 'comparison',
@@ -251,6 +282,8 @@ export function componentsForKind(kind: CardKind, blocks: ContentBlock[]): Exclu
       return ['iconGrid', 'numberedList', 'checklist', 'splitList']
     case 'gallery':
       return ['gallery']
+    case 'image':
+      return ['imageFocus', 'standardSplit']
     case 'text':
       // A split needs a picture to sit beside the prose; without one it renders
       // an empty half.

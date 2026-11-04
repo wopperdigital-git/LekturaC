@@ -29,6 +29,7 @@ const GROUP_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, PptxGroup> = {
   textFocus: 'title',
   standard: 'body',
   standardSplit: 'body',
+  imageFocus: 'body',
   timeline: 'body',
   iconGrid: 'body',
   numberedList: 'body',

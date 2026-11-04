@@ -46,7 +46,8 @@ export function roleLayoutHint(role: string | undefined, blocks: ContentBlock[])
   if (!role) return null
 
   if (HERO_ROLES.has(role)) {
-    return isTitleShaped(blocks) ? 'hero' : null
+    // A photo appended after the words doesn't make the card less of a title.
+    return isTitleShaped(blocks.filter((b) => b.type !== 'image')) ? 'hero' : null
   }
 
   if (RECAP_ROLES.has(role)) {

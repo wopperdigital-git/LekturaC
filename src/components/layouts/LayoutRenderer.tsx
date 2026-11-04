@@ -47,6 +47,8 @@ const LAYOUT_COMPONENTS: Record<
 > = {
   standard: StandardLayout,
   standardSplit: StandardSplitLayout,
+  // Stands in until Task 8 adds ImageFocusLayout (the classifier already awards it).
+  imageFocus: StandardSplitLayout,
   hero: HeroLayout,
   statHero: StatHeroLayout,
   quote: QuoteLayout,

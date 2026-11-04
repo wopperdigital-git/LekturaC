@@ -28,6 +28,13 @@ describe('roleLayoutHint', () => {
     expect(roleLayoutHint('insight', [heading, stat])).toBeNull()
   })
 
+  it('still sees a title-shaped card when a photo was appended after its words', () => {
+    const photo: ContentBlock = { type: 'image', url: 'https://example.com/a.jpg' }
+    expect(roleLayoutHint('insight', [heading, paragraph, photo])).toBe('hero')
+    expect(roleLayoutHint('closing-line', [heading, photo])).toBe('hero')
+    expect(roleLayoutHint('insight', [heading, bullets, photo])).toBeNull()
+  })
+
   it('numbers a recap that actually holds a list', () => {
     expect(roleLayoutHint('recap', [heading, bullets])).toBe('numberedList')
     expect(roleLayoutHint('recap-next-steps', [heading, bullets])).toBe('numberedList')

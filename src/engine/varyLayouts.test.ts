@@ -110,4 +110,10 @@ describe('varyLayouts', () => {
       expect(allowed).toContain(layout)
     })
   })
+
+  it('still varies two consecutive list cards that each carry a photo', () => {
+    const photo: ContentBlock = { type: 'image', url: 'https://example.com/a.jpg' }
+    const withPhoto = { blocks: [heading, shortList, photo], layout: 'auto' as LayoutType }
+    expect(varyLayouts([timelineCard, withPhoto, withPhoto])).toEqual(['auto', 'auto', 'checklist'])
+  })
 })

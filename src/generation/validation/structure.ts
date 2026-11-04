@@ -66,6 +66,7 @@ const LAYOUT_FAMILY: Record<ReturnType<typeof resolveLayout>, string> = {
   textFocus: 'text',
   standard: 'text',
   standardSplit: 'text',
+  imageFocus: 'visual',
   gallery: 'visual',
 }
 

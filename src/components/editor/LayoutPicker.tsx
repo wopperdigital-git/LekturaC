@@ -28,6 +28,7 @@ const LAYOUT_LABELS: Record<Exclude<LayoutType, 'auto'>, string> = {
   textFocus: 'Text focus',
   gallery: 'Gallery',
   standardSplit: 'Split',
+  imageFocus: 'Image',
   standard: 'Standard',
 }
 

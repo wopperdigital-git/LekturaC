@@ -98,3 +98,47 @@ describe('cardKind', () => {
     expect(cardKind([heading, paragraph], { isFirstCard: false })).toBe('text')
   })
 })
+
+describe('a single photo (image kind)', () => {
+  it('calls a text card with a photo an image card', () => {
+    expect(cardKind([heading, paragraph, image('a')])).toBe('image')
+    expect(cardKind([heading, image('a')])).toBe('image')
+    expect(cardKind([image('a')])).toBe('image')
+  })
+
+  it('keeps the core kind when the card is anything but plain text', () => {
+    expect(cardKind([heading, bullets, image('a')])).toBe('list')
+    expect(cardKind([heading, stat('1'), image('a')])).toBe('stats')
+    expect(cardKind([heading, quote, image('a')])).toBe('quote')
+    expect(cardKind([heading, paragraph, image('a')], { isFirstCard: true })).toBe('title')
+  })
+
+  it('offers the image slide and the split, in both treatments', () => {
+    expect(layoutVarieties([heading, image('a')], 'image')).toEqual([
+      { layout: 'imageFocus', visualStyle: 'structured' },
+      { layout: 'imageFocus', visualStyle: 'expressive' },
+      { layout: 'standardSplit', visualStyle: 'structured' },
+      { layout: 'standardSplit', visualStyle: 'expressive' },
+    ])
+  })
+
+  it('always lists what the classifier picked for a card with one photo', () => {
+    const cards: ContentBlock[][] = [
+      [heading, paragraph, image('a')],
+      [heading, image('a')],
+      [image('a')],
+      [heading, bullets, image('a')],
+      [heading, stat('1'), image('a')],
+      [heading, paragraph, paragraph, image('a')],
+    ]
+    for (const blocks of cards) {
+      for (const isFirstCard of [false, true]) {
+        const context = { isFirstCard }
+        expect(layoutsIn(blocks, cardKind(blocks, context))).toContain(chooseLayout(blocks, context))
+      }
+    }
+    // (An opening heading + quote reads as hero but kind quote with or without a photo: not new.)
+    const quoted = [heading, quote, image('a')]
+    expect(layoutsIn(quoted, cardKind(quoted))).toContain(chooseLayout(quoted))
+  })
+})
