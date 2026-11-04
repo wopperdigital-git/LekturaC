@@ -18,6 +18,8 @@ import type { Frame } from '@/engine/frame'
 const BUTTON_PX = 24
 /** Gap between the element's box and the button, so it clears the resize handles. */
 const GAP_PX = 8
+/** The resize handles' size (SelectionOverlay `HANDLE_PX`): one is centred on the top-right corner. */
+const CORNER_HANDLE_PX = 9
 /** Inset from a frame's corner for a button drawn inside it. */
 const INSIDE_PX = 12
 
@@ -77,7 +79,9 @@ export function ElementActions({
           style={
             inside
               ? { left: frame.w - 2 * BUTTON_PX - INSIDE_PX - GAP_PX, top: INSIDE_PX }
-              : { left: frame.w - BUTTON_PX, top: -BUTTON_PX - GAP_PX / 2 }
+              : // Right-aligned over the corner, so it must clear the corner handle (which pokes
+                // CORNER_HANDLE_PX / 2 above the frame) by GAP_PX, as the bin clears it sideways.
+                { left: frame.w - BUTTON_PX, top: -BUTTON_PX - CORNER_HANDLE_PX / 2 - GAP_PX }
           }
         >
           <ReplaceIcon />
