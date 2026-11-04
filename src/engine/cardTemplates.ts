@@ -171,9 +171,9 @@ export function contentLines(blocks: ContentBlock[]): string[] {
         lines.push(block.heading, ...block.items)
         break
       case 'image':
-        // An image cannot become text. Its alt is the only writing on it, and a
-        // line reading "image" would be worse than nothing.
-        if (block.alt) lines.push(block.alt)
+        // An image cannot become text. Its alt describes the picture (a stock photo's is a
+        // sentence about the photo), not the slide, so it must not reach the quiz or
+        // narration prompts as content.
         break
     }
   })

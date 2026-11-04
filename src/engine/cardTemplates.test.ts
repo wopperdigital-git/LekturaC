@@ -113,10 +113,20 @@ describe('contentLines', () => {
     ])
   })
 
-  it('drops an image with no alt text rather than writing a line about it', () => {
+  it('writes nothing for an image, whatever its alt text', () => {
+    // A stock photo's alt describes the picture, not the slide; prompts must not read it as content.
     expect(contentLines([HEADING, { type: 'image', url: 'x.png' }])).toEqual([])
-    expect(contentLines([HEADING, { type: 'image', url: 'x.png', alt: 'A chart' }])).toEqual([
-      'A chart',
-    ])
+    expect(contentLines([HEADING, { type: 'image', url: 'x.png', alt: 'A chart' }])).toEqual([])
+    expect(
+      contentLines([
+        HEADING,
+        {
+          type: 'image',
+          url: 'x.png',
+          alt: 'A man in a suit smiling at a laptop',
+          credit: { name: 'Ada', url: 'https://www.pexels.com/@ada', source: 'pexels' },
+        },
+      ]),
+    ).toEqual([])
   })
 })
