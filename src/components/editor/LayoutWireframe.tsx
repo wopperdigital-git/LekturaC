@@ -93,6 +93,30 @@ function Picture({ x, y, w, h }: { x: number; y: number; w: number; h: number })
   )
 }
 
+/**
+ * The expressive treatment's accent-filled panel behind a heading (or, with
+ * `inner` off, behind a number): `bg-slide-accent` with accent-foreground ink.
+ */
+function HeadPanel({ x = 12, y = 9, w = 70, h = 10, bar = true }: { x?: number; y?: number; w?: number; h?: number; bar?: boolean }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={2.5} fill={ACCENT} />
+      {bar && <rect x={x + 4} y={y + h / 2 - 2} width={Math.max(8, w - 22)} height={4} rx={2} fill="var(--app-accent-foreground)" opacity={0.9} />}
+    </g>
+  )
+}
+
+/** A figure on its own accent panel, with its label in accent-foreground ink. */
+function FigurePanel({ x, y, w, h, labelW = 0.55 }: { x: number; y: number; w: number; h: number; labelW?: number }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={2.5} fill={ACCENT} />
+      <rect x={x + w * 0.14} y={y + h * 0.22} width={w * 0.58} height={h * 0.34} rx={2} fill="var(--app-accent-foreground)" opacity={0.95} />
+      <rect x={x + w * 0.14} y={y + h * 0.68} width={w * labelW * 0.9} height={Math.max(2.4, h * 0.1)} rx={1.2} fill="var(--app-accent-foreground)" opacity={0.6} />
+    </g>
+  )
+}
+
 const range = (n: number) => Array.from({ length: n }, (_, i) => i)
 
 function structured(layout: LayoutType): ReactNode {
@@ -359,21 +383,20 @@ function structured(layout: LayoutType): ReactNode {
 function expressive(layout: LayoutType): ReactNode {
   switch (layout) {
     case 'hero':
-      // Left-aligned beside a vertical accent bar.
+      // Left-aligned: the heading is its own accent panel, subtitle below.
       return (
         <>
-          <rect x={16} y={26} width={3} height={38} rx={1.5} fill={ACCENT} />
-          <Title x={27} y={32} w={96} h={9} />
-          <Line x={27} y={49} w={64} />
+          <HeadPanel x={16} y={22} w={112} h={24} bar={false} />
+          <rect x={24} y={30} width={86} height={8} rx={2.5} fill="var(--app-accent-foreground)" opacity={0.9} />
+          <Line x={16} y={56} w={70} />
         </>
       )
     case 'standard':
-      // The content on one surface.
+      // The lead heading on an accent panel, the content below it.
       return (
         <>
-          <Surface x={10} y={10} w={140} h={70} />
-          <Title x={18} y={18} />
-          {[118, 110, 122, 74].map((w, i) => <Line key={i} x={18} y={33 + i * 9} w={w} />)}
+          <HeadPanel x={12} y={12} w={72} h={12} />
+          {[126, 118, 130, 80].map((w, i) => <Line key={i} x={12} y={34 + i * 10} w={w} />)}
         </>
       )
     case 'standardSplit':
@@ -381,52 +404,43 @@ function expressive(layout: LayoutType): ReactNode {
       return (
         <>
           <Picture x={12} y={14} w={64} h={62} />
-          <Title x={88} y={24} w={56} />
-          {[60, 54, 58, 38].map((w, i) => <Line key={i} x={88} y={38 + i * 8} w={w} />)}
+          <HeadPanel x={88} y={22} w={60} h={12} />
+          {[60, 54, 58, 38].map((w, i) => <Line key={i} x={88} y={42 + i * 8} w={w} />)}
         </>
       )
     case 'statHero':
-      // One surface: the figure on the left, heading and text beside it.
+      // The figure on its own accent panel, heading and text beside it.
       return (
         <>
-          <Surface x={10} y={16} w={140} h={58} />
-          <Figure x={22} y={30} w={40} h={16} />
-          <Line x={22} y={52} w={34} />
-          <Title x={76} y={30} w={60} />
-          <Line x={76} y={43} w={62} />
-          <Line x={76} y={50} w={48} />
+          <FigurePanel x={12} y={20} w={64} h={50} />
+          <Title x={88} y={30} w={58} />
+          <Line x={88} y={43} w={58} />
+          <Line x={88} y={50} w={46} />
         </>
       )
     case 'statGrid':
-      // Equal cells on surfaces.
+      // Equal accent-filled panels under the heading panel.
       return (
         <>
-          <Title />
-          {range(3).map((i) => {
-            const x = 12 + i * 47
-            return (
-              <g key={i}>
-                <Surface x={x} y={28} w={42} h={46} />
-                <Figure x={x + 6} y={36} w={24} />
-                <Line x={x + 6} y={50} w={30} />
-                <Line x={x + 6} y={57} w={22} />
-              </g>
-            )
-          })}
+          <HeadPanel />
+          {range(3).map((i) => (
+            <FigurePanel key={i} x={12 + i * 47} y={28} w={42} h={46} />
+          ))}
         </>
       )
     case 'statList':
-      // Ledger rows, each on its own surface.
+      // Ledger rows on surfaces, each figure on an accent panel.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
               <g key={i}>
                 <Surface x={12} y={y} w={136} h={15} />
-                <Figure x={18} y={y + 4} w={26} h={7} />
-                <Line x={60} y={y + 6} w={72 - i * 10} />
+                <rect x={14} y={y + 1.5} width={44} height={12} rx={2.5} fill={ACCENT} />
+                <rect x={19} y={y + 5} width={26} height={5} rx={2} fill="var(--app-accent-foreground)" opacity={0.9} />
+                <Line x={66} y={y + 6} w={66 - i * 10} />
               </g>
             )
           })}
@@ -436,13 +450,13 @@ function expressive(layout: LayoutType): ReactNode {
       // A card per step with a numbered accent disc.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
               <g key={i}>
                 <Surface x={12} y={y} w={136} h={15} />
-                <Dot cx={21} cy={y + 7.5} r={4} />
+                <Dot cx={21} cy={y + 7.5} r={5} />
                 <Label x={30} y={y + 3.5} w={30} h={3} />
                 <Line x={30} y={y + 9} w={96 - i * 12} />
               </g>
@@ -454,13 +468,13 @@ function expressive(layout: LayoutType): ReactNode {
       // Numbered cards side by side.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(4).map((i) => {
             const x = 12 + i * 35
             return (
               <g key={i}>
                 <Surface x={x} y={27} w={31} h={48} />
-                <Dot cx={x + 8} cy={35} r={4} />
+                <Dot cx={x + 8} cy={36} r={5} />
                 <Label x={x + 4} y={45} w={20} h={3} />
                 <Line x={x + 4} y={53} w={23} />
                 <Line x={x + 4} y={59} w={16} />
@@ -473,7 +487,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Stacked, divided rows; the first heading in accent.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(2).map((i) => {
             const y = 27 + i * 26
             return (
@@ -495,7 +509,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Filled accent headers over cells on surfaces.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(2).map((i) => {
             const x = 12 + i * 70
             return (
@@ -517,7 +531,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Wrapping pills tinted with the accent, a numbered disc in each.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {[
             [12, 28, 52],
             [68, 28, 44],
@@ -538,13 +552,13 @@ function expressive(layout: LayoutType): ReactNode {
       // Numbered cards.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
               <g key={i}>
                 <Surface x={12} y={y} w={136} h={15} />
-                <Dot cx={21} cy={y + 7.5} r={4} />
+                <Dot cx={21} cy={y + 7.5} r={5} />
                 <Line x={30} y={y + 6} w={[96, 82, 104][i]} />
               </g>
             )
@@ -555,13 +569,13 @@ function expressive(layout: LayoutType): ReactNode {
       // Cards with a filled accent check.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
               <g key={i}>
                 <Surface x={12} y={y} w={136} h={15} />
-                <Dot cx={21} cy={y + 7.5} r={4} />
+                <Dot cx={21} cy={y + 7.5} r={5} />
                 <path
                   d={`M18.8 ${y + 7.6}l1.5 1.5 3-3.3`}
                   fill="none"
@@ -580,7 +594,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Two columns of cards with an accent left edge.
       return (
         <>
-          <Title />
+          <HeadPanel />
           {range(4).map((i) => {
             const x = 12 + (i % 2) * 70
             const y = 26 + Math.floor(i / 2) * 25
@@ -596,21 +610,24 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'quote':
-      // Left-aligned italic lines beside an accent border, attribution below.
+      // The lead heading on an accent panel, an oversized accent quote mark,
+      // then larger italic lines and the attribution.
       return (
         <>
-          <rect x={16} y={24} width={2.5} height={42} rx={1.25} fill={ACCENT} />
-          <Line x={26} y={28} w={104} h={4} />
-          <Line x={26} y={36} w={96} h={4} />
-          <Line x={26} y={44} w={70} h={4} />
-          <Line x={26} y={57} w={30} />
+          <HeadPanel x={12} y={9} w={60} h={10} />
+          <rect x={14} y={24} width={7} height={9} rx={2} fill={ACCENT} />
+          <rect x={24} y={24} width={7} height={9} rx={2} fill={ACCENT} />
+          <Line x={14} y={38} w={120} h={5} />
+          <Line x={14} y={47} w={108} h={5} />
+          <Line x={14} y={56} w={74} h={5} />
+          <Line x={14} y={69} w={32} />
         </>
       )
     case 'textFocus':
       // The first paragraph larger, a lede above the prose.
       return (
         <>
-          <Title />
+          <HeadPanel />
           <rect x={12} y={26} width={120} height={4.5} rx={2} fill={INK} opacity={0.5} />
           <rect x={12} y={34} width={86} height={4.5} rx={2} fill={INK} opacity={0.5} />
           {[112, 104, 110, 70].map((w, i) => <Line key={i} x={12} y={46 + i * 8} w={w} />)}
@@ -620,7 +637,7 @@ function expressive(layout: LayoutType): ReactNode {
       // A featured picture beside two stacked ones.
       return (
         <>
-          <Title />
+          <HeadPanel />
           <Picture x={12} y={26} w={66} h={54} />
           <Picture x={82} y={26} w={66} h={25} />
           <Picture x={82} y={55} w={66} h={25} />

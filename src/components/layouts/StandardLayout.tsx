@@ -3,13 +3,13 @@ import { BlockRenderer } from './BlockRenderer'
 
 export function StandardLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   if (variant === 'expressive') {
+    // The first heading sits on an accent panel; every block keeps its index.
+    const lead = blocks.findIndex((b) => b.type === 'heading')
     return (
-      <div className="rounded-slide-sm bg-slide-surface p-6">
-        <div className="flex flex-col gap-4">
-          {blocks.map((block, i) => (
-            <BlockRenderer key={i} block={block} index={i} />
-          ))}
-        </div>
+      <div className="flex flex-col gap-5">
+        {blocks.map((block, i) => (
+          <BlockRenderer key={i} block={block} index={i} variant={variant} headingPanel={i === lead} />
+        ))}
       </div>
     )
   }

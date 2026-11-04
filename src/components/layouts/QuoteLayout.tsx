@@ -5,6 +5,14 @@ import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
+/*
+  The quote is a multiple of the theme's h2 step rather than a bare rem, so the
+  toolbar's size for the element still moves it. At the presets' 2.5rem h2 these
+  are 2.25rem and 2.75rem.
+*/
+const STRUCTURED_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 0.9)'
+const EXPRESSIVE_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 1.1)'
+
 /** Cinematic pull-quote treatment for a card built around one verbatim line. */
 export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -18,21 +26,33 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
 
   if (variant === 'expressive') {
     return (
-      <div className="flex flex-col gap-6 py-8">
-        {headings.map(({ block, index }) => (
-          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
+      <div className="flex flex-col gap-6 py-4">
+        {headings.map(({ block, index }, i) => (
+          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} variant="expressive" panel={i === 0} />
         ))}
         {quote && (
           <Adjustable index={quote.index}>
-            <div className="flex max-w-2xl flex-col gap-4 border-l-4 border-slide-accent pl-6" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            <div className="flex max-w-3xl flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT }}>
+              <span
+                aria-hidden="true"
+                className="select-none font-extrabold text-slide-accent"
+                style={{
+                  fontFamily: SLIDE_HEADING_FONT,
+                  fontSize: 'calc(var(--slide-size-h1) * 3)',
+                  lineHeight: 0.7,
+                  height: '0.45em',
+                }}
+              >
+                "
+              </span>
               <p
-                className="text-[length:var(--slide-size-h3)] italic leading-snug text-slide-foreground"
-                style={{ fontFamily: SLIDE_HEADING_FONT }}
+                className="italic leading-tight text-slide-foreground"
+                style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: EXPRESSIVE_QUOTE_SIZE }}
               >
                 <EditableText textRef={textRef(quote.index, 'text')} value={quote.block.text} />
               </p>
               {quote.block.attribution && (
-                <div className="text-slide-muted">
+                <div className="mt-2 text-[length:var(--slide-size-body)] font-semibold text-slide-muted">
                   —{' '}
                   <EditableText
                     textRef={textRef(quote.index, 'attribution')}
@@ -46,7 +66,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
         {paragraph && (
           <Adjustable index={paragraph.index}>
             <p
-              className="max-w-md text-slide-foreground/80"
+              className="max-w-md text-[length:var(--slide-size-body)] text-slide-foreground/80"
               style={{ fontFamily: SLIDE_BODY_FONT }}
             >
               <EditableText
@@ -68,7 +88,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
       ))}
       {quote && (
         <Adjustable index={quote.index}>
-          <div className="flex max-w-2xl flex-col items-center gap-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
+          <div className="flex max-w-3xl flex-col items-center gap-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
             <span
               aria-hidden="true"
               className="text-slide-accent"
@@ -81,13 +101,13 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
               "
             </span>
             <p
-              className="text-[length:var(--slide-size-h3)] italic leading-snug text-slide-foreground"
-              style={{ fontFamily: SLIDE_HEADING_FONT }}
+              className="italic leading-snug text-slide-foreground"
+              style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: STRUCTURED_QUOTE_SIZE }}
             >
               <EditableText textRef={textRef(quote.index, 'text')} value={quote.block.text} />
             </p>
             {quote.block.attribution && (
-              <div className="text-slide-muted">
+              <div className="text-[length:var(--slide-size-body)] text-slide-muted">
                 —{' '}
                 <EditableText
                   textRef={textRef(quote.index, 'attribution')}
@@ -101,7 +121,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
       {paragraph && (
         <Adjustable index={paragraph.index}>
           <p
-            className="max-w-md text-slide-foreground/80"
+            className="max-w-md text-[length:var(--slide-size-body)] text-slide-foreground/80"
             style={{ fontFamily: SLIDE_BODY_FONT }}
           >
             <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { ContentBlock } from '@/engine/contentBlocks'
+import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { leftoverBlocks } from '@/engine/blockPartition'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
@@ -16,10 +16,22 @@ import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
  * must pass the same index they iterate with, or Level 3 would store a run's
  * formatting against the wrong block.
  */
-export function BlockRenderer({ block, index }: { block: ContentBlock; index: number }) {
+export function BlockRenderer({
+  block,
+  index,
+  variant,
+  headingPanel,
+}: {
+  block: ContentBlock
+  index: number
+  /** Only a heading reads it: the expressive treatment sets it heavier. */
+  variant?: VisualStyle
+  /** A heading drawn on the accent panel (the expressive lead heading). */
+  headingPanel?: boolean
+}) {
   return (
     <Adjustable index={index}>
-      <BlockBody block={block} index={index} />
+      <BlockBody block={block} index={index} variant={variant} headingPanel={headingPanel} />
     </Adjustable>
   )
 }
@@ -67,11 +79,29 @@ export function Leftovers({
   duties to, and a switch returning eight different roots inside the holder is
   the simplest way to guarantee it gets one.
 */
-function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
+function BlockBody({
+  block,
+  index,
+  variant,
+  headingPanel,
+}: {
+  block: ContentBlock
+  index: number
+  variant?: VisualStyle
+  headingPanel?: boolean
+}) {
   const itemProps = useItemProps()
   switch (block.type) {
     case 'heading':
-      return <Heading text={block.text} textRef={textRef(index, 'text')} size={block.size} />
+      return (
+        <Heading
+          text={block.text}
+          textRef={textRef(index, 'text')}
+          size={block.size}
+          variant={variant}
+          panel={headingPanel}
+        />
+      )
     case 'paragraph':
       return (
         <p
@@ -113,11 +143,11 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       return (
         <blockquote
           className="max-w-prose border-l-4 border-slide-accent pl-4 italic text-slide-foreground/90"
-          style={{ fontFamily: SLIDE_BODY_FONT }}
+          style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}
         >
           "<EditableText textRef={textRef(index, 'text')} value={block.text} />"
           {block.attribution && (
-            <footer className="mt-2 text-sm not-italic text-slide-muted">
+            <footer className="mt-2 text-[length:0.85em] not-italic text-slide-muted">
               — <EditableText textRef={textRef(index, 'attribution')} value={block.attribution} />
             </footer>
           )}
@@ -125,7 +155,7 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       )
     case 'timelineStep':
       return (
-        <div style={{ fontFamily: SLIDE_BODY_FONT }}>
+        <div style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}>
           <div className="font-semibold text-slide-accent">
             <EditableText textRef={textRef(index, 'label')} value={block.label} />
           </div>
@@ -136,13 +166,13 @@ function BlockBody({ block, index }: { block: ContentBlock; index: number }) {
       )
     case 'comparisonGroup':
       return (
-        <div style={{ fontFamily: SLIDE_BODY_FONT }}>
+        <div style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}>
           <div className="mb-2 font-semibold text-slide-foreground">
             <EditableText textRef={textRef(index, 'heading')} value={block.heading} />
           </div>
           <ul className="flex flex-col gap-1">
             {block.items.map((item, i) => (
-              <li key={i} {...itemProps(index, i)} className="text-sm text-slide-foreground/90">
+              <li key={i} {...itemProps(index, i)} className="text-slide-foreground/90">
                 <EditableText textRef={textRef(index, 'items', i)} value={item} />
               </li>
             ))}
@@ -164,16 +194,31 @@ export function Heading({
   text,
   textRef: ref,
   size = 'h2',
+  variant,
+  panel = false,
 }: {
   text: string
   textRef: string
   size?: 'h1' | 'h2' | 'h3'
+  /** Expressive sets the heading heavier. */
+  variant?: VisualStyle
+  /**
+   * Draw the heading on an accent-filled panel (the expressive treatment's lead
+   * heading). The panel is the heading's own box, so a nudge or a resize moves
+   * the two together. The accent-foreground class is what keeps a picked text
+   * colour off it — see the user-colour rule in `index.css`.
+   */
+  panel?: boolean
 }) {
   const sizeVar = `var(--slide-size-${size})`
+  const weight = variant === 'expressive' || panel ? 'font-extrabold' : 'font-semibold'
+  const tone = panel
+    ? 'w-fit max-w-full self-start rounded-slide-sm bg-slide-accent px-6 py-3 text-slide-accent-foreground'
+    : 'text-slide-foreground'
   return (
     <MaybeAdjustable forRef={ref}>
       <h2
-        className="font-semibold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
+        className={`${weight} tracking-[var(--slide-letter-spacing)] ${tone}`}
         style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: sizeVar, lineHeight: 1.15 }}
       >
         <EditableText textRef={ref} value={text} />
@@ -201,24 +246,35 @@ export function StatBlockView({
   label,
   valueRef,
   labelRef,
+  valueSize = 'var(--slide-size-h1)',
+  panel,
 }: {
   value: string
   label: string
   valueRef: string
   labelRef: string
+  /** CSS font-size of the figure. The default is the theme's h1 step. */
+  valueSize?: string
+  /**
+   * Classes that make the figure's own box an accent-filled panel (the
+   * expressive treatment). They must carry `bg-slide-accent` and
+   * `text-slide-accent-foreground`; the ink switches from accent/muted to
+   * accent-foreground. The panel being the adjusted node, a nudge moves both.
+   */
+  panel?: string
 }) {
   return (
     <MaybeAdjustable forRef={valueRef}>
       {/* The label inherits this; the value below overrides it with the heading
           font, the way the two read on screen. */}
-      <div style={{ fontFamily: SLIDE_BODY_FONT }}>
+      <div className={panel} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}>
         <div
-          className="font-bold text-slide-accent"
-          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1 }}
+          className={`font-bold ${panel ? 'text-slide-accent-foreground' : 'text-slide-accent'}`}
+          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: valueSize, lineHeight: 1 }}
         >
           <EditableText textRef={valueRef} value={value} />
         </div>
-        <div className="mt-2 text-slide-muted">
+        <div className={`mt-2 ${panel ? 'text-slide-accent-foreground/85' : 'text-slide-muted'}`}>
           <EditableText textRef={labelRef} value={label} />
         </div>
       </div>

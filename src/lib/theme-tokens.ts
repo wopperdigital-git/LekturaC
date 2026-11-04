@@ -248,7 +248,7 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     typography: {
       headingFont: "'Inter', system-ui, sans-serif",
       bodyFont: "'Inter', system-ui, sans-serif",
-      scale: [2.75, 1.875, 1.375, 1],
+      scale: [3.5, 2.5, 1.625, 1.25],
       lineHeight: 1.55,
       letterSpacing: -0.2,
     },
@@ -290,7 +290,7 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     typography: {
       headingFont: "'Georgia', 'Times New Roman', serif",
       bodyFont: "'Inter', system-ui, sans-serif",
-      scale: [3, 2, 1.5, 1.05],
+      scale: [3.5, 2.5, 1.625, 1.25],
       lineHeight: 1.6,
       letterSpacing: 0,
     },
@@ -346,7 +346,7 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     typography: {
       headingFont: "'Inter', system-ui, sans-serif",
       bodyFont: "'Inter', system-ui, sans-serif",
-      scale: [2.75, 1.875, 1.375, 1],
+      scale: [3.5, 2.5, 1.625, 1.25],
       lineHeight: 1.55,
       letterSpacing: -0.2,
     },
@@ -393,7 +393,7 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     typography: {
       headingFont: "'Arial Black', system-ui, sans-serif",
       bodyFont: "'Inter', system-ui, sans-serif",
-      scale: [3.25, 2.1, 1.5, 1.05],
+      scale: [3.25, 2.25, 1.5, 1.2],
       lineHeight: 1.45,
       letterSpacing: -0.5,
     },
@@ -434,7 +434,7 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     typography: {
       headingFont: "'Inter', system-ui, sans-serif",
       bodyFont: "'Inter', system-ui, sans-serif",
-      scale: [2.5, 1.75, 1.3, 1],
+      scale: [3.5, 2.5, 1.625, 1.25],
       lineHeight: 1.6,
       letterSpacing: 0,
     },

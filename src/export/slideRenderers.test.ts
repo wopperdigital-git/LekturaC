@@ -60,9 +60,14 @@ function fakeSlide() {
   return slide
 }
 
-function render(card: Card, isFirstCard = false, style: Parameters<(typeof RENDERERS)['body']>[3] = {}) {
+function render(
+  card: Card,
+  isFirstCard = false,
+  style: Parameters<(typeof RENDERERS)['body']>[3] = {},
+  theme = DEFAULT_THEME,
+) {
   const slide = fakeSlide()
-  RENDERERS[slideGroup(card, isFirstCard)](slide, card, DEFAULT_THEME, style, estimateMeasurer)
+  RENDERERS[slideGroup(card, isFirstCard)](slide, card, theme, style, estimateMeasurer)
   return slide
 }
 
@@ -752,6 +757,17 @@ describe('fitting the adjusted arrangement', () => {
     length keeps each paragraph around 200 characters, per the brief.
   */
   it('never raises an adjusted paragraph past its own fittedPointSize, even when that is below FLOOR_PT', () => {
+    /*
+      Pinned to the body step (1rem) this fixture was written against. At the
+      presentation-sized body step the export's box estimates (`blockBoxes.ts`)
+      no longer hold the text of a card this tall at a sub-floor size, so there
+      is no tall-card fixture that is both below FLOOR_PT and fits; the floor
+      rule itself is independent of the theme's scale.
+    */
+    const theme = {
+      ...DEFAULT_THEME,
+      typography: { ...DEFAULT_THEME.typography, scale: [2.75, 1.875, 1.375, 1] as typeof DEFAULT_THEME.typography.scale },
+    }
     const longParagraph = Array.from({ length: 40 }, () => 'word').join(' ')
     const card = adjustedCard(
       [
@@ -768,13 +784,13 @@ describe('fitting the adjusted arrangement', () => {
 
     const { height } = cardBoxes(card)
     const fit = fitCard(height)
-    const expected = fittedPointSize(DEFAULT_THEME.typography.scale[3], undefined, fit)
+    const expected = fittedPointSize(theme.typography.scale[3], undefined, fit)
     // Sanity check that this fixture actually exercises the below-FLOOR_PT
     // case the fix targets — if the card isn't tall enough this assertion
     // would pass for the wrong reason.
     expect(expected).toBeLessThan(FLOOR_PT)
 
-    const slide = render(card)
+    const slide = render(card, false, {}, theme)
     const paragraphBoxes = slide.texts.filter((t) => t.text === longParagraph)
     expect(paragraphBoxes.length).toBe(3)
     for (const box of paragraphBoxes) {

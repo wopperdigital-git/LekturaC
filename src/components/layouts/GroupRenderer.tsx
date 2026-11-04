@@ -6,6 +6,9 @@ import { Adjustable } from './Adjustable'
 import { StatBlockView } from './BlockRenderer'
 import { EditableText } from './EditableText'
 import { useItemProps } from './adjustContext'
+import { figureSize } from './figureSize'
+
+const BODY_SIZE = 'var(--slide-size-body)'
 
 /**
  * Draws one group of blocks in its arrangement.
@@ -24,29 +27,44 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
   const itemProps = useItemProps()
 
   switch (node.arrangement) {
-    case 'boxes':
-      // From StatGridLayout: equal cells, a surface box when expressive and a
-      // top accent rule when structured.
+    case 'boxes': {
+      // From StatGridLayout: equal cells, an accent-filled panel when
+      // expressive and a top accent rule when structured. Past three cells the
+      // figure steps down to h2 so a long value still fits its column.
+      const wide = node.items.length <= 3
+      const longest = Math.max(...node.items.map(({ block }) => block.value.length))
+      const valueSize = figureSize(wide ? 'h1' : 'h2', 1, 'x'.repeat(longest), wide ? 6 : 5)
       return (
         <div
           className="grid gap-6"
           style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
         >
-          {node.items.map(({ block, index }) => (
-            <div
-              key={index}
-              className={expressive ? 'rounded-slide-sm bg-slide-surface p-5' : 'border-t-2 border-slide-accent pt-4'}
-            >
+          {node.items.map(({ block, index }) =>
+            expressive ? (
               <StatBlockView
+                key={index}
                 value={block.value}
                 label={block.label}
                 valueRef={textRef(index, 'value')}
                 labelRef={textRef(index, 'label')}
+                valueSize={valueSize}
+                panel="min-w-0 rounded-slide-sm bg-slide-accent p-6 text-slide-accent-foreground"
               />
-            </div>
-          ))}
+            ) : (
+              <div key={index} className="min-w-0 border-t-2 border-slide-accent pt-4">
+                <StatBlockView
+                  value={block.value}
+                  label={block.label}
+                  valueRef={textRef(index, 'value')}
+                  labelRef={textRef(index, 'label')}
+                  valueSize={valueSize}
+                />
+              </div>
+            ),
+          )}
         </div>
       )
+    }
 
     case 'timeline':
       // From TimelineLayout: a numbered card per step when expressive, a
@@ -58,9 +76,9 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
               <Adjustable key={step.index} index={step.index}>
                 <li
                   className="flex gap-4 rounded-slide-sm bg-slide-surface p-4"
-                  style={{ fontFamily: SLIDE_BODY_FONT }}
+                  style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slide-accent text-lg font-extrabold text-slide-accent-foreground">
                     {i + 1}
                   </span>
                   <div>
@@ -85,7 +103,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
           />
           {node.items.map((step) => (
             <Adjustable key={step.index} index={step.index}>
-              <li className="relative pl-6" style={{ fontFamily: SLIDE_BODY_FONT }}>
+              <li className="relative pl-6" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
                 <span className="absolute left-[calc(var(--spacing)*1.5)] top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-slide-accent" />
                 <div className="font-semibold text-slide-accent">
                   <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
@@ -109,13 +127,13 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
               const featured = i === 0
               return (
                 <Adjustable key={group.index} index={group.index}>
-                  <div className="flex flex-col gap-3 py-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
+                  <div className="flex flex-col gap-3 py-4" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
                     <div className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
                       <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
                     </div>
                     <ul className="flex flex-col gap-2">
                       {group.block.items.map((item, j) => (
-                        <li key={j} {...itemProps(group.index, j)} className="flex items-start gap-2 text-sm text-slide-foreground/90">
+                        <li key={j} {...itemProps(group.index, j)} className="flex items-start gap-2 text-slide-foreground/90">
                           <span
                             className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                               featured ? 'bg-slide-accent' : 'bg-slide-muted'
@@ -145,14 +163,14 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                   className={`rounded-slide-sm border p-4 ${
                     featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
                   }`}
-                  style={{ fontFamily: SLIDE_BODY_FONT }}
+                  style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
                 >
                   <div className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
                     <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
                   </div>
                   <ul className="flex flex-col gap-2">
                     {group.block.items.map((item, j) => (
-                      <li key={j} {...itemProps(group.index, j)} className="flex items-start gap-2 text-sm text-slide-foreground/90">
+                      <li key={j} {...itemProps(group.index, j)} className="flex items-start gap-2 text-slide-foreground/90">
                         <span
                           className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                             featured ? 'bg-slide-accent' : 'bg-slide-muted'
@@ -176,13 +194,13 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <div className="flex flex-wrap gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            <div className="flex flex-wrap gap-3" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
                 <div key={i} {...itemProps(list.index, i)} className="flex items-center gap-2 rounded-full bg-slide-accent/10 py-2 pl-2 pr-4">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-xs font-semibold text-slide-accent-foreground">
                     {i + 1}
                   </span>
-                  <span className="text-sm text-slide-foreground/90">
+                  <span className="text-slide-foreground/90">
                     <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
                   </span>
                 </div>
@@ -193,7 +211,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       }
       return (
         <Adjustable index={list.index}>
-          <div className="grid grid-cols-2 gap-4 @min-[640px]:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+          <div className="grid grid-cols-2 gap-4 @min-[640px]:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
               <div
                 key={i}
@@ -203,7 +221,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
                   {i + 1}
                 </span>
-                <span className="text-sm text-slide-foreground/90">
+                <span className="text-slide-foreground/90">
                   <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
                 </span>
               </div>
@@ -220,10 +238,10 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <ol className="flex flex-col gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            <ol className="flex flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className="flex items-center gap-4 rounded-slide-sm bg-slide-surface p-4">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-sm font-semibold text-slide-accent-foreground">
+                <li key={i} {...itemProps(list.index, i)} className="flex items-center gap-4 rounded-slide-sm bg-slide-surface px-4 py-2">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-lg font-extrabold text-slide-accent-foreground">
                     {i + 1}
                   </span>
                   <span className="text-slide-foreground/90">
@@ -237,7 +255,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       }
       return (
         <Adjustable index={list.index}>
-          <ol className="flex flex-col divide-y divide-slide-border" style={{ fontFamily: SLIDE_BODY_FONT }}>
+          <ol className="flex flex-col divide-y divide-slide-border" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
               <li key={i} {...itemProps(list.index, i)} className="flex items-baseline gap-4 py-3">
                 <span className="shrink-0 text-slide-accent" style={{ fontFamily: SLIDE_HEADING_FONT, fontWeight: 600 }}>
@@ -261,9 +279,9 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <ul className="flex flex-col gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            <ul className="flex flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className="flex items-center gap-3 rounded-slide-sm bg-slide-surface p-4">
+                <li key={i} {...itemProps(list.index, i)} className="flex items-center gap-3 rounded-slide-sm bg-slide-surface px-4 py-2">
                   <CheckMark filled />
                   <span className="text-slide-foreground/90">
                     <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
@@ -276,7 +294,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       }
       return (
         <Adjustable index={list.index}>
-          <ul className="flex flex-col gap-3" style={{ fontFamily: SLIDE_BODY_FONT }}>
+          <ul className="flex flex-col gap-3" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
               <li key={i} {...itemProps(list.index, i)} className="flex items-start gap-3">
                 <CheckMark />
@@ -297,7 +315,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <ul className="grid grid-cols-2 gap-4" style={{ fontFamily: SLIDE_BODY_FONT }}>
+            <ul className="grid grid-cols-2 gap-4" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
                 <li key={i} {...itemProps(list.index, i)} className="rounded-slide-sm border-l-4 border-slide-accent bg-slide-surface p-4">
                   <span className="text-slide-foreground/90">
@@ -311,7 +329,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
       }
       return (
         <Adjustable index={list.index}>
-          <ul className="grid grid-cols-2 gap-x-10 gap-y-2" style={{ fontFamily: SLIDE_BODY_FONT }}>
+          <ul className="grid grid-cols-2 gap-x-10 gap-y-2" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
               <li key={i} {...itemProps(list.index, i)} className="flex items-start gap-3 border-t border-slide-border pt-3">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-slide-accent" />
@@ -333,11 +351,15 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
           {node.items.map(({ block, index }) => (
             <Adjustable key={index} index={index}>
               <div
-                className={`flex items-baseline gap-6 ${expressive ? 'rounded-slide-sm bg-slide-surface p-5' : 'py-4'}`}
-                style={{ fontFamily: SLIDE_BODY_FONT }}
+                className={`flex gap-6 ${expressive ? 'items-center rounded-slide-sm bg-slide-surface p-3' : 'items-baseline py-4'}`}
+                style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
               >
                 <div
-                  className="w-1/3 shrink-0 font-bold text-slide-accent"
+                  className={
+                    expressive
+                      ? 'w-1/3 shrink-0 rounded-slide-sm bg-slide-accent px-5 py-4 font-extrabold text-slide-accent-foreground'
+                      : 'w-1/3 shrink-0 font-bold text-slide-accent'
+                  }
                   style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h2)', lineHeight: 1 }}
                 >
                   <EditableText textRef={textRef(index, 'value')} value={block.value} />
@@ -362,9 +384,9 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
               {expressive ? (
                 <li
                   className="flex flex-col gap-3 rounded-slide-sm bg-slide-surface p-4"
-                  style={{ fontFamily: SLIDE_BODY_FONT }}
+                  style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slide-accent text-lg font-extrabold text-slide-accent-foreground">
                     {i + 1}
                   </span>
                   <div className="font-semibold text-slide-accent">
@@ -375,7 +397,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                   </div>
                 </li>
               ) : (
-                <li style={{ fontFamily: SLIDE_BODY_FONT }}>
+                <li style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
                   <div className="relative mb-4 h-3">
                     <span className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-slide-accent/40" />
                     <span className="absolute left-0 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-slide-accent" />
@@ -411,7 +433,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
             <Adjustable key={group.index} index={group.index}>
               <div
                 className="grid grid-rows-subgrid"
-                style={{ gridRow: `span ${rows}`, fontFamily: SLIDE_BODY_FONT }}
+                style={{ gridRow: `span ${rows}`, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
               >
                 <div
                   className={
@@ -426,7 +448,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                   <div
                     key={j}
                     {...itemProps(group.index, j)}
-                    className={`border-b border-slide-border text-sm text-slide-foreground/90 ${
+                    className={`border-b border-slide-border text-slide-foreground/90 ${
                       expressive ? 'bg-slide-surface px-3 py-2' : 'py-2'
                     }`}
                   >

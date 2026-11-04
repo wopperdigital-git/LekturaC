@@ -105,7 +105,17 @@ describe('built-in themes', () => {
     }
   })
 
-  const DECOR_KINDS = ['stars', 'orbits', 'bodies', 'constellation', 'grid'] as const
+  it('every built-in theme has presentation-sized type', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const [h1, h2, h3, body] = theme.typography.scale
+      expect(h1, `${theme.id} h1`).toBeGreaterThanOrEqual(3.25)
+      expect(h2, `${theme.id} h2`).toBeGreaterThanOrEqual(2.25)
+      expect(h3, `${theme.id} h3`).toBeGreaterThanOrEqual(1.5)
+      expect(body, `${theme.id} body`).toBeGreaterThanOrEqual(1.2)
+    }
+  })
+
+  const DECOR_KINDS =['stars', 'orbits', 'bodies', 'constellation', 'grid'] as const
 
   // The restraint rule: a theme picks the two or three elements that carry its
   // mood. One that reached for all of them would collapse the distinction

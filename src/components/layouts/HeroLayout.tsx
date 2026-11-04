@@ -18,31 +18,31 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
 
   if (variant === 'expressive') {
     return (
-      <div className="flex gap-6 py-14">
-        <span className="w-1.5 shrink-0 rounded-full bg-gradient-to-b from-slide-accent to-slide-accent-soft" />
-        <div className="flex flex-col gap-5 text-left">
-          {heading && (
-            <Adjustable index={heading.index}>
+      <div className="flex flex-col items-start gap-6 py-6 text-left">
+        {heading && (
+          <Adjustable index={heading.index}>
+            {/* The heading is its own accent panel, so a nudge or resize moves
+                the two together; accent-foreground keeps a picked text colour
+                off it (index.css). */}
             <h1
-              className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
+              className="w-fit max-w-full rounded-slide-sm bg-slide-accent px-10 py-7 font-extrabold tracking-[var(--slide-letter-spacing)] text-slide-accent-foreground"
               style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
             >
               <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
             </h1>
-            </Adjustable>
-          )}
-          {paragraph && (
-            <Adjustable index={paragraph.index}>
+          </Adjustable>
+        )}
+        {paragraph && (
+          <Adjustable index={paragraph.index}>
             <p
-              className="max-w-lg text-[length:var(--slide-size-h3)] text-slide-muted"
+              className="max-w-xl text-[length:var(--slide-size-h3)] text-slide-muted"
               style={{ fontFamily: SLIDE_BODY_FONT }}
             >
               <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
             </p>
-            </Adjustable>
-          )}
-          <Leftovers blocks={blocks} consumed={consumed} />
-        </div>
+          </Adjustable>
+        )}
+        <Leftovers blocks={blocks} consumed={consumed} />
       </div>
     )
   }

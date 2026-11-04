@@ -457,11 +457,13 @@ body {
   utility classes on the elements themselves, so an inherited colour would lose
   to every one of them. Unlayered CSS beats Tailwind's layered utilities.
 
-  Text placed on a filled disc (the number badges) is left alone: it is coloured
+  Text placed on a filled disc (the number badges) or an accent panel (the
+  expressive heading and number panels) is left alone, and so is everything
+  nested inside such an element (the editable run's own span): it is coloured
   for contrast against the fill, and forcing the picked colour onto it would make
   it unreadable.
 */
-[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']) {
+[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *) {
   color: var(--slide-user-color);
 }
 
