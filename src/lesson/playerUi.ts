@@ -28,6 +28,17 @@ export function isWatchRefusal(message: string): boolean {
   return WATCH_REFUSALS.includes(message.trim())
 }
 
+/**
+ * Whether a lesson shown without its video should stop asking and offer to load it again.
+ * Such a lesson only gets this far when the link to the video could not be made (possibly just
+ * for a moment) while the server still holds slide timings, so it still enforces watching: a
+ * refusal means answering cannot work until the video is back. `acknowledged` is the number of
+ * refusals the student has already answered with "Try again".
+ */
+export function noVideoNeedsReload(refusals: number, acknowledged: number): boolean {
+  return refusals > acknowledged
+}
+
 /** A click on the progress bar at `fraction` of its length, held to what has been watched. */
 export function seekFromFraction(fraction: number, duration: number, watchedUntil: number): number {
   return clampSeek(fraction * duration, watchedUntil)

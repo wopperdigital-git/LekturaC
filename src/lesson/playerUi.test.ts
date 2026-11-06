@@ -6,6 +6,7 @@ import {
   formatClock,
   hasUsableVideo,
   isWatchRefusal,
+  noVideoNeedsReload,
   progressFraction,
   seekFromFraction,
 } from './playerUi'
@@ -34,6 +35,15 @@ describe('isWatchRefusal', () => {
     expect(isWatchRefusal('Answer the questions in order.')).toBe(true)
     expect(isWatchRefusal("Couldn't reach the server.")).toBe(false)
     expect(isWatchRefusal('')).toBe(false)
+  })
+})
+
+describe('noVideoNeedsReload', () => {
+  it('asks to reload after a refusal, until the student has pressed Try again for it', () => {
+    expect(noVideoNeedsReload(0, 0)).toBe(false)
+    expect(noVideoNeedsReload(1, 0)).toBe(true)
+    expect(noVideoNeedsReload(1, 1)).toBe(false)
+    expect(noVideoNeedsReload(2, 1)).toBe(true)
   })
 })
 

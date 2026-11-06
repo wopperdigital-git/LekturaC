@@ -639,6 +639,8 @@ declare
   v_type text;
   v_key jsonb;
   v_stored boolean;
+  v_attempt_score numeric;
+  v_finished boolean;
   v_first uuid;
   v_stop numeric;
   v_ok boolean;
@@ -648,6 +650,27 @@ declare
 begin
   v_quiz := lesson_open(p_code, p_class_id);
 
+  select qq.question_type, qq.answer into v_type, v_key
+    from quiz_questions qq
+   where qq.id = p_question_id and qq.quiz_id = v_quiz.id;
+  if not found then raise exception 'That question isn''t in this lesson.'; end if;
+
+  -- Answered already: the stored result, nothing changes. Once the attempt exists this still
+  -- says so (finished, with its score), so a retry after a lost reply to the last answer lands
+  -- on the end of the lesson instead of an error or a lesson that never finishes.
+  select a.correct into v_stored
+    from lesson_answers a
+   where a.quiz_id = v_quiz.id and a.class_id = p_class_id
+     and a.student_id = v_uid and a.question_id = p_question_id;
+  if found then
+    select t.score into v_attempt_score
+      from quiz_attempts t
+     where t.quiz_id = v_quiz.id and t.class_id = p_class_id and t.student_id = v_uid;
+    v_finished := found;
+    return jsonb_build_object('correct', v_stored, 'finished', v_finished, 'score', v_attempt_score);
+  end if;
+
+  -- A question not answered yet, after the lesson (or the quiz) was submitted, is refused.
   if exists (
     select 1 from quiz_attempts
      where quiz_id = v_quiz.id and class_id = p_class_id and student_id = v_uid
@@ -655,21 +678,7 @@ begin
     raise exception 'You''ve already submitted this quiz for this class.';
   end if;
 
-  select qq.question_type, qq.answer into v_type, v_key
-    from quiz_questions qq
-   where qq.id = p_question_id and qq.quiz_id = v_quiz.id;
-  if not found then raise exception 'That question isn''t in this lesson.'; end if;
-
   v_prog := lesson_sync_progress(v_quiz.id, p_class_id, v_uid);
-
-  -- Answered already: the stored result, nothing changes.
-  select a.correct into v_stored
-    from lesson_answers a
-   where a.quiz_id = v_quiz.id and a.class_id = p_class_id
-     and a.student_id = v_uid and a.question_id = p_question_id;
-  if found then
-    return jsonb_build_object('correct', v_stored, 'finished', false, 'score', null::numeric);
-  end if;
 
   -- In order: only the first unanswered checkpoint can be answered.
   select s.question_id, s.stop_seconds into v_first, v_stop

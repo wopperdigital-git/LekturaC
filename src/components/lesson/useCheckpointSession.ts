@@ -34,6 +34,8 @@ export function useCheckpointSession({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // How many times the server has sent the student back to watch (for a lesson with no video to go back to).
+  const [refusals, setRefusals] = useState(0)
   const busyRef = useRef(false)
   const lastBeat = useRef<Promise<void>>(Promise.resolve())
   const noticeTimer = useRef<number | undefined>(undefined)
@@ -82,6 +84,7 @@ export function useCheckpointSession({
           // 0: the reducer keeps what it already knew, and sends the student back to it.
           dispatch({ type: 'refused', watchedUntil: 0 })
           setNotice(message)
+          setRefusals((n) => n + 1)
           window.clearTimeout(noticeTimer.current)
           noticeTimer.current = window.setTimeout(() => setNotice(null), NOTICE_MS)
         } else {
@@ -100,7 +103,7 @@ export function useCheckpointSession({
     dispatch({ type: 'continue' })
   }, [])
 
-  return { state, dispatch, busy, error, notice, submit, onContinue, reportPosition }
+  return { state, dispatch, busy, error, notice, refusals, submit, onContinue, reportPosition }
 }
 
 export type CheckpointSession = ReturnType<typeof useCheckpointSession>

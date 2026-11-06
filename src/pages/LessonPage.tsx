@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAsync } from '@/classroom/useAsync'
 import { DashboardShell } from '@/components/home/DashboardShell'
@@ -10,7 +10,7 @@ import { useCheckpointSession } from '@/components/lesson/useCheckpointSession'
 import { Button } from '@/components/ui/Button'
 import { getLessonForTaking, lessonVideoUrl } from '@/lesson/api'
 import { placeCheckpoints, type Stop } from '@/lesson/checkpoints'
-import { checkpointContext, hasUsableVideo } from '@/lesson/playerUi'
+import { checkpointContext, hasUsableVideo, noVideoNeedsReload } from '@/lesson/playerUi'
 import type { TakeLesson } from '@/lesson/rows'
 import { normalizeQuizCode } from '@/quiz/quizCode'
 
@@ -80,13 +80,23 @@ function LessonPageInner({ code, classId }: { code: string; classId: string }) {
           />
         </Panel>
       ) : (
-        <LessonBody key={state.data.lesson.quizId} code={code} classId={classId} loaded={state.data} />
+        <LessonBody key={state.data.lesson.quizId} code={code} classId={classId} loaded={state.data} onReload={reload} />
       )}
     </DashboardShell>
   )
 }
 
-function LessonBody({ code, classId, loaded }: { code: string; classId: string; loaded: LoadedLesson }) {
+function LessonBody({
+  code,
+  classId,
+  loaded,
+  onReload,
+}: {
+  code: string
+  classId: string
+  loaded: LoadedLesson
+  onReload: () => void
+}) {
   const { lesson, videoUrl } = loaded
   const playable = hasUsableVideo(lesson.video, videoUrl)
   // Without a video every question is asked at the end, in order.
@@ -100,7 +110,7 @@ function LessonBody({ code, classId, loaded }: { code: string; classId: string; 
       <LessonPlayer code={code} classId={classId} lesson={lesson} video={lesson.video} videoUrl={videoUrl} stops={stops} />
     )
   }
-  return <VideoRemoved code={code} classId={classId} lesson={lesson} stops={stops} />
+  return <VideoRemoved code={code} classId={classId} lesson={lesson} stops={stops} onReload={onReload} />
 }
 
 /**
@@ -112,19 +122,30 @@ function VideoRemoved({
   classId,
   lesson,
   stops,
+  onReload,
 }: {
   code: string
   classId: string
   lesson: TakeLesson
   stops: readonly Stop[]
+  onReload: () => void
 }) {
-  const { state, dispatch, busy, error, submit, onContinue } = useCheckpointSession({ code, classId, lesson, stops })
+  const { state, dispatch, busy, error, notice, refusals, submit, onContinue } = useCheckpointSession({
+    code,
+    classId,
+    lesson,
+    stops,
+  })
+  const [acknowledged, setAcknowledged] = useState(0)
+  // The link to the video could not be made but the server still wants it watched: asking again
+  // would only be refused again, so stop and offer to load the lesson afresh.
+  const needsReload = noVideoNeedsReload(refusals, acknowledged)
 
   // Nothing plays, so the first question is due at once, and again after anything that sends
   // the student back to watching.
   useEffect(() => {
-    if (state.phase === 'watching') dispatch({ type: 'tick', time: 0, ended: true })
-  }, [state.phase, dispatch])
+    if (state.phase === 'watching' && !needsReload) dispatch({ type: 'tick', time: 0, ended: true })
+  }, [state.phase, needsReload, dispatch])
 
   if (state.phase === 'done') {
     return <LessonSummary lesson={lesson} answered={state.answered} score={state.score} />
@@ -137,6 +158,22 @@ function VideoRemoved({
   return (
     <Panel>
       <p className="mb-4 text-sm font-medium text-app-foreground">The video for this lesson was removed.</p>
+      {needsReload && (
+        <div role="alert" className="mb-4 flex flex-col items-start gap-3 rounded-app-sm border border-app-border bg-app-surface p-3">
+          <p className="text-sm text-app-foreground">
+            {notice ? `${notice} ` : ''}The video couldn&apos;t be loaded, so this question can&apos;t be checked yet.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => {
+              setAcknowledged(refusals)
+              onReload()
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      )}
       <ol className="flex flex-col gap-3">
         {remaining.map((stop) => {
           const q = lesson.questions.find((x) => x.id === stop.questionId)

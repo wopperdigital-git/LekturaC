@@ -555,12 +555,20 @@ begin
     raise exception 'finish: expected one attempt scoring 4/6, got %', (select jsonb_agg(to_jsonb(a)) from quiz_attempts a);
   end if;
 
-  -- nothing more can be answered
-  msg := null;
-  begin perform answer_lesson_checkpoint('QZPKM234', k, q5, 'true');
-  exception when others then msg := sqlerrm; end;
-  if msg is distinct from 'You''ve already submitted this quiz for this class.' then
-    raise exception 'after finishing: %', msg;
+  -- a retry of the last answer (a lost reply) lands on the end of the lesson: the stored
+  -- result, finished, with the attempt's score; nothing is written twice
+  res := answer_lesson_checkpoint('QZPKM234', k, q5, 'false');
+  if (res->>'correct')::boolean is distinct from true or (res->>'finished')::boolean is distinct from true
+     or (res->>'score')::numeric is distinct from (4::numeric / 6) then
+    raise exception 'after finishing: re-answering the last question gave %', res;
+  end if;
+  res := answer_lesson_checkpoint('QZPKM234', k, q6, 'true');
+  if (res->>'finished')::boolean is distinct from true or (res->>'score')::numeric is distinct from (4::numeric / 6) then
+    raise exception 'after finishing: re-answering an earlier question gave %', res;
+  end if;
+  if (select count(*) from quiz_attempts) <> 1
+     or (select count(*) from lesson_answers where student_id = '00000000-0000-4000-a000-000000001802') <> 6 then
+    raise exception 'after finishing: a re-answer wrote something';
   end if;
 
   -- reopening shows the result and the answers, still no key
@@ -573,6 +581,36 @@ begin
     raise exception 'finish: answers should hold 4 right';
   end if;
 end $$;
+
+-- A question that is NOT yet answered is still refused once the attempt exists: take one
+-- answer away (as the superuser), try it, then put it back exactly as it was.
+reset role;
+create temp table _removed_answer as
+  select * from lesson_answers
+   where student_id = '00000000-0000-4000-a000-000000001802'
+     and question_id = '00000000-0000-4000-f000-000000001805';
+delete from lesson_answers
+ where student_id = '00000000-0000-4000-a000-000000001802'
+   and question_id = '00000000-0000-4000-f000-000000001805';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001802","role":"authenticated"}', true);
+
+do $$
+declare
+  msg text;
+begin
+  begin perform answer_lesson_checkpoint('QZPKM234', '00000000-0000-4000-b000-000000001801', '00000000-0000-4000-f000-000000001805', 'true');
+  exception when others then msg := sqlerrm; end;
+  if msg is distinct from 'You''ve already submitted this quiz for this class.' then
+    raise exception 'after finishing: an unanswered question should be refused, got %', msg;
+  end if;
+end $$;
+
+reset role;
+insert into lesson_answers select * from _removed_answer;
+drop table _removed_answer;
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001802","role":"authenticated"}', true);
 
 -- ── 10. the posting cannot flip under students ──────────────────────────────
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001801","role":"authenticated"}', true);
