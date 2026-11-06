@@ -6,6 +6,7 @@ import { DraftsPage } from '@/pages/DraftsPage'
 import { EditorPage } from '@/pages/EditorPage'
 import { PresentPage } from '@/pages/PresentPage'
 import { QuizPage } from '@/pages/QuizPage'
+import { LessonPage } from '@/pages/LessonPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
@@ -123,6 +124,14 @@ function App() {
           element={
             <RequireAuth>
               <QuizPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/lesson/:code/:classId"
+          element={
+            <RequireAuth>
+              <LessonPage />
             </RequireAuth>
           }
         />
