@@ -68,6 +68,7 @@ export async function generateVideoForDeck(o: {
     const result = await generateVideo(
       {
         texts: o.deck.cards.map((c) => c.narration?.text ?? ''),
+        cardIds: o.deck.cards.map((c) => c.id),
         signal: o.signal,
         onProgress: o.onProgress,
       },
@@ -76,13 +77,14 @@ export async function generateVideoForDeck(o: {
         silence: (seconds, channels) => narrator.silence(seconds, channels),
         drawSlide: (index, signal) => renderer.draw(index, signal),
         encoder,
-        save: (blob, durationSeconds) =>
+        save: (blob, durationSeconds, slides) =>
           saveVideo(ports, {
             uid,
             presentationId,
             blob,
             format,
             durationSeconds,
+            slides,
             previous: o.previous,
           }),
       },

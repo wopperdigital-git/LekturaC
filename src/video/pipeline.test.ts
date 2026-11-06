@@ -51,8 +51,8 @@ function setup() {
       return { ...RECORD, durationSeconds: seconds }
     },
   }
-  const run = (texts: string[], onProgress?: (p: Progress) => void) =>
-    generateVideo({ texts, signal: controller.signal, onProgress }, deps)
+  const run = (texts: string[], onProgress?: (p: Progress) => void, cardIds = texts.map((_, i) => `c${i + 1}`)) =>
+    generateVideo({ texts, cardIds, signal: controller.signal, onProgress }, deps)
   return { deps, log, controller, run }
 }
 
@@ -273,5 +273,28 @@ describe('generateVideo: cancelling', () => {
       return { ...RECORD, durationSeconds: seconds }
     }
     expect((await run(['A'])).status).toBe('done')
+  })
+})
+
+describe('generateVideo: slide timings', () => {
+  it('passes each slide timing to save', async () => {
+    const { deps, run } = setup()
+    let seen: unknown
+    deps.save = async (_blob, seconds, slides) => {
+      seen = slides
+      return { ...RECORD, durationSeconds: seconds }
+    }
+    await run(['hi', ''])
+    expect(seen).toEqual([
+      { cardId: 'c1', startSeconds: 0, durationSeconds: 2 },
+      { cardId: 'c2', startSeconds: 2, durationSeconds: 4 },
+    ])
+  })
+
+  it('refuses mismatched cardIds before narrating anything', async () => {
+    const { log, run } = setup()
+    const err = await run(['hi', 'there'], undefined, ['only-one']).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RangeError)
+    expect(log).toEqual([])
   })
 })

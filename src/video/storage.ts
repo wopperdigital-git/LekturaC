@@ -3,7 +3,7 @@ import { VideoError } from './errors'
 import type { VideoFormat } from './format'
 import { VIDEO_BUCKET, videoPath } from './paths'
 import { describeStorageFailure, type PortError } from './storageErrors'
-import { parseVideo, type VideoRecord } from './videoRecord'
+import { parseVideo, type VideoRecord, type VideoSlideTiming } from './videoRecord'
 
 /*
   Where a deck's video goes and how it is found again. The rules (what is written first, what is
@@ -34,6 +34,8 @@ export interface SaveVideoInput {
   blob: Blob
   format: VideoFormat
   durationSeconds: number
+  /** Where each slide sits in the video; stored so lessons can place checkpoints. */
+  slides?: VideoSlideTiming[]
   /** The deck's video before this run, if it has one. */
   previous: VideoRecord | null
   now?: () => Date
@@ -62,6 +64,7 @@ export async function saveVideo(ports: StoragePorts, input: SaveVideoInput): Pro
     contentType: input.format.contentType,
     durationSeconds: input.durationSeconds,
     generatedAt: (input.now?.() ?? new Date()).toISOString(),
+    ...(input.slides ? { slides: input.slides } : {}),
   }
   const wrote = await ports.writeRecord(input.presentationId, record)
   if (wrote.error) {

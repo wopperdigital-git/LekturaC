@@ -69,6 +69,28 @@ describe('saveVideo', () => {
     })
   })
 
+  it('writes slides into the record', async () => {
+    const slides = [
+      { cardId: 'a', startSeconds: 0, durationSeconds: 4 },
+      { cardId: 'b', startSeconds: 4, durationSeconds: 3 },
+    ]
+    const written: VideoRecord[] = []
+    const { ports } = fakePorts({
+      writeRecord: async (_id, record) => {
+        written.push(record)
+        return { error: null }
+      },
+    })
+    const record = await saveVideo(ports, input({ slides }))
+    expect(record.slides).toEqual(slides)
+    expect(written[0].slides).toEqual(slides)
+  })
+
+  it('leaves slides out of the record when none are given', async () => {
+    const { ports } = fakePorts()
+    expect('slides' in (await saveVideo(ports, input()))).toBe(false)
+  })
+
   it('replaces at the same path without removing anything', async () => {
     const { ports, log } = fakePorts()
     await saveVideo(ports, input({ previous }))

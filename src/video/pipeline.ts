@@ -1,6 +1,6 @@
 import { VideoError, type VideoStage } from './errors'
 import { SILENT_SLIDE_SECONDS, frameSlots, planTimeline } from './timeline'
-import type { VideoRecord } from './videoRecord'
+import type { VideoRecord, VideoSlideTiming } from './videoRecord'
 
 /*
   The whole run, in order: narrate every slide, then draw and encode each one, then finish the
@@ -41,12 +41,14 @@ export interface PipelineDeps<A extends Clip> {
   drawSlide(index: number, signal: AbortSignal): Promise<void>
   encoder: VideoEncoderPort<A>
   /** Stores the file and points the deck at it. Throws `VideoError('uploading', ...)`. */
-  save(blob: Blob, durationSeconds: number): Promise<VideoRecord>
+  save(blob: Blob, durationSeconds: number, slides: VideoSlideTiming[]): Promise<VideoRecord>
 }
 
 export interface PipelineInput {
   /** Each slide's script, in deck order. Blank means a silent slide. */
   texts: readonly string[]
+  /** Each slide's card id, in the same order and number as `texts`. */
+  cardIds: readonly string[]
   signal: AbortSignal
   onProgress?: (p: Progress) => void
 }
@@ -71,7 +73,10 @@ export async function generateVideo<A extends Clip>(
   input: PipelineInput,
   deps: PipelineDeps<A>,
 ): Promise<PipelineResult> {
-  const { texts, signal } = input
+  const { texts, cardIds, signal } = input
+  if (cardIds.length !== texts.length) {
+    throw new RangeError(`Expected ${texts.length} card ids, got ${cardIds.length}.`)
+  }
   const total = texts.length
   const report = (stage: VideoStage, done: number, of: number) => input.onProgress?.({ stage, done, total: of })
   const check = () => {
@@ -149,7 +154,15 @@ export async function generateVideo<A extends Clip>(
     report('uploading', 0, 1)
     let record: VideoRecord
     try {
-      record = await deps.save(blob, timeline.totalSeconds)
+      record = await deps.save(
+        blob,
+        timeline.totalSeconds,
+        timeline.slides.map((s) => ({
+          cardId: cardIds[s.index],
+          startSeconds: s.startSeconds,
+          durationSeconds: s.durationSeconds,
+        })),
+      )
     } catch (err) {
       throw err instanceof VideoError ? err : new VideoError('uploading', 'The video could not be saved. Try again.')
     }

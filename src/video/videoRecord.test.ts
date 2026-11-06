@@ -24,4 +24,33 @@ describe('parseVideo', () => {
   it('drops fields it does not know', () => {
     expect(parseVideo({ ...good, extra: 1 })).toEqual(good)
   })
+
+  it('keeps valid slide timings', () => {
+    const slides = [
+      { cardId: 'a', startSeconds: 0, durationSeconds: 4 },
+      { cardId: 'b', startSeconds: 4, durationSeconds: 2.5 },
+    ]
+    expect(parseVideo({ ...good, slides })?.slides).toEqual(slides)
+  })
+
+  it('drops malformed slides but keeps the record', () => {
+    for (const slides of [
+      [{ cardId: 'a' }],
+      'x',
+      [{ cardId: '', startSeconds: 0, durationSeconds: 4 }],
+      [{ cardId: 'a', startSeconds: -1, durationSeconds: 4 }],
+      [{ cardId: 'a', startSeconds: 0, durationSeconds: 0 }],
+      [{ cardId: 'a', startSeconds: NaN, durationSeconds: 4 }],
+      [{ cardId: 'a', startSeconds: 0, durationSeconds: 4 }, null],
+    ]) {
+      const record = parseVideo({ ...good, slides })
+      expect(record).toEqual(good)
+      expect(record?.slides).toBeUndefined()
+    }
+  })
+
+  it('old records have no slides', () => {
+    expect(parseVideo(good)?.slides).toBeUndefined()
+    expect('slides' in (parseVideo(good) ?? {})).toBe(false)
+  })
 })
