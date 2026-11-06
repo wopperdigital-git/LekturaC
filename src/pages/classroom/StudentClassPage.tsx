@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { loadStudentClassroom, removeMembership } from '@/classroom/api'
+import { loadLessonModes, loadMyLessonStarts } from '@/lesson/api'
 import { matchesQuery, personLabel, plural } from '@/classroom/format'
 import { studentClassQuizzes } from '@/classroom/select'
 import { useAsync } from '@/classroom/useAsync'
@@ -22,11 +23,25 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
 }
 
+/**
+ * The class page's one load: the classroom, plus which postings are lessons and which of those
+ * this student has started. The lesson reads are best effort (without migration 0018 every
+ * posting is a quiz), so a failure of either is an empty set and never costs the page.
+ */
+async function loadClassPage() {
+  const [data, lessonModes, lessonStarts] = await Promise.all([
+    loadStudentClassroom(),
+    loadLessonModes().catch(() => new Set<string>()),
+    loadMyLessonStarts().catch(() => new Set<string>()),
+  ])
+  return { data, lessonModes, lessonStarts }
+}
+
 export function StudentClassPage() {
   const { classId = '' } = useParams()
   const navigate = useNavigate()
   const userId = useAuthStore((s) => s.user?.id ?? '')
-  const { state, reload } = useAsync(loadStudentClassroom, userId)
+  const { state, reload } = useAsync(loadClassPage, userId)
   const [query, setQuery] = useState('')
   const [confirmLeave, setConfirmLeave] = useState(false)
 
@@ -40,7 +55,7 @@ export function StudentClassPage() {
     )
   }
 
-  const classRoom = state.data.classes.find((c) => c.id === classId)
+  const classRoom = state.data.data.classes.find((c) => c.id === classId)
   if (!classRoom) {
     return (
       <DashboardShell title="Class" query={query} onQueryChange={setQuery}>
@@ -49,12 +64,15 @@ export function StudentClassPage() {
     )
   }
 
-  const teacher = state.data.teachers.find((t) => t.id === classRoom.teacherId)
-  const classAnnouncements = state.data.announcements.filter((a) => a.classId === classRoom.id)
+  const teacher = state.data.data.teachers.find((t) => t.id === classRoom.teacherId)
+  const classAnnouncements = state.data.data.announcements.filter((a) => a.classId === classRoom.id)
   const announcements = classAnnouncements.filter((a) => matchesQuery(query, a.title, a.body))
-  const { quizzes, postings, attempts } = state.data
-  const classQuizzes = studentClassQuizzes(classRoom.id, quizzes, postings, attempts)
-  const visibleQuizzes = query.trim() ? studentClassQuizzes(classRoom.id, quizzes, postings, attempts, query) : classQuizzes
+  const { quizzes, postings, attempts } = state.data.data
+  const { lessonModes, lessonStarts } = state.data
+  const classQuizzes = studentClassQuizzes(classRoom.id, quizzes, postings, attempts, '', lessonModes, lessonStarts)
+  const visibleQuizzes = query.trim()
+    ? studentClassQuizzes(classRoom.id, quizzes, postings, attempts, query, lessonModes, lessonStarts)
+    : classQuizzes
   const completedQuizzes = classQuizzes.filter((item) => item.attempt !== null)
 
   const initials = getInitials(classRoom.name)

@@ -6,11 +6,16 @@ import { quizTypeLabel as labelFor } from '@/quiz/types'
 /**
  * One quiz posted to a class, as its student sees it: open ones link to the
  * quiz, answered ones show the score. There is no retake (the server allows one
- * attempt per class), so an answered quiz offers nothing to press.
+ * attempt per class), so an answered quiz offers nothing to press. A posting made
+ * as a lesson opens the lesson player instead, and reads Start lesson, Continue
+ * lesson, then Finished with the score.
  */
 export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
-  const { quiz, postedAt, attempt } = item
-  const quizTypeLabel = labelFor(quiz.quizType)
+  const { quiz, classId, postedAt, attempt, mode, started } = item
+  const isLesson = mode === 'lesson'
+  const quizTypeLabel = isLesson ? 'Lesson' : labelFor(quiz.quizType)
+  const actionLabel = isLesson ? (started ? 'Continue lesson' : 'Start lesson') : 'Take quiz'
+  const actionTo = isLesson ? `/lesson/${quiz.code}/${classId}` : `/quiz/${quiz.code}`
 
   const scorePercent = attempt ? Math.round(attempt.score * 100) : 0
   const isHigh = scorePercent >= 80
@@ -68,7 +73,7 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
               {attempt ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-app-highlight/25 bg-app-highlight/10 px-2 py-0.5 text-[11px] font-semibold text-app-highlight-text">
                   <span className="size-1.5 rounded-full bg-app-highlight" aria-hidden="true" />
-                  <span>Submitted</span>
+                  <span>{isLesson ? 'Finished' : 'Submitted'}</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full border border-app-track-sun/70 bg-app-track-sun/20 px-2 py-0.5 text-[11px] font-medium text-app-foreground">
@@ -96,7 +101,9 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
               {attempt && (
                 <>
                   <span>·</span>
-                  <span>Submitted {formatDate(attempt.submittedAt)}</span>
+                  <span>
+                    {isLesson ? 'Finished' : 'Submitted'} {formatDate(attempt.submittedAt)}
+                  </span>
                 </>
               )}
             </div>
@@ -118,14 +125,14 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
               <svg className="size-4 shrink-0" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M3 13.5h10M4 11V7a4 4 0 118 0v4M6.5 11h3" />
               </svg>
-              <span>{formatPercent(attempt.score)}</span>
+              <span>{isLesson ? `Finished · ${formatPercent(attempt.score)}` : formatPercent(attempt.score)}</span>
             </div>
           ) : (
             <Link
-              to={`/quiz/${quiz.code}`}
+              to={actionTo}
               className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-app-sm bg-app-accent px-4 py-2 text-sm font-semibold text-app-accent-foreground transition-all duration-150 hover:brightness-110 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
             >
-              <span>Take quiz</span>
+              <span>{actionLabel}</span>
               <svg className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 12l4-4-4-4" />
               </svg>

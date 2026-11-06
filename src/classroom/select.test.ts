@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { postingKey } from '@/lesson/rows'
 import { selectQuizzes, studentClassQuizzes } from './select'
 import type { Attempt, Posting, QuizSummary, StudentQuiz } from './types'
 
@@ -93,5 +94,29 @@ describe('studentClassQuizzes', () => {
   it('filters by title, ignoring case, and returns nothing for an unknown class', () => {
     expect(studentClassQuizzes('A', visible, posted, [], 'ATO').map((i) => i.quiz.id)).toEqual(['q2'])
     expect(studentClassQuizzes('nope', visible, posted, [])).toEqual([])
+  })
+
+  it('marks a posting as a lesson only when its (quiz, class) pair is in the lesson set', () => {
+    const modes = new Set([postingKey('q1', 'A'), postingKey('q3', 'A')])
+    const items = studentClassQuizzes('A', visible, posted, [], '', modes)
+    expect(items.map((i) => [i.quiz.id, i.mode])).toEqual([
+      ['q2', 'quiz'],
+      ['q1', 'lesson'],
+    ])
+    // q3 is a lesson in A but not posted there: it never appears, and B's q3 stays a quiz.
+    expect(studentClassQuizzes('B', visible, posted, [], '', modes)[0].mode).toBe('quiz')
+  })
+
+  it('reads started from the lesson-start set, per class', () => {
+    const modes = new Set([postingKey('q1', 'A')])
+    const starts = new Set([postingKey('q1', 'A'), postingKey('q2', 'B')])
+    const items = studentClassQuizzes('A', visible, posted, [], '', modes, starts)
+    expect(items.find((i) => i.quiz.id === 'q1')?.started).toBe(true)
+    expect(items.find((i) => i.quiz.id === 'q2')?.started).toBe(false)
+  })
+
+  it('defaults to plain quizzes, not started, and carries the class id', () => {
+    const items = studentClassQuizzes('A', visible, posted, [])
+    expect(items.every((i) => i.mode === 'quiz' && !i.started && i.classId === 'A')).toBe(true)
   })
 })

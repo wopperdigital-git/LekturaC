@@ -228,6 +228,17 @@ function QuizForm({ code, quiz }: { code: string; quiz: TakeQuiz }) {
 
       {!chosenClass ? (
         <PanelMessage title="This quiz isn't posted to any of your classes" />
+      ) : chosenClass.mode === 'lesson' ? (
+        // Posted as a lesson here: the questions are answered inside the player, not on this form.
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-sm text-app-foreground">This quiz is a lesson in {chosenClass.name}.</p>
+          <Link
+            to={`/lesson/${code}/${chosenClass.id}`}
+            className={`inline-flex items-center rounded-app-sm bg-app-accent px-3 py-1.5 text-sm font-medium text-app-accent-foreground hover:opacity-90 ${FOCUS_RING}`}
+          >
+            Open the lesson
+          </Link>
+        </div>
       ) : chosenClass.attempted ? (
         <p className="text-sm text-app-foreground">
           You&apos;ve already submitted this quiz for <span className="font-medium">{chosenClass.name}</span>.
