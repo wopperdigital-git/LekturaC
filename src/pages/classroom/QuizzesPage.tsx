@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { loadTeacherClassroom } from '@/classroom/api'
 import { plural } from '@/classroom/format'
+import { loadLessonModes } from '@/lesson/api'
 import { selectQuizzes, type QuizSort } from '@/classroom/select'
 import { useAsync } from '@/classroom/useAsync'
 import { DashboardShell } from '@/components/home/DashboardShell'
@@ -11,9 +12,17 @@ import { QuizRow } from '@/components/classroom/QuizRow'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 
+const NO_LESSONS: ReadonlySet<string> = new Set()
+
 export function QuizzesPage() {
   const userId = useAuthStore((s) => s.user?.id ?? '')
   const { state, reload } = useAsync(loadTeacherClassroom, userId)
+  const { state: modes, reload: reloadModes } = useAsync(loadLessonModes, userId)
+  const lessonModes = modes.status === 'ready' ? modes.data : NO_LESSONS
+  const reloadAll = () => {
+    reload()
+    reloadModes()
+  }
   const [query, setQuery] = useState('')
   const [classId, setClassId] = useState('')
   const [sort, setSort] = useState<QuizSort>('newest')
@@ -122,7 +131,9 @@ export function QuizzesPage() {
                   quiz={quiz}
                   postedIn={state.data.classes.filter((c) => postedClassIds.has(c.id))}
                   allClasses={state.data.classes}
-                  onChanged={reload}
+                  lessonModes={lessonModes}
+                  records={state.data}
+                  onChanged={reloadAll}
                 />
               )
             })}

@@ -3,6 +3,10 @@ import type { KeyboardEvent } from 'react'
 export interface RadioOption<T extends string> {
   value: T
   label: string
+  /** Greyed out and skipped by the arrow keys. */
+  disabled?: boolean
+  /** The tooltip, e.g. why the option is off. */
+  title?: string
 }
 
 /** A small exclusive choice, drawn as chips. Arrow keys move between options like a native radio group. */
@@ -24,10 +28,15 @@ export function Radios<T extends string>({
     if (step === 0 || disabled) return
     e.preventDefault()
     const at = options.findIndex((o) => o.value === value)
-    const next = options[(at + step + options.length) % options.length]
-    onChange(next.value)
+    let to = at
+    for (let i = 0; i < options.length; i += 1) {
+      to = (to + step + options.length) % options.length
+      if (!options[to].disabled) break
+    }
+    if (to === at || options[to].disabled) return
+    onChange(options[to].value)
     const buttons = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')
-    buttons[(at + step + options.length) % options.length]?.focus()
+    buttons[to]?.focus()
   }
 
   return (
@@ -41,7 +50,8 @@ export function Radios<T extends string>({
             role="radio"
             aria-checked={checked}
             tabIndex={checked ? 0 : -1}
-            disabled={disabled}
+            disabled={disabled || o.disabled}
+            title={o.title}
             onClick={() => onChange(o.value)}
             className={`cursor-pointer rounded-app-sm border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50 ${
               checked

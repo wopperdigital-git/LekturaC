@@ -11,6 +11,7 @@ import {
   updateClass,
 } from '@/classroom/api'
 import { matchesQuery, personLabel, plural } from '@/classroom/format'
+import { loadLessonModes } from '@/lesson/api'
 import { rosterOf, type RosterEntry } from '@/classroom/stats'
 import type { Announcement } from '@/classroom/types'
 import { useAsync } from '@/classroom/useAsync'
@@ -24,6 +25,8 @@ import { ClassUnavailable, LoadError, Panel, PanelMessage, RowsSkeleton } from '
 import { QuizRow } from '@/components/classroom/QuizRow'
 import { StudentRow } from '@/components/classroom/StudentRow'
 import { Button } from '@/components/ui/Button'
+
+const NO_LESSONS: ReadonlySet<string> = new Set()
 
 type Tab = 'students' | 'announcements' | 'quizzes'
 
@@ -79,6 +82,12 @@ export function ClassFolderPage() {
   const tab = parseTab(params.get('tab'))
   const userId = useAuthStore((s) => s.user?.id ?? '')
   const { state, reload } = useAsync(loadTeacherClassroom, userId)
+  const { state: modes, reload: reloadModes } = useAsync(loadLessonModes, userId)
+  const lessonModes = modes.status === 'ready' ? modes.data : NO_LESSONS
+  const reloadAll = () => {
+    reload()
+    reloadModes()
+  }
   const [query, setQuery] = useState('')
   const [editingDetails, setEditingDetails] = useState(false)
   const [confirmRegenerate, setConfirmRegenerate] = useState(false)
@@ -327,7 +336,9 @@ export function ClassFolderPage() {
                       quiz={quiz}
                       postedIn={data.classes.filter((c) => postedClassIds.has(c.id))}
                       allClasses={data.classes}
-                      onChanged={reload}
+                      lessonModes={lessonModes}
+                      records={data}
+                      onChanged={reloadAll}
                     />
                   )
                 })}

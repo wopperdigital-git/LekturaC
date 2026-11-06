@@ -2,12 +2,18 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/classroom/format'
 import { formatSlideRange } from '@/classroom/slideRange'
-import type { ClassRoom, QuizSummary } from '@/classroom/types'
+import { rosterOf } from '@/classroom/stats'
+import type { ClassRoom, QuizSummary, TeacherClassroom } from '@/classroom/types'
+import { loadDeckVideo } from '@/lesson/api'
+import { lessonReadiness, type LessonReadiness } from '@/lesson/readiness'
+import { postingKey, type PostingMode } from '@/lesson/rows'
 import { postQuiz, unpostQuiz } from '@/quiz/api'
 import { describeError } from '@/store/presentationStore'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
 import { DeleteQuizConfirm } from '@/components/quiz/DeleteQuizConfirm'
+import { LessonProgressModal } from '@/components/lesson/LessonProgressModal'
+import { PostModeChoice } from './PostModeChoice'
 
 type Copied = 'code' | 'link' | null
 type CopyState = Copied | 'failed-code' | 'failed-link'
@@ -21,11 +27,17 @@ export function QuizRow({
   quiz,
   postedIn,
   allClasses,
+  lessonModes,
+  records,
   onChanged,
 }: {
   quiz: QuizSummary
   postedIn: ClassRoom[]
   allClasses: ClassRoom[]
+  /** The postings made as lessons, as `quizId|classId` keys (`loadLessonModes`). */
+  lessonModes: ReadonlySet<string>
+  /** What the lesson progress panel needs from the teacher's classroom, so it is not read again. */
+  records: Pick<TeacherClassroom, 'members' | 'students' | 'attempts'>
   onChanged: () => void
 }) {
   const slides = formatSlideRange(quiz.slideNumbers)
@@ -34,15 +46,35 @@ export function QuizRow({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [mode, setMode] = useState<PostingMode>('quiz')
+  const [readiness, setReadiness] = useState<LessonReadiness | 'loading'>(
+    quiz.presentationId === null ? 'no_deck' : 'loading',
+  )
+  const [progressIn, setProgressIn] = useState<ClassRoom | null>(null)
+
+  const postedIds = new Set(postedIn.map((c) => c.id))
+  const available = allClasses.filter((c) => !postedIds.has(c.id))
+  const showsPosting = available.length > 0
+
+  // Whether the deck's video can carry a lesson is read once, when the posting control is first
+  // drawn for a quiz that still has its deck.
+  const { presentationId } = quiz
+  useEffect(() => {
+    if (!showsPosting || presentationId === null) return
+    let cancelled = false
+    void loadDeckVideo(presentationId).then((video) => {
+      if (!cancelled) setReadiness(lessonReadiness(presentationId, video))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [showsPosting, presentationId])
 
   useEffect(() => {
     if (!copied) return
     const timer = setTimeout(() => setCopied(null), 1800)
     return () => clearTimeout(timer)
   }, [copied])
-
-  const postedIds = new Set(postedIn.map((c) => c.id))
-  const available = allClasses.filter((c) => !postedIds.has(c.id))
 
   async function copy(kind: 'code' | 'link') {
     const text = kind === 'code' ? quiz.code : `${window.location.origin}/quiz/${quiz.code}`
@@ -159,7 +191,9 @@ export function QuizRow({
             <span className="text-[11px] font-semibold uppercase tracking-wider text-app-muted mr-1">
               Classrooms:
             </span>
-            {postedIn.map((c) => (
+            {postedIn.map((c) => {
+              const isLesson = lessonModes.has(postingKey(quiz.id, c.id))
+              return (
               <span
                 key={c.id}
                 className="group/chip inline-flex items-center gap-1.5 rounded-full border border-app-accent/25 bg-app-accent/8 py-0.5 pr-1 pl-2.5 text-[11px] font-medium text-app-accent-text"
@@ -169,6 +203,17 @@ export function QuizRow({
                   <path d="M3.5 7.5v4c0 1.2 2 2.5 4.5 2.5s4.5-1.3 4.5-2.5v-4L8 10 3.5 7.5z" opacity="0.75" />
                 </svg>
                 <span className="max-w-[12rem] truncate">{c.name}</span>
+                {isLesson && (
+                  <button
+                    type="button"
+                    onClick={() => setProgressIn(c)}
+                    aria-label={`Lesson progress in ${c.name}`}
+                    title="See who has done this lesson"
+                    className="cursor-pointer rounded-full border border-app-accent/30 bg-app-accent/15 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-app-accent-text transition-colors hover:bg-app-accent/25 focus-visible:outline-2 focus-visible:outline-app-accent"
+                  >
+                    Lesson
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={busy}
@@ -189,7 +234,8 @@ export function QuizRow({
                   </svg>
                 </button>
               </span>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -269,7 +315,8 @@ export function QuizRow({
         {/* Right: Custom Select Post to Class, then Delete */}
         <div className="flex flex-wrap items-center gap-2">
           {available.length > 0 ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <PostModeChoice mode={mode} onChange={setMode} readiness={readiness} disabled={busy} />
               <Select
                 value={selectedClassId}
                 onChange={(v) => setSelectedClassId(v)}
@@ -286,7 +333,7 @@ export function QuizRow({
                 disabled={busy || !selectedClassId || !available.some((c) => c.id === selectedClassId)}
                 onClick={() =>
                   void change(async () => {
-                    await postQuiz(quiz.id, selectedClassId)
+                    await postQuiz(quiz.id, selectedClassId, mode)
                     setSelectedClassId('')
                   })
                 }
@@ -327,6 +374,16 @@ export function QuizRow({
         <div className="border-t border-app-danger/20 bg-app-danger/5 px-4 py-2 text-xs font-medium text-app-danger-text">
           {error}
         </div>
+      )}
+
+      {progressIn && (
+        <LessonProgressModal
+          quizId={quiz.id}
+          classRoom={progressIn}
+          students={rosterOf(records.members, records.students, progressIn.id).map((e) => e.student)}
+          attempts={records.attempts}
+          onClose={() => setProgressIn(null)}
+        />
       )}
 
       {confirmingDelete && (
