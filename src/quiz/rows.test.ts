@@ -134,4 +134,25 @@ describe('takeQuizFromJson', () => {
     expect(quiz.questions[0]).toMatchObject({ sectionIndex: 0, type: 'fill_blank' })
     expect(quiz.wordBoxes).toEqual({ 0: ['sun'] })
   })
+
+  it('reads a class without a mode as a quiz, and keeps a lesson mode', () => {
+    const quiz = takeQuizFromJson({
+      id: 'q',
+      title: 'T',
+      deck_title: 'D',
+      quiz_type: 'true_false',
+      settings: {},
+      classes: [
+        { id: 'a', name: 'Old', attempted: false },
+        { id: 'b', name: 'New', attempted: true, mode: 'lesson' },
+        { id: 'c', name: 'Odd', attempted: false, mode: 'weird' },
+      ],
+      questions: [],
+    })
+    expect(quiz.classes).toEqual([
+      { id: 'a', name: 'Old', attempted: false, mode: 'quiz' },
+      { id: 'b', name: 'New', attempted: true, mode: 'lesson' },
+      { id: 'c', name: 'Odd', attempted: false, mode: 'quiz' },
+    ])
+  })
 })

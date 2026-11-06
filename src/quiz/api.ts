@@ -11,6 +11,7 @@ import {
   type OwnerQuestionRow,
   type OwnerQuiz,
   type OwnerQuizRow,
+  type PostingMode,
   type TakeQuiz,
 } from './rows'
 import { normalizeQuizCode } from './quizCode'
@@ -129,9 +130,18 @@ export async function deleteQuiz(quizId: string): Promise<void> {
   changed(await client.from('quizzes').delete().eq('id', quizId).select('id'))
 }
 
-export async function postQuiz(quizId: string, classId: string): Promise<void> {
+/**
+ * Posts a quiz to a class. `mode` is sent only for a lesson, so a project that has not run
+ * migration 0018 (no `mode` column) keeps posting quizzes.
+ */
+export async function postQuiz(quizId: string, classId: string, mode: PostingMode = 'quiz'): Promise<void> {
   const client = await db()
-  many(await client.from('quiz_classes').insert({ quiz_id: quizId, class_id: classId }).select('quiz_id'))
+  many(
+    await client
+      .from('quiz_classes')
+      .insert({ quiz_id: quizId, class_id: classId, ...(mode === 'lesson' ? { mode } : {}) })
+      .select('quiz_id'),
+  )
 }
 
 export async function unpostQuiz(quizId: string, classId: string): Promise<void> {

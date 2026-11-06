@@ -82,12 +82,19 @@ export interface TakeQuestion {
   type: QuizType
 }
 
+/** How a quiz is posted to a class: taken as a test, or woven into the deck's narrated video. */
+export type PostingMode = 'quiz' | 'lesson'
+
+export function asPostingMode(value: unknown): PostingMode {
+  return value === 'lesson' ? 'lesson' : 'quiz'
+}
+
 export interface TakeQuiz {
   id: string
   title: string
   deckTitle: string
   sections: QuizSection[]
-  classes: { id: string; name: string; attempted: boolean }[]
+  classes: { id: string; name: string; attempted: boolean; mode: PostingMode }[]
   questions: TakeQuestion[]
   /** Shuffled answers to offer above a fill-in-the-blank test, keyed by the test's index. */
   wordBoxes: Record<number, string[]>
@@ -170,29 +177,35 @@ export function ownerQuizFromRows(row: OwnerQuizRow, questions: OwnerQuestionRow
   }
 }
 
+export interface TakeQuestionJson {
+  id: string
+  order_index: number
+  section_index?: number | null
+  question_type?: string | null
+  slide_number: number
+  prompt: string
+  choices: unknown
+}
+
 interface TakeJson {
   id: string
   title: string
   deck_title: string
   quiz_type: string
   settings: unknown
-  classes: { id: string; name: string; attempted: boolean }[]
-  questions: {
-    id: string
-    order_index: number
-    section_index?: number | null
-    question_type?: string | null
-    slide_number: number
-    prompt: string
-    choices: unknown
-  }[]
+  /** `mode` is 0018 and later; a class without it is a quiz. */
+  classes: { id: string; name: string; attempted: boolean; mode?: unknown }[]
+  questions: TakeQuestionJson[]
   /** 0016 and later. */
   word_boxes?: unknown
   /** Before 0016: one box for the whole (single-type) quiz. */
   word_box?: unknown
 }
 
-function wordBoxesFrom(json: TakeJson, sectionCount: number): Record<number, string[]> {
+export function wordBoxesFrom(
+  json: { word_boxes?: unknown; word_box?: unknown },
+  sectionCount: number,
+): Record<number, string[]> {
   const out: Record<number, string[]> = {}
   if (json.word_boxes && typeof json.word_boxes === 'object' && !Array.isArray(json.word_boxes)) {
     for (const [k, v] of Object.entries(json.word_boxes as Record<string, unknown>)) {
@@ -206,6 +219,19 @@ function wordBoxesFrom(json: TakeJson, sectionCount: number): Record<number, str
   return out
 }
 
+/** One question as a student sees it: no answer, section and type resolved against the quiz's tests. */
+export function takeQuestionFrom(q: TakeQuestionJson, sections: readonly QuizSection[]): TakeQuestion {
+  const sectionIndex = sectionIndexOf(q.section_index, sections)
+  return {
+    id: q.id,
+    slideNumber: q.slide_number,
+    prompt: q.prompt,
+    choices: strings(q.choices),
+    sectionIndex,
+    type: asQuizType(q.question_type, sections[sectionIndex].config.type),
+  }
+}
+
 export function takeQuizFromJson(json: TakeJson): TakeQuiz {
   const sections = fromDbSections(json.quiz_type, json.settings)
   return {
@@ -213,20 +239,10 @@ export function takeQuizFromJson(json: TakeJson): TakeQuiz {
     title: json.title,
     deckTitle: json.deck_title,
     sections,
-    classes: json.classes,
+    classes: json.classes.map((c) => ({ id: c.id, name: c.name, attempted: c.attempted, mode: asPostingMode(c.mode) })),
     questions: [...json.questions]
       .sort((a, b) => a.order_index - b.order_index)
-      .map((q) => {
-        const sectionIndex = sectionIndexOf(q.section_index, sections)
-        return {
-          id: q.id,
-          slideNumber: q.slide_number,
-          prompt: q.prompt,
-          choices: strings(q.choices),
-          sectionIndex,
-          type: asQuizType(q.question_type, sections[sectionIndex].config.type),
-        }
-      }),
+      .map((q) => takeQuestionFrom(q, sections)),
     wordBoxes: wordBoxesFrom(json, sections.length),
   }
 }
