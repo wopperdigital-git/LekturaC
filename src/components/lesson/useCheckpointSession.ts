@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { answerLessonCheckpoint, lessonWatch } from '@/lesson/api'
 import type { Stop } from '@/lesson/checkpoints'
-import { isWatchRefusal } from '@/lesson/playerUi'
+import { isWatchRefusal, refusalAction } from '@/lesson/playerUi'
 import type { TakeLesson } from '@/lesson/rows'
 import { initialSession, sessionReducer } from '@/lesson/session'
 import { describeError } from '@/store/presentationStore'
@@ -36,6 +36,10 @@ export function useCheckpointSession({
   const [notice, setNotice] = useState<string | null>(null)
   // How many times the server has sent the student back to watch (for a lesson with no video to go back to).
   const [refusals, setRefusals] = useState(0)
+  // Set when rewinding cannot help (the server and this page disagree about the stops): the
+  // player then offers to load the lesson afresh instead of asking the same question again.
+  const [stuck, setStuck] = useState(false)
+  const lastRefused = useRef<string | null>(null)
   const busyRef = useRef(false)
   const lastBeat = useRef<Promise<void>>(Promise.resolve())
   const noticeTimer = useRef<number | undefined>(undefined)
@@ -71,6 +75,7 @@ export function useCheckpointSession({
         // count the student as having watched up to this question.
         await lastBeat.current
         const result = await answerLessonCheckpoint(code, classId, questionId, answer)
+        lastRefused.current = null
         dispatch({
           type: 'answered',
           questionId,
@@ -81,12 +86,18 @@ export function useCheckpointSession({
       } catch (err) {
         const message = describeError(err)
         if (isWatchRefusal(message)) {
-          // 0: the reducer keeps what it already knew, and sends the student back to it.
-          dispatch({ type: 'refused', watchedUntil: 0 })
-          setNotice(message)
           setRefusals((n) => n + 1)
+          setNotice(message)
           window.clearTimeout(noticeTimer.current)
-          noticeTimer.current = window.setTimeout(() => setNotice(null), NOTICE_MS)
+          if (refusalAction(message, questionId, lastRefused.current) === 'reload') {
+            // The sentence stays up with the offer to reload; no timer clears it.
+            setStuck(true)
+          } else {
+            lastRefused.current = questionId
+            // 0: the reducer keeps what it already knew, and sends the student back to it.
+            dispatch({ type: 'refused', watchedUntil: 0 })
+            noticeTimer.current = window.setTimeout(() => setNotice(null), NOTICE_MS)
+          }
         } else {
           setError(err instanceof TypeError ? "Couldn't reach the server. Press Check to try again." : message)
         }
@@ -103,7 +114,7 @@ export function useCheckpointSession({
     dispatch({ type: 'continue' })
   }, [])
 
-  return { state, dispatch, busy, error, notice, refusals, submit, onContinue, reportPosition }
+  return { state, dispatch, busy, error, notice, refusals, stuck, submit, onContinue, reportPosition }
 }
 
 export type CheckpointSession = ReturnType<typeof useCheckpointSession>

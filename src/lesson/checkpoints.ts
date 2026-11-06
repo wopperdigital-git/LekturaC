@@ -25,8 +25,8 @@ export function videoEnd(slides: readonly VideoSlideTiming[]): number {
  * the video, is asked at the end.
  *
  * Order (the SQL in migration 0018 must mirror this exactly): placed stops by
- * (slide position, orderIndex), then unplaced stops by orderIndex. No question
- * is dropped or repeated.
+ * (slide position, orderIndex, id), then unplaced stops by (orderIndex, id). A
+ * card on two slides is placed on the first. No question is dropped or repeated.
  */
 export function placeCheckpoints(
   questions: readonly CheckpointQuestion[],
@@ -55,8 +55,11 @@ export function placeCheckpoints(
     }
   }
 
-  placed.sort((a, b) => a.slideIndex! - b.slideIndex! || a.orderIndex - b.orderIndex)
-  unplaced.sort((a, b) => a.orderIndex - b.orderIndex)
+  // The id is the last tie-break, exactly as `lesson_stops` orders (equal orderIndex is rare,
+  // but both sides must still agree on it).
+  const byId = (a: Stop, b: Stop) => (a.questionId < b.questionId ? -1 : a.questionId > b.questionId ? 1 : 0)
+  placed.sort((a, b) => a.slideIndex! - b.slideIndex! || a.orderIndex - b.orderIndex || byId(a, b))
+  unplaced.sort((a, b) => a.orderIndex - b.orderIndex || byId(a, b))
   return [...placed, ...unplaced].map(({ questionId, atSeconds, slideIndex }) => ({
     questionId,
     atSeconds,

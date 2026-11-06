@@ -806,6 +806,46 @@ begin
   end if;
 end $$;
 
+-- ── 12c. the mode locks at the first answer, not at opening ────────────────
+-- S2 has opened the long lesson (a progress row) and answered nothing: the
+-- teacher can still re-post it as a quiz, and back as a lesson.
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001801","role":"authenticated"}', true);
+do $$
+declare
+  k constant uuid := '00000000-0000-4000-b000-000000001801';
+begin
+  if not exists (select 1 from lesson_progress where quiz_id = '00000000-0000-4000-d000-000000001803')
+     or exists (select 1 from lesson_answers where quiz_id = '00000000-0000-4000-d000-000000001803') then
+    raise exception 'lock: setup (opened but not answered)';
+  end if;
+  delete from quiz_classes where quiz_id = '00000000-0000-4000-d000-000000001803' and class_id = k;
+  insert into quiz_classes (quiz_id, class_id, mode) values ('00000000-0000-4000-d000-000000001803', k, 'quiz');
+  delete from quiz_classes where quiz_id = '00000000-0000-4000-d000-000000001803' and class_id = k;
+  insert into quiz_classes (quiz_id, class_id, mode) values ('00000000-0000-4000-d000-000000001803', k, 'lesson');
+end $$;
+
+-- ...but one answer is enough to lock it (written as the superuser: answering for real
+-- would need the whole 300 s watched).
+reset role;
+insert into lesson_answers (quiz_id, class_id, student_id, question_id, correct) values
+  ('00000000-0000-4000-d000-000000001803', '00000000-0000-4000-b000-000000001801',
+   '00000000-0000-4000-a000-000000001804', '00000000-0000-4000-f000-000000001808', true);
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001801","role":"authenticated"}', true);
+do $$
+declare
+  msg text;
+  k constant uuid := '00000000-0000-4000-b000-000000001801';
+begin
+  delete from quiz_classes where quiz_id = '00000000-0000-4000-d000-000000001803' and class_id = k;
+  begin insert into quiz_classes (quiz_id, class_id, mode) values ('00000000-0000-4000-d000-000000001803', k, 'quiz');
+  exception when others then msg := sqlerrm; end;
+  if msg is distinct from 'Students already started this as a lesson in that class.' then
+    raise exception 'lock: one answer should lock the mode, got %', msg;
+  end if;
+  insert into quiz_classes (quiz_id, class_id, mode) values ('00000000-0000-4000-d000-000000001803', k, 'lesson');
+end $$;
+
 -- ── 13. the lesson rows are cleaned up with the class ───────────────────────
 reset role;
 do $$ begin

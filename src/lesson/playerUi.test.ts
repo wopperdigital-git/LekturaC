@@ -8,6 +8,7 @@ import {
   isWatchRefusal,
   noVideoNeedsReload,
   progressFraction,
+  refusalAction,
   seekFromFraction,
 } from './playerUi'
 
@@ -44,6 +45,20 @@ describe('noVideoNeedsReload', () => {
     expect(noVideoNeedsReload(1, 0)).toBe(true)
     expect(noVideoNeedsReload(1, 1)).toBe(false)
     expect(noVideoNeedsReload(2, 1)).toBe(true)
+  })
+})
+
+describe('refusalAction', () => {
+  it('sends a first "watch more" refusal back to the video', () => {
+    expect(refusalAction('Watch up to this question first.', 'q1', null)).toBe('rewind')
+    expect(refusalAction('Watch up to this question first.', 'q2', 'q1')).toBe('rewind')
+  })
+  it('stops and offers a reload when the server says the order is wrong', () => {
+    expect(refusalAction('Answer the questions in order.', 'q1', null)).toBe('reload')
+    expect(refusalAction('  Answer the questions in order.', 'q1', 'q0')).toBe('reload')
+  })
+  it('stops and offers a reload when the same question is refused twice in a row', () => {
+    expect(refusalAction('Watch up to this question first.', 'q1', 'q1')).toBe('reload')
   })
 })
 

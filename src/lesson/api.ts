@@ -9,7 +9,7 @@ import { lessonModesFrom, takeLessonFromJson, type TakeLesson } from './rows'
   Every lesson read and write; components never build a query (the rule
   `quiz/api.ts` follows). RPC refusals are rethrown as bare `Error`s carrying the
   SQL's sentence. The `quiz_classes.mode` column and the lesson tables exist only
-  after migration 0018, so the plain reads below never throw: without it they
+  after migration 0018, so the plain reads below (except `loadLessonAnswers`) never throw: without it they
   report "nothing" and every posting is a quiz.
 */
 
@@ -64,7 +64,13 @@ export async function answerLessonCheckpoint(
 export async function lessonVideoUrl(path: string): Promise<string | null> {
   const client = await db()
   const { data, error } = await client.storage.from(VIDEO_BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS)
-  if (error) return null
+  if (error) {
+    if (!warned.has('video link')) {
+      warned.add('video link')
+      console.warn('[lesson] Could not make a link to the lesson video.', error)
+    }
+    return null
+  }
   return data?.signedUrl ?? null
 }
 
@@ -94,28 +100,24 @@ export async function loadMyLessonStarts(): Promise<Set<string>> {
   }
 }
 
-/** Every student's answers to one posting, for the teacher's progress view. Empty without 0018. */
+/**
+ * Every student's answers to one posting, for the teacher's progress view. Unlike the plain
+ * reads above this throws: an empty list would show students who are part-way through as
+ * "Not started", and the view that calls it is only reachable once 0018 exists.
+ */
 export async function loadLessonAnswers(quizId: string, classId: string): Promise<LessonAnswerRow[]> {
-  try {
-    const client = await db()
-    const result = await client
-      .from('lesson_answers')
-      .select('student_id, question_id, correct')
-      .eq('quiz_id', quizId)
-      .eq('class_id', classId)
-    if (result.error) {
-      warnOnce('lesson answers', result.error)
-      return []
-    }
-    return ((result.data ?? []) as { student_id: string; question_id: string; correct: boolean }[]).map((r) => ({
-      studentId: r.student_id,
-      questionId: r.question_id,
-      correct: r.correct,
-    }))
-  } catch (error) {
-    warnOnce('lesson answers', error)
-    return []
-  }
+  const client = await db()
+  const result = await client
+    .from('lesson_answers')
+    .select('student_id, question_id, correct')
+    .eq('quiz_id', quizId)
+    .eq('class_id', classId)
+  if (result.error) throw new Error(result.error.message)
+  return ((result.data ?? []) as { student_id: string; question_id: string; correct: boolean }[]).map((r) => ({
+    studentId: r.student_id,
+    questionId: r.question_id,
+    correct: r.correct,
+  }))
 }
 
 /** The owner's read of a deck's video record (what readiness is judged on). Null on any failure. */

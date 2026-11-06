@@ -14,6 +14,7 @@ import type { TakeLesson } from '@/lesson/rows'
 import type { VideoRecord } from '@/video/videoRecord'
 import { CheckpointCard } from './CheckpointCard'
 import { LessonSummary } from './LessonSummary'
+import { ReloadPrompt } from './ReloadPrompt'
 import { useCheckpointSession } from './useCheckpointSession'
 
 /**
@@ -29,6 +30,7 @@ export function LessonPlayer({
   video,
   videoUrl,
   stops,
+  onReload,
 }: {
   code: string
   classId: string
@@ -36,8 +38,10 @@ export function LessonPlayer({
   video: VideoRecord
   videoUrl: string
   stops: readonly Stop[]
+  /** Loads the lesson afresh, when the server and this page disagree about the questions. */
+  onReload: () => void
 }) {
-  const { state, dispatch, busy, error, notice, submit, onContinue, reportPosition } = useCheckpointSession({
+  const { state, dispatch, busy, error, notice, stuck, submit, onContinue, reportPosition } = useCheckpointSession({
     code,
     classId,
     lesson,
@@ -179,14 +183,20 @@ export function LessonPlayer({
         </span>
       </div>
 
-      {notice && (
+      {notice && !stuck && (
         <p role="status" className="text-sm font-medium text-app-highlight-text">
           {notice}
         </p>
       )}
 
       {/* On a phone the question covers the video; on a wider screen it sits under it. */}
-      {asked && (
+      {stuck && (
+        <ReloadPrompt notice={notice} onReload={onReload}>
+          This question can&apos;t be checked against the video yet.
+        </ReloadPrompt>
+      )}
+
+      {asked && !stuck && (
         <div className="absolute inset-0 z-10 overflow-y-auto bg-app-background/95 p-3 sm:static sm:overflow-visible sm:bg-transparent sm:p-0">
           <CheckpointCard
             key={context.question.id}

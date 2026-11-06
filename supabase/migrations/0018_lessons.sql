@@ -728,8 +728,9 @@ $$;
 -- ─── posting rules ──────────────────────────────────────────────────────────
 
 -- A lesson needs a narrated video with timings, and a class never mixes the
--- two ways of taking the same quiz (attempts without progress are quiz
--- attempts; progress rows are lessons that were started).
+-- two ways of taking the same quiz once anyone has begun. A lesson counts as
+-- begun at its first answer, not when it is merely opened (a progress row);
+-- attempts without lesson answers are quiz attempts.
 create or replace function quiz_classes_check_mode()
 returns trigger
 language plpgsql
@@ -750,13 +751,13 @@ begin
       select 1 from quiz_attempts a
        where a.quiz_id = new.quiz_id and a.class_id = new.class_id
          and not exists (
-           select 1 from lesson_progress p
-            where p.quiz_id = a.quiz_id and p.class_id = a.class_id and p.student_id = a.student_id)
+           select 1 from lesson_answers la
+            where la.quiz_id = a.quiz_id and la.class_id = a.class_id and la.student_id = a.student_id)
     ) then
       raise exception 'Students already took this as a quiz in that class.';
     end if;
   elsif exists (
-    select 1 from lesson_progress p where p.quiz_id = new.quiz_id and p.class_id = new.class_id
+    select 1 from lesson_answers la where la.quiz_id = new.quiz_id and la.class_id = new.class_id
   ) then
     raise exception 'Students already started this as a lesson in that class.';
   end if;

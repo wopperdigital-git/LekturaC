@@ -22,10 +22,25 @@ export function hasUsableVideo(video: VideoRecord | null, url: string | null): b
 }
 
 /** The two sentences `answer_lesson_checkpoint` refuses with when the student is ahead of the video. */
-const WATCH_REFUSALS = ['Watch up to this question first.', 'Answer the questions in order.']
+const ORDER_REFUSAL = 'Answer the questions in order.'
+const WATCH_REFUSALS = ['Watch up to this question first.', ORDER_REFUSAL]
 
 export function isWatchRefusal(message: string): boolean {
   return WATCH_REFUSALS.includes(message.trim())
+}
+
+/**
+ * What to do with a "watch more" refusal. A single "Watch up to this question first." is the
+ * client being ahead of the server's count, so it rewinds. "Answer the questions in order." means
+ * the page's idea of the stops disagrees with the server's (the video was made again mid-lesson),
+ * and a second refusal of the same question in a row means rewinding is not helping: both stop
+ * and offer to load the lesson afresh, since asking again would only be refused again.
+ */
+export type RefusalAction = 'rewind' | 'reload'
+
+export function refusalAction(message: string, questionId: string, lastRefusedQuestionId: string | null): RefusalAction {
+  if (message.trim() === ORDER_REFUSAL) return 'reload'
+  return lastRefusedQuestionId === questionId ? 'reload' : 'rewind'
 }
 
 /**

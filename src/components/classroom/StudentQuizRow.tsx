@@ -8,13 +8,14 @@ import { quizTypeLabel as labelFor } from '@/quiz/types'
  * quiz, answered ones show the score. There is no retake (the server allows one
  * attempt per class), so an answered quiz offers nothing to press. A posting made
  * as a lesson opens the lesson player instead, and reads Start lesson, Continue
- * lesson, then Finished with the score.
+ * lesson, then Finished with the score; a lesson already begun is In progress, not Pending.
  */
 export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
   const { quiz, classId, postedAt, attempt, mode, started } = item
   const isLesson = mode === 'lesson'
   const quizTypeLabel = isLesson ? 'Lesson' : labelFor(quiz.quizType)
   const actionLabel = isLesson ? (started ? 'Continue lesson' : 'Start lesson') : 'Take quiz'
+  const pendingLabel = isLesson && started ? 'In progress' : 'Pending'
   const actionTo = isLesson ? `/lesson/${quiz.code}/${classId}` : `/quiz/${quiz.code}`
 
   const scorePercent = attempt ? Math.round(attempt.score * 100) : 0
@@ -78,7 +79,7 @@ export function StudentQuizRow({ item }: { item: StudentQuizItem }) {
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full border border-app-track-sun/70 bg-app-track-sun/20 px-2 py-0.5 text-[11px] font-medium text-app-foreground">
                   <span className="size-1.5 rounded-full bg-app-track-sun" aria-hidden="true" />
-                  <span>Pending</span>
+                  <span>{pendingLabel}</span>
                 </span>
               )}
             </div>

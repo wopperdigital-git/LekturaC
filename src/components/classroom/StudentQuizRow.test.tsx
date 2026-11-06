@@ -49,6 +49,14 @@ describe('StudentQuizRow', () => {
     expect(html).not.toContain('Start lesson')
   })
 
+  it('says In progress, not Pending, beside Continue lesson', () => {
+    const started = render(item({ mode: 'lesson', started: true }))
+    expect(started).toContain('In progress')
+    expect(started).not.toContain('Pending')
+    expect(render(item({ mode: 'lesson' }))).toContain('Pending')
+    expect(render(item())).toContain('Pending')
+  })
+
   it('shows Finished with the whole-number score for a finished lesson, and nothing to press', () => {
     const html = render(
       item({

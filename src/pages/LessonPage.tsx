@@ -6,6 +6,7 @@ import { Panel, PanelMessage, RowsSkeleton } from '@/components/classroom/Panel'
 import { CheckpointCard } from '@/components/lesson/CheckpointCard'
 import { LessonPlayer } from '@/components/lesson/LessonPlayer'
 import { LessonSummary } from '@/components/lesson/LessonSummary'
+import { ReloadPrompt } from '@/components/lesson/ReloadPrompt'
 import { useCheckpointSession } from '@/components/lesson/useCheckpointSession'
 import { Button } from '@/components/ui/Button'
 import { getLessonForTaking, lessonVideoUrl } from '@/lesson/api'
@@ -18,13 +19,17 @@ interface LoadedLesson {
   lesson: TakeLesson
   /** Null when there is no video to play. */
   videoUrl: string | null
+  /** Counts loads, so a reload starts the lesson's session afresh from what the server now says. */
+  loadId: number
 }
+
+let loads = 0
 
 async function loadLesson(code: string, classId: string): Promise<LoadedLesson> {
   const lesson = await getLessonForTaking(code, classId)
   const wantsVideo = lesson.video !== null && (lesson.video.slides?.length ?? 0) > 0
   const videoUrl = wantsVideo && lesson.video ? await lessonVideoUrl(lesson.video.path) : null
-  return { lesson, videoUrl }
+  return { lesson, videoUrl, loadId: ++loads }
 }
 
 /**
@@ -80,7 +85,7 @@ function LessonPageInner({ code, classId }: { code: string; classId: string }) {
           />
         </Panel>
       ) : (
-        <LessonBody key={state.data.lesson.quizId} code={code} classId={classId} loaded={state.data} onReload={reload} />
+        <LessonBody key={`${state.data.lesson.quizId}|${state.data.loadId}`} code={code} classId={classId} loaded={state.data} onReload={reload} />
       )}
     </DashboardShell>
   )
@@ -107,7 +112,15 @@ function LessonBody({
 
   if (playable && lesson.video && videoUrl) {
     return (
-      <LessonPlayer code={code} classId={classId} lesson={lesson} video={lesson.video} videoUrl={videoUrl} stops={stops} />
+      <LessonPlayer
+        code={code}
+        classId={classId}
+        lesson={lesson}
+        video={lesson.video}
+        videoUrl={videoUrl}
+        stops={stops}
+        onReload={onReload}
+      />
     )
   }
   return <VideoRemoved code={code} classId={classId} lesson={lesson} stops={stops} onReload={onReload} />
@@ -159,26 +172,21 @@ function VideoRemoved({
     <Panel>
       <p className="mb-4 text-sm font-medium text-app-foreground">The video for this lesson was removed.</p>
       {needsReload && (
-        <div role="alert" className="mb-4 flex flex-col items-start gap-3 rounded-app-sm border border-app-border bg-app-surface p-3">
-          <p className="text-sm text-app-foreground">
-            {notice ? `${notice} ` : ''}The video couldn&apos;t be loaded, so this question can&apos;t be checked yet.
-          </p>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setAcknowledged(refusals)
-              onReload()
-            }}
-          >
-            Try again
-          </Button>
-        </div>
+        <ReloadPrompt
+          notice={notice}
+          onReload={() => {
+            setAcknowledged(refusals)
+            onReload()
+          }}
+        >
+          The video couldn&apos;t be loaded, so this question can&apos;t be checked yet.
+        </ReloadPrompt>
       )}
       <ol className="flex flex-col gap-3">
         {remaining.map((stop) => {
           const q = lesson.questions.find((x) => x.id === stop.questionId)
           if (!q) return null
-          if (stop.questionId === current && context && (state.phase === 'asking' || state.phase === 'feedback')) {
+          if (!needsReload && stop.questionId === current && context && (state.phase === 'asking' || state.phase === 'feedback')) {
             return (
               <li key={q.id}>
                 <CheckpointCard

@@ -14,6 +14,7 @@ import {
   type PostingMode,
   type TakeQuiz,
 } from './rows'
+import { describePostFailure } from './postError'
 import { normalizeQuizCode } from './quizCode'
 import { toDbConfig, type QuizQuestionDraft, type QuizSection } from './types'
 
@@ -136,12 +137,13 @@ export async function deleteQuiz(quizId: string): Promise<void> {
  */
 export async function postQuiz(quizId: string, classId: string, mode: PostingMode = 'quiz'): Promise<void> {
   const client = await db()
-  many(
-    await client
-      .from('quiz_classes')
-      .insert({ quiz_id: quizId, class_id: classId, ...(mode === 'lesson' ? { mode } : {}) })
-      .select('quiz_id'),
-  )
+  const result = await client
+    .from('quiz_classes')
+    .insert({ quiz_id: quizId, class_id: classId, ...(mode === 'lesson' ? { mode } : {}) })
+    .select('quiz_id')
+  // Only a lesson names the `mode` column, so only its failures can mean 0018 is missing.
+  if (mode === 'lesson' && result.error) throw describePostFailure(result.error)
+  many(result)
 }
 
 export async function unpostQuiz(quizId: string, classId: string): Promise<void> {
