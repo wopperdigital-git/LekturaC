@@ -273,6 +273,48 @@ begin
 end;
 $$;
 
+-- ─── word boxes ─────────────────────────────────────────────────────────────
+
+-- The word box per fill-in-the-blank test that asked for one, as 0016's
+-- get_quiz_for_taking built it (moved out unchanged so a lesson shows the same
+-- boxes): that test's answers, shuffled stably. JSON comparison, never a cast
+-- (settings is client-supplied and must not be able to break taking). Called
+-- only by the two taking functions.
+create or replace function quiz_word_boxes(p_quiz quizzes)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  boxes jsonb := '{}'::jsonb;
+  sec record;
+begin
+  if jsonb_typeof(p_quiz.settings->'sections') = 'array' then
+    for sec in
+      select (t.ord - 1)::int as idx, t.elem
+        from jsonb_array_elements(p_quiz.settings->'sections') with ordinality as t(elem, ord)
+    loop
+      if sec.elem->>'type' = 'fill_blank' and coalesce(sec.elem->'wordBox' = 'true'::jsonb, false) then
+        boxes := boxes || jsonb_build_object(sec.idx::text, (
+          select coalesce(jsonb_agg(w.word order by md5(w.word || p_quiz.id::text)), '[]'::jsonb)
+            from (select distinct (qq.answer->>'text') as word
+                    from quiz_questions qq
+                   where qq.quiz_id = p_quiz.id
+                     and qq.section_index = sec.idx
+                     and qq.question_type = 'fill_blank') w));
+      end if;
+    end loop;
+  elsif p_quiz.quiz_type = 'fill_blank' and coalesce(p_quiz.settings->'wordBox' = 'true'::jsonb, false) then
+    boxes := jsonb_build_object('0', (
+      select coalesce(jsonb_agg(w.word order by md5(w.word || p_quiz.id::text)), '[]'::jsonb)
+        from (select distinct (qq.answer->>'text') as word from quiz_questions qq where qq.quiz_id = p_quiz.id) w));
+  end if;
+
+  return boxes;
+end;
+$$;
+
 -- ─── get_quiz_for_taking, now with each class's mode ────────────────────────
 
 create or replace function get_quiz_for_taking(p_code text)
@@ -285,8 +327,7 @@ declare
   quiz quizzes%rowtype;
   eligible jsonb;
   question_list jsonb;
-  boxes jsonb := '{}'::jsonb;
-  sec record;
+  boxes jsonb;
 begin
   if auth.uid() is null then raise exception 'Log in to take a quiz.'; end if;
 
@@ -330,29 +371,7 @@ begin
     from quiz_questions qq
     where qq.quiz_id = quiz.id;
 
-  -- A word box per fill-in-the-blank test that asked for one: that test's
-  -- answers, shuffled stably. JSON comparison, never a cast (settings is
-  -- client-supplied and must not be able to break taking).
-  if jsonb_typeof(quiz.settings->'sections') = 'array' then
-    for sec in
-      select (t.ord - 1)::int as idx, t.elem
-        from jsonb_array_elements(quiz.settings->'sections') with ordinality as t(elem, ord)
-    loop
-      if sec.elem->>'type' = 'fill_blank' and coalesce(sec.elem->'wordBox' = 'true'::jsonb, false) then
-        boxes := boxes || jsonb_build_object(sec.idx::text, (
-          select coalesce(jsonb_agg(w.word order by md5(w.word || quiz.id::text)), '[]'::jsonb)
-            from (select distinct (qq.answer->>'text') as word
-                    from quiz_questions qq
-                   where qq.quiz_id = quiz.id
-                     and qq.section_index = sec.idx
-                     and qq.question_type = 'fill_blank') w));
-      end if;
-    end loop;
-  elsif quiz.quiz_type = 'fill_blank' and coalesce(quiz.settings->'wordBox' = 'true'::jsonb, false) then
-    boxes := jsonb_build_object('0', (
-      select coalesce(jsonb_agg(w.word order by md5(w.word || quiz.id::text)), '[]'::jsonb)
-        from (select distinct (qq.answer->>'text') as word from quiz_questions qq where qq.quiz_id = quiz.id) w));
-  end if;
+  boxes := quiz_word_boxes(quiz);
 
   return jsonb_build_object(
     'id', quiz.id,
@@ -475,9 +494,8 @@ declare
   v_class_name text;
   v_questions jsonb;
   v_answers jsonb;
-  v_boxes jsonb := '{}'::jsonb;
+  v_boxes jsonb;
   v_score numeric;
-  v_sec record;
 begin
   v_quiz := lesson_open(p_code, p_class_id);
   v_prog := lesson_sync_progress(v_quiz.id, p_class_id, v_uid);
@@ -501,27 +519,7 @@ begin
     from quiz_questions qq
    where qq.quiz_id = v_quiz.id;
 
-  -- The same word boxes as get_quiz_for_taking.
-  if jsonb_typeof(v_quiz.settings->'sections') = 'array' then
-    for v_sec in
-      select (t.ord - 1)::int as idx, t.elem
-        from jsonb_array_elements(v_quiz.settings->'sections') with ordinality as t(elem, ord)
-    loop
-      if v_sec.elem->>'type' = 'fill_blank' and coalesce(v_sec.elem->'wordBox' = 'true'::jsonb, false) then
-        v_boxes := v_boxes || jsonb_build_object(v_sec.idx::text, (
-          select coalesce(jsonb_agg(w.word order by md5(w.word || v_quiz.id::text)), '[]'::jsonb)
-            from (select distinct (qq.answer->>'text') as word
-                    from quiz_questions qq
-                   where qq.quiz_id = v_quiz.id
-                     and qq.section_index = v_sec.idx
-                     and qq.question_type = 'fill_blank') w));
-      end if;
-    end loop;
-  elsif v_quiz.quiz_type = 'fill_blank' and coalesce(v_quiz.settings->'wordBox' = 'true'::jsonb, false) then
-    v_boxes := jsonb_build_object('0', (
-      select coalesce(jsonb_agg(w.word order by md5(w.word || v_quiz.id::text)), '[]'::jsonb)
-        from (select distinct (qq.answer->>'text') as word from quiz_questions qq where qq.quiz_id = v_quiz.id) w));
-  end if;
+  v_boxes := quiz_word_boxes(v_quiz);
 
   -- Which questions were answered and whether each was right; never the key.
   select coalesce(jsonb_agg(
@@ -556,17 +554,21 @@ $$;
 -- The player reports its position about every 5 seconds. The server credits
 -- watching only as fast as real time allows:
 --
---   allowed = min(whole seconds since the heartbeat clock, 15) + 2
+--   from    = max(heartbeat clock, now - 15 s)
+--   allowed = whole seconds from `from` to now, + 2
 --   new     = max(old, min(position, old + allowed, next unanswered stop or the
 --                          video's end))
 --
 -- The +2 is slack for timer jitter. It must not be free on every call, or a
 -- client calling this in a loop would gain 2 seconds a call, so the heartbeat
 -- clock is not "when the last beat arrived" but is spent by what was credited:
--- it moves forward by exactly the seconds advanced. Credited watch time
--- therefore never outruns real time by more than the 2 seconds of slack plus
--- the (at most 15 seconds of) time the student has not yet used. Whole seconds
--- only, so a call right after the last one is allowed exactly the slack.
+-- it moves forward from `from` by exactly the seconds advanced. After a full
+-- spend it sits about 2 seconds ahead of now, so an immediate second call is
+-- allowed nothing. Time the student has not used (idle, paused, answering a
+-- question) is banked only up to the last 15 seconds, because `from` is never
+-- earlier than now - 15 s: however long the pause, the next calls together
+-- credit at most 17 seconds, never the whole pause. Whole seconds only, so a
+-- call right after the last one is allowed exactly the slack.
 create or replace function lesson_watch(p_code text, p_class_id uuid, p_position numeric)
 returns jsonb
 language plpgsql
@@ -579,6 +581,8 @@ declare
   v_prog lesson_progress%rowtype;
   v_video jsonb;
   v_cap numeric;
+  v_now timestamptz;
+  v_from timestamptz;
   v_allowed numeric;
   v_new numeric;
 begin
@@ -603,16 +607,16 @@ begin
     select sl.start_s + sl.dur_s into v_cap from lesson_slides(v_video) sl order by sl.idx desc limit 1;
   end if;
 
-  v_allowed := greatest(
-    least(floor(extract(epoch from (clock_timestamp() - v_prog.last_beat_at)))::numeric, 15) + 2,
-    0);
+  v_now := clock_timestamp();
+  v_from := greatest(v_prog.last_beat_at, v_now - interval '15 seconds');
+  v_allowed := greatest(floor(extract(epoch from (v_now - v_from)))::numeric + 2, 0);
   v_new := greatest(
     v_prog.watched_until,
     least(coalesce(p_position, 0), v_prog.watched_until + v_allowed, v_cap));
 
   update lesson_progress
      set watched_until = v_new,
-         last_beat_at = v_prog.last_beat_at + make_interval(secs => (v_new - v_prog.watched_until)::double precision)
+         last_beat_at = v_from + make_interval(secs => (v_new - v_prog.watched_until)::double precision)
    where quiz_id = v_quiz.id and class_id = p_class_id and student_id = v_uid;
 
   return jsonb_build_object('watched_until', v_new);
@@ -798,6 +802,7 @@ create policy deck_videos_lesson_select on storage.objects
 -- ─── grants ─────────────────────────────────────────────────────────────────
 
 revoke execute on function quiz_answer_correct(text, jsonb, jsonb) from public, anon, authenticated;
+revoke execute on function quiz_word_boxes(quizzes) from public, anon, authenticated;
 revoke execute on function lesson_slides(jsonb) from public, anon, authenticated;
 revoke execute on function lesson_has_slides(jsonb) from public, anon, authenticated;
 revoke execute on function lesson_stops(uuid) from public, anon, authenticated;

@@ -23,6 +23,8 @@
 -- second student S2 ...1804; deck P e000-1801 (its quiz Q d000-1801, code
 -- QZPKM234), deck P2 e000-1802 (quiz Q2, code QZPKM235); class K b000-1801;
 -- cards c000-18c1..18c5; questions f000-1801..1806 (Q), f000-1807 (Q2).
+-- Deck P3 e000-1803 (one 300 s slide) with quiz Q3 d000-1803, code QZPKM236, question
+-- f000-1808: the unused-watch-time check (12b).
 
 begin;
 
@@ -56,6 +58,12 @@ insert into cards (id, presentation_id, order_index, blocks) values
 select set_config('lt.video',
   (select video::text from presentations where id = '00000000-0000-4000-e000-000000001801'), true);
 
+-- A deck whose only slide is 300 seconds long, for the unused-time check (12b).
+insert into presentations (id, owner_id, title, theme, video)
+values ('00000000-0000-4000-e000-000000001803', '00000000-0000-4000-a000-000000001801', 'Long', '{}',
+  '{"path":"00000000-0000-4000-a000-000000001801/00000000-0000-4000-e000-000000001803.mp4","contentType":"video/mp4","durationSeconds":300,"generatedAt":"2026-11-06T10:00:00.000Z","slides":[
+     {"cardId":"00000000-0000-4000-c000-0000000018c1","startSeconds":0,"durationSeconds":300}]}');
+
 insert into classes (id, teacher_id, name, join_code)
 values ('00000000-0000-4000-b000-000000001801', '00000000-0000-4000-a000-000000001801', 'Lesson Bio', 'LSNBI2');
 insert into class_members (class_id, student_id) values
@@ -68,6 +76,10 @@ insert into quizzes (id, teacher_id, presentation_id, title, deck_title, quiz_ty
   ('00000000-0000-4000-d000-000000001802', '00000000-0000-4000-a000-000000001801', '00000000-0000-4000-e000-000000001802',
    'Genes quiz', 'Genes', 'true_false', '{"sections":[{"title":"Test 1","instructions":"","type":"true_false"}]}', 'QZPKM235');
 
+insert into quizzes (id, teacher_id, presentation_id, title, deck_title, quiz_type, settings, code)
+values ('00000000-0000-4000-d000-000000001803', '00000000-0000-4000-a000-000000001801', '00000000-0000-4000-e000-000000001803',
+        'Long lesson', 'Long', 'true_false', '{"sections":[{"title":"Test 1","instructions":"","type":"true_false"}]}', 'QZPKM236');
+
 -- Every answer is true. (id, order_index, card)
 insert into quiz_questions (id, quiz_id, order_index, section_index, question_type, card_id, slide_number, prompt, answer) values
   ('00000000-0000-4000-f000-000000001801', '00000000-0000-4000-d000-000000001801', 0, 0, 'true_false', '00000000-0000-4000-c000-0000000018c3', 3, 'q1', 'true'),
@@ -77,6 +89,11 @@ insert into quiz_questions (id, quiz_id, order_index, section_index, question_ty
   ('00000000-0000-4000-f000-000000001805', '00000000-0000-4000-d000-000000001801', 4, 0, 'true_false', '00000000-0000-4000-c000-0000000018c5', 5, 'q5', 'true'),
   ('00000000-0000-4000-f000-000000001806', '00000000-0000-4000-d000-000000001801', 5, 0, 'true_false', '00000000-0000-4000-c000-0000000018c4', 4, 'q6', 'true'),
   ('00000000-0000-4000-f000-000000001807', '00000000-0000-4000-d000-000000001802', 0, 0, 'true_false', null,                                   1, 'q7', 'true');
+
+insert into quiz_questions (id, quiz_id, order_index, section_index, question_type, card_id, slide_number, prompt, answer)
+values ('00000000-0000-4000-f000-000000001808', '00000000-0000-4000-d000-000000001803', 0, 0, 'true_false', null, 1, 'q8', 'true');
+insert into quiz_classes (quiz_id, class_id, mode)
+values ('00000000-0000-4000-d000-000000001803', '00000000-0000-4000-b000-000000001801', 'lesson');
 
 -- ── 1. the moved scoring block still scores each type the same way ──────────
 do $$ begin
@@ -181,7 +198,7 @@ begin
   exception when others then msg := sqlerrm; end;
   if msg is distinct from 'Make the narrated video first.' then raise exception 'posting: slides not a list: %', msg; end if;
 
-  -- a plain quiz posting needs no video, and the mode check rejects nothing else
+  -- a mode other than quiz/lesson is refused by the column check
   msg := null;
   begin insert into quiz_classes (quiz_id, class_id, mode) values (quiz, k, 'nonsense');
   exception when check_violation then msg := 'check'; end;
@@ -280,6 +297,18 @@ begin
   begin
     perform quiz_answer_correct('true_false', 'true', 'true');
     raise exception 'student: called quiz_answer_correct';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform lesson_open('QZPKM234', k);
+    raise exception 'student: called lesson_open';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform lesson_sync_progress('00000000-0000-4000-d000-000000001801', k, '00000000-0000-4000-a000-000000001802');
+    raise exception 'student: called lesson_sync_progress';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform quiz_word_boxes(null::quizzes);
+    raise exception 'student: called quiz_word_boxes';
   exception when insufficient_privilege then null; end;
 
   -- opening the lesson: no key anywhere, the video and the questions are there
@@ -710,16 +739,45 @@ begin
   end if;
 end $$;
 
+-- ── 12b. unused watch time is banked for 15 seconds only ───────────────────
+-- S2 opens the long lesson and then sits idle for ten minutes. Calling the
+-- heartbeat back to back must credit 17 seconds in all (15 banked + 2 slack),
+-- not 17 a call until the ten minutes are spent.
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001804","role":"authenticated"}', true);
+do $$ begin perform get_lesson_for_taking('QZPKM236', '00000000-0000-4000-b000-000000001801'); end $$;
+
+reset role;
+update lesson_progress set last_beat_at = clock_timestamp() - interval '600 seconds'
+ where quiz_id = '00000000-0000-4000-d000-000000001803' and student_id = '00000000-0000-4000-a000-000000001804';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-a000-000000001804","role":"authenticated"}', true);
+
+do $$
+declare
+  res jsonb;
+begin
+  res := lesson_watch('QZPKM236', '00000000-0000-4000-b000-000000001801', 1000);
+  if (res->>'watched_until')::numeric <> 17 then
+    raise exception 'bank: the first call after ten idle minutes should credit 17, got %', res;
+  end if;
+  for i in 1..5 loop
+    res := lesson_watch('QZPKM236', '00000000-0000-4000-b000-000000001801', 1000);
+  end loop;
+  if (res->>'watched_until')::numeric > 19 then
+    raise exception 'bank: idle time was not capped, watched_until is %', res;
+  end if;
+end $$;
+
 -- ── 13. the lesson rows are cleaned up with the class ───────────────────────
 reset role;
 do $$ begin
-  if (select count(*) from lesson_answers where class_id = '00000000-0000-4000-b000-000000001801') <> 12
-     or (select count(*) from lesson_progress where class_id = '00000000-0000-4000-b000-000000001801') <> 2 then
+  if (select count(*) from lesson_answers where quiz_id = '00000000-0000-4000-d000-000000001801') <> 12
+     or (select count(*) from lesson_progress where quiz_id = '00000000-0000-4000-d000-000000001801') <> 2 then
     raise exception 'rows: expected 12 answers and 2 progress rows';
   end if;
   delete from classes where id = '00000000-0000-4000-b000-000000001801';
-  if exists (select 1 from lesson_answers where quiz_id = '00000000-0000-4000-d000-000000001801')
-     or exists (select 1 from lesson_progress where quiz_id = '00000000-0000-4000-d000-000000001801') then
+  if exists (select 1 from lesson_answers where quiz_id in ('00000000-0000-4000-d000-000000001801', '00000000-0000-4000-d000-000000001803'))
+     or exists (select 1 from lesson_progress where quiz_id in ('00000000-0000-4000-d000-000000001801', '00000000-0000-4000-d000-000000001803')) then
     raise exception 'cascade: lesson rows survived their class';
   end if;
 end $$;
