@@ -7,7 +7,10 @@ let held: Window | null = null
 const outcomes = new Map<string, 'opened' | 'blocked'>()
 
 export function newSessionId(): string {
-  return crypto.randomUUID()
+  // randomUUID exists only in a secure context (plain-http LAN testing lacks it).
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /** Opens (or refocuses) the slide window. Call it inside a click, or the browser blocks it. */
