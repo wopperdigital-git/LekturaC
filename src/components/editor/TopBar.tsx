@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { PercentField } from '@/components/editor/PercentField'
 import { MAX_ZOOM, MIN_ZOOM } from '@/lib/zoom'
-import { AccountMenu, ExportMenu } from '@/components/editor/TopBarMenus'
+import { AccountMenu, ExportMenu, PresentMenu } from '@/components/editor/TopBarMenus'
 
 /**
  * The editor's top bar. Left: home and the deck title. Right: zoom, the Create & export menu (quiz, narrated video, PowerPoint, script), Present and the account menu.
@@ -22,7 +22,8 @@ export function TopBar({
   canExport,
   onExportScript,
   scriptDisabledReason,
-  presentHref,
+  onPresent,
+  onPresenterView,
   onQuiz,
   quizDisabledReason,
   onVideo,
@@ -45,7 +46,9 @@ export function TopBar({
   onExportScript: () => void
   /** Why there is no narration script to export, or `null` when there is. */
   scriptDisabledReason: string | null
-  presentHref: string
+  onPresent: () => void
+  /** Opens the presenter view; the page opens the slide window inside this very click. */
+  onPresenterView: (from: 'current' | 'first') => void
   onQuiz: () => void
   /** Why a quiz cannot be made right now, or `null` when it can. */
   quizDisabledReason: string | null
@@ -166,15 +169,7 @@ export function TopBar({
           highlight={exportHighlight}
           highlightQuiz={exportHighlight}
         />
-        {/* A link, not a button, because it navigates. */}
-        <Link
-          to={presentHref}
-          aria-label="Present"
-          title="Present this deck"
-          className={`flex size-8 shrink-0 pointer-coarse:size-11 items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10 ${FOCUS_RING}`}
-        >
-          <PlayIcon />
-        </Link>
+        <PresentMenu onPresent={onPresent} onPresenterView={onPresenterView} />
         <AccountMenu name={accountName} accountType={accountType} onProfileSettings={onProfileSettings} />
       </div>
     </div>
@@ -222,12 +217,4 @@ const stroke = {
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
   'aria-hidden': true,
-}
-
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-4">
-      <path d="M6 4.5v11l9-5.5-9-5.5Z" />
-    </svg>
-  )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { flushScheduledSaves, usePresentationStore } from '@/store/presentationStore'
 import { clearNew, useNewItems } from '@/jobs/newItems'
 import { useJobsStore } from '@/jobs/jobsStore'
@@ -71,6 +71,8 @@ import { FactCheckModal } from '@/components/editor/FactCheckModal'
 import { RIGHT_PANEL_WIDTH_PX } from '@/components/editor/panelSize'
 import { editorLayout } from '@/lib/editorLayout'
 import { useEditorLayout } from '@/lib/useEditorLayout'
+import { newSessionId, openSlideWindow } from '@/present/slideWindow'
+import { consoleUrl } from '@/present/protocol'
 
 const SIDEBAR_WIDTH_PX = 160
 
@@ -83,6 +85,7 @@ type PhotoRequest =
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const store = usePresentationStore()
   const { cards, undo, redo } = store
 
@@ -763,6 +766,18 @@ export function EditorPage() {
     URL.revokeObjectURL(url)
   }
 
+  // The presenter view. The slide window has to be opened inside the click itself
+  // (before any await or timer), or a pop-up blocker refuses it; then the console
+  // takes this tab.
+  function presentFrom(from: 'current' | 'first') {
+    if (!id) return
+    const here = sortedCards.findIndex((c) => c.id === (selectedCardId ?? activeCardId))
+    const start = from === 'first' ? 0 : Math.max(0, here)
+    const session = newSessionId()
+    openSlideWindow(id, session)
+    void navigate(consoleUrl(id, session, start))
+  }
+
   const selectedIndex = sortedCards.findIndex((c) => c.id === selectedCardId)
   const selectedCard = selectedIndex >= 0 ? sortedCards[selectedIndex] : null
   // The picker offers varieties of this type only, so the type is resolved once
@@ -1121,7 +1136,8 @@ export function EditorPage() {
         onExport={exportPptx}
         exporting={exportStatus === 'working'}
         canExport={cards.length > 0}
-        presentHref={`/deck/${id}/present`}
+        onPresent={() => void navigate(`/deck/${id}/present`)}
+        onPresenterView={presentFrom}
         onQuiz={() => {
           setQuizTab('create')
           setQuizOpen(true)

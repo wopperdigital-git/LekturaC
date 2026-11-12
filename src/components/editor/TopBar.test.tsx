@@ -23,7 +23,8 @@ function render(extra: Partial<ComponentProps<typeof TopBar>> = {}) {
         onExport={noop}
         exporting={false}
         canExport
-        presentHref="/deck/x/present"
+        onPresent={noop}
+        onPresenterView={noop}
         onQuiz={noop}
         quizDisabledReason={null}
         onVideo={noop}
@@ -82,13 +83,12 @@ describe('TopBar', () => {
     expect(html).not.toContain('Fit</button>')
     expect(at('aria-label="Create &amp; export"')).toBeLessThan(at('aria-label="Present"'))
     expect(at('aria-label="Present"')).toBeLessThan(at('aria-label="Account"'))
-    expect(html).toContain('href="/deck/x/present"')
   })
 
   // Present is an icon; the quiz lives in the Create & export menu; light/dark lives in the settings.
   it('has no Present word, no standalone quiz button and no light/dark toggle', () => {
     const html = render()
-    expect(html).not.toContain('Present</a>')
+    expect(html).not.toContain('>Present</button>')
     expect(html).not.toContain('Generate quiz')
     expect(html).not.toContain('Generate Quiz')
     expect(html).not.toContain('Quiz…')

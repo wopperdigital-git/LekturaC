@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AccountMenu, ExportMenu } from './TopBarMenus'
+import { AccountMenu, ExportMenu, PresentMenu } from './TopBarMenus'
 
 /**
  * Render smoke tests, like `TopBar.test.tsx`: what each menu offers for which
@@ -109,5 +109,24 @@ describe('AccountMenu', () => {
     const html = renderToStaticMarkup(<AccountMenu name="Ada Lovelace" accountType="Teacher" onProfileSettings={noop} />)
     expect(html).toContain('aria-label="Account"')
     expect(html).not.toContain('Profile settings')
+  })
+})
+
+describe('PresentMenu', () => {
+  it('is an icon button that keeps its items out of the bar until it is opened', () => {
+    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} />)
+    expect(html).toContain('aria-label="Present"')
+    expect(html).toContain('title="Present this deck"')
+    expect(html).not.toContain('>Present</button>')
+    expect(html).not.toContain('role="menuitem"')
+  })
+
+  it('offers Present, then the presenter view from the current slide before the first', () => {
+    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} defaultOpen />)
+    const at = (needle: string) => html.indexOf(needle)
+    expect(at('Present</button>')).toBeGreaterThan(-1)
+    expect(at('Present</button>')).toBeLessThan(at('Presenter view'))
+    expect(at('Presenter view')).toBeLessThan(at('From current slide'))
+    expect(at('From current slide')).toBeLessThan(at('From first slide'))
   })
 })

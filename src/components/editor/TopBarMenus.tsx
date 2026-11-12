@@ -254,6 +254,67 @@ export function ExportMenu({
 }
 
 /**
+ * Present, as an icon beside Create & export: the plain presentation, or the
+ * presenter view (a console here, the slides on a second window) from the slide the
+ * editor is on or from the first. The presenter view's window is opened by the
+ * page inside the click itself, so a pop-up blocker lets it through.
+ */
+export function PresentMenu({
+  onPresent,
+  onPresenterView,
+  defaultOpen,
+}: {
+  onPresent: () => void
+  onPresenterView: (from: 'current' | 'first') => void
+  defaultOpen?: boolean
+}) {
+  return (
+    <Dropdown
+      label="Present"
+      title="Present this deck"
+      trigger={<PlayIcon />}
+      triggerClassName="flex size-8 shrink-0 pointer-coarse:size-11 cursor-pointer items-center justify-center rounded-[6px] text-app-foreground/90 transition-colors hover:bg-app-foreground/10"
+      defaultOpen={defaultOpen}
+    >
+      {(close) => (
+        <>
+          <MenuItem
+            icon={<PlayIcon />}
+            onClick={() => {
+              close()
+              onPresent()
+            }}
+          >
+            Present
+          </MenuItem>
+          <div aria-hidden="true" className="my-1 h-px bg-app-border" />
+          <MenuGroup caption="Presenter view">
+            <MenuItem
+              icon={<PlayIcon />}
+              onClick={() => {
+                close()
+                onPresenterView('current')
+              }}
+            >
+              From current slide
+            </MenuItem>
+            <MenuItem
+              icon={<PlayIcon />}
+              onClick={() => {
+                close()
+                onPresenterView('first')
+              }}
+            >
+              From first slide
+            </MenuItem>
+          </MenuGroup>
+        </>
+      )}
+    </Dropdown>
+  )
+}
+
+/**
  * The signed-in account: an avatar with a down arrow that opens who it is (name,
  * with the account type under it) and the way into the profile settings.
  */
@@ -330,6 +391,14 @@ const stroke = {
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
   'aria-hidden': true,
+}
+
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="size-4">
+      <path d="M6 4.5v11l9-5.5-9-5.5Z" />
+    </svg>
+  )
 }
 
 function DownloadIcon() {
