@@ -10,6 +10,8 @@ import type { PresenterAction } from './presenterState'
 export const SLIDE_WINDOW_NAME = 'lekturac-slides'
 export const ALIVE_INTERVAL_MS = 1000
 export const SILENCE_MS = 3000
+/** A new slide window loads the app and resolves the session before its first hello. */
+export const CONNECT_GRACE_MS = 10000
 export const ORPHAN_AFTER_MS = 3000
 
 export interface DeckSnapshot {
@@ -124,4 +126,23 @@ export function parsePresentParams(search: string): PresentParams {
   }
   if (view === 'screen') return { view: 'screen', session }
   return { view: 'single' }
+}
+
+export type ScreenLink = 'connecting' | 'open' | 'closed' | 'blocked'
+
+/**
+ * The console's once-a-second verdict on the slide window. Connecting gets a longer
+ * grace (counted from the open click) than an open window's silence, because a
+ * window still loading cannot post yet. `blocked` and `closed` only change by an
+ * explicit event (a click, a hello, a bye).
+ */
+export function nextScreenLink(
+  link: ScreenLink,
+  now: number,
+  lastHeardAt: number | null,
+  connectingSince: number,
+): ScreenLink {
+  if (link === 'connecting') return now - connectingSince > CONNECT_GRACE_MS ? 'closed' : link
+  if (link === 'open') return lastHeardAt !== null && now - lastHeardAt > SILENCE_MS ? 'closed' : link
+  return link
 }

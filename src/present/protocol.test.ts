@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CONNECT_GRACE_MS,
+  SILENCE_MS,
   channelName,
   consoleUrl,
   parseConsoleMessage,
   parsePresentParams,
+  nextScreenLink,
   parseScreenMessage,
   screenUrl,
   type DeckSnapshot,
@@ -84,5 +87,32 @@ describe('urls and params', () => {
     expect(parsePresentParams('view=screen&session=s')).toEqual({ view: 'screen', session: 's' })
     expect(parsePresentParams('?view=screen')).toEqual({ view: 'screen', session: null })
     expect(parsePresentParams('?view=other')).toEqual({ view: 'single' })
+  })
+})
+
+describe('nextScreenLink', () => {
+  it('keeps a connecting window through the load grace, not the 3 s silence', () => {
+    expect(nextScreenLink('connecting', 5000, null, 0)).toBe('connecting')
+    expect(nextScreenLink('connecting', CONNECT_GRACE_MS, null, 0)).toBe('connecting')
+    expect(nextScreenLink('connecting', CONNECT_GRACE_MS + 1, null, 0)).toBe('closed')
+  })
+
+  it('counts the grace from the last open click', () => {
+    expect(nextScreenLink('connecting', 20000, null, 15000)).toBe('connecting')
+    expect(nextScreenLink('connecting', 25001, null, 15000)).toBe('closed')
+  })
+
+  it('closes an open window after the silence, not before', () => {
+    expect(nextScreenLink('open', 1000 + SILENCE_MS, 1000, 0)).toBe('open')
+    expect(nextScreenLink('open', 1000 + SILENCE_MS + 1, 1000, 0)).toBe('closed')
+  })
+
+  it('never closes an open window that has not been heard (it cannot be open then)', () => {
+    expect(nextScreenLink('open', 99999, null, 0)).toBe('open')
+  })
+
+  it('leaves closed and blocked as they are', () => {
+    expect(nextScreenLink('closed', 99999, 0, 0)).toBe('closed')
+    expect(nextScreenLink('blocked', 99999, 0, 0)).toBe('blocked')
   })
 })

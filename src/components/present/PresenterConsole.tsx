@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
@@ -22,14 +23,15 @@ import {
   type JumpBuffer,
   type PresenterState,
 } from '@/present/presenterState'
-import { leavesKeyToBrowser, presenterKeyIntent } from '@/present/keys'
+import { confirmsExit, EXIT_CONFIRM_MS, leavesKeyToBrowser, presenterKeyIntent } from '@/present/keys'
 import {
-  SILENCE_MS,
   channelName,
+  nextScreenLink,
   parseScreenMessage,
   type ConsoleMessage,
   type DeckSnapshot,
   type ForwardedKey,
+  type ScreenLink,
 } from '@/present/protocol'
 import { loadSession, restoreStartIndex, restoreState, saveSession } from '@/present/session'
 import { closeSlideWindow, lastOpenOutcome, openSlideWindow } from '@/present/slideWindow'
@@ -42,8 +44,6 @@ import {
   type Stopwatch,
 } from '@/present/timer'
 
-export type ScreenLink = 'connecting' | 'open' | 'closed' | 'blocked'
-
 // The script sizes belong to this view and its tests; a separate file would only hold this line.
 // oxlint-disable-next-line react/only-export-components
 export const NOTE_SIZES = ['text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl'] as const
@@ -52,13 +52,14 @@ const DEFAULT_NOTE_SIZE = 1
 export interface PresenterConsoleViewProps {
   deck: DeckSnapshot
   state: PresenterState
-  startIndex: number
   clock: string
   running: boolean
   targetMinutes: number
   pace: Pace
   noteSize: number
   screen: ScreenLink
+  /** The first Escape has been pressed; a second within the window ends. */
+  exitPending: boolean
   onPrev: () => void
   onNext: () => void
   onToggleBlack: () => void
@@ -69,6 +70,14 @@ export interface PresenterConsoleViewProps {
   onNotesLarger: () => void
   onOpenScreen: () => void
   onEnd: () => void
+}
+
+/**
+ * A mouse press must not leave a button focused: Enter and Space on a focused button
+ * press it, so a clicked Pause would eat the clicker's next Space. Tab still focuses.
+ */
+function refuseFocus(e: MouseEvent) {
+  e.preventDefault()
 }
 
 const BUTTON =
@@ -89,7 +98,7 @@ function ScreenBanner({ screen, onOpenScreen }: { screen: ScreenLink; onOpenScre
       className="flex items-center justify-between gap-3 border-b border-app-border bg-app-highlight px-4 py-2 text-sm text-app-highlight-foreground"
     >
       <span>{closed ? 'Slide window closed' : 'Your browser blocked the slide window'}</span>
-      <button type="button" onClick={onOpenScreen} className={BUTTON}>
+      <button type="button" onMouseDown={refuseFocus} onClick={onOpenScreen} className={BUTTON}>
         {closed ? 'Reopen' : 'Open slide window'}
       </button>
     </div>
@@ -158,6 +167,7 @@ export function PresenterConsoleView({
   pace,
   noteSize,
   screen,
+  exitPending,
   onPrev,
   onNext,
   onToggleBlack,
@@ -170,7 +180,19 @@ export function PresenterConsoleView({
   onEnd,
 }: PresenterConsoleViewProps) {
   const count = deck.cards.length
-  if (count === 0) return <div className="p-8 text-app-muted">No slides to present.</div>
+  if (count === 0) {
+    return (
+      <div className="flex h-screen flex-col bg-app-background text-app-foreground">
+        <header className="flex items-center justify-between gap-3 border-b border-app-border px-4 py-2">
+          <h1 className="min-w-0 truncate text-sm font-semibold">{deck.title}</h1>
+          <button type="button" onMouseDown={refuseFocus} onClick={onEnd} className={BUTTON}>
+            End presentation
+          </button>
+        </header>
+        <p className="p-8 text-app-muted">No slides to present.</p>
+      </div>
+    )
+  }
 
   const index = Math.min(Math.max(state.index, 0), count - 1)
   const card = deck.cards[index]
@@ -185,19 +207,27 @@ export function PresenterConsoleView({
 
       <header className="flex items-center justify-between gap-3 border-b border-app-border px-4 py-2">
         <h1 className="min-w-0 truncate text-sm font-semibold">{deck.title}</h1>
-        <button type="button" onClick={onEnd} className={BUTTON}>
+        <button type="button" onMouseDown={refuseFocus} onClick={onEnd} className={BUTTON}>
           End presentation
         </button>
       </header>
 
       <ScreenBanner screen={screen} onOpenScreen={onOpenScreen} />
 
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 flex justify-center">
+        {exitPending && (
+          <span className="rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-sm font-medium text-app-foreground shadow-lg">
+            Press Esc again to end presentation
+          </span>
+        )}
+      </div>
+
       <div className="flex min-h-0 flex-1 gap-4 p-4">
         <section className="relative min-h-0 min-w-0 flex-1">
           <ThemeProvider theme={deck.theme}>
             <SlideStage className="h-full w-full overflow-hidden rounded-app">
               {state.ended ? (
-                <div className="flex h-full w-full items-center justify-center text-xl text-white/80">
+                <div className="flex h-full w-full items-center justify-center bg-black text-xl text-white">
                   End of presentation
                 </div>
               ) : (
@@ -240,6 +270,7 @@ export function PresenterConsoleView({
               <div className="flex gap-1">
                 <button
                   type="button"
+                  onMouseDown={refuseFocus}
                   onClick={onNotesSmaller}
                   disabled={noteSize <= 0}
                   aria-label="Smaller script text"
@@ -249,6 +280,7 @@ export function PresenterConsoleView({
                 </button>
                 <button
                   type="button"
+                  onMouseDown={refuseFocus}
                   onClick={onNotesLarger}
                   disabled={noteSize >= NOTE_SIZES.length - 1}
                   aria-label="Larger script text"
@@ -273,15 +305,16 @@ export function PresenterConsoleView({
 
       <footer className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-app-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onPrev} className={BUTTON}>
+          <button type="button" onMouseDown={refuseFocus} onClick={onPrev} className={BUTTON}>
             ‹ Prev
           </button>
           <span className="min-w-14 text-center text-sm tabular-nums">{`${index + 1} / ${count}`}</span>
-          <button type="button" onClick={onNext} disabled={state.ended} className={BUTTON}>
+          <button type="button" onMouseDown={refuseFocus} onClick={onNext} disabled={state.ended} className={BUTTON}>
             Next ›
           </button>
           <button
             type="button"
+            onMouseDown={refuseFocus}
             onClick={onToggleBlack}
             aria-pressed={state.black}
             title="Black screen (B)"
@@ -293,10 +326,10 @@ export function PresenterConsoleView({
 
         <div className="flex items-center gap-2">
           <span className="min-w-16 text-lg font-semibold tabular-nums">{clock}</span>
-          <button type="button" onClick={onPauseResume} className={BUTTON}>
+          <button type="button" onMouseDown={refuseFocus} onClick={onPauseResume} className={BUTTON}>
             {running ? 'Pause' : 'Resume'}
           </button>
-          <button type="button" onClick={onReset} className={BUTTON}>
+          <button type="button" onMouseDown={refuseFocus} onClick={onReset} className={BUTTON}>
             Reset
           </button>
         </div>
@@ -391,7 +424,12 @@ function ConsoleRunner({
   const channelRef = useRef<BroadcastChannel | null>(null)
   const stateRef = useRef(state)
   const jumpRef = useRef<JumpBuffer | null>(null)
-  const lastHeardRef = useRef(0)
+  // null until the slide window has been heard; a loading window cannot post yet.
+  const lastHeardRef = useRef<number | null>(null)
+  const connectingSinceRef = useRef(0) // set on mount and on each Open or Reopen
+  const lastExitRef = useRef<number | null>(null)
+  const exitTimerRef = useRef<number | undefined>(undefined)
+  const [exitPending, setExitPending] = useState(false)
 
   const post = useCallback((message: ConsoleMessage) => {
     channelRef.current?.postMessage(message)
@@ -437,18 +475,33 @@ function ConsoleRunner({
   const endPresentation = useCallback(() => {
     post({ type: 'end' })
     closeSlideWindow()
-    void navigate(`/deck/${deckId}`)
+    void navigate(`/deck/${deckId}`, { replace: true })
   }, [post, navigate, deckId])
 
   // The listeners below outlive renders; they call whatever is current.
   const keyRef = useRef<(key: ForwardedKey | { type: 'exit' }) => void>(() => {})
   useEffect(() => {
-    keyRef.current = (key) => (key.type === 'exit' ? endPresentation() : handleKey(key))
+    keyRef.current = (key) => {
+      if (key.type !== 'exit') return handleKey(key)
+      // A clicker's one button alternates F5 and Esc: a single Esc must not close the projector.
+      const at = Date.now()
+      if (confirmsExit(lastExitRef.current, at)) return endPresentation()
+      lastExitRef.current = at
+      setExitPending(true)
+      window.clearTimeout(exitTimerRef.current)
+      exitTimerRef.current = window.setTimeout(() => {
+        lastExitRef.current = null
+        setExitPending(false)
+      }, EXIT_CONFIRM_MS)
+    }
   }, [handleKey, endPresentation])
+
+  useEffect(() => () => window.clearTimeout(exitTimerRef.current), [])
 
   // The channel to the slide window.
   useEffect(() => {
-    lastHeardRef.current = Date.now()
+    lastHeardRef.current = null
+    connectingSinceRef.current = Date.now()
     if (typeof BroadcastChannel === 'undefined') return
     const channel = new BroadcastChannel(channelName(session))
     channelRef.current = channel
@@ -528,9 +581,7 @@ function ConsoleRunner({
       const at = Date.now()
       setNow(at)
       setScreen((current) =>
-        (current === 'connecting' || current === 'open') && at - lastHeardRef.current > SILENCE_MS
-          ? 'closed'
-          : current,
+        nextScreenLink(current, at, lastHeardRef.current, connectingSinceRef.current),
       )
     }, 1000)
     return () => window.clearInterval(timer)
@@ -538,7 +589,8 @@ function ConsoleRunner({
 
   const openScreen = useCallback(() => {
     const win = openSlideWindow(deckId, session)
-    lastHeardRef.current = Date.now()
+    lastHeardRef.current = null
+    connectingSinceRef.current = Date.now()
     setScreen(win ? 'connecting' : 'blocked')
   }, [deckId, session])
 
@@ -556,13 +608,13 @@ function ConsoleRunner({
     <PresenterConsoleView
       deck={deck}
       state={state}
-      startIndex={startIndex}
       clock={formatClock(elapsed)}
       running={running}
       targetMinutes={targetMinutes}
       pace={pace}
       noteSize={noteSize}
       screen={screen}
+      exitPending={exitPending}
       onPrev={() => setState((s) => reducePresenter(s, { type: 'prev' }))}
       onNext={() => setState((s) => reducePresenter(s, { type: 'next' }))}
       onToggleBlack={() => setState((s) => reducePresenter(s, { type: 'toggleBlack' }))}

@@ -61,3 +61,11 @@ export function presenterKeyIntent(e: KeyInput): KeyIntent | null {
 export function leavesKeyToBrowser(key: string, onControl: boolean): boolean {
   return onControl && (key === 'Enter' || key === ' ')
 }
+
+/** Escape must be pressed twice within this long to end: a clicker's one button alternates F5 and Esc. */
+export const EXIT_CONFIRM_MS = 2000
+
+/** Whether an Escape at `now` confirms an exit begun by one at `lastExitAt`. */
+export function confirmsExit(lastExitAt: number | null, now: number): boolean {
+  return lastExitAt !== null && now - lastExitAt <= EXIT_CONFIRM_MS
+}

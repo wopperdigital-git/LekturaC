@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { leavesKeyToBrowser, presenterKeyIntent, type KeyInput } from './keys'
+import { EXIT_CONFIRM_MS, confirmsExit, leavesKeyToBrowser, presenterKeyIntent, type KeyInput } from './keys'
 
 const key = (k: string, extra: Partial<KeyInput> = {}) =>
   presenterKeyIntent({ key: k, ctrlKey: false, metaKey: false, altKey: false, inField: false, ...extra })
@@ -59,5 +59,20 @@ describe('leavesKeyToBrowser', () => {
     expect(leavesKeyToBrowser('b', true)).toBe(false)
     expect(leavesKeyToBrowser('Enter', false)).toBe(false)
     expect(leavesKeyToBrowser(' ', false)).toBe(false)
+  })
+})
+
+describe('confirmsExit', () => {
+  it('needs an earlier Escape', () => {
+    expect(confirmsExit(null, 5000)).toBe(false)
+  })
+
+  it('confirms a second Escape within the window, boundary included', () => {
+    expect(confirmsExit(1000, 1000)).toBe(true)
+    expect(confirmsExit(1000, 1000 + EXIT_CONFIRM_MS)).toBe(true)
+  })
+
+  it('does not confirm after the window', () => {
+    expect(confirmsExit(1000, 1000 + EXIT_CONFIRM_MS + 1)).toBe(false)
   })
 })

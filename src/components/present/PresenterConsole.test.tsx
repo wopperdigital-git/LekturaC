@@ -3,13 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card } from '@/engine/contentBlocks'
 import { BUILTIN_THEMES } from '@/lib/theme-tokens'
 import type { Pace } from '@/present/pacing'
-import type { DeckSnapshot } from '@/present/protocol'
+import type { DeckSnapshot, ScreenLink } from '@/present/protocol'
 import type { PresenterState } from '@/present/presenterState'
-import {
-  PresenterConsoleView,
-  type PresenterConsoleViewProps,
-  type ScreenLink,
-} from './PresenterConsole'
+import { PresenterConsoleView, type PresenterConsoleViewProps } from './PresenterConsole'
 
 function card(id: string, orderIndex: number, script?: string): Card {
   return {
@@ -40,13 +36,13 @@ function render(over: Partial<PresenterConsoleViewProps> = {}) {
   const props: PresenterConsoleViewProps = {
     deck: DECK,
     state: state(),
-    startIndex: 0,
     clock: '06:12',
     running: true,
     targetMinutes: 10,
     pace: ON_TIME,
     noteSize: 1,
     screen: 'open' as ScreenLink,
+    exitPending: false,
     onPrev: noop,
     onNext: noop,
     onToggleBlack: noop,
@@ -89,9 +85,17 @@ describe('PresenterConsoleView', () => {
     expect(render()).not.toContain('Screen is black')
   })
 
-  it('says when the presentation has ended', () => {
-    const html = render({ state: state({ index: 2, ended: true }) })
+  it('says when the presentation has ended, in the current slide pane too', () => {
+    // Slide 2 of 3 has a next slide, so the only "End of presentation" is the current pane's.
+    const html = render({ state: state({ index: 1, ended: true }) })
     expect(html).toContain('End of presentation')
+    expect(html).toContain('bg-black')
+    expect(render({ state: state({ index: 1 }) })).not.toContain('End of presentation')
+  })
+
+  it('asks for a second Escape only after the first', () => {
+    expect(render({ exitPending: true })).toContain('Press Esc again to end presentation')
+    expect(render()).not.toContain('Press Esc again')
   })
 
   it('banners a closed or blocked slide window', () => {
@@ -131,6 +135,7 @@ describe('PresenterConsoleView', () => {
   it('renders only a message for an empty deck', () => {
     const html = render({ deck: { ...DECK, cards: [] }, state: state({ index: 0, count: 0 }) })
     expect(html).toContain('No slides to present.')
+    expect(html).toContain('End presentation')
     expect(html).not.toContain('Next')
   })
 
