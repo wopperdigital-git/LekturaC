@@ -7,14 +7,29 @@ import { SlideStage } from '@/components/theme/SlideStage'
 import { PresentSlide } from '@/components/present/PresentSlide'
 import { DeckLoadError } from '@/components/editor/DeckLoadError'
 import { SlideWindow } from '@/components/present/SlideWindow'
-import { parsePresentParams } from '@/present/protocol'
+import { PresenterConsole } from '@/components/present/PresenterConsole'
+import { consoleUrl, parsePresentParams } from '@/present/protocol'
+import { newSessionId } from '@/present/slideWindow'
 
 export function PresentPage() {
   const { search } = useLocation()
   const params = parsePresentParams(search)
   if (params.view === 'screen') return <SlideWindow session={params.session} />
-  // The presenter console arrives in a later task; until then it is the single view.
+  if (params.view === 'presenter') return <PresenterRoute session={params.session} start={params.start} />
   return <SinglePresent />
+}
+
+/** The console needs a session; one opened without it gets a fresh one in its address. */
+function PresenterRoute({ session, start }: { session: string | null; start: number }) {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (id && !session) void navigate(consoleUrl(id, newSessionId(), start), { replace: true })
+  }, [id, session, start, navigate])
+
+  if (!id || !session) return <div className="p-8 text-app-muted">Loading…</div>
+  return <PresenterConsole deckId={id} session={session} start={start} />
 }
 
 function SinglePresent() {
