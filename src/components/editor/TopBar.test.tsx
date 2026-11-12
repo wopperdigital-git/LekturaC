@@ -25,6 +25,7 @@ function render(extra: Partial<ComponentProps<typeof TopBar>> = {}) {
         canExport
         onPresent={noop}
         onPresenterView={noop}
+        presenterDisabledReason={null}
         onQuiz={noop}
         quizDisabledReason={null}
         onVideo={noop}

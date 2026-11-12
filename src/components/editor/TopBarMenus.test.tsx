@@ -114,7 +114,7 @@ describe('AccountMenu', () => {
 
 describe('PresentMenu', () => {
   it('is an icon button that keeps its items out of the bar until it is opened', () => {
-    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} />)
+    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason={null} />)
     expect(html).toContain('aria-label="Present"')
     expect(html).toContain('title="Present this deck"')
     expect(html).not.toContain('>Present</button>')
@@ -122,11 +122,30 @@ describe('PresentMenu', () => {
   })
 
   it('offers Present, then the presenter view from the current slide before the first', () => {
-    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} defaultOpen />)
+    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason={null} defaultOpen />)
     const at = (needle: string) => html.indexOf(needle)
     expect(at('Present</button>')).toBeGreaterThan(-1)
     expect(at('Present</button>')).toBeLessThan(at('Presenter view'))
     expect(at('Presenter view')).toBeLessThan(at('From current slide'))
     expect(at('From current slide')).toBeLessThan(at('From first slide'))
+  })
+
+  it('disables both presenter view items, with the reason, for an empty deck', () => {
+    const html = renderToStaticMarkup(
+      <PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason="Add a slide first" defaultOpen />,
+    )
+    const items = html.match(/<button[^>]*role="menuitem"[^>]*>/g) ?? []
+    const presenter = items.filter((b) => b.includes('title="Add a slide first"'))
+    expect(presenter).toHaveLength(2)
+    for (const b of presenter) expect(b).toContain('disabled=""')
+    // plain Present stays available
+    expect(items.filter((b) => !b.includes('Add a slide first'))[0]).not.toContain('disabled=""')
+  })
+
+  it('leaves them enabled when there is a slide', () => {
+    const html = renderToStaticMarkup(
+      <PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason={null} defaultOpen />,
+    )
+    expect(html).not.toContain('disabled=""')
   })
 })

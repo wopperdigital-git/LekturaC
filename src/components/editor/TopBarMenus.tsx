@@ -262,10 +262,13 @@ export function ExportMenu({
 export function PresentMenu({
   onPresent,
   onPresenterView,
+  presenterDisabledReason,
   defaultOpen,
 }: {
   onPresent: () => void
   onPresenterView: (from: 'current' | 'first') => void
+  /** Why the presenter view cannot start (an empty deck), or `null` when it can. */
+  presenterDisabledReason: string | null
   defaultOpen?: boolean
 }) {
   return (
@@ -291,6 +294,8 @@ export function PresentMenu({
           <MenuGroup caption="Presenter view">
             <MenuItem
               icon={<PlayIcon />}
+              disabled={presenterDisabledReason !== null}
+              title={presenterDisabledReason ?? 'Console here, slides on a second window, from the slide you are on'}
               onClick={() => {
                 close()
                 onPresenterView('current')
@@ -300,6 +305,8 @@ export function PresentMenu({
             </MenuItem>
             <MenuItem
               icon={<PlayIcon />}
+              disabled={presenterDisabledReason !== null}
+              title={presenterDisabledReason ?? 'Console here, slides on a second window, from the first slide'}
               onClick={() => {
                 close()
                 onPresenterView('first')

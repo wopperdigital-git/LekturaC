@@ -24,6 +24,7 @@ export function TopBar({
   scriptDisabledReason,
   onPresent,
   onPresenterView,
+  presenterDisabledReason,
   onQuiz,
   quizDisabledReason,
   onVideo,
@@ -49,6 +50,8 @@ export function TopBar({
   onPresent: () => void
   /** Opens the presenter view; the page opens the slide window inside this very click. */
   onPresenterView: (from: 'current' | 'first') => void
+  /** Why the presenter view cannot start (an empty deck), or `null` when it can. */
+  presenterDisabledReason: string | null
   onQuiz: () => void
   /** Why a quiz cannot be made right now, or `null` when it can. */
   quizDisabledReason: string | null
@@ -169,7 +172,11 @@ export function TopBar({
           highlight={exportHighlight}
           highlightQuiz={exportHighlight}
         />
-        <PresentMenu onPresent={onPresent} onPresenterView={onPresenterView} />
+        <PresentMenu
+          onPresent={onPresent}
+          onPresenterView={onPresenterView}
+          presenterDisabledReason={presenterDisabledReason}
+        />
         <AccountMenu name={accountName} accountType={accountType} onProfileSettings={onProfileSettings} />
       </div>
     </div>

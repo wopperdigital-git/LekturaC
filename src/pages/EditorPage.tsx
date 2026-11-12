@@ -1138,6 +1138,7 @@ export function EditorPage() {
         canExport={cards.length > 0}
         onPresent={() => void navigate(`/deck/${id}/present`)}
         onPresenterView={presentFrom}
+        presenterDisabledReason={cards.length === 0 ? 'Add a slide first' : null}
         onQuiz={() => {
           setQuizTab('create')
           setQuizOpen(true)
