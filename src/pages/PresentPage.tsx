@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { ScaledSlide } from '@/components/theme/ScaledSlide'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { PresentSlide } from '@/components/present/PresentSlide'
 import { DeckLoadError } from '@/components/editor/DeckLoadError'
+import { SlideWindow } from '@/components/present/SlideWindow'
+import { parsePresentParams } from '@/present/protocol'
 
 export function PresentPage() {
+  const { search } = useLocation()
+  const params = parsePresentParams(search)
+  if (params.view === 'screen') return <SlideWindow session={params.session} />
+  // The presenter console arrives in a later task; until then it is the single view.
+  return <SinglePresent />
+}
+
+function SinglePresent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const store = usePresentationStore()
