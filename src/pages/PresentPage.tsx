@@ -2,13 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
-import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
-import { SlideBody } from '@/components/layouts/SlideBody'
-import { SlideSurface } from '@/components/theme/SlideSurface'
 import { ScaledSlide } from '@/components/theme/ScaledSlide'
 import { SlideStage } from '@/components/theme/SlideStage'
-import { TextStyleScope } from '@/components/theme/TextStyleScope'
-import { mergeTextStyle } from '@/engine/textStyle'
+import { PresentSlide } from '@/components/present/PresentSlide'
 import { DeckLoadError } from '@/components/editor/DeckLoadError'
 
 export function PresentPage() {
@@ -102,16 +98,7 @@ export function PresentPage() {
               {/* Laid out at the editor's width and scaled to the screen (up to
                   `max-w-5xl`), so text wraps exactly as it does in the editor. */}
               <ScaledSlide maxDisplayWidth={1024}>
-                <TextStyleScope style={mergeTextStyle(store.textStyle, card.textStyle)}>
-                  <SlideSurface className="w-full rounded-slide shadow-slide-card">
-                    {/* Provides the card width every stored element nudge is a
-                        fraction of, so the presenter shows the same arrangement
-                        the editor does. */}
-                    <SlideBody card={card}>
-                      <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
-                    </SlideBody>
-                  </SlideSurface>
-                </TextStyleScope>
+                <PresentSlide card={card} textStyle={store.textStyle} isFirstCard={i === 0} />
               </ScaledSlide>
             </div>
           ))}
