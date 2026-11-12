@@ -22,7 +22,7 @@ import {
   type JumpBuffer,
   type PresenterState,
 } from '@/present/presenterState'
-import { presenterKeyIntent } from '@/present/keys'
+import { leavesKeyToBrowser, presenterKeyIntent } from '@/present/keys'
 import {
   SILENCE_MS,
   channelName,
@@ -31,7 +31,7 @@ import {
   type DeckSnapshot,
   type ForwardedKey,
 } from '@/present/protocol'
-import { loadSession, restoreState, saveSession } from '@/present/session'
+import { loadSession, restoreStartIndex, restoreState, saveSession } from '@/present/session'
 import { closeSlideWindow, lastOpenOutcome, openSlideWindow } from '@/present/slideWindow'
 import {
   elapsedMs,
@@ -337,6 +337,7 @@ function sessionStorageOrNull(): Storage | null {
 
 interface Initial {
   state: PresenterState
+  startIndex: number
   stopwatch: Stopwatch
   targetMinutes: number
 }
@@ -363,12 +364,15 @@ function ConsoleRunner({
     if (saved) {
       return {
         state: restoreState(saved, count),
+        startIndex: restoreStartIndex(saved, count),
         stopwatch: saved.stopwatch,
         targetMinutes: saved.targetMinutes,
       }
     }
+    const fresh = initialPresenterState(count, start)
     return {
-      state: initialPresenterState(count, start),
+      state: fresh,
+      startIndex: fresh.index,
       stopwatch: startStopwatch(Date.now()),
       targetMinutes: estimateMinutes(budgets),
     }
@@ -377,6 +381,7 @@ function ConsoleRunner({
   const [state, setState] = useState(initial.state)
   const [stopwatch, setStopwatch] = useState(initial.stopwatch)
   const [targetMinutes, setTargetMinutes] = useState(initial.targetMinutes)
+  const [startIndex, setStartIndex] = useState(initial.startIndex)
   const [noteSize, setNoteSize] = useState(DEFAULT_NOTE_SIZE)
   const [now, setNow] = useState(() => Date.now())
   const [screen, setScreen] = useState<ScreenLink>(() =>
@@ -402,8 +407,9 @@ function ConsoleRunner({
       ended: state.ended,
       stopwatch,
       targetMinutes,
+      startIndex,
     })
-  }, [state, stopwatch, targetMinutes, session, count])
+  }, [state, stopwatch, targetMinutes, startIndex, session, count])
 
   // The projector follows every change.
   useEffect(() => {
@@ -504,6 +510,10 @@ function ConsoleRunner({
         inField,
       })
       if (!intent) return
+      // Enter and Space on a focused button or link press it, not the slide.
+      const onControl =
+        target instanceof Element && target.closest('button, a[href], [role="button"]') !== null
+      if (leavesKeyToBrowser(e.key, onControl)) return
       e.preventDefault()
       if (intent.type === 'fullscreen') return
       keyRef.current(intent)
@@ -539,14 +549,14 @@ function ConsoleRunner({
     state.ended ? count - 1 : state.index,
     budgets,
     targetMinutes * 60,
-    initial.state.index,
+    startIndex,
   )
 
   return (
     <PresenterConsoleView
       deck={deck}
       state={state}
-      startIndex={initial.state.index}
+      startIndex={startIndex}
       clock={formatClock(elapsed)}
       running={running}
       targetMinutes={targetMinutes}
@@ -565,6 +575,8 @@ function ConsoleRunner({
         const at = Date.now()
         setNow(at)
         setStopwatch(startStopwatch(at))
+        // Pacing counts from here: a mid-deck reset reads on time.
+        setStartIndex(state.ended ? count - 1 : state.index)
       }}
       onTargetChange={(input) => {
         const parsed = parseTargetMinutes(input)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { presenterKeyIntent, type KeyInput } from './keys'
+import { leavesKeyToBrowser, presenterKeyIntent, type KeyInput } from './keys'
 
 const key = (k: string, extra: Partial<KeyInput> = {}) =>
   presenterKeyIntent({ key: k, ctrlKey: false, metaKey: false, altKey: false, inField: false, ...extra })
@@ -45,5 +45,19 @@ describe('presenterKeyIntent', () => {
     expect(key('ArrowRight', { ctrlKey: true })).toBeNull()
     expect(key('b', { metaKey: true })).toBeNull()
     expect(key('n', { altKey: true })).toBeNull()
+  })
+})
+
+describe('leavesKeyToBrowser', () => {
+  it('leaves Enter and Space to a focused control', () => {
+    expect(leavesKeyToBrowser('Enter', true)).toBe(true)
+    expect(leavesKeyToBrowser(' ', true)).toBe(true)
+  })
+
+  it('handles every other key, and Enter and Space elsewhere', () => {
+    expect(leavesKeyToBrowser('ArrowRight', true)).toBe(false)
+    expect(leavesKeyToBrowser('b', true)).toBe(false)
+    expect(leavesKeyToBrowser('Enter', false)).toBe(false)
+    expect(leavesKeyToBrowser(' ', false)).toBe(false)
   })
 })

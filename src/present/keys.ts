@@ -53,3 +53,11 @@ export function presenterKeyIntent(e: KeyInput): KeyIntent | null {
   if (/^[0-9]$/.test(e.key)) return { type: 'digit', digit: e.key }
   return null
 }
+
+/**
+ * Enter and Space on a focused button or link belong to the browser (they press
+ * it); every other key still drives the presenter.
+ */
+export function leavesKeyToBrowser(key: string, onControl: boolean): boolean {
+  return onControl && (key === 'Enter' || key === ' ')
+}

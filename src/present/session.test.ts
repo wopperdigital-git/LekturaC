@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loadSession, restoreState, saveSession, sessionKey, type SavedSession } from './session'
+import { loadSession, restoreStartIndex, restoreState, saveSession, sessionKey, type SavedSession } from './session'
 
 const saved: SavedSession = {
   index: 2,
@@ -7,6 +7,7 @@ const saved: SavedSession = {
   ended: false,
   stopwatch: { startedAt: 1000, accumulatedMs: 500 },
   targetMinutes: 20,
+  startIndex: 1,
 }
 
 function memory() {
@@ -39,6 +40,10 @@ describe('session storage', () => {
     expect(loadSession(s, 's1')).toBeNull()
     s.setItem(sessionKey('s1'), JSON.stringify({ index: 'x' }))
     expect(loadSession(s, 's1')).toBeNull()
+    // a session saved without its start slide reads as a fresh start
+    const { startIndex: _omit, ...old } = saved
+    s.setItem(sessionKey('s1'), JSON.stringify(old))
+    expect(loadSession(s, 's1')).toBeNull()
   })
 
   it('does not throw when setItem throws or storage is null', () => {
@@ -65,5 +70,13 @@ describe('restoreState', () => {
       black: true,
     })
     expect(restoreState({ ...saved, index: 3, ended: true }, 4).ended).toBe(true)
+  })
+})
+
+describe('restoreStartIndex', () => {
+  it('keeps a start slide that fits and clamps one that does not', () => {
+    expect(restoreStartIndex({ ...saved, startIndex: 2 }, 4)).toBe(2)
+    expect(restoreStartIndex({ ...saved, startIndex: 9 }, 4)).toBe(3)
+    expect(restoreStartIndex({ ...saved, startIndex: -1 }, 4)).toBe(0)
   })
 })

@@ -10,6 +10,8 @@ export interface SavedSession {
   ended: boolean
   stopwatch: Stopwatch
   targetMinutes: number
+  /** The slide the pacing counts from: where the talk (or the last Reset) began. */
+  startIndex: number
 }
 
 export interface KeyValueStorage {
@@ -26,6 +28,7 @@ const savedSchema = z.object({
     accumulatedMs: z.number(),
   }),
   targetMinutes: z.number(),
+  startIndex: z.number(),
 })
 
 export function sessionKey(session: string): string {
@@ -65,4 +68,8 @@ export function restoreState(saved: SavedSession, count: number): PresenterState
     black: saved.black,
     ended: index === saved.index ? saved.ended : false,
   }
+}
+
+export function restoreStartIndex(saved: SavedSession, count: number): number {
+  return Math.max(0, Math.min(saved.startIndex, count - 1))
 }
