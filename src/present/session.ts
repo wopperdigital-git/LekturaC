@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import type { PresenterState } from './presenterState'
-import type { Stopwatch } from './timer'
 
 // The presenter console's state, saved per session so a reload resumes it.
 
@@ -8,10 +7,6 @@ export interface SavedSession {
   index: number
   black: boolean
   ended: boolean
-  stopwatch: Stopwatch
-  targetMinutes: number
-  /** The slide the pacing counts from: where the talk (or the last Reset) began. */
-  startIndex: number
 }
 
 export interface KeyValueStorage {
@@ -23,12 +18,6 @@ const savedSchema = z.object({
   index: z.number(),
   black: z.boolean(),
   ended: z.boolean(),
-  stopwatch: z.object({
-    startedAt: z.number().nullable(),
-    accumulatedMs: z.number(),
-  }),
-  targetMinutes: z.number(),
-  startIndex: z.number(),
 })
 
 export function sessionKey(session: string): string {
@@ -68,8 +57,4 @@ export function restoreState(saved: SavedSession, count: number): PresenterState
     black: saved.black,
     ended: index === saved.index ? saved.ended : false,
   }
-}
-
-export function restoreStartIndex(saved: SavedSession, count: number): number {
-  return Math.max(0, Math.min(saved.startIndex, count - 1))
 }

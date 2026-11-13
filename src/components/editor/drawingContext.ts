@@ -3,6 +3,7 @@ import type { OverlayItem, Shape, Stroke } from '@/engine/overlay'
 import type { InkKeep, PenSettings } from '@/engine/penSettings'
 import type { ShapeSettings } from '@/engine/shapes'
 import type { TempInk } from '@/lib/temporaryInk'
+import type { LaserPoint } from '@/present/liveInk'
 
 /** The shape tool's settings with the colour and destination it shares with the pen already resolved. */
 export interface ShapeTool {
@@ -15,9 +16,10 @@ export interface ShapeTool {
  * What one card needs to be drawn on, provided per card by `CardCanvas` the way
  * `BlockAdjustContext` is, with the card's id already applied to the callbacks.
  *
- * Editor only: no other surface provides it, so ink that is *temporary* can
- * never show up in the presenter, the narration viewer or a thumbnail, and
- * nothing outside the editor can be drawn on.
+ * The editor provides it, and so does the presenter view for its live ink (pen,
+ * highlighter, laser; `components/present/presentDrawing.ts`). Nothing else does,
+ * so the editor's temporary ink never shows up in the single-window presenter,
+ * the narration viewer or a thumbnail.
  */
 export interface CardDrawing {
   /** The pen's settings while the pen tool is active; `null` otherwise (ink still draws, nothing captures presses). */
@@ -44,6 +46,11 @@ export interface CardDrawing {
   /** The selected shape moved or resized, committed once on release. */
   changeShape: (shape: Shape, keep: InkKeep) => void
   removeShape: (id: string, keep: InkKeep) => void
+
+  /** Presenter view: the stroke being drawn, on every move, then `null` once it is committed or abandoned. */
+  onLiveStroke?: (stroke: Stroke | null) => void
+  /** Presenter view: the laser pointer's dot and trail on this slide. */
+  laser?: readonly LaserPoint[]
 }
 
 export const DrawingContext = createContext<CardDrawing | null>(null)

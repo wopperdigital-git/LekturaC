@@ -172,7 +172,7 @@ export class GeminiProvider implements AIProvider {
     const options: CallGeminiOptions = {
       // Gemini's own budget, not Groq's `deckMaxTokens` — see
       // `geminiDeckMaxTokens`'s own comment for why the two must not share one.
-      maxOutputTokens: geminiDeckMaxTokens(brief.slideCount),
+      maxOutputTokens: geminiDeckMaxTokens(brief.slideCount, brief.detailLevel),
       jsonMode: true,
       temperature: 0.7,
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeTrend, formatCompletion, formatPercent, matchesQuery, personLabel, plural } from './format'
+import { describeTrend, formatCompletion, formatPercent, matchesQuery, noun, personLabel, plural } from './format'
 
 describe('formatPercent', () => {
   it('shows a dash, not 0%, when there is nothing to average', () => {
@@ -64,5 +64,13 @@ describe('plural', () => {
     expect(plural(1, 'student')).toBe('1 student')
     expect(plural(0, 'student')).toBe('0 students')
     expect(plural(2, 'quiz', 'quizzes')).toBe('2 quizzes')
+  })
+})
+
+describe('noun', () => {
+  it('is the word without the number, for labels that draw the count themselves', () => {
+    expect(noun(1, 'student')).toBe('student')
+    expect(noun(10, 'student')).toBe('students')
+    expect(noun(2, 'quiz', 'quizzes')).toBe('quizzes')
   })
 })

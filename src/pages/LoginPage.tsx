@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { supabaseConfigured } from '@/lib/supabaseClient'
 import { AuthLayout } from '@/components/auth/AuthLayout'
@@ -65,6 +65,8 @@ export function LoginPage() {
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  // An admin account tried the ordinary login: point it at its own.
+  const [adminAccount, setAdminAccount] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
   const [forgotSubmitted, setForgotSubmitted] = useState(false)
@@ -87,6 +89,7 @@ export function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setFormError(null)
+    setAdminAccount(false)
 
     const nextEmailError = validateEmail(email)
     setEmailError(nextEmailError)
@@ -110,8 +113,9 @@ export function LoginPage() {
 
     setSubmitting(true)
     if (mode === 'login') {
-      const { error } = await signIn(email, password)
+      const { error, wrongLogin } = await signIn(email, password, 'user')
       if (error) setFormError(error)
+      setAdminAccount(wrongLogin === 'admin')
     } else {
       const { error, needsVerification } = await signUp(email, password, { role, displayName })
       if (error) setFormError(error)
@@ -281,7 +285,19 @@ export function LoginPage() {
           </button>
         )}
 
-        {formError && <Alert tone="error">{formError}</Alert>}
+        {formError && (
+          <Alert tone="error">
+            {formError}
+            {adminAccount && (
+              <>
+                {' '}
+                <Link to="/admin/login" className="font-medium underline underline-offset-4">
+                  Go to admin login
+                </Link>
+              </>
+            )}
+          </Alert>
+        )}
 
         <Button type="submit" variant="primary" loading={submitting} className="mt-1 w-full py-2.5">
           {submitting ? pendingLabel : submitLabel}

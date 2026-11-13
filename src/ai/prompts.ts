@@ -1,6 +1,8 @@
 import { BLUEPRINTS, FIELD_PLAYBOOK, sequenceFor, type BlueprintId } from './slideBlueprints'
 import { NARRATION_STYLE_RULES } from './narrationPrompt'
+import { PLAIN_LANGUAGE_RULES } from './plainLanguage'
 import { DEFAULT_SLIDE_COUNT, MAX_SLIDES } from '@/lib/slideCount'
+import { densitySection, type DetailLevel } from './detailLevel'
 import {
   CLAIM_TYPES,
   PRESENTATION_TYPES,
@@ -11,7 +13,7 @@ import {
 
 export interface GenerationBrief {
   audience: string
-  detailLevel: 'simplified' | 'balanced' | 'detailed'
+  detailLevel: DetailLevel
   tone: 'professional' | 'casual' | 'bold'
   /** Exact number of cards to generate, or 'auto' to let the model choose a count that fits the topic. */
   slideCount: number | 'auto'
@@ -29,15 +31,20 @@ export interface DeckContext {
   evidence: EvidencePack | null
   /** YYYY-MM-DD */
   today: string
+  /**
+   * The brief's detail level, for the repair call (which has no brief of its
+   * own) to keep a repaired slide at the deck's density. Absent = balanced.
+   */
+  detailLevel?: DetailLevel
 }
 
 const DETAIL_LEVEL_INSTRUCTIONS: Record<GenerationBrief['detailLevel'], string> = {
   simplified:
     'Keep it high-level and easy to skim. Favor short, punchy statements over thorough explanations. Avoid jargon. One idea per card, stated plainly.',
   balanced:
-    'Balance clarity with useful substance. Include real specifics, but do not overload any single card — say the one thing that matters most, well.',
+    'Balance clarity with useful substance. Include real specifics, but do not overload any single card. Say the one thing that matters most, well.',
   detailed:
-    'Go deep: precise data, technical specifics and the mechanism behind each point — keep the slide itself within the visible-text limits and put the extended justification in speakerNotes.',
+    'Go deep: precise data, technical specifics and the mechanism behind each point, on the slide itself: fuller slides than a balanced deck, not just longer speaker notes.',
 }
 
 const TONE_INSTRUCTIONS: Record<GenerationBrief['tone'], string> = {
@@ -62,11 +69,11 @@ const SLIDE_PURPOSE_LIST = SLIDE_PURPOSES.map((v) => `"${v}"`).join(' | ')
 const VISUAL_TYPE_LIST = VISUAL_TYPES.map((v) => `"${v}"`).join(' | ')
 const CLAIM_TYPE_LIST = CLAIM_TYPES.map((v) => `"${v}"`).join(' | ')
 
-export const DECK_SYSTEM_PROMPT = `You are planning and writing a presentation, not an article. Your job is to help an audience understand a topic through a sequence of slides, each one scanned in seconds — not a document broken into pages.
+export const DECK_SYSTEM_PROMPT = `You are planning and writing a presentation, not an article. Your job is to help an audience understand a topic through a sequence of slides, each one scanned in seconds, not a document broken into pages.
 
 Before writing any slide's visible text, plan the whole deck: identify the presentation's objective, decide what the audience must understand, build a logical narrative arc, give every slide one purpose and one key message, decide which claims need evidence, and choose the most effective visual form for each slide. Do not default to bullet lists or cards out of habit.
 
-That plan is what you write first. Every card's "plan" object comes before its "blocks" in your output, and everything in "blocks" exists to deliver plan.keyMessage — the one thing that slide has to say.
+That plan is what you write first. Every card's "plan" object comes before its "blocks" in your output, and everything in "blocks" exists to deliver plan.keyMessage, the one thing that slide has to say.
 
 Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this shape:
 
@@ -100,7 +107,7 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
   ]
 }
 
-"role" is optional — set it only when this card fills a row from the STRUCTURE section below, and omit it otherwise. "imageQuery" is optional — see IMAGES below. "claims" lists every factual claim the card makes (see EVIDENCE below); an empty array is correct for a card with no factual claims. "transition" is one short phrase from the previous slide into this one ('' on the first card).
+"role" is optional: set it only when this card fills a row from the STRUCTURE section below, and omit it otherwise. "imageQuery" is optional: see IMAGES below. "claims" lists every factual claim the card makes (see EVIDENCE below); an empty array is correct for a card with no factual claims. "transition" is one short phrase from the previous slide into this one ('' on the first card).
 
 Each ContentBlock is one of these EXACT shapes (field names matter, do not rename or omit fields):
 - { "type": "heading", "text": string }
@@ -111,61 +118,60 @@ Each ContentBlock is one of these EXACT shapes (field names matter, do not renam
 - { "type": "timelineStep", "label": string, "text": string }
 - { "type": "comparisonGroup", "heading": string, "items": string[] }
 
-Do not use any block type other than the ones listed above (in particular, never write an "image" block yourself: photos are found and added afterwards from "imageQuery", see IMAGES below). Every card's "blocks" array MUST start with exactly one "heading" block — this is the card's title and is required, not optional.
+Do not use any block type other than the ones listed above (in particular, never write an "image" block yourself: photos are found and added afterwards from "imageQuery", see IMAGES below). Every card's "blocks" array MUST start with exactly one "heading" block. This is the card's title and is required, not optional.
 
 HEADINGS
 - 3-10 words, never more than 14.
-- A topic label, a clear claim, or a question — never a generic AI-report sentence.
+- A topic label, a clear claim, or a question, never a generic AI-report sentence.
 - Never open with "This presentation", "This deck", "This slide", "You will learn", or "In this slide".
 - Example: "EV adoption is accelerating", not "Global EV sales have surged to a significant share of new car registrations".
 
 ONE MAIN IDEA PER SLIDE
 - Exactly one idea per card. Everything on it supports plan.keyMessage; do not cram in a second, unrelated point.
-- Visible text — everything except the heading — is 20-40 words, 55 at most. Timelines and quotes are exempt from this ceiling.
-- Bullet lists run 3-5 items, each 8 words or fewer.
+- How much visible text a slide carries (everything except the heading), how many bullet items and how long a paragraph is are set by the SLIDE DENSITY section of the user prompt, which follows the requested detail level. Follow it exactly: a detailed deck's slides must be visibly fuller than a balanced deck's, and a simplified deck's visibly sparer.
 
 TITLE SLIDE
-- The first card is ALWAYS the title slide: exactly one "heading" (the deck's title) followed by at most one short "paragraph" subtitle of 20 words or fewer. No other blocks on it — no list, stat, quote, timeline or comparison. Its plan.visualType is "text".
+- The first card is ALWAYS the title slide: exactly one "heading" (the deck's title) followed by at most one short "paragraph" subtitle of 20 words or fewer. No other blocks on it: no list, stat, quote, timeline or comparison. Its plan.visualType is "text".
 - It still counts toward the slide count, and it opens the blueprint's first row (a hook or an opening line works as the subtitle).
 
 NO FILLER SLIDES
 - The title slide above is required and is not filler. Do not add an agenda, "objectives", "what you will learn", introduction, or "thank you" slide by default. Only include one when presentationType is "educational" or "tutorial" and this is a formal lesson, or the user explicitly asked for it.
-- The final slide must resolve the deck's objective: a summary, conclusion, recommendation, or call to action — never a bare sign-off.
+- The final slide must resolve the deck's objective: a summary, conclusion, recommendation, or call to action, never a bare sign-off.
 
 SPEAKER NOTES
-Write "speakerNotes" as the actual words a presenter would say out loud for this slide — not a summary of it.
+Write "speakerNotes" as the actual words a presenter would say out loud for this slide, not a summary of it.
 ${NARRATION_STYLE_RULES}
 - Add context that is not on the slide: definitions, how a number was measured, caveats, and a transition into and out of the slide. Never copy or lightly reword the visible text.
 
 EVIDENCE
 - Every number, date, named statistic, or quotation must come from the EVIDENCE PACK when the user prompt includes one, and must be listed in that card's "claims" with the pack's own source ids in "sourceIds". Never invent a source id, a source, a citation, or a quotation.
-- State what a metric measures, where, when, and its unit — e.g. "battery-electric share of new U.S. light-duty vehicle sales, 2024", not "EV share: 5.8%".
+- State what a metric measures, where, when, and its unit, e.g. "battery-electric share of new U.S. light-duty vehicle sales, 2024", not "EV share: 5.8%".
 - Use approximate wording ("about", "roughly", "more than") where the evidence itself is approximate. Never add decimal precision the evidence doesn't have.
-- Keep tailpipe emissions and lifecycle emissions distinct — never collapse "zero tailpipe emissions" into "zero emissions".
+- Keep tailpipe emissions and lifecycle emissions distinct: never collapse "zero tailpipe emissions" into "zero emissions".
 - Use calibrated language. Do not write "proves", "always", "guarantees", or "clearly superior" unless the evidence pack genuinely supports it; prefer "suggests", "is associated with", "tends to", "can".
-- Without an evidence pack: do not invent specific statistics. Long-established, widely known facts are fine, stated approximately — still list them in "claims", with "sourceIds": [].
+- Without an evidence pack: do not invent specific statistics. Long-established, widely known facts are fine, stated approximately, but still list them in "claims", with "sourceIds": [].
 - A "quote" block attributed to a real person or organization must be a verbatim quotation from the evidence pack, cited in that card's "claims" with the pack's source id. Without a supporting quotation in the pack, use a "quote" block only for the deck's own unattributed thesis or mission line.
 
 FRESHNESS
 - Today's date is given in the user prompt. When the topic asks about what's current, latest, or trending, prefer the newest evidence available and never present data more than two years old as current.
 
 VISUAL CHOICE
-Choose each slide's information structure before you choose its wording. Ask what shape the point has, then pick the block that draws that shape. Do not reach for a "bulletList" merely because a slide has several points — a bullet list is the fallback for items that are parallel and unordered, not the default for anything with more than one part.
+Choose each slide's information structure before you choose its wording. Ask what shape the point has, then pick the block that draws that shape. Do not reach for a "bulletList" merely because a slide has several points. A bullet list is the fallback for items that are parallel and unordered, not the default for anything with more than one part.
 - Sequence, steps, chronology, cause → effect → a run of "timelineStep" blocks.
 - Two or more alternatives, before/after, pros/cons → "comparisonGroup" blocks.
 - Quantitative evidence → "stat" blocks: one striking number as a single "stat", several related numbers as 2-4 together.
 - One explanatory idea → a single short "paragraph".
 - A thesis or a verbatim quotation → a "quote" block.
 - Only 3-5 parallel items where order does not matter (categories, features, criteria) → a short "bulletList".
-- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList". We cannot draw charts, maps or diagrams, so never plan one of those as the visualType. A photo is never a visualType either: it arrives only through "imageQuery", and the slide's visualType still names the structure its blocks deliver. A trend or a set of numbers is "metric_cards" — but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
+- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList". We cannot draw charts, maps or diagrams, so never plan one of those as the visualType. A photo is never a visualType either: it arrives only through "imageQuery", and the slide's visualType still names the structure its blocks deliver. A trend or a set of numbers is "metric_cards", but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
 - Vary the structure across the deck on purpose. In a deck of 5 or more slides no more than about 40% of the slides should be "bulletList" slides, never put two "bulletList" slides next to each other, and use at least three different block structures across the deck when the subject supports it. Avoid three consecutive cards using the same block-type pattern:
   - Use a single "stat" block for a card that leads with one striking number (market size, growth rate, performance metric, savings, etc).
-  - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta) — this reads far better as one card than as several single-stat cards in a row.
+  - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta); this reads far better as one card than as several single-stat cards in a row.
   - Use 2-4 "comparisonGroup" blocks together when contrasting options/approaches/before-vs-after.
   - Use 2-5 "timelineStep" blocks together for anything sequential (process, history, roadmap, funding stages).
-  - Use a single "quote" block for the deck's own unattributed thesis or mission line, or for a verbatim quotation from the evidence pack attributed to a real person or organization (cite it in "claims" — see EVIDENCE above). Omit "attribution" for the deck's own thesis/mission line; set it whenever the line is someone else's words.
-  - Use "bulletList" for scannable lists: 3-5 items by default, never more than 6 on one card. Short items (each under ~6 words) read as a compact grid; longer or more detailed items read as a clean numbered list. This cap is never a reason to drop or blur a real item — a genuinely longer sequence is chronological (use "timelineStep" instead) or belongs split across two cards, which likely changes the slide's purpose too.
-  - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven — a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" of 35 words or fewer, and only when no more specific block type fits.
+  - Use a single "quote" block for the deck's own unattributed thesis or mission line, or for a verbatim quotation from the evidence pack attributed to a real person or organization (cite it in "claims"; see EVIDENCE above). Omit "attribution" for the deck's own thesis/mission line; set it whenever the line is someone else's words.
+  - Use "bulletList" for scannable lists: the item count SLIDE DENSITY gives, never more than 6 on one card. Short items (each under ~6 words) read as a compact grid; longer or more detailed items read as a clean numbered list. This cap is never a reason to drop or blur a real item: a genuinely longer sequence is chronological (use "timelineStep" instead) or belongs split across two cards, which likely changes the slide's purpose too.
+  - Use 2+ "paragraph" blocks on a card only when the content is truly prose-driven: a narrative beat, a nuanced explanation with no natural list/comparison/number shape. Otherwise prefer a single "paragraph" within the SLIDE DENSITY paragraph length, and only when no more specific block type fits (a detailed deck may still pair a structure with an explanatory paragraph, as SLIDE DENSITY says).
 
 IMAGES
 - Add "imageQuery" to a card only when the slide's point is something a photograph can show: a place, an object, people doing something, a natural scene. Otherwise omit it.
@@ -175,11 +181,14 @@ IMAGES
 - The photo is found and added to the slide after you finish, so never write an "image" block yourself and never put a URL in the deck.
 
 CONTENT QUALITY
-- Be concrete and specific, never generic. Ground claims in named entities, real-world comparables, timeframes, or examples — not vague qualities.
+- Be concrete and specific, never generic. Ground claims in named entities, real-world comparables, timeframes, or examples, not vague qualities.
 - NEVER use vague marketing filler. Do not write sentences that could apply to literally any company in any industry. Banned words/phrases: "revolutionize", "revolutionary", "cutting-edge", "empower", "unlock", "seamless", "game-changing", "state-of-the-art", "innovative solution", "unique technology", "leverage", "synergy", "best-in-class", "next-generation".
 - Bad (too generic): "Our platform provides efficient and affordable solutions for customers." Good (specific): "Our routing algorithm skips congested highways by re-scoring routes every 90 seconds, instead of once at dispatch like competitors."
 
-Every card also needs a "visualStyle": "structured" or "expressive" — this picks between two visual treatments of whatever layout the card ends up with, independent of block content. Use "expressive" for cards that should feel bold or visually striking (a pivotal stat, a big turning point, a rallying quote); use "structured" for calmer, more informational cards. Vary it across the deck rather than defaulting to one value throughout — but don't force a mechanical alternation either; let it follow the actual rhythm of the content.
+PLAIN LANGUAGE (slide text and speaker notes alike)
+${PLAIN_LANGUAGE_RULES}
+
+Every card also needs a "visualStyle": "structured" or "expressive". This picks between two visual treatments of whatever layout the card ends up with, independent of block content. Use "expressive" for cards that should feel bold or visually striking (a pivotal stat, a big turning point, a rallying quote); use "structured" for calmer, more informational cards. Vary it across the deck rather than defaulting to one value throughout, but don't force a mechanical alternation either; let it follow the actual rhythm of the content.
 
 Set "blueprint" to the id of the structure you chose in the STRUCTURE section below.`
 
@@ -193,7 +202,7 @@ const AUTO_COUNTS = Array.from(
 
 function renderSequence(id: BlueprintId, count: number): string {
   return sequenceFor(id, count)
-    .map((spec, i) => `  ${i + 1}. [${spec.role}] ${spec.label} — ${spec.instruction}`)
+    .map((spec, i) => `  ${i + 1}. [${spec.role}] ${spec.label}: ${spec.instruction}`)
     .join('\n')
 }
 
@@ -232,7 +241,7 @@ export function buildBlueprintSection(slideCount: number | 'auto'): string {
       ? `Pick the ONE blueprint whose arc fits this deck's goal, then choose a slide count between ${DEFAULT_SLIDE_COUNT} and ${MAX_SLIDES} that suits the topic's depth. Once chosen, the slide count is exact.`
       : "Pick the ONE blueprint whose arc fits this deck's goal. The slide count above is exact."
 
-  return `STRUCTURE — choose a blueprint and use its sequence as the narrative arc
+  return `STRUCTURE: choose a blueprint and use its sequence as the narrative arc
 
 ${instruction}
 Use the sequence below as the arc, not a template to copy row for row: you may merge or replace rows to serve this deck's objective, and skip objectives/agenda/roadmap-style rows unless the deck is a formal lesson or the user explicitly asked for them. When a card fills one of these rows, set that card's "role" to the row's bracketed id; when it doesn't, omit "role".
@@ -253,11 +262,19 @@ ${blueprints}`
  * measured the same overhead on the same model); the ceiling stays inside
  * Groq's free-tier 8,000-token/minute window. See the design spec's "Token
  * budget".
+ *
+ * A detailed deck writes roughly twice the visible text per slide, so it gets
+ * `DETAILED_EXTRA_TOKENS_PER_SLIDE` more per slide, still under the same 7000
+ * ceiling (Groq's window doesn't move).
  */
-export function deckMaxTokens(slideCount: number | 'auto'): number {
+export function deckMaxTokens(slideCount: number | 'auto', detailLevel: DetailLevel = 'balanced'): number {
   if (slideCount === 'auto') return 7000
-  return Math.min(7000, Math.max(5200, slideCount * 480 + 2600))
+  const perSlide = 480 + (detailLevel === 'detailed' ? DETAILED_EXTRA_TOKENS_PER_SLIDE : 0)
+  return Math.min(7000, Math.max(5200, slideCount * perSlide + 2600))
 }
+
+/** ~60 more visible words per slide on a detailed deck, as output tokens. */
+export const DETAILED_EXTRA_TOKENS_PER_SLIDE = 120
 
 /**
  * Gemini's own deck token budget — deliberately not `deckMaxTokens`.
@@ -267,11 +284,13 @@ export function deckMaxTokens(slideCount: number | 'auto'): number {
  * provider's ceiling. Gemini has no such per-minute cap in this app's usage,
  * so its budget can sit well above the writer's measured ~3,400-token
  * reasoning overhead without risk of tripping a window that doesn't apply to
- * it — `clamp(slideCount * 700 + 3000, 6000, 12000)`, `12000` for `'auto'`.
+ * it — `clamp(slideCount * 700 + 3000, 6000, 12000)`, `12000` for `'auto'`
+ * (a detailed deck adds `DETAILED_EXTRA_TOKENS_PER_SLIDE` per slide).
  */
-export function geminiDeckMaxTokens(slideCount: number | 'auto'): number {
+export function geminiDeckMaxTokens(slideCount: number | 'auto', detailLevel: DetailLevel = 'balanced'): number {
   if (slideCount === 'auto') return 12000
-  return Math.min(12000, Math.max(6000, slideCount * 700 + 3000))
+  const perSlide = 700 + (detailLevel === 'detailed' ? DETAILED_EXTRA_TOKENS_PER_SLIDE : 0)
+  return Math.min(12000, Math.max(6000, slideCount * perSlide + 3000))
 }
 
 /**
@@ -281,7 +300,7 @@ export function geminiDeckMaxTokens(slideCount: number | 'auto'): number {
  */
 export function renderEvidencePack(pack: EvidencePack): string {
   const sourceLines = pack.sources.map((s) => {
-    const publisher = s.publisher ? `${s.publisher} — ` : ''
+    const publisher = s.publisher ? `${s.publisher}, ` : ''
     const year = s.publicationDate ? ` (${s.publicationDate})` : ''
     const url = s.url ? ` ${s.url}` : ''
     return `[${s.id}] ${publisher}${s.title}${year}${url}`
@@ -305,20 +324,22 @@ export function buildDeckUserPrompt(topic: string, brief: GenerationBrief, conte
     ? ''
     : context.evidence && context.evidence.sources.length > 0
       ? `\nEVIDENCE PACK (cite these source ids; do not use any other source):\n${renderEvidencePack(context.evidence)}\n`
-      : '\nNo verified evidence is available for this deck — the no-evidence rules apply: no specific statistics except long-established, widely known facts, phrased approximately, still listed in "claims" with "sourceIds": [].\n'
+      : '\nNo verified evidence is available for this deck, so the no-evidence rules apply: no specific statistics except long-established, widely known facts, phrased approximately, still listed in "claims" with "sourceIds": [].\n'
 
   return `Create a presentation about: ${topic.trim()}
 ${todaySection}
 Slide count: ${
     brief.slideCount === 'auto'
       ? `choose between ${DEFAULT_SLIDE_COUNT} and ${MAX_SLIDES} cards (never more than ${MAX_SLIDES}), whichever best fits the topic's depth and the requested detail level. Don't pad with filler or cram; end on a natural close.`
-      : `exactly ${brief.slideCount} cards. Not approximately — exactly this many.`
+      : `exactly ${brief.slideCount} cards. Not approximately: exactly this many.`
   }
 Audience: ${audience}
-Detail level: ${brief.detailLevel} — ${DETAIL_LEVEL_INSTRUCTIONS[brief.detailLevel]}
-Tone: ${brief.tone} — ${TONE_INSTRUCTIONS[brief.tone]}
+Detail level: ${brief.detailLevel}. ${DETAIL_LEVEL_INSTRUCTIONS[brief.detailLevel]}
+Tone: ${brief.tone}. ${TONE_INSTRUCTIONS[brief.tone]}
+
+${densitySection(brief.detailLevel)}
 ${evidenceSection}
 ${buildBlueprintSection(brief.slideCount)}
-${guidance ? `\nUSER'S EXPLICIT INTENT (hard constraint — follow this over the general content rules wherever they conflict): ${guidance}\n` : ''}
+${guidance ? `\nUSER'S EXPLICIT INTENT (hard constraint: follow this over the general content rules wherever they conflict): ${guidance}\n` : ''}
 Write every card specifically for this audience at this detail level and tone.`
 }

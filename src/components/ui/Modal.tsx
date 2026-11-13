@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { popDialog, useMotion } from '@/lib/motion'
 
 export function Modal({
   title,
@@ -23,8 +24,16 @@ export function Modal({
 
   const ariaLabel = typeof title === 'string' ? title : 'Dialog'
 
+  // Opening only: closing is instant, because most dialogs are closed by their
+  // parent unmounting them and an exit nobody can wait for is no exit at all.
+  const backdropRef = useMotion<HTMLDivElement>(({ reduce, root }) => {
+    const panel = root.querySelector('[role=dialog]')
+    if (panel) popDialog(root, panel, reduce)
+  })
+
   return (
     <div
+      ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
       onClick={onClose}
     >
@@ -32,7 +41,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
-        className={`scrollbar-subtle max-h-[88vh] w-full ${maxWidth} overflow-y-auto rounded-app bg-app-background p-6 shadow-app border border-app-border/70 transition-all`}
+        className={`scrollbar-subtle max-h-[88vh] w-full ${maxWidth} overflow-y-auto rounded-app bg-app-background p-6 shadow-app border border-app-border/70`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between gap-3">

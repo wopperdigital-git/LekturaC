@@ -98,14 +98,15 @@ export async function generatePresentation(
     }
   }
 
-  const context: DeckContext = { evidence, today }
+  const context: DeckContext = { evidence, today, detailLevel: brief.detailLevel }
 
   onStage?.('write')
   let deck = await provider.generateDeck(topic, brief, signal, context)
 
   onStage?.('validate')
   const freshnessRequired = deck.brief.freshnessRequired || requiresFreshness(topic, brief.guidance)
-  let { flags, claims } = validateDeck(deck, { pack: evidence, currentYear, freshnessRequired })
+  const detailLevel = brief.detailLevel
+  let { flags, claims } = validateDeck(deck, { pack: evidence, currentYear, freshnessRequired, detailLevel })
 
   const targets = repairTargets(flags)
   const repaired: number[] = []
@@ -118,7 +119,7 @@ export async function generatePresentation(
       deck = result.deck
       repaired.push(...result.repaired)
       if (result.repaired.length > 0) {
-        const revalidated = validateDeck(deck, { pack: evidence, currentYear, freshnessRequired })
+        const revalidated = validateDeck(deck, { pack: evidence, currentYear, freshnessRequired, detailLevel })
         flags = revalidated.flags
         claims = revalidated.claims
       }

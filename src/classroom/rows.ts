@@ -11,7 +11,7 @@ export const PERSON_COLUMNS = 'id, display_name, email'
 export const CLASS_COLUMNS = 'id, teacher_id, name, description, join_code, created_at'
 export const MEMBER_COLUMNS = 'class_id, student_id, joined_at'
 export const ANNOUNCEMENT_COLUMNS = 'id, class_id, title, body, created_at, updated_at'
-export const QUIZ_COLUMNS = 'id, title, deck_title, presentation_id, created_at, code, quiz_type, quiz_questions(slide_number)'
+export const QUIZ_COLUMNS = 'id, title, deck_title, presentation_id, created_at, code, quiz_type, quiz_questions!quiz_questions_quiz_id_fkey(slide_number)'
 /** No `quiz_questions(...)` embed: a student cannot read questions, so it would only ever be empty. */
 export const STUDENT_QUIZ_COLUMNS = 'id, title, code, quiz_type, created_at'
 export const POSTING_COLUMNS = 'quiz_id, class_id, posted_at'

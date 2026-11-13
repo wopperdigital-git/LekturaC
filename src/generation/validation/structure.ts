@@ -1,5 +1,6 @@
+import { DENSITY, type DetailLevel } from '@/ai/detailLevel'
 import { resolveLayout } from '@/engine/layoutEngine'
-import { isTitleShaped } from '@/engine/roleLayout'
+import { isHeroRole, isTitleShaped } from '@/engine/roleLayout'
 import type { GeneratedDeck, QualityFlag } from '../schemas'
 import { headingOf, normalize, visibleLines, wordCount } from './text'
 
@@ -109,7 +110,12 @@ function titleTooLongFlags(deck: GeneratedDeck): QualityFlag[] {
   return flags
 }
 
-function bodyTooDenseFlags(deck: GeneratedDeck): QualityFlag[] {
+function visibleWordCount(card: GeneratedDeck['cards'][number]): number {
+  return visibleLines(card).reduce((sum, line) => sum + wordCount(line), 0)
+}
+
+function bodyTooDenseFlags(deck: GeneratedDeck, level: DetailLevel): QualityFlag[] {
+  const max = DENSITY[level].maxVisibleWords
   const flags: QualityFlag[] = []
   deck.cards.forEach((card, index) => {
     if (card.plan.purpose === 'timeline' || card.plan.purpose === 'references') return
@@ -117,14 +123,51 @@ function bodyTooDenseFlags(deck: GeneratedDeck): QualityFlag[] {
     // content too, not only by declared purpose — a card whose blocks carry a
     // timelineStep or quote is exempt whatever `plan.purpose` says.
     if (card.blocks.some((block) => block.type === 'timelineStep' || block.type === 'quote')) return
-    const words = visibleLines(card).reduce((sum, line) => sum + wordCount(line), 0)
-    if (words > 55) {
+    const words = visibleWordCount(card)
+    if (words > max) {
       flags.push({
         type: 'BODY_TOO_DENSE',
         severity: 'medium',
         slideIndex: index,
-        message: `${slideLabel(index)} carries ${words} visible words, past the 55-word limit.`,
+        message: `${slideLabel(index)} carries ${words} visible words, past the ${max}-word limit.`,
         suggestedAction: 'Move explanation into speaker notes and trim the visible text.',
+      })
+    }
+  })
+  return flags
+}
+
+/** Purposes whose slide is short by design, whatever the detail level. */
+const SHORT_BY_DESIGN_PURPOSES = new Set(['hook', 'title', 'call_to_action', 'timeline', 'references'])
+
+/**
+ * The other side of the detail level: a detailed deck whose content slides
+ * came back as thin as a balanced one's. Only levels with a
+ * `minVisibleWords` floor are checked, and the floor sits well under the
+ * target range so only a slide that plainly ignored the level is sent to
+ * repair. Never checked, because the prompt's SLIDE DENSITY section lets them
+ * be short: the title slide (index 0), quotes, timelines (by purpose or by
+ * blocks, as `BODY_TOO_DENSE` does), a call to action, and a blueprint hero
+ * role such as a story's insight or closing line — repair would pad those
+ * with paragraphs that then pile up as hero leftovers.
+ */
+function bodyTooThinFlags(deck: GeneratedDeck, level: DetailLevel): QualityFlag[] {
+  const min = DENSITY[level].minVisibleWords
+  if (min === null) return []
+  const flags: QualityFlag[] = []
+  deck.cards.forEach((card, index) => {
+    if (index === 0 || SHORT_BY_DESIGN_PURPOSES.has(card.plan.purpose)) return
+    if (isHeroRole(card.role)) return
+    if (card.blocks.some((block) => block.type === 'quote' || block.type === 'timelineStep')) return
+    const words = visibleWordCount(card)
+    if (words < min) {
+      flags.push({
+        type: 'BODY_TOO_THIN',
+        severity: 'medium',
+        slideIndex: index,
+        message: `${slideLabel(index)} carries only ${words} visible words for a ${level} deck (at least ${min} expected).`,
+        suggestedAction:
+          'Explain the point on the slide: add the specific figure, example or mechanism behind it, and a short paragraph saying what it means.',
       })
     }
   })
@@ -438,10 +481,11 @@ function narrationDuplicatesSlideFlags(deck: GeneratedDeck): QualityFlag[] {
  * All deterministic structural checks over a generated deck, in rule order.
  * Pure and synchronous — see the design spec's "[3] Deterministic validation".
  */
-export function structureFlags(deck: GeneratedDeck): QualityFlag[] {
+export function structureFlags(deck: GeneratedDeck, level: DetailLevel = 'balanced'): QualityFlag[] {
   return [
     ...titleTooLongFlags(deck),
-    ...bodyTooDenseFlags(deck),
+    ...bodyTooDenseFlags(deck, level),
+    ...bodyTooThinFlags(deck, level),
     ...tooManyBulletsFlags(deck),
     ...layoutRepetitionFlags(deck),
     ...listDominantFlags(deck),

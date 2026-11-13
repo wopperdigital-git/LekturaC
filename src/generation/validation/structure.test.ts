@@ -182,6 +182,63 @@ describe('structureFlags', () => {
     })
   })
 
+  describe('density by detail level', () => {
+    const body = (n: number) =>
+      card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(n) }] })
+    const of = (type: string, d: GeneratedDeck, level: 'simplified' | 'balanced' | 'detailed') =>
+      structureFlags(d, level).filter((f) => f.type === type)
+
+    it('lets a detailed slide carry 100 words that a balanced one may not', () => {
+      const d = deck([body(100)])
+      expect(of('BODY_TOO_DENSE', d, 'detailed')).toEqual([])
+      expect(of('BODY_TOO_DENSE', d, 'balanced')).toHaveLength(1)
+    })
+
+    it('flags a simplified slide past 40 words', () => {
+      expect(of('BODY_TOO_DENSE', deck([body(41)]), 'simplified')).toHaveLength(1)
+      expect(of('BODY_TOO_DENSE', deck([body(40)]), 'simplified')).toEqual([])
+    })
+
+    it('flags a thin content slide in a detailed deck as medium, never the title slide', () => {
+      const d = deck([body(5), body(29), body(30)])
+      const flags = of('BODY_TOO_THIN', d, 'detailed')
+      expect(flags.map((f) => f.slideIndex)).toEqual([1])
+      expect(flags[0].severity).toBe('medium')
+    })
+
+    it('never flags thin slides for balanced or simplified decks', () => {
+      const d = deck([body(5), body(5)])
+      expect(of('BODY_TOO_THIN', d, 'balanced')).toEqual([])
+      expect(of('BODY_TOO_THIN', d, 'simplified')).toEqual([])
+    })
+
+    it('does not flag a short timeline slide as thin, by blocks or by purpose', () => {
+      const steps = card({
+        blocks: [
+          { type: 'heading', text: 'Title' },
+          { type: 'timelineStep', label: '1990', text: 'First pilot' },
+          { type: 'timelineStep', label: '2000', text: 'Rolled out nationally' },
+        ],
+      })
+      const byPurpose = card({ plan: { purpose: 'timeline' }, blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(5) }] })
+      expect(of('BODY_TOO_THIN', deck([body(5), steps, byPurpose]), 'detailed')).toEqual([])
+    })
+
+    it('does not flag a short hero-role slide or a call to action as thin', () => {
+      const insight = { ...body(8), role: 'insight' }
+      const closing = { ...body(8), role: 'closing-line' }
+      const cta = card({ plan: { purpose: 'call_to_action' }, blocks: [{ type: 'heading', text: 'Title' }, { type: 'paragraph', text: words(8) }] })
+      expect(of('BODY_TOO_THIN', deck([body(5), insight, closing, cta]), 'detailed')).toEqual([])
+      // An ordinary role is still checked.
+      expect(of('BODY_TOO_THIN', deck([body(5), { ...body(8), role: 'evidence' }]), 'detailed')).toHaveLength(1)
+    })
+
+    it('does not flag a short quote slide as thin', () => {
+      const d = deck([body(5), card({ blocks: [{ type: 'heading', text: 'Title' }, { type: 'quote', text: 'Short line.' }] })])
+      expect(of('BODY_TOO_THIN', d, 'detailed')).toEqual([])
+    })
+  })
+
   describe('TOO_MANY_BULLETS', () => {
     it('does not flag exactly 6 items', () => {
       const d = deck([

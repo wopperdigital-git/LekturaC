@@ -1,20 +1,12 @@
 import type { MouseEvent } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePresentationStore } from '@/store/presentationStore'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { FittedSlide } from '@/components/theme/FittedSlide'
 import { PresentSlide } from '@/components/present/PresentSlide'
-import { SlidePreview } from '@/components/editor/SlidePreview'
 import { DeckLoadError } from '@/components/editor/DeckLoadError'
-import {
-  estimateMinutes,
-  pace as computePace,
-  parseTargetMinutes,
-  slideBudgets,
-  type Pace,
-} from '@/present/pacing'
 import {
   commitJump,
   initialPresenterState,
@@ -33,16 +25,8 @@ import {
   type ForwardedKey,
   type ScreenLink,
 } from '@/present/protocol'
-import { loadSession, restoreStartIndex, restoreState, saveSession } from '@/present/session'
+import { loadSession, restoreState, saveSession } from '@/present/session'
 import { closeSlideWindow, lastOpenOutcome, openSlideWindow } from '@/present/slideWindow'
-import {
-  elapsedMs,
-  formatClock,
-  pauseStopwatch,
-  resumeStopwatch,
-  startStopwatch,
-  type Stopwatch,
-} from '@/present/timer'
 
 // The script sizes belong to this view and its tests; a separate file would only hold this line.
 // oxlint-disable-next-line react/only-export-components
@@ -52,10 +36,6 @@ const DEFAULT_NOTE_SIZE = 1
 export interface PresenterConsoleViewProps {
   deck: DeckSnapshot
   state: PresenterState
-  clock: string
-  running: boolean
-  targetMinutes: number
-  pace: Pace
   noteSize: number
   screen: ScreenLink
   /** The first Escape has been pressed; a second within the window ends. */
@@ -63,9 +43,6 @@ export interface PresenterConsoleViewProps {
   onPrev: () => void
   onNext: () => void
   onToggleBlack: () => void
-  onPauseResume: () => void
-  onReset: () => void
-  onTargetChange: (input: string) => void
   onNotesSmaller: () => void
   onNotesLarger: () => void
   onOpenScreen: () => void
@@ -74,7 +51,7 @@ export interface PresenterConsoleViewProps {
 
 /**
  * A mouse press must not leave a button focused: Enter and Space on a focused button
- * press it, so a clicked Pause would eat the clicker's next Space. Tab still focuses.
+ * press it, so a clicked Black screen would eat the clicker's next Space. Tab still focuses.
  */
 function refuseFocus(e: MouseEvent) {
   e.preventDefault()
@@ -82,12 +59,6 @@ function refuseFocus(e: MouseEvent) {
 
 const BUTTON =
   'inline-flex cursor-pointer items-center justify-center rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-sm font-medium text-app-foreground transition-colors hover:bg-app-border/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50'
-
-function paceText(pace: Pace): string {
-  if (pace.status === 'ahead') return `${pace.minutes} min ahead`
-  if (pace.status === 'behind') return `${pace.minutes} min behind`
-  return 'On time'
-}
 
 function ScreenBanner({ screen, onOpenScreen }: { screen: ScreenLink; onOpenScreen: () => void }) {
   if (screen !== 'closed' && screen !== 'blocked') return null
@@ -105,75 +76,16 @@ function ScreenBanner({ screen, onOpenScreen }: { screen: ScreenLink; onOpenScre
   )
 }
 
-/** A number field that commits on Enter or blur and reverts a non-number. */
-function TargetField({
-  targetMinutes,
-  onChange,
-}: {
-  targetMinutes: number
-  onChange: (input: string) => void
-}) {
-  const [draft, setDraft] = useState(String(targetMinutes))
-  const abandon = useRef(false)
-
-  function commit() {
-    if (abandon.current) {
-      abandon.current = false
-      setDraft(String(targetMinutes))
-      return
-    }
-    const parsed = parseTargetMinutes(draft)
-    if (parsed === null) {
-      setDraft(String(targetMinutes))
-      return
-    }
-    setDraft(String(parsed))
-    onChange(draft)
-  }
-
-  return (
-    <label className="flex items-center gap-2 text-sm text-app-muted">
-      Target
-      <input
-        type="number"
-        inputMode="numeric"
-        min={1}
-        max={180}
-        value={draft}
-        aria-label="Target length in minutes"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur()
-          else if (e.key === 'Escape') {
-            abandon.current = true
-            e.currentTarget.blur()
-          }
-        }}
-        className="w-16 rounded-app-sm border border-app-border bg-app-background px-2 py-1 text-sm text-app-foreground focus-visible:outline-2 focus-visible:outline-app-accent"
-      />
-      min
-    </label>
-  )
-}
-
 /** The console's picture: pure, so each state can be rendered in a test. */
 export function PresenterConsoleView({
   deck,
   state,
-  clock,
-  running,
-  targetMinutes,
-  pace,
   noteSize,
   screen,
   exitPending,
   onPrev,
   onNext,
   onToggleBlack,
-  onPauseResume,
-  onReset,
-  onTargetChange,
   onNotesSmaller,
   onNotesLarger,
   onOpenScreen,
@@ -196,7 +108,6 @@ export function PresenterConsoleView({
 
   const index = Math.min(Math.max(state.index, 0), count - 1)
   const card = deck.cards[index]
-  const nextCard = deck.cards[index + 1]
   const script = card.narration?.text.trim() ? card.narration.text : ''
 
   return (
@@ -247,23 +158,6 @@ export function PresenterConsoleView({
         </section>
 
         <aside className="flex min-h-0 w-[26rem] shrink-0 flex-col gap-3">
-          <div>
-            <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-app-muted">Next</h2>
-            {nextCard ? (
-              <SlidePreview
-                card={nextCard}
-                theme={deck.theme}
-                textStyle={deck.textStyle}
-                isFirstCard={false}
-                className="aspect-video w-full rounded-app-sm border border-app-border"
-              />
-            ) : (
-              <div className="flex aspect-video w-full items-center justify-center rounded-app-sm border border-app-border text-sm text-app-muted">
-                End of presentation
-              </div>
-            )}
-          </div>
-
           <div className="flex min-h-0 flex-1 flex-col rounded-app-sm border border-app-border">
             <div className="flex items-center justify-between border-b border-app-border px-3 py-1.5">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-app-muted">Script</h2>
@@ -324,37 +218,6 @@ export function PresenterConsoleView({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="min-w-16 text-lg font-semibold tabular-nums">{clock}</span>
-          <button type="button" onMouseDown={refuseFocus} onClick={onPauseResume} className={BUTTON}>
-            {running ? 'Pause' : 'Resume'}
-          </button>
-          <button type="button" onMouseDown={refuseFocus} onClick={onReset} className={BUTTON}>
-            Reset
-          </button>
-        </div>
-
-        <TargetField targetMinutes={targetMinutes} onChange={onTargetChange} />
-
-        <div className="flex min-w-48 flex-1 items-center gap-3">
-          <div className="relative h-2 flex-1 rounded-full bg-app-border" aria-hidden="true">
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-app-accent"
-              style={{ width: `${pace.elapsedFraction * 100}%` }}
-            />
-            <div
-              className="absolute -inset-y-1 w-0.5 bg-app-foreground"
-              style={{ left: `${pace.plannedFraction * 100}%` }}
-              data-planned-tick
-            />
-          </div>
-          <span
-            className={`text-sm font-medium ${pace.status === 'behind' ? 'text-app-danger-text' : 'text-app-muted'}`}
-          >
-            {paceText(pace)}
-          </span>
-        </div>
-
       </footer>
     </div>
   )
@@ -368,12 +231,6 @@ function sessionStorageOrNull(): Storage | null {
   }
 }
 
-interface Initial {
-  state: PresenterState
-  startIndex: number
-  stopwatch: Stopwatch
-  targetMinutes: number
-}
 
 function ConsoleRunner({
   deckId,
@@ -390,33 +247,12 @@ function ConsoleRunner({
   // Frozen: later store changes (the editor is another tab) never reach the projector.
   const [deck] = useState(initialDeck)
   const count = deck.cards.length
-  const budgets = useMemo(() => slideBudgets(deck.cards.map((c) => c.narration?.text)), [deck])
 
-  const [initial] = useState<Initial>(() => {
+  const [state, setState] = useState<PresenterState>(() => {
     const saved = count > 0 ? loadSession(sessionStorageOrNull(), session) : null
-    if (saved) {
-      return {
-        state: restoreState(saved, count),
-        startIndex: restoreStartIndex(saved, count),
-        stopwatch: saved.stopwatch,
-        targetMinutes: saved.targetMinutes,
-      }
-    }
-    const fresh = initialPresenterState(count, start)
-    return {
-      state: fresh,
-      startIndex: fresh.index,
-      stopwatch: startStopwatch(Date.now()),
-      targetMinutes: estimateMinutes(budgets),
-    }
+    return saved ? restoreState(saved, count) : initialPresenterState(count, start)
   })
-
-  const [state, setState] = useState(initial.state)
-  const [stopwatch, setStopwatch] = useState(initial.stopwatch)
-  const [targetMinutes, setTargetMinutes] = useState(initial.targetMinutes)
-  const [startIndex, setStartIndex] = useState(initial.startIndex)
   const [noteSize, setNoteSize] = useState(DEFAULT_NOTE_SIZE)
-  const [now, setNow] = useState(() => Date.now())
   const [screen, setScreen] = useState<ScreenLink>(() =>
     lastOpenOutcome(session) === 'blocked' ? 'blocked' : 'connecting',
   )
@@ -443,11 +279,8 @@ function ConsoleRunner({
       index: state.index,
       black: state.black,
       ended: state.ended,
-      stopwatch,
-      targetMinutes,
-      startIndex,
     })
-  }, [state, stopwatch, targetMinutes, startIndex, session, count])
+  }, [state, session, count])
 
   // The projector follows every change.
   useEffect(() => {
@@ -575,11 +408,10 @@ function ConsoleRunner({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // One second tick: the clock, and the slide window's silence.
+  // One second tick: the slide window's silence.
   useEffect(() => {
     const timer = window.setInterval(() => {
       const at = Date.now()
-      setNow(at)
       setScreen((current) =>
         nextScreenLink(current, at, lastHeardRef.current, connectingSinceRef.current),
       )
@@ -594,46 +426,16 @@ function ConsoleRunner({
     setScreen(win ? 'connecting' : 'blocked')
   }, [deckId, session])
 
-  const elapsed = elapsedMs(stopwatch, now)
-  const running = stopwatch.startedAt !== null
-  const pace = computePace(
-    elapsed / 1000,
-    state.ended ? count - 1 : state.index,
-    budgets,
-    targetMinutes * 60,
-    startIndex,
-  )
-
   return (
     <PresenterConsoleView
       deck={deck}
       state={state}
-      clock={formatClock(elapsed)}
-      running={running}
-      targetMinutes={targetMinutes}
-      pace={pace}
       noteSize={noteSize}
       screen={screen}
       exitPending={exitPending}
       onPrev={() => setState((s) => reducePresenter(s, { type: 'prev' }))}
       onNext={() => setState((s) => reducePresenter(s, { type: 'next' }))}
       onToggleBlack={() => setState((s) => reducePresenter(s, { type: 'toggleBlack' }))}
-      onPauseResume={() => {
-        const at = Date.now()
-        setNow(at)
-        setStopwatch((sw) => (sw.startedAt === null ? resumeStopwatch(sw, at) : pauseStopwatch(sw, at)))
-      }}
-      onReset={() => {
-        const at = Date.now()
-        setNow(at)
-        setStopwatch(startStopwatch(at))
-        // Pacing counts from here: a mid-deck reset reads on time.
-        setStartIndex(state.ended ? count - 1 : state.index)
-      }}
-      onTargetChange={(input) => {
-        const parsed = parseTargetMinutes(input)
-        if (parsed !== null) setTargetMinutes(parsed)
-      }}
       onNotesSmaller={() => setNoteSize((n) => Math.max(0, n - 1))}
       onNotesLarger={() => setNoteSize((n) => Math.min(NOTE_SIZES.length - 1, n + 1))}
       onOpenScreen={openScreen}

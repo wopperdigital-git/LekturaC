@@ -114,7 +114,9 @@ export function DrawingSurface({
       setLive(shapeOf('live', g, point))
     } else {
       g.points.push(point)
-      setLive(strokeOf('live', [...g.points]))
+      const stroke = strokeOf('live', [...g.points])
+      setLive(stroke)
+      drawing?.onLiveStroke?.(stroke)
     }
   }
 
@@ -160,12 +162,15 @@ export function DrawingSurface({
     // The release position is the last point, so a stroke ends where the pen came up.
     g.points.push(last)
     drawing.commitStroke(strokeOf(crypto.randomUUID(), decimate(g.points)), keep)
+    // After the commit, so a watcher never sees the stroke vanish before it lands.
+    drawing.onLiveStroke?.(null)
   }
 
   function cancel() {
     gesture.current = null
     setLive(null)
     onFading(new Set())
+    drawing?.onLiveStroke?.(null)
   }
 
   return (

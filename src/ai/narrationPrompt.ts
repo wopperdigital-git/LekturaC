@@ -2,6 +2,7 @@ import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { contentLines } from '@/engine/cardTemplates'
 import { MAX_NARRATION_SCRIPT_CHARS } from '@/engine/narration'
 import type { NarrationSlide } from './provider'
+import { PLAIN_LANGUAGE_RULES } from './plainLanguage'
 
 /**
  * The core "this is a spoken script, not a summary" rules — shared verbatim by
@@ -14,11 +15,11 @@ import type { NarrationSlide } from './provider'
  * enforces, not a second number someone edits here and forgets there.
  */
 export const NARRATION_STYLE_RULES = `- Write to be SPOKEN, not read: short, natural sentences, contractions welcome ("that's", "here's", "let's").
-- This is NOT a summary. Do not restate or condense the bullets into a spoken list ("this slide covers three things..."). Pick the one idea that matters most on this slide and talk about it directly — explain it, give it context, say why it matters — the way you'd explain it to a person sitting across from you, not narrate what's written on screen.
-- Use simple, everyday words. Avoid jargon and complex sentences — write so anyone can follow it on a single listen.
-- Under ${MAX_NARRATION_SCRIPT_CHARS} characters — about 90 to 110 words, roughly 25 to 35 seconds of speech. Shorter and punchier beats long and thorough; a script that runs over will be cut off mid-thought, so stay comfortably under the limit rather than right at it.`
+- This is NOT a summary. Do not restate or condense the bullets into a spoken list ("this slide covers three things..."). Pick the one idea that matters most on this slide and talk about it directly: explain it, give it context, say why it matters, the way you'd explain it to a person sitting across from you, not narrate what's written on screen.
+- Use simple, everyday words. Avoid jargon and complex sentences; write so anyone can follow it on a single listen.
+- Under ${MAX_NARRATION_SCRIPT_CHARS} characters: about 90 to 110 words, roughly 25 to 35 seconds of speech. Shorter and punchier beats long and thorough; a script that runs over will be cut off mid-thought, so stay comfortably under the limit rather than right at it.`
 
-export const NARRATION_SYSTEM_PROMPT = `You write narration scripts for presentation slides — the actual words a presenter says out loud while a slide is on screen, exactly as a skilled human presenter would say them.
+export const NARRATION_SYSTEM_PROMPT = `You write narration scripts for presentation slides: the actual words a presenter says out loud while a slide is on screen, exactly as a skilled human presenter would say them.
 
 You are given a whole deck at once so the narration flows from slide to slide as one continuous talk.
 
@@ -29,8 +30,11 @@ ${NARRATION_STYLE_RULES}
 - Never invent statistics, dates, names or facts that are not on the slide.
 - Plain prose only: no markdown, no asterisks, no bullet characters, no stage directions, no "Slide 3:" prefixes.
 
+PLAIN LANGUAGE
+${PLAIN_LANGUAGE_RULES}
+
 SLIDES YOU ARE NOT WRITING
-The request names exactly which slides to write. Every other slide is marked SKIP and is there for context only — do not return a script for it. Where a skipped slide already has a script it is quoted for you, so the slides on either side can flow into and out of it.
+The request names exactly which slides to write. Every other slide is marked SKIP and is there for context only. Do not return a script for it. Where a skipped slide already has a script it is quoted for you, so the slides on either side can flow into and out of it.
 
 OUTPUT
 Return ONLY a JSON object, no other text:
@@ -49,7 +53,7 @@ export function buildNarrationUserPrompt(title: string, slides: NarrationSlide[]
         (they are keeping what is there) — collapsing the two into "has text",
         as this once did, silently requests the first.
       */
-      const skip = s.write ? '' : `\n[SKIP — do not return a script for this slide.]`
+      const skip = s.write ? '' : `\n[SKIP: do not return a script for this slide.]`
       const existing = s.existingScript ? `\nIts current script: "${s.existingScript}"` : ''
       return `${head}${content}${skip}${existing}`
     })

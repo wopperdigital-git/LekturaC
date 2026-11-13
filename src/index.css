@@ -86,6 +86,17 @@
   */
   --app-background: #ffffff;
   --app-canvas: #f4f4f2;
+  /*
+    Chart series for the admin statistics (categorical, fixed order, never
+    cycled). Validated with the dataviz skill's validator against
+    --app-background in each mode: adjacent CVD ΔE >= 8.4, normal-vision >=
+    19.8. Slots 3-4 are under 3:1 on white, so every chart that uses them
+    also prints its numbers (tooltip + table view).
+  */
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
   --app-foreground: #111111;
   --app-accent: #ff5a1f;
   --app-accent-foreground: #111111;
@@ -162,6 +173,10 @@
 */
 [data-theme='dark'] {
   --app-background: #1a1a19;
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
   --app-canvas: #111110;
   --app-foreground: #f2f2ee;
   --app-accent: #ff6a33;
@@ -278,26 +293,9 @@ body {
   animation: dash-skeleton-pulse 1.6s ease-in-out infinite;
 }
 
-/* Create-flow step transitions (components/create/ConversationStep.tsx) */
-@keyframes create-step-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 8px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-.create-step-in {
-  animation: create-step-in 180ms ease-out;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .auth-fade-in,
-  .dash-skeleton,
-  .create-step-in {
+  .dash-skeleton {
     animation: none;
   }
 }

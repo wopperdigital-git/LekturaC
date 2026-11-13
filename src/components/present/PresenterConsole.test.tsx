@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card } from '@/engine/contentBlocks'
 import { BUILTIN_THEMES } from '@/lib/theme-tokens'
-import type { Pace } from '@/present/pacing'
 import type { DeckSnapshot, ScreenLink } from '@/present/protocol'
 import type { PresenterState } from '@/present/presenterState'
 import { PresenterConsoleView, type PresenterConsoleViewProps } from './PresenterConsole'
@@ -25,8 +24,6 @@ const DECK: DeckSnapshot = {
   cards: [card('a', 0, 'Script one'), card('b', 1, '   '), card('c', 2, 'Script three')],
 }
 
-const ON_TIME: Pace = { status: 'on-time', minutes: 0, elapsedFraction: 0.2, plannedFraction: 0.3 }
-
 function state(over: Partial<PresenterState> = {}): PresenterState {
   return { index: 1, count: 3, black: false, ended: false, ...over }
 }
@@ -36,19 +33,12 @@ function render(over: Partial<PresenterConsoleViewProps> = {}) {
   const props: PresenterConsoleViewProps = {
     deck: DECK,
     state: state(),
-    clock: '06:12',
-    running: true,
-    targetMinutes: 10,
-    pace: ON_TIME,
     noteSize: 1,
     screen: 'open' as ScreenLink,
     exitPending: false,
     onPrev: noop,
     onNext: noop,
     onToggleBlack: noop,
-    onPauseResume: noop,
-    onReset: noop,
-    onTargetChange: noop,
     onNotesSmaller: noop,
     onNotesLarger: noop,
     onOpenScreen: noop,
@@ -73,11 +63,13 @@ describe('PresenterConsoleView', () => {
     expect(render({ state: state({ index: 0 }) })).not.toContain('No script for this slide.')
   })
 
-  it('shows end of presentation as the next slide on the last one', () => {
-    const html = render({ state: state({ index: 2 }) })
-    expect(html).toContain('Next')
-    expect(html).toContain('End of presentation')
-    expect(render()).not.toContain('End of presentation')
+  it('has no next-slide preview, timer or pacing', () => {
+    const html = render({ state: state({ index: 0 }) })
+    expect(html).not.toContain('>Next<')
+    expect(html).not.toContain('Slide 2</h')
+    for (const gone of ['Pause', 'Resume', 'Reset', 'Target', 'On time', 'data-planned-tick']) {
+      expect(html).not.toContain(gone)
+    }
   })
 
   it('says when the screen is black', () => {
@@ -86,7 +78,6 @@ describe('PresenterConsoleView', () => {
   })
 
   it('says when the presentation has ended, in the current slide pane too', () => {
-    // Slide 2 of 3 has a next slide, so the only "End of presentation" is the current pane's.
     const html = render({ state: state({ index: 1, ended: true }) })
     expect(html).toContain('End of presentation')
     expect(html).toContain('bg-black')
@@ -114,18 +105,6 @@ describe('PresenterConsoleView', () => {
     }
   })
 
-  it('names the pace', () => {
-    expect(render()).toContain('On time')
-    expect(render({ pace: { ...ON_TIME, status: 'ahead', minutes: 2 } })).toContain('2 min ahead')
-    expect(render({ pace: { ...ON_TIME, status: 'behind', minutes: 3 } })).toContain('3 min behind')
-  })
-
-  it('offers Pause while the clock runs and Resume when it does not', () => {
-    expect(render()).toContain('Pause')
-    const paused = render({ running: false })
-    expect(paused).toContain('Resume')
-    expect(paused).not.toContain('Pause')
-  })
 
   it('marks Black screen pressed only while black', () => {
     expect(render()).toContain('aria-pressed="false"')

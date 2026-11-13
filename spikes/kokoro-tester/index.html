@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kokoro voice tester</title>
+<style>
+  :root { --bg:#f6f6f4; --card:#fff; --ink:#1c1c1a; --muted:#6b6b66; --line:#e2e2dd; --accent:#3b5bdb; --on-accent:#fff; --bad:#c92a2a; --good:#2b8a3e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#121212; --card:#1c1c1c; --ink:#ececec; --muted:#9a9a9a; --line:#2e2e2e; --accent:#7d95ff; --on-accent:#0d0d0d; --bad:#ff8787; --good:#69db7c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:15px; margin:0 0 12px; }
+  .row { display:flex; flex-wrap:wrap; gap:12px; align-items:end; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  select, input, textarea, button { font:inherit; color:var(--ink); }
+  select, input[type=number] { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  textarea { width:100%; min-height:220px; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; resize:vertical; }
+  button { background:var(--accent); color:var(--on-accent); border:0; border-radius:6px; padding:8px 14px; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  progress { width:100%; height:8px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .err { color:var(--bad); }
+  .env span { display:inline-block; margin-right:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 6px; border-top:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:500; border-top:0; }
+  td.num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.text { max-width:300px; }
+  audio { height:32px; width:220px; }
+  .fast { color:var(--good); } .slow { color:var(--bad); }
+  @media (max-width:640px) { audio { width:150px; } td.text { display:none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kokoro voice tester</h1>
+  <p class="sub">Throwaway spike. Runs Kokoro-82M in this browser tab. Nothing is sent anywhere except the one-time model download from Hugging Face.</p>
+
+  <section>
+    <h2>0. Record a voice sample (for building a custom voice)</h2>
+    <p class="muted">Quiet room, normal teaching voice, about 20–30 seconds. Read this aloud once, at your usual pace:</p>
+    <blockquote id="passage" style="margin:0 0 12px;padding:10px 14px;border-left:3px solid var(--accent);background:var(--bg);border-radius:4px">
+      Good morning, everyone. Today we're going to look at how living things get their energy. Think about the last thing you ate. Where did that energy come from before it reached your plate? Every food chain starts with the sun. Plants catch its light, store it as sugar, and pass it on to the animals that eat them. By the end of this lesson, you'll be able to draw a simple food chain and explain each link. Ready? Let's begin.
+    </blockquote>
+    <div class="row">
+      <button id="recStart">Record</button>
+      <button id="recStop" class="secondary" disabled>Stop</button>
+      <span class="muted" id="recTime"></span>
+    </div>
+    <div class="row" id="recResult" style="margin-top:12px" hidden>
+      <audio id="recAudio" controls></audio>
+      <a id="recDownload" download="voice-sample-24k-mono.wav">Download WAV (24 kHz mono)</a>
+    </div>
+    <p class="muted" id="recStatus"></p>
+  </section>
+
+  <section>
+    <h2>1. Load the model</h2>
+    <p class="env muted" id="env"></p>
+    <div class="row">
+      <label>Device
+        <select id="device">
+          <option value="wasm">wasm (CPU, works everywhere)</option>
+          <option value="webgpu">webgpu (GPU, faster if available)</option>
+        </select>
+      </label>
+      <label>Precision
+        <select id="dtype">
+          <option value="q8">q8 (~90 MB, recommended for wasm)</option>
+          <option value="fp32">fp32 (~330 MB, recommended for webgpu)</option>
+          <option value="fp16">fp16 (~165 MB)</option>
+          <option value="q4">q4 (~300 MB)</option>
+          <option value="q4f16">q4f16 (~155 MB)</option>
+        </select>
+      </label>
+      <button id="load">Load model</button>
+    </div>
+    <div style="margin-top:12px">
+      <progress id="bar" max="100" value="0" hidden></progress>
+      <p class="muted" id="loadStatus">Not loaded.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Voice</h2>
+    <div class="row">
+      <label>Voice
+        <select id="voice" disabled><option>Load the model first</option></select>
+      </label>
+      <label>Speed (0.6–1.5)
+        <input id="speed" type="number" min="0.6" max="1.5" step="0.05" value="1" />
+      </label>
+    </div>
+    <details style="margin-top:16px">
+      <summary>Add a custom voice (.bin voicepack)</summary>
+      <p class="muted">A Kokoro voicepack is exactly 522,240 bytes (510 × 256 numbers). Build one from a recording with KVoiceWalk.</p>
+      <div class="row">
+        <label>File <input id="customFile" type="file" accept=".bin" /></label>
+        <label>Name <input id="customName" type="text" value="My voice" maxlength="40" style="background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px" /></label>
+        <label>Accent
+          <select id="customAccent"><option value="a">American</option><option value="b">British</option></select>
+        </label>
+        <button id="customAdd" disabled>Add voice</button>
+        <button id="devVoice" class="secondary" hidden disabled>Load developer voice</button>
+      </div>
+      <p class="muted" id="customStatus"></p>
+    </details>
+  </section>
+
+  <section>
+    <h2>3. Slide scripts</h2>
+    <p class="muted">One slide per paragraph. Leave a blank line between slides. Each slide is generated separately, like the video does.</p>
+    <textarea id="script">Welcome to today's lesson on photosynthesis. By the end of this video, you'll be able to explain how plants turn sunlight into food.
+
+Plants take in carbon dioxide, or CO2, through tiny pores called stomata. They also draw water up from their roots. Using energy from sunlight, they combine these into glucose and release oxygen.
+
+Here's the equation: 6CO2 plus 6H2O gives C6H12O6 plus 6O2. That's six molecules of carbon dioxide and six of water, making one molecule of glucose and six of oxygen.
+
+A single large tree can release around 100 kilograms of oxygen a year. In 1779, Jan Ingenhousz showed that plants only do this in light. Dr. Rizal's garden in Calamba, Laguna, would have done the same.
+
+Quick check: what two things does a plant need besides sunlight? Pause the video, think about it, and then we'll go on.</textarea>
+    <div class="row" style="margin-top:12px">
+      <button id="speak" disabled>Generate all slides</button>
+      <button id="stop" class="secondary" disabled>Stop</button>
+      <span class="muted" id="speakStatus"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. Results</h2>
+    <p class="muted">"Speed ×" is seconds of audio made per second of work. Above 1× means faster than real time.</p>
+    <table>
+      <thead><tr><th>#</th><th>Words</th><th>Audio</th><th>Took</th><th>Speed ×</th><th>Listen</th><th class="text">Text</th></tr></thead>
+      <tbody id="results"><tr><td colspan="7" class="muted">Nothing yet.</td></tr></tbody>
+    </table>
+    <div class="row" style="margin-top:12px" id="allRow" hidden>
+      <span class="muted" id="totals"></span>
+      <audio id="allAudio" controls></audio>
+      <a id="allDownload" download="kokoro-all-slides.wav">Download all as WAV</a>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+const $ = (id) => document.getElementById(id)
+const worker = new Worker('./worker.js', { type: 'module' })
+const pending = new Map()
+let voices = null
+let running = false
+let clips = []
+
+const hasGpu = 'gpu' in navigator
+$('env').innerHTML = [
+  `WebGPU: <b>${hasGpu ? 'available' : 'not available'}</b>`,
+  `CPU threads: <b>${navigator.hardwareConcurrency ?? '?'}</b>`,
+  `Multi-threaded wasm: <b>${self.crossOriginIsolated ? 'yes' : 'no (slower)'}</b>`,
+].map((s) => `<span>${s}</span>`).join('')
+if (hasGpu) { $('device').value = 'webgpu'; $('dtype').value = 'fp32' }
+else { $('device').querySelector('[value=webgpu]').disabled = true }
+
+const fileProgress = new Map()
+worker.onmessage = ({ data }) => {
+  if (data.type === 'log') return console.log('[worker]', data.message)
+  if (data.type === 'progress') return onProgress(data.progress)
+  if (data.type === 'loaded') return onLoaded(data)
+  if (data.type === 'voiceAdded') return onVoiceAdded(data)
+  if (data.type === 'voiceMissing') return onVoiceMissing(data)
+  if (data.type === 'voiceError') {
+    saveCustom(savedCustom().filter((c) => c.id !== data.id))
+    $('customStatus').innerHTML = `<span class="err">Couldn't add "${data.name}": ${data.message}</span>`
+    return
+  }
+  const job = pending.get(data.id)
+  if (data.type === 'error' && !job) { $('loadStatus').innerHTML = `<span class="err">${data.message}</span>`; $('load').disabled = false; return }
+  if (!job) return
+  pending.delete(data.id)
+  if (data.type === 'done') job.resolve(data)
+  else if (data.type === 'cancelled') job.reject(new Error('Stopped'))
+  else job.reject(new Error(data.message))
+}
+
+function onProgress(p) {
+  if (p.status === 'progress' && p.total) {
+    fileProgress.set(p.file, { loaded: p.loaded, total: p.total })
+    let loaded = 0, total = 0
+    for (const f of fileProgress.values()) { loaded += f.loaded; total += f.total }
+    $('bar').hidden = false
+    $('bar').value = (loaded / total) * 100
+    $('loadStatus').textContent = `Downloading… ${(loaded / 1e6).toFixed(0)} of ${(total / 1e6).toFixed(0)} MB`
+  } else if (p.status === 'ready') {
+    $('loadStatus').textContent = 'Preparing the model…'
+  }
+}
+
+function onLoaded({ voices: v, ms }) {
+  $('bar').hidden = true
+  $('loadStatus').textContent = `Loaded in ${(ms / 1000).toFixed(1)} s (${$('device').value}, ${$('dtype').value}). Reloading the page uses the browser cache.`
+  renderVoices(v, 'af_heart')
+  $('voice').disabled = false
+  $('speak').disabled = false
+  $('customAdd').disabled = false
+  $('devVoice').disabled = false
+  // Voices added before a reload: the .bin is still in the cache, only the name list is ours.
+  for (const c of savedCustom()) worker.postMessage({ type: 'addVoice', ...c })
+}
+
+function renderVoices(v, selected) {
+  voices = v
+  const sel = $('voice')
+  const keep = selected ?? sel.value
+  sel.innerHTML = ''
+  const custom = Object.entries(v).filter(([, x]) => x.overallGrade === 'custom')
+  if (custom.length) {
+    const og = document.createElement('optgroup')
+    og.label = 'Custom'
+    custom.forEach(([id, x]) => og.append(new Option(`${x.name} · custom · ${x.language === 'en-gb' ? 'British' : 'American'}`, id)))
+    sel.append(og)
+  }
+  const groups = { 'en-us': 'American English', 'en-gb': 'British English' }
+  for (const [lang, label] of Object.entries(groups)) {
+    const og = document.createElement('optgroup')
+    og.label = label
+    Object.entries(v)
+      .filter(([, x]) => x.language === lang && x.overallGrade !== 'custom')
+      .sort(([, a], [, b]) => a.overallGrade.localeCompare(b.overallGrade))
+      .forEach(([id, x]) => og.append(new Option(`${x.name} · ${x.gender} · grade ${x.overallGrade}`, id)))
+    sel.append(og)
+  }
+  if (keep && v[keep]) sel.value = keep
+}
+
+// --- Custom voices ---
+const VOICEPACK_BYTES = 510 * 256 * 4
+const STORE_KEY = 'kokoro-tester:custom-voices'
+function savedCustom() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) ?? '[]') } catch { return [] }
+}
+function saveCustom(list) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(list)) } catch { /* storage blocked: lasts this session */ }
+}
+
+// A fresh id each time: kokoro-js keeps a loaded voice in memory by id, so re-adding a
+// different file under the same id would keep playing the old one until a reload.
+function newVoiceId(name, accent) {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20) || 'voice'
+  return `${accent}x_${slug}_${Date.now().toString(36)}`
+}
+
+async function addCustom(buffer, name, accent) {
+  if (buffer.byteLength !== VOICEPACK_BYTES) {
+    $('customStatus').innerHTML = `<span class="err">That file is ${buffer.byteLength.toLocaleString()} bytes. A Kokoro voicepack is exactly ${VOICEPACK_BYTES.toLocaleString()} bytes, so this isn't one.</span>`
+    return
+  }
+  const id = newVoiceId(name, accent)
+  saveCustom([...savedCustom(), { id, name, accent }])
+  $('customStatus').textContent = 'Adding…'
+  worker.postMessage({ type: 'addVoice', id, name, accent, buffer }, [buffer])
+}
+
+function onVoiceAdded({ id, name, voices: v }) {
+  renderVoices(v, id)
+  $('customStatus').textContent = `Added "${name}". It's selected in the voice list.`
+}
+
+function onVoiceMissing({ id, name }) {
+  saveCustom(savedCustom().filter((c) => c.id !== id))
+  $('customStatus').innerHTML = `<span class="err">"${name}" is no longer in this browser's cache. Add the file again.</span>`
+}
+
+$('customAdd').onclick = async () => {
+  const file = $('customFile').files[0]
+  if (!file) { $('customStatus').innerHTML = '<span class="err">Choose a .bin file first.</span>'; return }
+  addCustom(await file.arrayBuffer(), $('customName').value.trim() || 'My voice', $('customAccent').value)
+}
+
+// --- Recording a sample for KVoiceWalk: mono, 24 kHz, 16-bit WAV ---
+const REC_LIMIT_S = 40
+let recorder = null, recStream = null, recTimer = null, recStartedAt = 0
+$('recStart').onclick = async () => {
+  try {
+    recStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+  } catch (e) {
+    $('recStatus').innerHTML = `<span class="err">No microphone: ${e.message}</span>`
+    return
+  }
+  const parts = []
+  recorder = new MediaRecorder(recStream)
+  recorder.ondataavailable = (e) => e.data.size && parts.push(e.data)
+  recorder.onstop = async () => {
+    recStream.getTracks().forEach((t) => t.stop())
+    clearInterval(recTimer)
+    $('recTime').textContent = ''
+    $('recStart').disabled = false
+    $('recStop').disabled = true
+    const seconds = (performance.now() - recStartedAt) / 1000
+    try {
+      const decoded = await new AudioContext().decodeAudioData(await new Blob(parts).arrayBuffer())
+      const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * 24000), 24000)
+      const src = off.createBufferSource()
+      src.buffer = decoded
+      src.connect(off.destination)
+      src.start()
+      const mono = (await off.startRendering()).getChannelData(0)
+      const url = URL.createObjectURL(wavBlob(mono, 24000))
+      $('recAudio').src = url
+      $('recDownload').href = url
+      $('recResult').hidden = false
+      $('recStatus').innerHTML = seconds < 15
+        ? `<span class="err">Only ${seconds.toFixed(0)} s. KVoiceWalk works best with 20–30 s; record again if you can.</span>`
+        : `${seconds.toFixed(0)} s recorded. Listen back, then download the WAV and send me its path.`
+    } catch (e) {
+      $('recStatus').innerHTML = `<span class="err">Couldn't convert the recording: ${e.message}</span>`
+    }
+  }
+  recorder.start()
+  recStartedAt = performance.now()
+  $('recStart').disabled = true
+  $('recStop').disabled = false
+  $('recResult').hidden = true
+  $('recStatus').textContent = ''
+  recTimer = setInterval(() => {
+    const s = (performance.now() - recStartedAt) / 1000
+    $('recTime').textContent = `Recording… ${s.toFixed(0)} s`
+    if (s >= REC_LIMIT_S) recorder.stop()
+  }, 250)
+}
+$('recStop').onclick = () => recorder?.state === 'recording' && recorder.stop()
+
+// Offered only when spikes/kokoro-tester/voices/dev.bin exists.
+fetch('./voices/dev.bin', { method: 'HEAD' })
+  .then((r) => { if (r.ok && Number(r.headers.get('content-length')) === VOICEPACK_BYTES) $('devVoice').hidden = false })
+  .catch(() => {})
+$('devVoice').onclick = async () => {
+  const r = await fetch('./voices/dev.bin')
+  addCustom(await r.arrayBuffer(), 'Developer', 'a')
+}
+
+$('load').onclick = () => {
+  $('load').disabled = true
+  $('device').disabled = true
+  $('dtype').disabled = true
+  fileProgress.clear()
+  $('loadStatus').textContent = 'Starting…'
+  worker.postMessage({ type: 'load', device: $('device').value, dtype: $('dtype').value })
+}
+
+let nextId = 0
+function speakOne(text, voice, speed) {
+  const id = ++nextId
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject })
+    worker.postMessage({ type: 'speak', id, text, voice, speed })
+  })
+}
+
+$('stop').onclick = () => worker.postMessage({ type: 'stop' })
+
+$('speak').onclick = async () => {
+  const slides = $('script').value.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
+  if (!slides.length) return
+  const speed = Math.min(1.5, Math.max(0.6, Number($('speed').value) || 1))
+  const voice = $('voice').value
+  running = true
+  setBusy(true)
+  clips = []
+  const tbody = $('results')
+  tbody.innerHTML = ''
+  $('allRow').hidden = true
+  const rows = slides.map((text, i) => {
+    const tr = document.createElement('tr')
+    tr.innerHTML = `<td>${i + 1}</td><td class="num">${text.split(/\s+/).length}</td><td class="num">…</td><td class="num"></td><td class="num"></td><td></td><td class="text muted"></td>`
+    tr.lastChild.textContent = text.length > 90 ? text.slice(0, 90) + '…' : text
+    tbody.append(tr)
+    return tr
+  })
+  let workMs = 0
+  try {
+    for (let i = 0; i < slides.length; i++) {
+      $('speakStatus').textContent = `Slide ${i + 1} of ${slides.length}…`
+      const r = await speakOne(slides[i], voice, speed)
+      const seconds = r.audio.length / r.sampleRate
+      const factor = seconds / (r.ms / 1000)
+      workMs += r.ms
+      clips.push(r)
+      const cells = rows[i].children
+      cells[2].textContent = `${seconds.toFixed(1)} s`
+      cells[3].textContent = `${(r.ms / 1000).toFixed(1)} s`
+      cells[4].innerHTML = `<span class="${factor >= 1 ? 'fast' : 'slow'}">${factor.toFixed(2)}×</span>`
+      const url = URL.createObjectURL(wavBlob(r.audio, r.sampleRate))
+      cells[5].innerHTML = `<audio controls src="${url}"></audio>`
+    }
+    const all = joinClips(clips)
+    const audioSeconds = all.length / clips[0].sampleRate
+    $('totals').textContent = `${slides.length} slides · ${fmt(audioSeconds)} of audio · took ${fmt(workMs / 1000)} · voice ${voice} · speed ${speed}`
+    const url = URL.createObjectURL(wavBlob(all, clips[0].sampleRate))
+    $('allAudio').src = url
+    $('allDownload').href = url
+    $('allRow').hidden = false
+    $('speakStatus').textContent = 'Done.'
+  } catch (e) {
+    $('speakStatus').innerHTML = `<span class="${e.message === 'Stopped' ? '' : 'err'}">${e.message}</span>`
+  } finally {
+    running = false
+    setBusy(false)
+  }
+}
+
+function setBusy(busy) {
+  $('speak').disabled = busy
+  $('stop').disabled = !busy
+  $('voice').disabled = busy
+  $('speed').disabled = busy
+  $('script').disabled = busy
+}
+
+function fmt(s) { return s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${s.toFixed(1)} s` }
+
+// Slides joined with 0.4 s of silence, roughly how the video holds between slides.
+function joinClips(list) {
+  const gap = Math.round(list[0].sampleRate * 0.4)
+  const total = list.reduce((n, c) => n + c.audio.length, 0) + gap * (list.length - 1)
+  const out = new Float32Array(total)
+  let o = 0
+  list.forEach((c, i) => { out.set(c.audio, o); o += c.audio.length + (i < list.length - 1 ? gap : 0) })
+  return out
+}
+
+function wavBlob(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2)
+  const v = new DataView(buf)
+  const str = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)))
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE')
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true)
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true)
+  str(36, 'data'); v.setUint32(40, samples.length * 2, true)
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+  }
+  return new Blob([buf], { type: 'audio/wav' })
+}
+</script>
+</body>
+</html>

@@ -92,6 +92,13 @@ describe('buildRepairUserPrompt', () => {
   it('includes today\'s date', () => {
     expect(prompt).toContain('2026-09-19')
   })
+
+  it("keeps a repaired slide at the deck's detail level (balanced when none is given)", () => {
+    expect(prompt).toContain('20-40 words, 55 at most')
+    const detailed = buildRepairUserPrompt(DECK, [1], FLAGS, { ...CONTEXT, detailLevel: 'detailed' })
+    expect(detailed).toContain('50-90 words, 110 at most')
+    expect(REPAIR_SYSTEM_PROMPT).not.toContain('20-40 words')
+  })
 })
 
 describe('parseRepairResponse', () => {

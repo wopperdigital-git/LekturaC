@@ -24,6 +24,11 @@ const HERO_ROLES = new Set([
 
 const RECAP_ROLES = new Set(['recap', 'recap-next-steps'])
 
+/** `true` for a blueprint role whose slide is meant to stand alone as a short hero line. */
+export function isHeroRole(role: string | undefined): boolean {
+  return role !== undefined && HERO_ROLES.has(role)
+}
+
 /** What every hero layout is built for: one heading, optionally one paragraph beneath it — nothing else. */
 export function isTitleShaped(blocks: ContentBlock[]): boolean {
   const headings = blocks.filter((b) => b.type === 'heading').length

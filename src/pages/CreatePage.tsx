@@ -8,12 +8,13 @@ import { useJobsStore } from '@/jobs/jobsStore'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
-import { AgentHeader } from '@/components/create/AgentHeader'
-import { AnswerPill, OptionCards, StepBlock } from '@/components/create/ConversationStep'
-import { ArrowLeftIcon, CheckIcon } from '@/components/create/icons'
+import { TrackBand } from '@/components/ui/Programme'
+import { BadgePreview, type BadgeMetaPart } from '@/components/create/BadgePreview'
+import { BriefSection, ChoiceChips } from '@/components/create/BriefParts'
+import { ArrowLeftIcon } from '@/components/create/icons'
+import { prefersReducedMotion, printBand, rise, riseInRef, riseList, sendOff, useMotion } from '@/lib/motion'
 import {
   STEP_ORDER,
-  answeredCount,
   deleteDraft,
   emptyDraft,
   getDraft,
@@ -23,20 +24,21 @@ import {
   type DetailLevel,
   type StepKey,
 } from '@/lib/briefDrafts'
-import { DEFAULT_SLIDE_COUNT, MAX_SLIDES, parseSlideCount, slideCountProblem } from '@/lib/slideCount'
+import { restorePending } from '@/lib/resumePending'
+import { DEFAULT_SLIDE_COUNT, MAX_SLIDES } from '@/lib/slideCount'
 
 /**
  * Preset audiences, with an escape hatch to anything else.
  *
- * `audience` stays a free-text string in `Answers` and in `GenerationBrief` —
- * these buttons only write a fixed sentence into it, so the prompt, the drafts
- * and the store are untouched by their existence. `custom` carries no text of
- * its own; picking it reveals the field this step used to be.
+ * `audience` stays a free-text string in `Answers` and in `GenerationBrief`;
+ * the presets only write a fixed phrase into it, so the prompt, the drafts and
+ * the store are untouched by their existence. `custom` carries no text of its
+ * own; picking it reveals a field.
  */
 const AUDIENCE_PRESETS = [
-  { value: 'general', label: 'General', description: 'A broad, non-specialist audience' },
-  { value: 'student', label: 'Students', description: 'Learners in a class or course' },
-  { value: 'custom', label: 'Someone else', description: 'Describe the audience yourself' },
+  { value: 'general', label: 'General' },
+  { value: 'student', label: 'Students' },
+  { value: 'custom', label: 'Someone else' },
 ] as const
 
 type AudienceChoice = (typeof AUDIENCE_PRESETS)[number]['value']
@@ -46,7 +48,12 @@ const AUDIENCE_TEXT: Record<Exclude<AudienceChoice, 'custom'>, string> = {
   student: 'students',
 }
 
-/** Which card to light up for an audience already answered. */
+const AUDIENCE_BADGE: Record<Exclude<AudienceChoice, 'custom'>, string> = {
+  general: 'General audience',
+  student: 'Students',
+}
+
+/** Which chip to light for an audience already answered. */
 function audienceChoiceFor(audience: string | null): AudienceChoice | null {
   if (audience === null) return null
   const preset = Object.entries(AUDIENCE_TEXT).find(([, text]) => text === audience)
@@ -54,20 +61,34 @@ function audienceChoiceFor(audience: string | null): AudienceChoice | null {
 }
 
 const DETAIL_OPTIONS: { value: DetailLevel; label: string; description: string }[] = [
-  { value: 'simplified', label: 'Simplified', description: 'Quick & easy to skim' },
-  { value: 'balanced', label: 'Balanced', description: 'Clear with real substance' },
-  { value: 'detailed', label: 'Detailed', description: 'Deep and thorough' },
+  { value: 'simplified', label: 'Simplified', description: 'Quick and easy to skim.' },
+  { value: 'balanced', label: 'Balanced', description: 'Clear, with real substance.' },
+  { value: 'detailed', label: 'Detailed', description: 'Fuller slides: the facts and the why.' },
 ]
 
-/** `answering` covers both the initial brief and any post-error edit. */
-type Phase = 'answering' | 'failed' | 'done'
+const SLIDE_OPTIONS: { value: number | 'auto'; label: string; narrow?: boolean; breakBefore?: boolean }[] = [
+  ...Array.from({ length: MAX_SLIDES }, (_, i) => ({ value: i + 1, label: String(i + 1), narrow: true })),
+  // Its own row: the alternative to a number, not an eighth number.
+  { value: 'auto', label: 'Let AI decide', breakBefore: true },
+]
 
+/** "a, b and c" */
+function listPhrase(items: string[]): string {
+  return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+/**
+ * `/new`: the brief as one proposal sheet, every question visible and
+ * answerable in any order, with the deck's dashboard badge filling in beside
+ * it. Generation is a background job (`startDeckJob`); this page only writes
+ * the brief, keeps it as a draft on every keystroke and hands it off.
+ */
 export function CreatePage() {
   const navigate = useNavigate()
   const { createDeck } = usePresentationStore()
 
   const uid = useId()
-  const qid = (step: StepKey) => `${uid}-q-${step}`
+  const id = (part: string) => `${uid}-${part}`
 
   // `?draft=<id>` resumes an existing brief; anything else starts a fresh one.
   // Resolved once and held in a ref so the identity can't change underfoot and
@@ -80,563 +101,406 @@ export function CreatePage() {
   }
   const resumed = resumedRef.current
   const draftId = resumed.id
+  const saved = resumed.answers
 
-  const [answers, setAnswers] = useState<Answers>(resumed.answers)
-  const [editing, setEditing] = useState<StepKey | null>(null)
+  // Drafts from the one-question-at-a-time brief kept text typed into the open
+  // question as `pendingText`; it belongs to the first unanswered step (a chip
+  // step takes it only if it reads as an option, else it goes to guidance).
+  const resumedStep: StepKey | null = STEP_ORDER.find((step) => saved[step] === null) ?? null
+  const pending = restorePending(resumedStep, resumed.pendingText)
+  const initialAudience = audienceChoiceFor(saved.audience) ?? (pending.audience ? 'custom' : null)
 
-  // The unsubmitted text belongs to whichever question was open when the draft
-  // was saved, so it's restored into that step's field and left blank elsewhere.
-  const resumedStep = STEP_ORDER.find((step) => resumed.answers[step] === null) ?? null
-  const restore = (step: StepKey) => (resumedStep === step ? resumed.pendingText : '')
+  const [topicText, setTopicText] = useState(() => saved.topic ?? pending.topic ?? '')
+  const [slideCount, setSlideCount] = useState<number | 'auto'>(
+    () => saved.slideCount ?? pending.slideCount ?? DEFAULT_SLIDE_COUNT,
+  )
+  const [audienceChoice, setAudienceChoice] = useState<AudienceChoice | null>(initialAudience)
+  const [audienceText, setAudienceText] = useState(() =>
+    initialAudience === 'custom' ? (saved.audience ?? pending.audience ?? '') : '',
+  )
+  const [detailLevel, setDetailLevel] = useState<DetailLevel | null>(saved.detailLevel ?? pending.detailLevel ?? null)
+  const [guidanceText, setGuidanceText] = useState(() => saved.guidance ?? pending.guidance ?? '')
 
-  const [topicDraft, setTopicDraft] = useState(() => restore('topic'))
-  const [slideCountDraft, setSlideCountDraft] = useState(String(DEFAULT_SLIDE_COUNT))
-  const [audienceDraft, setAudienceDraft] = useState(() => restore('audience'))
-  // Which audience card is lit, once the user has picked one this session.
-  const [audienceChoice, setAudienceChoice] = useState<AudienceChoice | null>(null)
-  const [guidanceDraft, setGuidanceDraft] = useState(() => restore('guidance'))
-
-  const [phase, setPhase] = useState<Phase>('answering')
+  const [leaving, setLeaving] = useState(false)
+  const [showMissing, setShowMissing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [skipping, setSkipping] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
 
-  const { topic, slideCount, audience, detailLevel, guidance } = answers
+  const topicRef = useRef<HTMLTextAreaElement>(null)
+  const audienceRef = useRef<HTMLDivElement>(null)
+  const audienceInputRef = useRef<HTMLInputElement>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
+  const badgeRef = useRef<HTMLDivElement>(null)
+
   const deckRunning = useJobsStore((s) => s.jobs.deck?.status === 'running')
-
-  // Falls back to the answer itself, and then to "there is unsubmitted text in
-  // the custom field" — which is how a draft saved mid-sentence reopens on the
-  // field it was typed into rather than on three untouched cards. Derived
-  // rather than stored so those two sources can't disagree with the state.
-  const shownAudienceChoice: AudienceChoice | null =
-    audienceChoice ?? audienceChoiceFor(audience) ?? (audienceDraft ? 'custom' : null)
-
-  // Checked up front rather than inside startGeneration: without this the user
-  // answered every question before being told the app has no key. One key is
-  // enough — the chain simply has one link.
+  // Checked up front: one key is enough, the chain then has one link.
   const missingKey = PROVIDER_CHAIN.length === 0
 
+  const topic = topicText.trim() || null
+  const audience =
+    audienceChoice === 'custom'
+      ? audienceText.trim() || null
+      : audienceChoice
+        ? AUDIENCE_TEXT[audienceChoice]
+        : null
+  const guidance = guidanceText.trim() || null
 
+  // The slide count always has a value on screen, so it only counts as an
+  // answer once something else does; otherwise every visit to /new would leave
+  // a draft behind.
+  const touched = topic !== null || audienceChoice !== null || detailLevel !== null || guidance !== null
+  const answers: Answers = {
+    topic,
+    slideCount: touched ? slideCount : null,
+    audience,
+    detailLevel,
+    guidance,
+  }
+
+  const missing: { label: string; focus: () => void }[] = []
+  if (topic === null) missing.push({ label: 'a topic', focus: () => topicRef.current?.focus() })
+  if (audience === null)
+    missing.push({
+      label: 'an audience',
+      focus: () =>
+        (audienceChoice === 'custom'
+          ? audienceInputRef.current
+          : audienceRef.current?.querySelector<HTMLInputElement>('input'))?.focus(),
+    })
+  if (detailLevel === null)
+    missing.push({ label: 'a detail level', focus: () => detailRef.current?.querySelector('input')?.focus() })
+
+  // Persist on every keystroke, so leaving costs nothing; there is no prompt on
+  // the way out for exactly this reason.
+  const draftSlideCount = answers.slideCount
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [answers, editing, phase, error])
+    if (leaving) return
+    saveDraft({
+      id: draftId,
+      answers: { topic, slideCount: draftSlideCount, audience, detailLevel, guidance },
+      pendingText: '',
+      savedAt: Date.now(),
+    })
+  }, [draftId, leaving, topic, draftSlideCount, audience, detailLevel, guidance])
 
-  function startGeneration(brief: Answers) {
-    const { topic: t, slideCount: count, audience: aud, detailLevel: level } = brief
-    if (t === null || count === null || aud === null || level === null) {
-      setPhase('failed')
-      setError('Some answers are still missing. Fill in the questions above and try again.')
+  const pageRef = useMotion<HTMLDivElement>(({ reduce, root }) => {
+    printBand(root.querySelectorAll('[data-motion=band] > span'), reduce)
+    rise(root.querySelectorAll('[data-motion=head]'), reduce, { delay: reduce ? 0 : 0.1, stagger: 0.05 })
+    riseList(root.querySelectorAll('[data-motion=section]'), reduce, { delay: reduce ? 0 : 0.18 })
+    rise(root.querySelectorAll('[data-motion=aside]'), reduce, { delay: reduce ? 0 : 0.26, y: 16, duration: 0.5 })
+  })
+
+  function generate() {
+    if (leaving || deckRunning) return
+    setError(null)
+    if (topic === null || audience === null || detailLevel === null) {
+      setShowMissing(true)
+      missing[0]?.focus()
       return
     }
-    // Saved now, not by the autosave effect: the page unmounts before that would run, and the
-    // draft is what "Edit brief" comes back to if the job fails.
+    const brief: Answers = { topic, slideCount, audience, detailLevel, guidance: guidance ?? '' }
+    // Saved complete now: the page leaves before the autosave would run, and
+    // the draft is what "Edit brief" comes back to if the job fails.
     saveDraft({ id: draftId, answers: brief, pendingText: '', savedAt: Date.now() })
     const started = startDeckJob({
-      topic: t,
-      requestedCount: count,
+      topic,
+      requestedCount: slideCount,
       draftId,
       brief: {
-        slideCount: count,
-        audience: aud,
-        detailLevel: level,
+        slideCount,
+        audience,
+        detailLevel,
         // The brief no longer asks for a tone; every deck is generated with the default.
         tone: DEFAULT_TONE,
-        guidance: brief.guidance ?? '',
+        guidance: guidance ?? '',
       },
     })
     if (!started) {
-      setPhase('failed')
       setError('A deck is already generating. Wait for it to finish, then try again.')
       return
     }
-    setPhase('done')
-    void navigate('/')
-  }
-
-  function answer(patch: Partial<Answers>, { generate = false } = {}) {
-    const next = { ...answers, ...patch }
-    setAnswers(next)
-    setEditing(null)
-    // Editing after a failure clears the stale error; the Generate button below
-    // lets them re-run when they're happy with the brief.
-    if (phase === 'failed') {
-      setPhase('answering')
-      setError(null)
-    }
-    if (generate) startGeneration(next)
-  }
-
-  function beginEdit(step: StepKey) {
-    if (topic !== null) setTopicDraft(topic)
-    setSlideCountDraft(
-      slideCount === 'auto' || slideCount === null ? String(DEFAULT_SLIDE_COUNT) : String(slideCount),
-    )
-    // A preset answer must not land in the custom field: reopening the step
-    // would then show "a general audience" as text the user apparently typed.
-    const choice = audienceChoiceFor(audience)
-    setAudienceChoice(choice)
-    setAudienceDraft(choice === 'custom' && audience !== null ? audience : '')
-    setGuidanceDraft(guidance ?? '')
-    setEditing(step)
-  }
-
-  const parsedSlideCount = parseSlideCount(slideCountDraft)
-  const slideCountError = slideCountProblem(slideCountDraft)
-
-  function handleTopicKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      if (topicDraft.trim()) answer({ topic: topicDraft.trim() })
-    }
+    setLeaving(true)
+    // The badge is sent off to the dashboard, then the page follows it.
+    sendOff(badgeRef.current, prefersReducedMotion(), () => void navigate('/'))
   }
 
   async function handleSkip() {
     setSkipping(true)
     setError(null)
     try {
-      const id = await createDeck()
+      const deckId = await createDeck()
       deleteDraft(draftId)
-      void navigate(`/deck/${id}`)
+      void navigate(`/deck/${deckId}`)
     } catch (err) {
-      // previously unhandled: the button just looked dead on a failure
       setSkipping(false)
       setError(err instanceof Error ? err.message : 'Could not create a blank presentation.')
     }
   }
 
-  const answeredAll =
-    topic !== null &&
-    slideCount !== null &&
-    audience !== null &&
-    detailLevel !== null &&
-    guidance !== null
+  function handleFormKeyDown(e: KeyboardEvent<HTMLFormElement>) {
+    // ⌘/Ctrl+Enter generates from anywhere in the brief.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      generate()
+    }
+  }
 
-  const completedCount = answeredCount(answers)
+  const badgeMeta: BadgeMetaPart[] = [
+    { text: slideCount === 'auto' ? 'AI picks the length' : `${slideCount} ${slideCount === 1 ? 'slide' : 'slides'}` },
+    audienceChoice === 'custom'
+      ? audience
+        ? { text: audience.charAt(0).toUpperCase() + audience.slice(1) }
+        : { text: 'Audience not set', missing: true }
+      : audienceChoice
+        ? { text: AUDIENCE_BADGE[audienceChoice] }
+        : { text: 'Audience not set', missing: true },
+    detailLevel
+      ? { text: DETAIL_OPTIONS.find((o) => o.value === detailLevel)?.label ?? '' }
+      : { text: 'Detail not set', missing: true },
+  ]
 
-  /**
-   * The step wearing the active-card treatment. Not simply the last one on
-   * screen: reopening an earlier answer via Edit makes *that* step active again
-   * while the later answers stay collapsed below it.
-   */
-  const activeStep: StepKey | null =
-    editing ?? STEP_ORDER.find((step) => answers[step] === null) ?? null
+  const flag = (missingNow: boolean) => showMissing && missingNow
+  const topicError = flag(topic === null) ? 'Add a topic.' : null
+  const audienceError = flag(audience === null)
+    ? audienceChoice === 'custom'
+      ? 'Describe the audience.'
+      : 'Pick an audience.'
+    : null
+  const detailError = flag(detailLevel === null) ? 'Pick a detail level.' : null
+  const describe = (...ids: (string | false)[]) => ids.filter(Boolean).join(' ') || undefined
 
-  /** Answers lock once the brief has been handed off. */
-  const canEdit = phase !== 'done'
-  const editHandler = (step: StepKey) => (canEdit ? () => beginEdit(step) : undefined)
-
-  /**
-   * Text sitting in the open question. Only one step is active at a time, so a
-   * single slot covers all three text fields — and it's what makes a brief
-   * abandoned mid-sentence resumable rather than just mid-question.
-   */
-  const pendingText =
-    activeStep === 'topic'
-      ? topicDraft
-      : activeStep === 'audience'
-        ? audienceDraft
-        : activeStep === 'guidance'
-          ? guidanceDraft
-          : ''
-
-  // Persist on every keystroke and every answer, so leaving costs nothing —
-  // there's no confirmation on the way out for exactly this reason.
-  useEffect(() => {
-    if (phase === 'done') return
-    saveDraft({ id: draftId, answers, pendingText, savedAt: Date.now() })
-  }, [draftId, answers, pendingText, phase])
-
-  const subtleButton =
-    'cursor-pointer rounded-app-sm text-xs text-app-muted transition-colors hover:text-app-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent'
+  const subtleLink =
+    'cursor-pointer rounded-app-sm text-sm text-app-muted underline underline-offset-3 transition-colors hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent disabled:cursor-not-allowed disabled:opacity-50'
 
   const skipButton = (
-    <button
-      type="button"
-      onClick={() => void handleSkip()}
-      disabled={skipping}
-      className={`${subtleButton} disabled:cursor-not-allowed disabled:opacity-50`}
-    >
-      {skipping ? 'Creating…' : 'Skip and start with a blank canvas instead'}
+    <button type="button" onClick={() => void handleSkip()} disabled={skipping || leaving} className={subtleLink}>
+      {skipping ? 'Creating a blank deck…' : 'Start with a blank deck instead'}
     </button>
   )
 
+  let status: { text: string; tone: 'muted' | 'danger' }
+  if (leaving) status = { text: 'Generating in the background. Taking you to your dashboard…', tone: 'muted' }
+  else if (deckRunning)
+    status = {
+      text: 'A deck is generating right now. This brief waits in Drafts until it finishes.',
+      tone: 'muted',
+    }
+  else if (showMissing && missing.length > 0)
+    status = { text: `Add ${listPhrase(missing.map((m) => m.label))} first.`, tone: 'danger' }
+  else
+    status = {
+      text: 'Lektura researches, writes and lays out the deck in the background. It appears on your dashboard.',
+      tone: 'muted',
+    }
+
   return (
-    <div className="min-h-screen bg-app-canvas">
-      <div className="flex items-center px-6 py-4">
-        <Link
-          to="/"
-          className="group inline-flex items-center gap-1.5 rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-sm font-medium text-app-muted transition-colors hover:bg-app-border/40 hover:text-app-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
-        >
-          <ArrowLeftIcon className="size-3.5 transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transform-none" />
-          Home
-        </Link>
-      </div>
-
-      {/*
-        Natural height: the container starts compact and grows as the
-        conversation accumulates, rather than filling the viewport up front.
-      */}
-      <div className="mx-auto w-full max-w-2xl px-4 pb-20 sm:px-6">
-        <div className="overflow-hidden rounded-app border border-app-border bg-app-background shadow-app">
-          <AgentHeader
-            completed={completedCount}
-            total={STEP_ORDER.length}
-            showProgress={!missingKey}
-          />
-
-          <div
-            // role="log" so a screen reader announces each new question as it
-            // appears — the whole interaction is questions arriving one at a
-            // time. The header sits outside it deliberately: its step counter
-            // changes every turn and would otherwise be re-announced each time.
-            role="log"
-            aria-live="polite"
-            aria-relevant="additions text"
-            className="px-5 py-4 sm:px-6 sm:py-5"
+    <div ref={pageRef} className="min-h-screen bg-app-canvas">
+      <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <Link
+            to="/"
+            className="group inline-flex items-center gap-1.5 rounded-app-sm border-[1.5px] border-app-foreground bg-app-background px-3 py-1.5 text-sm font-bold text-app-foreground transition-colors hover:bg-app-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-app-accent"
           >
-            {missingKey ? (
-              <div className="flex flex-col gap-4">
-                <Alert tone="error">
-                  No AI key configured. Add{' '}
-                  <code className="font-mono text-xs">VITE_ANTHROPIC_API_KEY</code>,{' '}
-                  <code className="font-mono text-xs">VITE_GROQ_API_KEY</code>, or{' '}
-                  <code className="font-mono text-xs">VITE_GEMINI_API_KEY</code> to your{' '}
-                  <code className="font-mono text-xs">.env</code> file and restart the dev server.
-                </Alert>
-                <div className="self-start">{skipButton}</div>
-                {/* the blank-canvas path is the only action here, so its failures
-                    need somewhere to land on this branch too */}
-                {error && <Alert tone="error">{error}</Alert>}
-              </div>
-            ) : (
-              <>
-                {/* Said before the first question, not after the last: the brief can still be
-                    written now, and it waits in Drafts until a deck can be generated. */}
-                {deckRunning && phase === 'answering' && (
-                  <div className="mb-4">
-                    <Alert tone="info">
-                      A deck is generating right now. You can still write this brief. It waits in Drafts until you
-                      can generate it.
-                    </Alert>
-                  </div>
-                )}
-                <StepBlock
-                  active={activeStep === 'topic'}
-                  question="What's this presentation about?"
-                  hint="Describe it in a sentence or two — the more specific, the better the deck."
-                  questionId={qid('topic')}
-                >
-                  {activeStep === 'topic' ? (
-                    <form
-                      onSubmit={(e: FormEvent) => {
-                        e.preventDefault()
-                        if (topicDraft.trim()) answer({ topic: topicDraft.trim() })
-                      }}
-                      className="flex w-full flex-col gap-3"
-                    >
-                      <Textarea
-                        rows={3}
-                        autoFocus
-                        aria-labelledby={qid('topic')}
-                        placeholder="e.g. a pitch for a solar panel startup called Helios"
-                        value={topicDraft}
-                        onChange={(e) => setTopicDraft(e.target.value)}
-                        onKeyDown={handleTopicKeyDown}
-                      />
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        {editing === 'topic' ? (
-                          <Button variant="ghost" type="button" onClick={() => setEditing(null)}>
-                            Cancel
-                          </Button>
-                        ) : (
-                          skipButton
-                        )}
-                        <Button type="submit" variant="primary" disabled={!topicDraft.trim()}>
-                          {editing === 'topic' ? 'Save' : 'Next'}
-                        </Button>
-                      </div>
-                    </form>
-                  ) : (
-                    <AnswerPill onEdit={editHandler('topic')} editLabel="Edit the topic">
-                      {topic}
-                    </AnswerPill>
-                  )}
-                </StepBlock>
-
-                {topic !== null && (
-                  <StepBlock
-                    active={activeStep === 'slideCount'}
-                    question="How many slides?"
-                    hint={`Up to ${MAX_SLIDES}, and ${DEFAULT_SLIDE_COUNT} unless you say otherwise. Not sure? Let the agent pick a length that fits.`}
-                    questionId={qid('slideCount')}
-                  >
-                    {activeStep === 'slideCount' ? (
-                      <form
-                        onSubmit={(e: FormEvent) => {
-                          e.preventDefault()
-                          if (parsedSlideCount !== null) answer({ slideCount: parsedSlideCount })
-                        }}
-                        className="flex w-full max-w-[300px] flex-col gap-2"
-                      >
-                        <div className="flex gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={MAX_SLIDES}
-                            autoFocus
-                            aria-labelledby={qid('slideCount')}
-                            aria-describedby={slideCountError ? `${uid}-slide-error` : undefined}
-                            invalid={Boolean(slideCountError)}
-                            value={slideCountDraft}
-                            onChange={(e) => setSlideCountDraft(e.target.value)}
-                          />
-                          <Button
-                            type="submit"
-                            variant="primary"
-                            disabled={Boolean(slideCountError)}
-                          >
-                            {editing === 'slideCount' ? 'Save' : 'Next'}
-                          </Button>
-                        </div>
-                        {slideCountError && (
-                          <p id={`${uid}-slide-error`} className="text-xs text-app-danger-text">
-                            {slideCountError}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-4">
-                          <button
-                            type="button"
-                            onClick={() => answer({ slideCount: 'auto' })}
-                            className={subtleButton}
-                          >
-                            Not sure — let AI decide
-                          </button>
-                          {editing === 'slideCount' && (
-                            <button
-                              type="button"
-                              onClick={() => setEditing(null)}
-                              className={subtleButton}
-                            >
-                              Cancel
-                            </button>
-                          )}
-                        </div>
-                      </form>
-                    ) : (
-                      <AnswerPill
-                        onEdit={editHandler('slideCount')}
-                        editLabel="Edit the slide count"
-                      >
-                        {slideCount === 'auto' ? 'Let AI decide' : `${slideCount} slides`}
-                      </AnswerPill>
-                    )}
-                  </StepBlock>
-                )}
-
-                {slideCount !== null && (
-                  <StepBlock
-                    active={activeStep === 'audience'}
-                    question="Who's this presentation for?"
-                    hint="Who's in the room? This shapes the language and the level it pitches at."
-                    questionId={qid('audience')}
-                  >
-                    {activeStep === 'audience' ? (
-                      <div className="flex w-full flex-col gap-3">
-                        <OptionCards
-                          options={AUDIENCE_PRESETS.map((o) => ({ ...o }))}
-                          selected={shownAudienceChoice}
-                          onSelect={(value) => {
-                            setAudienceChoice(value)
-                            // The two presets are a complete answer, so they
-                            // advance on the click; 'custom' only opens the
-                            // field, which still needs submitting.
-                            if (value !== 'custom') answer({ audience: AUDIENCE_TEXT[value] })
-                          }}
-                        />
-                        {shownAudienceChoice === 'custom' && (
-                          <form
-                            onSubmit={(e: FormEvent) => {
-                              e.preventDefault()
-                              if (audienceDraft.trim()) answer({ audience: audienceDraft.trim() })
-                            }}
-                            className="flex gap-2"
-                          >
-                            <Input
-                              autoFocus
-                              aria-labelledby={qid('audience')}
-                              placeholder="e.g. investors, customers, my team, new hires..."
-                              value={audienceDraft}
-                              onChange={(e) => setAudienceDraft(e.target.value)}
-                            />
-                            <Button type="submit" variant="primary" disabled={!audienceDraft.trim()}>
-                              {editing === 'audience' ? 'Save' : 'Next'}
-                            </Button>
-                          </form>
-                        )}
-                        {editing === 'audience' && (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            className={`self-start ${subtleButton}`}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <AnswerPill onEdit={editHandler('audience')} editLabel="Edit the audience">
-                        {audience}
-                      </AnswerPill>
-                    )}
-                  </StepBlock>
-                )}
-
-                {audience !== null && (
-                  <StepBlock
-                    active={activeStep === 'detailLevel'}
-                    question="How much detail should it go into?"
-                    hint="How deep each slide digs into the material."
-                    questionId={qid('detailLevel')}
-                  >
-                    {activeStep === 'detailLevel' ? (
-                      <div className="flex flex-col gap-3">
-                        <OptionCards
-                          options={DETAIL_OPTIONS}
-                          selected={detailLevel}
-                          onSelect={(value) => answer({ detailLevel: value })}
-                        />
-                        {editing === 'detailLevel' && (
-                          <button
-                            type="button"
-                            onClick={() => setEditing(null)}
-                            className={`self-start ${subtleButton}`}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <AnswerPill
-                        onEdit={editHandler('detailLevel')}
-                        editLabel="Edit the detail level"
-                      >
-                        {DETAIL_OPTIONS.find((o) => o.value === detailLevel)?.label}
-                      </AnswerPill>
-                    )}
-                  </StepBlock>
-                )}
-
-                {detailLevel !== null && (
-                  <StepBlock
-                    active={activeStep === 'guidance'}
-                    question="Anything to focus on — or steer clear of?"
-                    // The second example matches `isUserMaterialOnly`, which skips web research: it is the way to say so.
-                    hint="Optional. The AI follows this ahead of its own choices. For example: “Focus on the water cycle” or “Only use the facts I paste here.”"
-                    questionId={qid('guidance')}
-                  >
-                    {activeStep === 'guidance' ? (
-                      <form
-                        onSubmit={(e: FormEvent) => {
-                          e.preventDefault()
-                          answer({ guidance: guidanceDraft.trim() }, { generate: editing === null })
-                        }}
-                        className="flex w-full flex-col gap-3"
-                      >
-                        <Textarea
-                          rows={2}
-                          autoFocus
-                          aria-labelledby={qid('guidance')}
-                          placeholder="e.g. don't make up statistics, stick to the facts I gave you; or emphasize the pricing story"
-                          value={guidanceDraft}
-                          onChange={(e) => setGuidanceDraft(e.target.value)}
-                        />
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          {editing === 'guidance' ? (
-                            <Button variant="ghost" type="button" onClick={() => setEditing(null)}>
-                              Cancel
-                            </Button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => answer({ guidance: '' }, { generate: true })}
-                              disabled={deckRunning}
-                              title={deckRunning ? 'A deck is already generating' : undefined}
-                              className={`${subtleButton} disabled:cursor-not-allowed disabled:opacity-50`}
-                            >
-                              Skip and generate
-                            </button>
-                          )}
-                          <Button
-                            type="submit"
-                            variant="primary"
-                            // Saving an edited answer never generates, so only the first pass waits.
-                            disabled={deckRunning && editing !== 'guidance'}
-                            title={deckRunning && editing !== 'guidance' ? 'A deck is already generating' : undefined}
-                          >
-                            {editing === 'guidance' ? 'Save' : 'Generate'}
-                          </Button>
-                        </div>
-                      </form>
-                    ) : (
-                      <AnswerPill onEdit={editHandler('guidance')} editLabel="Edit the guidance">
-                        {guidance || 'None'}
-                      </AnswerPill>
-                    )}
-                  </StepBlock>
-                )}
-
-                {phase === 'failed' && error && (
-                  <div className="mt-3 flex flex-col gap-3">
-                    <Alert tone="error">{error}</Alert>
-                    <Button
-                      variant="primary"
-                      className="self-start"
-                      disabled={deckRunning}
-                      title={deckRunning ? 'A deck is already generating' : undefined}
-                      onClick={() => startGeneration(answers)}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                )}
-
-                {/* Reachable after cancelling or editing once the brief is complete. */}
-                {phase === 'answering' && answeredAll && editing === null && (
-                  <div className="mt-4 flex justify-end border-t border-app-border pt-4">
-                    <Button
-                      variant="primary"
-                      disabled={deckRunning}
-                      title={deckRunning ? 'A deck is already generating' : undefined}
-                      onClick={() => startGeneration(answers)}
-                    >
-                      Generate presentation
-                    </Button>
-                  </div>
-                )}
-
-                {phase === 'done' && (
-                  <div className="mt-3 flex items-center gap-2.5 rounded-app border border-app-border bg-app-surface/50 p-4 sm:p-5">
-                    <CheckIcon className="size-4 shrink-0 text-app-accent-text" />
-                    <p className="text-sm text-app-foreground">
-                      Generating in the background — taking you to your dashboard…
-                    </p>
-                  </div>
-                )}
-
-                {/* Blank-canvas failures surface here too, not just at step one. */}
-                {phase !== 'failed' && error && (
-                  <div className="mt-3">
-                    <Alert tone="error">{error}</Alert>
-                  </div>
-                )}
-              </>
-            )}
-
-            <div ref={bottomRef} />
-          </div>
+            <ArrowLeftIcon className="size-3.5 transition-transform duration-150 group-hover:-translate-x-0.5 motion-reduce:transform-none" />
+            Home
+          </Link>
+          {touched && !missingKey && (
+            <Link to="/drafts" className="text-xs text-app-muted underline-offset-3 hover:text-app-foreground hover:underline">
+              Saved to Drafts
+            </Link>
+          )}
         </div>
-      </div>
 
+        <TrackBand className="mb-6 h-2" motionId="band" />
+        <h1 data-motion="head" className="display text-[2rem] leading-[1.05] font-extrabold text-app-foreground sm:text-[2.75rem]">
+          New presentation
+        </h1>
+        <p data-motion="head" className="mt-2 text-base text-app-muted">
+          Fill in the brief. The preview badge shows roughly how the deck will sit on your dashboard.
+        </p>
+
+        {missingKey ? (
+          <div className="mt-8 flex max-w-2xl flex-col items-start gap-4">
+            {/* For whoever runs the site, so the variable names are the point. */}
+            <Alert tone="error">
+              No AI key configured. Add <code className="font-mono text-xs">VITE_ANTHROPIC_API_KEY</code>,{' '}
+              <code className="font-mono text-xs">VITE_GROQ_API_KEY</code>, or{' '}
+              <code className="font-mono text-xs">VITE_GEMINI_API_KEY</code> to your{' '}
+              <code className="font-mono text-xs">.env</code> file and restart the dev server.
+            </Alert>
+            {skipButton}
+            {error && <Alert tone="error">{error}</Alert>}
+          </div>
+        ) : (
+          <form
+            noValidate
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault()
+              generate()
+            }}
+            onKeyDown={handleFormKeyDown}
+            className="mt-8 grid grid-cols-[minmax(0,1fr)] items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22.5rem] lg:gap-12 xl:gap-14"
+          >
+            <div className="rounded-app border border-app-border bg-app-background">
+              <BriefSection
+                label="Topic"
+                labelId={id('topic-label')}
+                htmlFor={id('topic')}
+                hintId={id('topic-hint')}
+                hint="A sentence or two. The more specific, the better the deck."
+                error={topicError}
+                errorId={id('topic-error')}
+              >
+                <Textarea
+                  ref={topicRef}
+                  id={id('topic')}
+                  rows={3}
+                  autoFocus={topic === null}
+                  aria-describedby={describe(Boolean(topicError) && id('topic-error'), id('topic-hint'))}
+                  invalid={Boolean(topicError)}
+                  placeholder="e.g. a pitch for a solar panel startup called Helios"
+                  value={topicText}
+                  onChange={(e) => setTopicText(e.target.value)}
+                  className="text-base"
+                />
+              </BriefSection>
+
+              <BriefSection
+                label="Slides"
+                labelId={id('slides-label')}
+                hintId={id('slides-hint')}
+                hint={`Up to ${MAX_SLIDES} for now. Not sure? Let AI pick a length that fits.`}
+              >
+                <ChoiceChips
+                  name={id('slides')}
+                  labelledBy={id('slides-label')}
+                  describedBy={id('slides-hint')}
+                  options={SLIDE_OPTIONS}
+                  value={slideCount}
+                  onChange={setSlideCount}
+                />
+              </BriefSection>
+
+              <BriefSection
+                label="Audience"
+                labelId={id('audience-label')}
+                hintId={id('audience-hint')}
+                hint="Who's in the room? This sets the language and the level it pitches at."
+                error={audienceError}
+                errorId={id('audience-error')}
+              >
+                <div ref={audienceRef}>
+                  <ChoiceChips
+                    name={id('audience')}
+                    labelledBy={id('audience-label')}
+                    describedBy={describe(Boolean(audienceError) && id('audience-error'), id('audience-hint'))}
+                    invalid={Boolean(audienceError) && audienceChoice !== 'custom'}
+                    options={AUDIENCE_PRESETS.map((o) => ({ ...o }))}
+                    value={audienceChoice}
+                    onChange={(value) => {
+                      setAudienceChoice(value)
+                      if (value === 'custom') requestAnimationFrame(() => audienceInputRef.current?.focus())
+                    }}
+                  />
+                </div>
+                {audienceChoice === 'custom' && (
+                  <div ref={riseInRef} className="mt-3 max-w-md">
+                    <Input
+                      ref={audienceInputRef}
+                      aria-label="Describe the audience"
+                      invalid={Boolean(audienceError)}
+                      aria-describedby={audienceError ? id('audience-error') : undefined}
+                      placeholder="e.g. investors, new hires, my team"
+                      value={audienceText}
+                      onChange={(e) => setAudienceText(e.target.value)}
+                      // Enter here would submit the whole brief.
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !(e.metaKey || e.ctrlKey)) e.preventDefault()
+                      }}
+                    />
+                  </div>
+                )}
+              </BriefSection>
+
+              <BriefSection
+                label="Detail"
+                labelId={id('detail-label')}
+                hintId={id('detail-hint')}
+                hint={
+                  DETAIL_OPTIONS.find((o) => o.value === detailLevel)?.description ??
+                  'How deep each slide digs into the material.'
+                }
+                error={detailError}
+                errorId={id('detail-error')}
+              >
+                <div ref={detailRef}>
+                  <ChoiceChips
+                    name={id('detail')}
+                    labelledBy={id('detail-label')}
+                    describedBy={describe(Boolean(detailError) && id('detail-error'), id('detail-hint'))}
+                    invalid={Boolean(detailError)}
+                    options={DETAIL_OPTIONS}
+                    value={detailLevel}
+                    onChange={setDetailLevel}
+                  />
+                </div>
+              </BriefSection>
+
+              <BriefSection
+                label="Focus"
+                optional
+                labelId={id('guidance-label')}
+                htmlFor={id('guidance')}
+                hintId={id('guidance-hint')}
+                // The second example matches `isUserMaterialOnly`, which skips web research: it is the way to say so.
+                hint="The AI follows this ahead of its own choices. For example: “Focus on the water cycle” or “Only use the facts I paste here.”"
+              >
+                <Textarea
+                  id={id('guidance')}
+                  rows={2}
+                  aria-describedby={id('guidance-hint')}
+                  placeholder="What to focus on, or steer clear of"
+                  value={guidanceText}
+                  onChange={(e) => setGuidanceText(e.target.value)}
+                />
+              </BriefSection>
+            </div>
+
+            <aside data-motion="aside" className="lg:sticky lg:top-8">
+              <p className="caps mb-2.5 text-[11px] text-app-muted">Preview</p>
+              <div className="mx-auto max-w-sm lg:max-w-none">
+                <BadgePreview ref={badgeRef} topic={topic ?? ''} meta={badgeMeta} />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                className="mt-6 w-full py-2.5 text-[0.9375rem] pointer-coarse:min-h-11"
+                disabled={deckRunning || leaving}
+                title={deckRunning ? 'A deck is already generating' : undefined}
+                aria-describedby={id('status')}
+              >
+                {leaving ? 'Generating…' : 'Generate presentation'}
+              </Button>
+              <p
+                id={id('status')}
+                aria-live="polite"
+                className={`mt-3 text-xs ${status.tone === 'danger' ? 'text-app-danger-text' : 'text-app-muted'}`}
+              >
+                {status.text}
+                {!leaving && !deckRunning && !(showMissing && missing.length > 0) && (
+                  <span className="mt-1 block pointer-coarse:hidden">⌘ / Ctrl + Enter generates from any field.</span>
+                )}
+              </p>
+              {error && (
+                <div ref={riseInRef} className="mt-3">
+                  <Alert tone="error">{error}</Alert>
+                </div>
+              )}
+              <div className="mt-5 border-t border-app-border pt-4 text-center">{skipButton}</div>
+            </aside>
+          </form>
+        )}
+      </div>
     </div>
   )
 }

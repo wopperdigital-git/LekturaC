@@ -1,6 +1,7 @@
 import { headingTextOf, type Card } from '@/engine/contentBlocks'
 import { contentLines } from '@/engine/cardTemplates'
 import type { QuizConfig, QuizRequest, QuizSlide } from '@/quiz/types'
+import { PLAIN_WORDS_RULES } from './plainLanguage'
 
 /*
   Groq's free tier counts *input plus requested output* against an ~8,000
@@ -73,7 +74,10 @@ RULES
 - Every question cites the slide it came from with "slide" (the slide number shown).
 - Spread the questions across the slides; do not ask about one slide over and over.
 - Ask about ideas and facts, not about the slides themselves ("what does slide 3 say" is not a question).
-- Write exactly the number of questions asked for. Return fewer ONLY if the slides cannot support that many distinct questions — never pad with near-duplicates.
+- Write exactly the number of questions asked for. Return fewer ONLY if the slides cannot support that many distinct questions. Never pad with near-duplicates.
+
+PLAIN LANGUAGE (questions, choices and answers alike)
+${PLAIN_WORDS_RULES}
 
 OUTPUT
 Return ONLY a JSON object, no other text, in the exact shape the request shows.`

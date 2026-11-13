@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
+import type { ComponentProps, InputHTMLAttributes, ReactNode } from 'react'
 
 /**
  * Shared field chrome: badge stock ruled in 1.5px ink like every other control,
@@ -20,7 +20,7 @@ export function Input({
   className = '',
   invalid = false,
   ...props
-}: InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
+}: ComponentProps<'input'> & { invalid?: boolean }) {
   return (
     <input
       className={`${fieldClasses(invalid)} ${className}`}
@@ -90,8 +90,18 @@ export function PasswordInput({
   )
 }
 
-export function Textarea({ className = '', ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea className={`${fieldClasses(false)} resize-none ${className}`} {...props} />
+export function Textarea({
+  className = '',
+  invalid = false,
+  ...props
+}: ComponentProps<'textarea'> & { invalid?: boolean }) {
+  return (
+    <textarea
+      className={`${fieldClasses(invalid)} resize-none ${className}`}
+      aria-invalid={invalid || undefined}
+      {...props}
+    />
+  )
 }
 
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {

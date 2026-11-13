@@ -273,7 +273,7 @@ export class GroqProvider implements AIProvider, QuizProvider {
 
     const options: CallGroqOptions = {
       model: this.deckModel,
-      maxTokens: deckMaxTokens(brief.slideCount),
+      maxTokens: deckMaxTokens(brief.slideCount, brief.detailLevel),
       jsonMode: true,
       temperature: 0.7,
     }

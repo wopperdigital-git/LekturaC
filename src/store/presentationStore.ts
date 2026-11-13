@@ -590,6 +590,52 @@ export async function insertNarration(
   if (changed.length > 0) await persistCardsSync(deckId, changed, changed)
 }
 
+/**
+ * The opening card of each deck in `ids`, keyed by deck id: what the dashboard and the Videos
+ * page draw as a deck's cover.
+ *
+ * One query, not one per deck: those pages draw every cover at once, so a per-deck read would be
+ * a round-trip per tile on the pages that can least afford them. `order_index = 0` is a
+ * dependable "first card": both card mutations re-derive `orderIndex` from array position
+ * (`cardMutations.ts`), so the sequence can never have a hole at the front. A deck with no cards
+ * contributes no row. RLS already scopes `cards` to the caller through its parent, so the `.in()`
+ * is about asking only for the decks in hand rather than about access.
+ */
+async function fetchCovers(ids: string[]): Promise<Map<string, Card>> {
+  if (!supabase || ids.length === 0) return new Map()
+  const { data, error } = await supabase.from('cards').select('*').in('presentation_id', ids).eq('order_index', 0)
+  if (error) throw error
+  return new Map((data ?? []).map((row) => [row.presentation_id as string, cardFromRow(row)]))
+}
+
+/**
+ * Every deck of the caller's that has a narrated video, as a summary (for its cover) beside the
+ * stored `video` column, unparsed: `video/library.ts` decides what counts as a video. Throws on a
+ * failed read, a project without migration 0015 included (it has no `video` column).
+ */
+export async function listVideoDecks(): Promise<{ deck: DeckSummary; video: unknown }[]> {
+  if (!supabaseConfigured || !supabase) return []
+  await ensureSession()
+  const { data, error } = await supabase
+    .from('presentations')
+    .select('id, title, updated_at, theme, text_style, video')
+    .not('video', 'is', null)
+  if (error) throw error
+  const rows = data ?? []
+  const covers = await fetchCovers(rows.map((row) => row.id as string))
+  return rows.map((row) => ({
+    deck: {
+      id: row.id,
+      title: row.title,
+      updatedAt: row.updated_at,
+      theme: resolveTheme(row.theme),
+      textStyle: parseTextStyle(row.text_style),
+      cover: covers.get(row.id) ?? null,
+    },
+    video: row.video,
+  }))
+}
+
 export async function fetchDeck(id: string): Promise<DeckContent | null> {
   if (!supabaseConfigured || !supabase) return null
   await ensureSession()
@@ -925,29 +971,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     const rows = data ?? []
     if (rows.length === 0) return []
 
-    /*
-      The covers come back in one more query, not one per deck.
-
-      The dashboard draws every deck's opening slide at once, so a per-deck
-      read would be a round-trip per tile on the page that can least afford
-      them. `order_index = 0` is a dependable "first card": both card mutations
-      re-derive `orderIndex` from array position (`cardMutations.ts`), so the
-      sequence can never have a hole at the front. A deck with no cards
-      contributes no row and gets `cover: null`.
-
-      RLS already scopes `cards` to the caller through its parent, so the
-      `.in()` is about asking only for the decks in hand rather than about
-      access — it keeps this honest if the list ever paginates.
-    */
-    const { data: coverRows, error: coversError } = await supabase
-      .from('cards')
-      .select('*')
-      .in('presentation_id', rows.map((row) => row.id))
-      .eq('order_index', 0)
-    if (coversError) throw coversError
-    const covers = new Map<string, Card>(
-      (coverRows ?? []).map((row) => [row.presentation_id as string, cardFromRow(row)]),
-    )
+    const covers = await fetchCovers(rows.map((row) => row.id as string))
 
     return rows.map((row) => ({
       id: row.id,

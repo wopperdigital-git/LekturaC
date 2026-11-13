@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ClassRoom } from '@/classroom/types'
-import { plural } from '@/classroom/format'
+import { noun } from '@/classroom/format'
 import { relativePostedAt } from '@/components/home/relativeTime'
 import { JoinCodeChip } from './JoinCodeChip'
 
@@ -194,7 +194,7 @@ export function ClassCard({
               <UsersIcon />
             </span>
             <span className="truncate font-medium">
-              {studentCount} <span className="font-normal text-app-muted">{plural(studentCount, 'student')}</span>
+              {studentCount} <span className="font-normal text-app-muted">{noun(studentCount, 'student')}</span>
             </span>
           </div>
 
@@ -203,7 +203,7 @@ export function ClassCard({
               <QuizIcon />
             </span>
             <span className="truncate font-medium">
-              {quizCount} <span className="font-normal text-app-muted">{plural(quizCount, 'quiz', 'quizzes')}</span>
+              {quizCount} <span className="font-normal text-app-muted">{noun(quizCount, 'quiz', 'quizzes')}</span>
             </span>
           </div>
         </div>

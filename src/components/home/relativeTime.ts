@@ -36,3 +36,9 @@ export function relativePostedAt(iso: string): string {
   const ago = relativeAgo(new Date(iso).getTime())
   return ago ? `Posted ${ago}` : 'Posted just now'
 }
+
+/** "Made 3 days ago" — a narrated video, from its `generatedAt`. */
+export function relativeMadeAt(iso: string): string {
+  const ago = relativeAgo(new Date(iso).getTime())
+  return ago ? `Made ${ago}` : 'Made just now'
+}

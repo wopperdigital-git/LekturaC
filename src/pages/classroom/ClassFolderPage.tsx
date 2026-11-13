@@ -10,7 +10,7 @@ import {
   updateAnnouncement,
   updateClass,
 } from '@/classroom/api'
-import { matchesQuery, personLabel, plural } from '@/classroom/format'
+import { matchesQuery, noun, personLabel, plural } from '@/classroom/format'
 import { loadLessonModes } from '@/lesson/api'
 import { rosterOf, type RosterEntry } from '@/classroom/stats'
 import type { Announcement } from '@/classroom/types'
@@ -179,17 +179,17 @@ export function ClassFolderPage() {
                 <span className="inline-flex items-center gap-1.5 rounded-app-sm border border-app-border/80 bg-app-surface/60 px-2.5 py-1 text-app-foreground">
                   <UsersTabIcon />
                   <span className="font-semibold">{fullRoster.length}</span>
-                  <span className="text-app-muted">{plural(fullRoster.length, 'student')}</span>
+                  <span className="text-app-muted">{noun(fullRoster.length, 'student')}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-app-sm border border-app-border/80 bg-app-surface/60 px-2.5 py-1 text-app-foreground">
                   <MegaphoneIcon />
                   <span className="font-semibold">{classAnnouncements.length}</span>
-                  <span className="text-app-muted">{plural(classAnnouncements.length, 'update', 'updates')}</span>
+                  <span className="text-app-muted">{noun(classAnnouncements.length, 'update', 'updates')}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-app-sm border border-app-border/80 bg-app-surface/60 px-2.5 py-1 text-app-foreground">
                   <QuizTabIcon />
                   <span className="font-semibold">{classQuizzes.length}</span>
-                  <span className="text-app-muted">{plural(classQuizzes.length, 'quiz', 'quizzes')}</span>
+                  <span className="text-app-muted">{noun(classQuizzes.length, 'quiz', 'quizzes')}</span>
                 </span>
               </div>
             </div>

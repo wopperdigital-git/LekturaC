@@ -1,6 +1,8 @@
 import { repairResponseSchema, type GeneratedCard, type GeneratedDeck, type QualityFlag, type RepairResponse } from '@/generation/schemas'
 import { extractJsonObject } from './jsonText'
 import { renderEvidencePack, type DeckContext } from './prompts'
+import { densitySection } from './detailLevel'
+import { PLAIN_LANGUAGE_RULES } from './plainLanguage'
 
 /** At most one repair call per generation (design spec's "[4] Targeted repair"). */
 export const REPAIR_MAX_TOKENS = 6000
@@ -11,19 +13,22 @@ export const REPAIR_MAX_TOKENS = 6000
  * notes) still applies, because a repaired slide has to read as if it had
  * been written that way the first time.
  */
-export const REPAIR_SYSTEM_PROMPT = `You are fixing specific slides of a presentation that has already been generated — you are repairing it, not writing a new deck.
+export const REPAIR_SYSTEM_PROMPT = `You are fixing specific slides of a presentation that has already been generated. You are repairing it, not writing a new deck.
 
 You are given the whole deck for context, then a list of target slides, each with the problems it has and what to do about them.
 
-For every target slide, write a full replacement card in the same shape the deck was generated in: { "plan": {...}, "role"?: string, "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] }. Keep that slide's purpose and its position in the deck — you are repairing it, not swapping in a different slide. If the slide you're given already has a "role", keep it. Fix every problem listed for it. When a problem asks for a different structure (a list that should be a timeline, a comparison or a set of stats), change the blocks themselves — restructuring is the fix, not a rewording of the same bullets — while keeping the slide's key message and never inventing a number to fill a stat.
+For every target slide, write a full replacement card in the same shape the deck was generated in: { "plan": {...}, "role"?: string, "blocks": ContentBlock[], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] }. Keep that slide's purpose and its position in the deck: you are repairing it, not swapping in a different slide. If the slide you're given already has a "role", keep it. Fix every problem listed for it. When a problem asks for a different structure (a list that should be a timeline, a comparison or a set of stats), change the blocks themselves (restructuring is the fix, not a rewording of the same bullets) while keeping the slide's key message and never inventing a number to fill a stat.
 
 Every other rule from deck generation still applies:
 - Headings are 3-10 words (14 at most), never more than one main idea per slide.
-- Visible text is 20-40 words (55 at most) excluding the heading; bullets run 3-5 items of 8 words or fewer.
+- Visible text (excluding the heading), bullet items and paragraph length follow the SLIDE DENSITY section of the user prompt, which matches the deck's detail level.
 - Speaker notes are 40-90 words and never repeat the visible text.
 - Every number, date, or quotation must come from the evidence pack when one is given, cited in "claims" by its source id. Do not add a new factual claim unless the evidence pack supports it.
 
-Reply with ONLY this JSON object, no markdown fences and no commentary, and include exactly the slides you were asked to fix — no others:
+Plain language, in slide text and speaker notes alike:
+${PLAIN_LANGUAGE_RULES}
+
+Reply with ONLY this JSON object, no markdown fences and no commentary, and include exactly the slides you were asked to fix, no others:
 { "repairs": [ { "slide": number, "card": { "plan": {...}, "role"?: string, "blocks": [...], "visualStyle": "structured" | "expressive", "speakerNotes": string, "claims": [...] } } ] }
 
 "slide" is the slide's 1-based position in the deck, matching the numbering you were given below.`
@@ -57,7 +62,7 @@ function targetSection(deck: GeneratedDeck, index: number, flags: QualityFlag[])
   const cardFlags = flags.filter((f) => f.slideIndex === index)
   const problems = cardFlags.map((f) => `- [${f.type}] ${f.message} → ${f.suggestedAction}`).join('\n')
 
-  return `SLIDE ${slide} — fix this one
+  return `SLIDE ${slide}: fix this one
 Problems:
 ${problems}
 
@@ -85,7 +90,7 @@ export function buildRepairUserPrompt(
   const evidenceSection =
     context.evidence && context.evidence.sources.length > 0
       ? `EVIDENCE PACK (cite these source ids; do not use any other source):\n${renderEvidencePack(context.evidence)}`
-      : 'No verified evidence is available for this deck — do not add a new statistic, date, or quotation that is not already supported.'
+      : 'No verified evidence is available for this deck. Do not add a new statistic, date, or quotation that is not already supported.'
 
   return `Today's date: ${context.today}
 
@@ -97,6 +102,8 @@ Fix exactly these slides:
 ${targetSections}
 
 ${evidenceSection}
+
+${densitySection(context.detailLevel ?? 'balanced')}
 
 Return only the JSON object described in the system prompt, with one entry in "repairs" for each slide listed above.`
 }

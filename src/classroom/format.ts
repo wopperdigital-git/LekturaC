@@ -28,8 +28,14 @@ export function describeTrend(trend: Trend): string {
   return trend.direction === 'improving' ? `Improving (+${points} pts)` : `Slipping (−${points} pts)`
 }
 
+/** The word alone, for a label whose number is drawn separately ("10" + "students"). */
+export function noun(count: number, one: string, many = `${one}s`): string {
+  return count === 1 ? one : many
+}
+
+/** Number and word together: "10 students". Never put it after a drawn count. */
 export function plural(count: number, one: string, many = `${one}s`): string {
-  return `${count} ${count === 1 ? one : many}`
+  return `${count} ${noun(count, one, many)}`
 }
 
 export function formatDate(iso: string): string {

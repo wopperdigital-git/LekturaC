@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import type { Card } from '@/engine/contentBlocks'
+import { parseOverlay, type Stroke } from '@/engine/overlay'
 import type { TextStyle } from '@/engine/textStyle'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { PresenterAction } from './presenterState'
+import { parseLiveInk, type LiveInk } from './liveInk'
 
 // Messages between the presenter console and the slide window, both windows of
 // this app, over a BroadcastChannel named by the session.
@@ -35,6 +37,12 @@ export type ConsoleMessage =
   | ({ type: 'state' } & ShownState)
   | { type: 'bye' }
   | { type: 'end' }
+  /** Every slide's finished ink, after each change. */
+  | { type: 'ink'; ink: LiveInk }
+  /** The stroke being drawn right now on `cardId`; `null` once it is finished or abandoned. */
+  | { type: 'inkLive'; cardId: string; stroke: Stroke | null }
+  /** Where the laser pointer is on `cardId`; `null` when it leaves the slide. */
+  | { type: 'laser'; cardId: string; point: [number, number] | null }
 
 export type ScreenMessage =
   | { type: 'hello' }
@@ -76,6 +84,24 @@ const consoleSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('bye') }),
   z.object({ type: z.literal('end') }),
+  // Ink is drawn from these, so each stroke is checked like a stored one.
+  z.object({ type: z.literal('ink'), ink: z.unknown().transform(parseLiveInk) }),
+  z.object({
+    type: z.literal('inkLive'),
+    cardId: z.string(),
+    stroke: z.unknown().transform((raw, ctx) => {
+      if (raw === null) return null
+      const item = parseOverlay([raw])?.[0]
+      if (item?.kind === 'stroke') return item
+      ctx.addIssue({ code: 'custom', message: 'not a stroke' })
+      return z.NEVER
+    }),
+  }),
+  z.object({
+    type: z.literal('laser'),
+    cardId: z.string(),
+    point: z.tuple([z.number().refine(Number.isFinite), z.number().refine(Number.isFinite)]).nullable(),
+  }),
 ])
 
 const screenSchema = z.discriminatedUnion('type', [

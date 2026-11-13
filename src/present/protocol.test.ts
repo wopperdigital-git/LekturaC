@@ -19,6 +19,15 @@ const deck = {
   cards: [{ id: 'a', orderIndex: 0, blocks: [] }],
 } as unknown as DeckSnapshot
 
+const stroke = {
+  id: 's1',
+  kind: 'stroke',
+  tool: 'pen',
+  color: '#ef4444',
+  width: 0.007,
+  points: [[0.1, 0.2], [0.3, 0.4]],
+}
+
 describe('parseConsoleMessage', () => {
   it('round-trips every message type', () => {
     const msgs = [
@@ -27,8 +36,24 @@ describe('parseConsoleMessage', () => {
       { type: 'state', index: 2, black: false, ended: true },
       { type: 'bye' },
       { type: 'end' },
+      { type: 'ink', ink: { a: [stroke] } },
+      { type: 'inkLive', cardId: 'a', stroke },
+      { type: 'inkLive', cardId: 'a', stroke: null },
+      { type: 'laser', cardId: 'a', point: [0.2, 0.3] },
+      { type: 'laser', cardId: 'a', point: null },
     ]
     for (const m of msgs) expect(parseConsoleMessage(m)).toEqual(m)
+  })
+
+  it('checks ink like stored ink', () => {
+    expect(parseConsoleMessage({ type: 'ink', ink: { a: [stroke, { id: 'x' }] } })).toEqual({
+      type: 'ink',
+      ink: { a: [stroke] },
+    })
+    expect(parseConsoleMessage({ type: 'ink', ink: 'x' })).toEqual({ type: 'ink', ink: {} })
+    expect(parseConsoleMessage({ type: 'inkLive', cardId: 'a', stroke: { id: 'x' } })).toBeNull()
+    expect(parseConsoleMessage({ type: 'laser', cardId: 'a', point: [Infinity, 0] })).toBeNull()
+    expect(parseConsoleMessage({ type: 'laser', cardId: 'a', point: [1] })).toBeNull()
   })
 
   it('rejects malformed input', () => {

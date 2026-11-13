@@ -149,7 +149,25 @@ describe('CloneVoiceModal', () => {
     Object.assign(useVoiceStore.getInitialState(), { loaded: true })
     const html = render()
     expect(tagLabelled(html, 'Generate video')).toContain('disabled=""')
-    expect(html).toContain('<p class="text-xs text-app-muted">Choose a voice first.</p>')
+    expect(html).toMatch(/<p role="status"[^>]*>Choose a voice first\.<\/p>/)
+  })
+
+  // Most people pick a voice; recording sits behind the second tab, still mounted so a
+  // recording in progress survives a switch, and the notice is still read before Record.
+  it('opens on Pick a voice, with Record your voice as a second tab', () => {
+    const html = render()
+    expect(html).toMatch(/<button[^>]*id="voice-tab-pick"[^>]*aria-selected="true"/)
+    expect(html).toMatch(/<button[^>]*id="voice-tab-record"[^>]*aria-selected="false"/)
+    expect(html).toMatch(/<div id="voice-panel-pick"[^>]*role="tabpanel"(?![^>]*hidden)[^>]*>/)
+    expect(html).toMatch(/<div id="voice-panel-record"[^>]*hidden=""/)
+  })
+
+  it('numbers its steps in order: voice, settings, video, with Generate after them', () => {
+    const html = render()
+    const at = (needle: string) => html.indexOf(needle)
+    expect(at('id="voice-voice"')).toBeLessThan(at('id="voice-settings"'))
+    expect(at('id="voice-settings"')).toBeLessThan(at('id="voice-video"'))
+    expect(at('id="voice-video"')).toBeLessThan(at('aria-label="Generate video"'))
   })
 
   it('can generate once a voice is chosen, the browser can encode and the deck has slides', () => {

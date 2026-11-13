@@ -110,6 +110,28 @@ function downloadBaseName(title: string): string {
 }
 
 /**
+ * Playback and download links for a stored video. Never throws: a link that cannot be made is
+ * `null` and the record is still shown. `baseName` (the deck title) names the downloaded file.
+ */
+export async function signVideo(ports: StoragePorts, record: VideoRecord, baseName: string): Promise<VideoView> {
+  // The extension comes from the stored file, not from what this browser would make today.
+  const downloadName = `${downloadBaseName(baseName)}.${record.contentType === 'video/webm' ? 'webm' : 'mp4'}`
+  try {
+    const [play, download] = await Promise.all([
+      ports.signedUrl(record.path),
+      ports.signedUrl(record.path, downloadName),
+    ])
+    return {
+      record,
+      url: play.error ? null : play.url,
+      downloadUrl: download.error ? null : download.url,
+    }
+  } catch {
+    return { record, url: null, downloadUrl: null }
+  }
+}
+
+/**
  * The deck's existing video, ready to show. Never throws: no video (or a read that failed, a project
  * without migration 0015) is simply nothing to show; the migration message appears when generating.
  */
@@ -123,17 +145,7 @@ export async function loadVideo(
     if (error) return null
     const record = parseVideo(data)
     if (!record) return null
-    // The extension comes from the stored file, not from what this browser would make today.
-    const downloadName = `${downloadBaseName(baseName)}.${record.contentType === 'video/webm' ? 'webm' : 'mp4'}`
-    const [play, download] = await Promise.all([
-      ports.signedUrl(record.path),
-      ports.signedUrl(record.path, downloadName),
-    ])
-    return {
-      record,
-      url: play.error ? null : play.url,
-      downloadUrl: download.error ? null : download.url,
-    }
+    return await signVideo(ports, record, baseName)
   } catch {
     return null
   }

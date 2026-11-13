@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VideoError } from './errors'
 import { MP4_FORMAT, WEBM_FORMAT } from './format'
 import { MIGRATION_MESSAGE } from './storageErrors'
-import { deleteDeckWithVideo, loadVideo, saveVideo, type SaveVideoInput, type StoragePorts } from './storage'
+import { deleteDeckWithVideo, loadVideo, saveVideo, signVideo, type SaveVideoInput, type StoragePorts } from './storage'
 import type { VideoRecord } from './videoRecord'
 
 function fakePorts(overrides: Partial<StoragePorts> = {}) {
@@ -230,6 +230,30 @@ describe('loadVideo', () => {
   it('never throws', async () => {
     const { ports } = fakePorts({ readRecord: async () => Promise.reject(new Error('offline')) })
     expect(await loadVideo(ports, 'p1', 'x')).toBeNull()
+  })
+})
+
+// The Videos page already holds each record (it lists them in one read), so it signs without reading again.
+describe('signVideo', () => {
+  it('makes a playback and a download link for a record in hand, without reading the deck', async () => {
+    const readRecord = vi.fn(async () => ({ data: null, error: null }))
+    const { ports } = fakePorts({ readRecord })
+    const view = await signVideo(ports, previous, 'My deck')
+    expect(view).toEqual({
+      record: previous,
+      url: 'https://signed/u1/p1.mp4',
+      downloadUrl: 'https://signed/u1/p1.mp4?download=My deck.mp4',
+    })
+    expect(readRecord).not.toHaveBeenCalled()
+  })
+
+  it('keeps the record with no links when signing throws', async () => {
+    const { ports } = fakePorts({
+      signedUrl: async () => {
+        throw new Error('offline')
+      },
+    })
+    expect(await signVideo(ports, previous, 'x')).toEqual({ record: previous, url: null, downloadUrl: null })
   })
 })
 

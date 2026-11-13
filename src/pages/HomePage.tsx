@@ -19,6 +19,7 @@ import { useExportPptx } from '@/export/useExportPptx'
 import { useJobsStore } from '@/jobs/jobsStore'
 import { useAuthStore } from '@/store/authStore'
 import { clearDeck } from '@/jobs/newItems'
+import { riseList, useMotion } from '@/lib/motion'
 
 export function HomePage() {
   const isTeacher = useAuthStore((st) => st.profile?.role === 'teacher')
@@ -29,6 +30,14 @@ export function HomePage() {
   const [deckPendingDelete, setDeckPendingDelete] = useState<DeckSummary | null>(null)
   const [query, setQuery] = useState('')
   const [view, setView] = useState<DeckView>('grid')
+  // The decks arrive as a list once they load, and again when the view
+  // switches between grid and list; searching and filtering never replay it.
+  const decksRef = useMotion<HTMLDivElement>(
+    ({ reduce, root }) => {
+      riseList(root.querySelectorAll('[data-motion=decks] > *'), reduce)
+    },
+    [loading, view],
+  )
   const [filters, setFilters] = useState<DeckFilters>(DEFAULT_FILTERS)
   const { error: exportError, exportingId, exportDeckById } = useExportPptx()
 
@@ -80,7 +89,7 @@ export function HomePage() {
           onCreate={() => navigate('/new')}
         />
 
-        <div className="pt-5">
+        <div ref={decksRef} className="pt-5">
           {exportError && (
             <p role="alert" className="mb-3 text-sm text-app-danger-text">
               Export failed: {exportError}
@@ -99,7 +108,7 @@ export function HomePage() {
               }}
             />
           ) : view === 'list' ? (
-            <div className="flex flex-col gap-1">
+            <div data-motion="decks" className="flex flex-col gap-1">
               {visibleDecks.map((deck) => (
                 <DeckListRow
                   key={deck.id}
@@ -113,7 +122,7 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div data-motion="decks" className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {visibleDecks.map((deck) => (
                 <DeckCard
                   key={deck.id}

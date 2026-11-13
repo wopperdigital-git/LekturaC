@@ -101,7 +101,7 @@ describe('generatePresentation', () => {
     const { provider, generateDeck } = stubProvider()
     await generatePresentation(provider, 'EVs', BRIEF, { now: FIXED_NOW })
 
-    expect(generateDeck).toHaveBeenCalledWith('EVs', BRIEF, undefined, { evidence: PACK, today: '2026-09-19' })
+    expect(generateDeck).toHaveBeenCalledWith('EVs', BRIEF, undefined, { evidence: PACK, today: '2026-09-19', detailLevel: 'balanced' })
   })
 
   it('still generates when research throws, with research: failed and no evidence', async () => {
@@ -110,7 +110,7 @@ describe('generatePresentation', () => {
 
     const result = await generatePresentation(provider, 'EVs', BRIEF, { now: FIXED_NOW })
 
-    expect(generateDeck).toHaveBeenCalledWith('EVs', BRIEF, undefined, { evidence: null, today: '2026-09-19' })
+    expect(generateDeck).toHaveBeenCalledWith('EVs', BRIEF, undefined, { evidence: null, today: '2026-09-19', detailLevel: 'balanced' })
     expect(result.research).toBe('failed')
     expect(result.evidence).toBeNull()
   })

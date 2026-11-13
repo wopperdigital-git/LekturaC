@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Spinner } from '@/components/ui/Spinner'
+import { dropFromTop } from '@/lib/motion'
 
 /*
   The top bar's two dropdowns: Create & export (the things a deck can be turned into) and
@@ -76,6 +77,7 @@ function Dropdown({
       </button>
       {open && (
         <div
+          ref={dropFromTop}
           id={menuId}
           role="menu"
           aria-label={label}

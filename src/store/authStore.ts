@@ -4,6 +4,12 @@ import { supabase, supabaseConfigured } from '@/lib/supabaseClient'
 import type { Role } from '@/classroom/roles'
 import { resolveProfile, type AccountProfile } from './profile'
 
+/** Which login page a sign-in came from, or which one the account belongs to. */
+export type LoginKind = 'user' | 'admin'
+
+export const ADMIN_ACCOUNT_AT_USER_LOGIN = 'This is an admin account. Log in on the admin login page.'
+export const USER_ACCOUNT_AT_ADMIN_LOGIN = "This isn't an admin account."
+
 export interface SignUpDetails {
   role: Role
   displayName: string
@@ -21,13 +27,30 @@ interface AuthState {
    * shown "General" as the permanent account type in the settings modal.
    */
   profileDegraded: boolean
+  /**
+   * A developer admin (a row in `admins`, migration 0019). An admin account is
+   * for admin work only: the rail shows just Admin and every other signed-in
+   * page sends it to /admin (`RequireAuth`). Read beside the profile, so it is
+   * known before any page renders. Fails closed (no table, failed read = false).
+   */
+  isAdmin: boolean
   status: 'loading' | 'authenticated' | 'unauthenticated'
   signUp: (
     email: string,
     password: string,
     details: SignUpDetails,
   ) => Promise<{ error: string | null; needsVerification: boolean }>
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>
+  /**
+   * `as` is which login page this is. Admins have their own (/admin/login): an
+   * admin account is refused at the ordinary login (`wrongLogin: 'admin'`) and
+   * any other account at the admin one (`wrongLogin: 'user'`), signed straight
+   * back out in both cases before any page renders.
+   */
+  signIn: (
+    email: string,
+    password: string,
+    as?: LoginKind,
+  ) => Promise<{ error: string | null; wrongLogin?: LoginKind }>
   signOut: () => Promise<void>
   resetPasswordForEmail: (email: string) => Promise<void>
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>
@@ -47,6 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   profile: null,
   profileDegraded: false,
+  isAdmin: false,
   status: supabaseConfigured ? 'loading' : 'unauthenticated',
 
   async signUp(email, password, details) {
@@ -61,10 +85,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return { error: null, needsVerification: !data.session }
   },
 
-  async signIn(email, password) {
+  async signIn(email, password, as = 'user') {
     if (!supabase) return { error: 'Supabase is not configured.' }
+    // Registered before the call so `applySession` (which the sign-in event
+    // triggers) can refuse the wrong kind of account before it reports
+    // 'authenticated' — a page never sees the session.
+    const verdict = new Promise<LoginKind | null>((resolve) => {
+      pendingLogin = { as, resolve }
+    })
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error: error ? error.message : null }
+    if (error) {
+      pendingLogin = null
+      return { error: error.message }
+    }
+    // A session that never reaches applySession (should not happen) must not hang the form.
+    const wrongLogin = await Promise.race([verdict, new Promise<null>((r) => setTimeout(() => r(null), 15000))])
+    if (!wrongLogin) return { error: null }
+    return {
+      error: wrongLogin === 'admin' ? ADMIN_ACCOUNT_AT_USER_LOGIN : USER_ACCOUNT_AT_ADMIN_LOGIN,
+      wrongLogin,
+    }
   },
 
   async signOut() {
@@ -170,6 +210,9 @@ function realUser(session: Session | null): User | null {
 
 let profileRequest = 0
 
+/** The login page a sign-in in flight came from; resolved by `applySession` with the account's kind when it is the wrong one. */
+let pendingLogin: { as: LoginKind; resolve: (wrong: LoginKind | null) => void } | null = null
+
 async function readProfile(userId: string) {
   // supabase is narrowed by both call sites before this runs.
   const { data, error } = await supabase!
@@ -178,6 +221,18 @@ async function readProfile(userId: string) {
     .eq('id', userId)
     .maybeSingle()
   return resolveProfile(data, error)
+}
+
+/** Whether the account has a row in `admins`. RLS shows an account only its own row. */
+async function readIsAdmin(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase!.from('admins').select('user_id').eq('user_id', userId).maybeSingle()
+    if (error) throw error
+    return data !== null
+  } catch (err) {
+    console.warn('[auth] could not read the admin flag (run migration 0019):', err)
+    return false
+  }
 }
 
 /*
@@ -209,7 +264,7 @@ async function applySession(session: Session | null) {
   const user = realUser(session)
   if (!user || !supabase) {
     profileRequest++
-    useAuthStore.setState({ user: null, profile: null, profileDegraded: false, status: 'unauthenticated' })
+    useAuthStore.setState({ user: null, profile: null, profileDegraded: false, isAdmin: false, status: 'unauthenticated' })
     return
   }
 
@@ -227,14 +282,28 @@ async function applySession(session: Session | null) {
   }
 
   const request = ++profileRequest
-  useAuthStore.setState({ user, profile: null, status: 'loading' })
-  const { profile, degraded } = await readProfile(user.id)
+  useAuthStore.setState({ user, profile: null, isAdmin: false, status: 'loading' })
+  const [{ profile, degraded }, isAdmin] = await Promise.all([readProfile(user.id), readIsAdmin(user.id)])
   if (request !== profileRequest) return
+
+  const login = pendingLogin
+  if (login) {
+    pendingLogin = null
+    const kind: LoginKind = isAdmin ? 'admin' : 'user'
+    if (kind !== login.as) {
+      profileRequest++
+      useAuthStore.setState({ user: null, profile: null, profileDegraded: false, isAdmin: false, status: 'unauthenticated' })
+      await supabase.auth.signOut()
+      login.resolve(kind)
+      return
+    }
+    login.resolve(null)
+  }
 
   if (degraded) {
     console.warn('[auth] No usable profile for this account; treating it as General.')
   }
-  useAuthStore.setState({ profile, profileDegraded: degraded, status: 'authenticated' })
+  useAuthStore.setState({ profile, profileDegraded: degraded, isAdmin, status: 'authenticated' })
 }
 
 // Runs once at module load (this store is an app-wide singleton, same as

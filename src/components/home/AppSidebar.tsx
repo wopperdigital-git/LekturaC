@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LogoSlot } from '@/components/ui/LogoSlot'
 import { useDrafts } from '@/lib/briefDrafts'
 import { useAuthStore } from '@/store/authStore'
+import { LogoSlot } from '@/components/ui/LogoSlot'
 import { useMyClasses } from '@/classroom/useMyClasses'
 import { ROLE_LABEL } from '@/classroom/roles'
+import { ADMIN_SECTIONS, DEFAULT_ADMIN_SECTION, adminPath, type AdminSectionId } from '@/admin/sections'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 
 /**
@@ -52,6 +53,40 @@ function DraftsIcon() {
     >
       <path d="M8.8 2H4.5A1.5 1.5 0 003 3.5v9A1.5 1.5 0 004.5 14h7a1.5 1.5 0 001.5-1.5V8" />
       <path d="M11.4 1.9l2 2-4.2 4.2-2.4.4.4-2.4z" />
+    </svg>
+  )
+}
+
+function QualityIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 1.75l1.6 3.4 3.65.45-2.7 2.5.7 3.6L8 9.95 4.75 11.7l.7-3.6-2.7-2.5 3.65-.45z" />
+    </svg>
+  )
+}
+
+function VoiceIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <rect x="5.75" y="1.75" width="4.5" height="8" rx="2.25" />
+      <path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2" />
+    </svg>
+  )
+}
+
+const ADMIN_SECTION_ICONS: Record<AdminSectionId, () => ReactNode> = {
+  people: () => <StudentsIcon />,
+  decks: () => <OverviewIcon />,
+  quality: () => <QualityIcon />,
+  classroom: () => <ClassesIcon />,
+  voice: () => <VoiceIcon />,
+}
+
+function VideosIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.75" y="3" width="12.5" height="10" rx="1.5" />
+      <path d="M6.5 6v4l3.5-2z" fill="currentColor" />
     </svg>
   )
 }
@@ -269,7 +304,10 @@ export function AppSidebar({
   const userId = useAuthStore((s) => s.user?.id ?? null)
   const profileDegraded = useAuthStore((s) => s.profileDegraded)
   const role = profile?.role ?? 'general'
-  const myClasses = useMyClasses(userId, role !== 'general')
+  // An admin account is for admin work only (migration 0019): the rail shows
+  // just Admin, and no workspace or classroom section.
+  const isAdmin = useAuthStore((s) => s.isAdmin)
+  const myClasses = useMyClasses(userId, role !== 'general' && !isAdmin)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const name = profile?.displayName.trim() || email
 
@@ -371,38 +409,63 @@ export function AppSidebar({
         )}
 
         <nav className="scrollbar-subtle relative min-h-0 flex-1 overflow-y-auto px-4 py-6">
-          <SidebarSection label="Workspace">
-            <SidebarLink
-              label="Overview"
-              icon={<OverviewIcon />}
-              active={pathname === '/'}
-              onClick={() => go('/')}
-            />
-            <SidebarLink
-              label="Drafts"
-              icon={<DraftsIcon />}
-              active={pathname === '/drafts'}
-              badge={draftCount > 0 ? draftCount : undefined}
-              onClick={() => go('/drafts')}
-            />
-            {/*
-              A General account can join a class — doing so promotes it to
-              Student (`join_class`, migration 0010) — so it needs a way in.
-              It sits under Workspace rather than in a Classroom section of its
-              own, because until the account joins something there is no
-              classroom to head a section with.
-            */}
-            {role === 'general' && (
-              <SidebarLink
-                label="Join a class"
-                icon={<JoinIcon />}
-                active={pathname === '/classes'}
-                onClick={() => go('/classes')}
-              />
-            )}
-          </SidebarSection>
+          {isAdmin && (
+            <SidebarSection label="Statistics">
+              {ADMIN_SECTIONS.map((section) => (
+                <SidebarLink
+                  key={section.id}
+                  label={section.label}
+                  icon={ADMIN_SECTION_ICONS[section.id]()}
+                  active={
+                    pathname === adminPath(section.id) ||
+                    (pathname === '/admin' && section.id === DEFAULT_ADMIN_SECTION)
+                  }
+                  onClick={() => go(adminPath(section.id))}
+                />
+              ))}
+            </SidebarSection>
+          )}
 
-          {role === 'teacher' && (
+          {!isAdmin && (
+            <SidebarSection label="Workspace">
+              <SidebarLink
+                label="Overview"
+                icon={<OverviewIcon />}
+                active={pathname === '/'}
+                onClick={() => go('/')}
+              />
+              <SidebarLink
+                label="Drafts"
+                icon={<DraftsIcon />}
+                active={pathname === '/drafts'}
+                badge={draftCount > 0 ? draftCount : undefined}
+                onClick={() => go('/drafts')}
+              />
+              <SidebarLink
+                label="Videos"
+                icon={<VideosIcon />}
+                active={pathname === '/videos'}
+                onClick={() => go('/videos')}
+              />
+              {/*
+                A General account can join a class — doing so promotes it to
+                Student (`join_class`, migration 0010) — so it needs a way in.
+                It sits under Workspace rather than in a Classroom section of its
+                own, because until the account joins something there is no
+                classroom to head a section with.
+              */}
+              {role === 'general' && (
+                <SidebarLink
+                  label="Join a class"
+                  icon={<JoinIcon />}
+                  active={pathname === '/classes'}
+                  onClick={() => go('/classes')}
+                />
+              )}
+            </SidebarSection>
+          )}
+
+          {!isAdmin && role === 'teacher' && (
             <SidebarSection label="Classroom">
               <SidebarLink
                 label="Classes"
@@ -426,7 +489,7 @@ export function AppSidebar({
             </SidebarSection>
           )}
 
-          {role === 'student' && (
+          {!isAdmin && role === 'student' && (
             <SidebarSection label="My classes">
               {(myClasses ?? []).slice(0, RAIL_CLASS_LIMIT).map((c) => (
                 <SidebarLink
@@ -472,7 +535,7 @@ export function AppSidebar({
                 the rail defaulting `role` to General for rendering safety
                 shouldn't also mean *labeling* a teacher General.
               */}
-              <span className="text-app-muted">{profileDegraded ? '—' : ROLE_LABEL[role]}</span>
+              <span className="text-app-muted">{isAdmin ? 'Admin' : profileDegraded ? '—' : ROLE_LABEL[role]}</span>
             </div>
             {/*
               One control instead of three (Account type, Log out, light/dark).

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { TrackBand } from '@/components/ui/Programme'
+import { printBand, rise, useMotion } from '@/lib/motion'
 import { AppSidebar } from './AppSidebar'
 
 /**
@@ -29,6 +30,12 @@ export function DashboardShell({
   const user = useAuthStore((s) => s.user)
   const signOut = useAuthStore((s) => s.signOut)
   const [menuOpen, setMenuOpen] = useState(false)
+  // The page head is put up like signage: the band prints left to right, then
+  // the title and the page settle under it. Replays per page, never per render.
+  const headRef = useMotion<HTMLDivElement>(({ reduce, root }) => {
+    printBand(root.querySelectorAll('[data-motion=band] > span'), reduce)
+    rise(root.querySelectorAll('[data-motion=head]'), reduce, { delay: reduce ? 0 : 0.12, stagger: 0.05 })
+  })
 
   return (
     <div className="flex h-screen overflow-hidden bg-app-canvas">
@@ -42,10 +49,10 @@ export function DashboardShell({
       />
 
       <main className="scrollbar-subtle min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
+        <div ref={headRef} className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 lg:px-10">
           {/* The programme's track band heads every dashboard page. */}
-          <TrackBand className="mb-6 h-2" />
-          <div className="mb-6 flex items-start gap-3">
+          <TrackBand className="mb-6 h-2" motionId="band" />
+          <div data-motion="head" className="mb-6 flex items-start gap-3">
             <button
               type="button"
               onClick={() => setMenuOpen(true)}

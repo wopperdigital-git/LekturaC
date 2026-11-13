@@ -13,11 +13,16 @@ export function AuthLayout({
   subtitle,
   children,
   footer,
+  panelTitle = 'Describe a topic. Get a finished deck.',
+  panelBody = 'Lektura turns a single brief into a complete, presentation-ready slide deck.',
 }: {
   title: string
   subtitle: string
   children: ReactNode
   footer?: ReactNode
+  /** The dark panel's words; the admin login replaces the product pitch. */
+  panelTitle?: string
+  panelBody?: string
 }) {
   return (
     <div className="relative grid min-h-screen bg-app-background lg:grid-cols-2">
@@ -34,10 +39,10 @@ export function AuthLayout({
         <LogoSlot onDark />
         <div>
           <p className="display max-w-md text-4xl leading-[1.08] font-extrabold text-white">
-            Describe a topic. Get a finished deck.
+            {panelTitle}
           </p>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/70">
-            Lektura turns a single brief into a complete, presentation-ready slide deck.
+            {panelBody}
           </p>
         </div>
       </AuthVisualPanel>

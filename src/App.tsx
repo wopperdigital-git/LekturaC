@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Routes, Route, useParams } from 'react-router-
 import { HomePage } from '@/pages/HomePage'
 import { CreatePage } from '@/pages/CreatePage'
 import { DraftsPage } from '@/pages/DraftsPage'
+import { VideosPage } from '@/pages/VideosPage'
 import { EditorPage } from '@/pages/EditorPage'
 import { PresentPage } from '@/pages/PresentPage'
 import { QuizPage } from '@/pages/QuizPage'
@@ -11,6 +12,9 @@ import { LoginPage } from '@/pages/LoginPage'
 import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireRole } from '@/components/auth/RequireRole'
+import { RequireAdmin } from '@/components/auth/RequireAdmin'
+import { AdminPage } from '@/pages/AdminPage'
+import { AdminLoginPage } from '@/pages/AdminLoginPage'
 import { ClassesPage } from '@/pages/classroom/ClassesPage'
 import { ClassFolderPage } from '@/pages/classroom/ClassFolderPage'
 import { StudentsPage } from '@/pages/classroom/StudentsPage'
@@ -63,6 +67,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route
           path="/welcome"
           element={
@@ -92,6 +97,14 @@ function App() {
           element={
             <RequireAuth>
               <DraftsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/videos"
+          element={
+            <RequireAuth>
+              <VideosPage />
             </RequireAuth>
           }
         />
@@ -132,6 +145,26 @@ function App() {
           element={
             <RequireAuth>
               <LessonPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <RequireAuth adminPage signedOutTo="/admin/login">
+              <RequireAdmin>
+                <AdminPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/:section"
+          element={
+            <RequireAuth adminPage signedOutTo="/admin/login">
+              <RequireAdmin>
+                <AdminPage />
+              </RequireAdmin>
             </RequireAuth>
           }
         />

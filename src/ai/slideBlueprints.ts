@@ -152,7 +152,7 @@ const INFORM: Record<InformRole, SlideSpec> = {
   'title-why-matters': {
     role: 'title-why-matters',
     label: 'Title + why it matters',
-    instruction: 'The topic, plus why this audience should listen — merged opening.',
+    instruction: 'The topic, plus why this audience should listen, in one merged opening.',
   },
   'why-matters': {
     role: 'why-matters',
@@ -167,7 +167,7 @@ const INFORM: Record<InformRole, SlideSpec> = {
   objectives: {
     role: 'objectives',
     label: 'Objectives',
-    instruction: '"By the end, you will be able to…" — 2-3 objectives, no more.',
+    instruction: '"By the end, you will be able to…": 2-3 objectives, no more.',
   },
   'gap-objectives': {
     role: 'gap-objectives',
@@ -303,7 +303,7 @@ const PERSUADE: Record<PersuadeRole, SlideSpec> = {
   offer: {
     role: 'offer',
     label: 'Offer',
-    instruction: 'What they get, stated explicitly — scope, packages, terms.',
+    instruction: 'What they get, stated explicitly: scope, packages, terms.',
   },
   handling: {
     role: 'handling',
@@ -318,7 +318,7 @@ const PERSUADE: Record<PersuadeRole, SlideSpec> = {
   'offer-handling-cta': {
     role: 'offer-handling-cta',
     label: 'Offer + handling + CTA',
-    instruction: 'What they get, the objection answered, and the specific ask — one closing slide.',
+    instruction: 'What they get, the objection answered, and the specific ask, in one closing slide.',
   },
   cta: {
     role: 'cta',
@@ -336,7 +336,7 @@ const PERSUADE_BLUEPRINT: Blueprint = {
   name: 'Persuading & Selling',
   useFor: 'sales pitches, investor and fundraising decks, client proposals, marketing pitches',
   logic:
-    'AIDA (Attention, Interest, Desire, Action) fused with the problem/solution pitch structure Kawasaki popularised for investors: earn attention, agitate a real problem, present the offer as relief, back it with proof, then ask for one specific action. Weight the deck toward proof and how the offer works — that is what moves a decision — and spend the least room on the hook and the close.',
+    'AIDA (Attention, Interest, Desire, Action) fused with the problem/solution pitch structure Kawasaki popularised for investors: earn attention, agitate a real problem, present the offer as relief, back it with proof, then ask for one specific action. Weight the deck toward proof and how the offer works (that is what moves a decision) and spend the least room on the hook and the close.',
   master: persuadeColumn(
     'hook',
     'problem',
@@ -389,7 +389,7 @@ const STORY: Record<StoryRole, SlideSpec> = {
   insight: {
     role: 'insight',
     label: 'Insight',
-    instruction: 'The turn, stated as one clear sentence — the idea worth spreading.',
+    instruction: 'The turn, stated as one clear sentence: the idea worth spreading.',
   },
   'journey-insight': {
     role: 'journey-insight',
@@ -531,9 +531,9 @@ export interface PlaybookEntry {
 export const FIELD_PLAYBOOK: PlaybookEntry[] = [
   { field: 'Education', type: 'Lecture or lesson', blueprint: 'inform', note: 'Objectives are stated learning outcomes; each core idea is one chunk.' },
   { field: 'Education', type: 'Thesis or capstone defense', blueprint: 'inform', note: 'The gap is the research gap; the core ideas are methodology, results, discussion.' },
-  { field: 'Education', type: 'Student pitch or competition entry', blueprint: 'persuade', note: 'Judges evaluate like investors — lead with the problem, not the product.' },
+  { field: 'Education', type: 'Student pitch or competition entry', blueprint: 'persuade', note: 'Judges evaluate like investors: lead with the problem, not the product.' },
   { field: 'Education', type: 'Storytelling assignment or show-and-tell', blueprint: 'story', note: 'Skip data-heavy proof; spend the room on the journey and the insight.' },
-  { field: 'Business', type: 'Client proposal or sales pitch', blueprint: 'persuade', note: 'The offer states scope explicitly — ambiguity stalls decisions.' },
+  { field: 'Business', type: 'Client proposal or sales pitch', blueprint: 'persuade', note: 'The offer states scope explicitly, because ambiguity stalls decisions.' },
   { field: 'Business', type: 'Investor or fundraising pitch', blueprint: 'persuade', note: 'Keep how-it-works and proof concrete, light on emotional framing.' },
   { field: 'Business', type: 'Status update or project report', blueprint: 'inform', note: 'Open situation-complication-question; lead with the recommendation, not the process.' },
   { field: 'Business', type: 'Onboarding or internal training', blueprint: 'inform', note: 'Keep all three core ideas; make the application a task or exercise.' },

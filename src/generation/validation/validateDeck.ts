@@ -1,6 +1,7 @@
 import type { Claim, GeneratedDeck, QualityFlag, QualityFlagType } from '../schemas'
 import { evidenceFlags, verifyClaims, type EvidenceContext } from './evidence'
 import { structureFlags } from './structure'
+import type { DetailLevel } from '@/ai/detailLevel'
 
 /*
   See the design spec's "[3] Deterministic validation" and "[4] Targeted
@@ -9,7 +10,10 @@ import { structureFlags } from './structure'
   oxlint's no-empty-interface-equivalent lint, and the two are otherwise
   identical.
 */
-export type ValidationContext = EvidenceContext
+export type ValidationContext = EvidenceContext & {
+  /** The brief's detail level; sets the density limits. Absent = balanced. */
+  detailLevel?: DetailLevel
+}
 
 /**
  * Runs every deterministic validator over `deck` and computes its claims'
@@ -17,7 +21,7 @@ export type ValidationContext = EvidenceContext
  */
 export function validateDeck(deck: GeneratedDeck, ctx: ValidationContext): { flags: QualityFlag[]; claims: Claim[] } {
   const claims = verifyClaims(deck, ctx.pack)
-  const flags = [...structureFlags(deck), ...evidenceFlags(deck, claims, ctx)]
+  const flags = [...structureFlags(deck, ctx.detailLevel), ...evidenceFlags(deck, claims, ctx)]
   return { flags, claims }
 }
 
@@ -37,6 +41,7 @@ export function validateDeck(deck: GeneratedDeck, ctx: ValidationContext): { fla
 export const REPAIRABLE: ReadonlySet<QualityFlagType> = new Set<QualityFlagType>([
   'TITLE_TOO_LONG',
   'BODY_TOO_DENSE',
+  'BODY_TOO_THIN',
   'UNSUPPORTED_STATISTIC',
   'MISSING_SOURCE',
   'FILLER_SLIDE',

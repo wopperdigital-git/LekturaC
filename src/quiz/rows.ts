@@ -6,7 +6,7 @@ import { fromDbSections, type QuizAnswer, type QuizSection, type QuizType } from
   another (the same rule `classroom/rows.ts` follows).
 */
 
-export const DECK_QUIZ_COLUMNS = 'id, code, title, created_at, quiz_type, settings, quiz_questions(count)'
+export const DECK_QUIZ_COLUMNS = 'id, code, title, created_at, quiz_type, settings, quiz_questions!quiz_questions_quiz_id_fkey(count)'
 export const OWNER_QUIZ_COLUMNS = 'id, code, title, deck_title, created_at, quiz_type, settings'
 export const OWNER_QUESTION_COLUMNS =
   'id, order_index, section_index, question_type, slide_number, slide_heading, prompt, choices, answer'

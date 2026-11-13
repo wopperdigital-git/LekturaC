@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { dropFromTop } from '@/lib/motion'
 
 /** How long the pointer may be off a hover menu (crossing the gap to it) before it closes. */
 const HOVER_CLOSE_DELAY_MS = 150
@@ -142,6 +143,7 @@ export function ToolbarMenu({
         // never crosses dead space on its way from the button to the menu.
         <div className="absolute left-1/2 top-full z-30 -translate-x-1/2 pt-1.5">
           <div
+            ref={dropFromTop}
             id={menuId}
             role={panel ? 'dialog' : 'menu'}
             aria-label={label}

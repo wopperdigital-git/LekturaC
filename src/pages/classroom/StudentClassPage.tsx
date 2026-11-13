@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { loadStudentClassroom, removeMembership } from '@/classroom/api'
 import { loadLessonModes, loadMyLessonStarts } from '@/lesson/api'
-import { matchesQuery, personLabel, plural } from '@/classroom/format'
+import { matchesQuery, noun, personLabel } from '@/classroom/format'
 import { studentClassQuizzes } from '@/classroom/select'
 import { useAsync } from '@/classroom/useAsync'
 import { invalidateMyClasses } from '@/classroom/useMyClasses'
@@ -137,7 +137,7 @@ export function StudentClassPage() {
                     <path d="M5.5 6l1 1 2-2M5.5 10.5l1 1 2-2M10 6.2h.5M10 10.7h.5" />
                   </svg>
                   <span className="font-semibold">{classQuizzes.length}</span>
-                  <span className="text-app-muted">{plural(classQuizzes.length, 'quiz', 'quizzes')}</span>
+                  <span className="text-app-muted">{noun(classQuizzes.length, 'quiz', 'quizzes')}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-app-sm border border-app-border/80 bg-app-surface/60 px-2.5 py-1 text-app-foreground">
                   <svg className="size-3.5 text-app-highlight-text" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -152,7 +152,7 @@ export function StudentClassPage() {
                     <path d="M12 5.5a4 4 0 010 5M13.5 3.5a7 7 0 010 9" />
                   </svg>
                   <span className="font-semibold">{classAnnouncements.length}</span>
-                  <span className="text-app-muted">{plural(classAnnouncements.length, 'announcement', 'announcements')}</span>
+                  <span className="text-app-muted">{noun(classAnnouncements.length, 'announcement', 'announcements')}</span>
                 </span>
               </div>
             </div>

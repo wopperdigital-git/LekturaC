@@ -148,6 +148,44 @@ describe('buildDeckUserPrompt', () => {
   it('stays callable with just topic and brief, as the existing providers call it', () => {
     expect(() => buildDeckUserPrompt('Electric vehicles', BRIEF)).not.toThrow()
   })
+
+  /*
+    The detail level used to change one sentence while every level shared the
+    same hard word limits (and "detailed" was told to stay inside them), so
+    Balanced and Detailed decks came out the same. Each level now carries its
+    own SLIDE DENSITY numbers.
+  */
+  it('carries a different SLIDE DENSITY section for each detail level', () => {
+    const prompts = (['simplified', 'balanced', 'detailed'] as const).map((detailLevel) =>
+      buildDeckUserPrompt('Electric vehicles', { ...BRIEF, detailLevel }),
+    )
+    for (const prompt of prompts) expect(prompt).toContain('SLIDE DENSITY')
+    expect(prompts[0]).toContain('10-30 words, 40 at most')
+    expect(prompts[1]).toContain('20-40 words, 55 at most')
+    expect(prompts[2]).toContain('50-90 words, 110 at most')
+    expect(prompts[2]).toContain('each 14 words or fewer')
+  })
+
+  it('no longer tells a detailed deck to keep the slide inside the balanced limits', () => {
+    const prompt = buildDeckUserPrompt('Electric vehicles', { ...BRIEF, detailLevel: 'detailed' })
+    expect(prompt).not.toMatch(/within the visible-text limits/)
+  })
+})
+
+describe('DECK_SYSTEM_PROMPT density', () => {
+  it('states no fixed word limit of its own, leaving it to SLIDE DENSITY', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toContain('20-40 words')
+    expect(DECK_SYSTEM_PROMPT).not.toContain('35 words or fewer')
+    expect(DECK_SYSTEM_PROMPT).toContain('SLIDE DENSITY')
+  })
+})
+
+describe('deckMaxTokens by detail level', () => {
+  it('gives a detailed deck more room, under the same ceiling', () => {
+    expect(deckMaxTokens(7, 'detailed')).toBeGreaterThan(deckMaxTokens(7, 'balanced'))
+    expect(deckMaxTokens(7, 'detailed')).toBeLessThanOrEqual(7000)
+    expect(geminiDeckMaxTokens(7, 'detailed')).toBeGreaterThan(geminiDeckMaxTokens(7, 'balanced'))
+  })
 })
 
 describe('deckMaxTokens', () => {

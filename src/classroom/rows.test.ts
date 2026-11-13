@@ -80,3 +80,17 @@ describe('row mapping', () => {
     expect(studentQuizFromRow({ id: 'q', title: 'T', code: 'C', quiz_type: 'mixed', created_at: 'c' }).quizType).toBe('mixed')
   })
 })
+
+describe('quiz_questions embeds', () => {
+  // lesson_answers (0018) references both quizzes and quiz_questions, so a bare
+  // `quiz_questions(...)` embed is ambiguous to PostgREST (PGRST201) and the
+  // teacher's Classes/Students/Quizzes pages fail to load.
+  it('name the direct foreign key', async () => {
+    const { QUIZ_COLUMNS } = await import('./rows')
+    const { DECK_QUIZ_COLUMNS } = await import('@/quiz/rows')
+    for (const columns of [QUIZ_COLUMNS, DECK_QUIZ_COLUMNS]) {
+      expect(columns).toContain('quiz_questions!quiz_questions_quiz_id_fkey(')
+      expect(columns).not.toMatch(/quiz_questions\(/)
+    }
+  })
+})

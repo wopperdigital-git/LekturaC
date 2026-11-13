@@ -17,9 +17,9 @@ export function trackFill(track: Track): string {
  * colours side by side, over page titles (never on dialogs).
  * Decorative, so hidden from assistive tech.
  */
-export function TrackBand({ className = 'h-1.5' }: { className?: string }) {
+export function TrackBand({ className = 'h-1.5', motionId }: { className?: string; motionId?: string }) {
   return (
-    <div aria-hidden="true" className={`flex ${className}`}>
+    <div aria-hidden="true" data-motion={motionId} className={`flex ${className}`}>
       <span className="flex-1 bg-app-track-orange" />
       <span className="flex-1 bg-app-track-teal" />
       <span className="flex-1 bg-app-track-sun" />
