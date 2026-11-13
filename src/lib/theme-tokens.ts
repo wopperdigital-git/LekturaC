@@ -187,6 +187,20 @@ export const SLIDE_HEADING_FONT = `var(${SLIDE_FONT_VARS.heading})`
 /** The body font. Every element of a card that carries words should set one of the two. */
 export const SLIDE_BODY_FONT = `var(${SLIDE_FONT_VARS.body})`
 
+/** Steps that are ratios of the body size, resolved where they are used so an element's own size carries. */
+export const SLIDE_SIZE = {
+  eyebrow: 'calc(var(--slide-size-body) * 0.65)',
+  lead: 'calc(var(--slide-size-body) * 1.2)',
+  caption: 'calc(var(--slide-size-body) * 0.7)',
+} as const
+
+/** The gap scale layouts use between slide elements; the values live on `:root` in index.css. */
+export const SLIDE_GAP = {
+  tight: 'var(--slide-gap-tight)',
+  group: 'var(--slide-gap-group)',
+  section: 'var(--slide-gap-section)',
+} as const
+
 export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
   const { typography, colors, spacing, shape } = theme
   const [h1, h2, h3, body] = typography.scale

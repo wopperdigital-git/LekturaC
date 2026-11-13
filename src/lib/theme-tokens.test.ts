@@ -11,6 +11,7 @@ import {
   SLIDE_BODY_FONT,
   SLIDE_FONT_VARS,
   SLIDE_HEADING_FONT,
+  SLIDE_SIZE,
 } from './theme-tokens'
 
 describe('darken', () => {
@@ -131,6 +132,16 @@ describe('built-in themes', () => {
       // accentForeground, so the soft end has to hold the ink too.
       expect(contrastRatio(colors.accentForeground, colors.accentSoft), `${id} on accentSoft`).toBeGreaterThanOrEqual(4.5)
     }
+  })
+
+  it('keeps muted text at AA on every theme background', () => {
+    for (const theme of BUILTIN_THEMES) {
+      expect(contrastRatio(theme.colors.muted, theme.colors.background), theme.id).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('derives eyebrow, lead and caption from the body size', () => {
+    for (const value of Object.values(SLIDE_SIZE)) expect(value).toMatch(/^calc\(var\(--slide-size-body\) \* [\d.]+\)$/)
   })
 
   // Pop's accent is set as small semibold label text, so it needs the 4.5:1 of body text
