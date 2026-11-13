@@ -109,12 +109,12 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i)
 function structured(layout: LayoutType): ReactNode {
   switch (layout) {
     case 'hero':
-      // Centred: a short accent bar, the title, a muted subtitle.
+      // Left-aligned: a short accent bar, the title, a muted subtitle.
       return (
         <>
-          <rect x={72} y={26} width={16} height={2.5} rx={1.25} fill={ACCENT} />
-          <Title x={30} y={36} w={100} h={9} />
-          <Line x={48} y={53} w={64} />
+          <rect x={16} y={26} width={16} height={2.5} rx={1.25} fill={ACCENT} />
+          <Title x={16} y={36} w={100} h={9} />
+          <Line x={16} y={53} w={64} />
         </>
       )
     case 'standard':
@@ -126,20 +126,20 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'imageFocus':
-      // The picture takes about three fifths on the left, heading and caption beside it.
+      // The picture takes about three fifths on the left; the heading tops the text column beside it, then the caption.
       return (
         <>
           <Picture x={12} y={14} w={90} h={62} />
-          <Title x={110} y={26} w={38} />
-          {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={40 + i * 8} w={w} />)}
+          <Title x={110} y={14} w={38} />
+          {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={28 + i * 8} w={w} />)}
         </>
       )
     case 'standardSplit':
-      // Text on one half, the picture on the other (the side alternates down the deck; the first slide's is drawn).
+      // Text on one half, the heading at its top, the picture on the other (the side alternates down the deck; the first slide's is drawn).
       return (
         <>
-          <Title y={24} w={58} />
-          {[62, 56, 60, 40].map((w, i) => <Line key={i} x={12} y={38 + i * 8} w={w} />)}
+          <Title y={14} w={58} />
+          {[62, 56, 60, 40].map((w, i) => <Line key={i} x={12} y={28 + i * 8} w={w} />)}
           <Picture x={84} y={14} w={64} h={62} />
         </>
       )
@@ -394,21 +394,21 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'imageFocus':
-      // The picture, accent-framed, about three fifths on the left; the heading and caption beside it.
+      // The picture, accent-framed, about three fifths on the left; the heading tops the text column beside it, then the caption.
       return (
         <>
           <Picture x={12} y={14} w={90} h={62} />
           <rect x={15} y={17} width={84} height={56} rx={1.5} fill="none" stroke={ACCENT} strokeWidth={2} />
-          <Title x={110} y={27} w={38} />
-          {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={44 + i * 8} w={w} />)}
+          <Title x={110} y={14} w={38} />
+          {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={30 + i * 8} w={w} />)}
         </>
       )
     case 'standardSplit':
-      // The lead heading and text on one half, the picture on the other.
+      // The lead heading at the top of the text on one half, the picture on the other.
       return (
         <>
-          <Title x={12} y={25} w={60} />
-          {[60, 54, 58, 38].map((w, i) => <Line key={i} x={12} y={42 + i * 8} w={w} />)}
+          <Title x={12} y={14} w={60} />
+          {[60, 54, 58, 38].map((w, i) => <Line key={i} x={12} y={30 + i * 8} w={w} />)}
           <Picture x={84} y={14} w={64} h={62} />
         </>
       )

@@ -10,7 +10,7 @@ import { BackgroundPhoto, PhotoStage } from './BackgroundPhoto'
 
 /**
  * Cinematic opening title card: big heading, optional short subtitle, no clutter.
- * With one photo the photo is the slide's ground, under a scrim, and the title sits
+ * Both treatments are left-aligned, on the slide's left edge like every claim. With one photo the photo is the slide's ground, under a scrim, and the title sits
  * bottom-left on it in white.
  */
 export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
@@ -70,7 +70,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
       className={
         photo
           ? 'flex flex-col items-start gap-5 py-6 text-left'
-          : 'my-auto flex flex-col items-center gap-5 py-14 text-center'
+          : 'my-auto flex flex-col items-start gap-5 py-6 text-left'
       }
     >
       <span className="h-1.5 w-14 rounded-full bg-gradient-to-r from-slide-accent to-slide-accent-soft" />

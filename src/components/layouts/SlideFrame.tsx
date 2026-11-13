@@ -18,9 +18,10 @@ import { textRef } from '@/engine/marks'
  * marks and selection address it exactly as before. Zone wrappers sit outside those
  * holders and are not elements of their own.
  *
- * A card with no heading has no head element at all. `aside` draws a lone photo beside
+ * A card with no heading has no head element at all. `aside` draws a photo beside
  * the text column from the slide's 640px width up (stacked below it); without it the
- * photo's index stays in the body list, so the caller draws it where it sits.
+ * photo's index stays in the body list, so the caller draws it where it sits. A card
+ * with a second photo keeps that one in the body, drawn where it sits.
  */
 export function SlideFrame({
   blocks,
@@ -32,13 +33,22 @@ export function SlideFrame({
   variant: VisualStyle
   /** Draws the body zone. Receives the body indices from `slotsOf`, ascending. */
   children: (body: number[]) => ReactNode
-  /** The lone photo drawn beside the text column; absent = the photo index stays in `body`. */
-  aside?: { node: ReactNode; side: 'left' | 'right'; width: 'half' | 'wide' }
+  /**
+   * The photo drawn beside the text column; absent = the photo index stays in `body`.
+   * `index` names the block the caller drew as the aside, so the frame leaves exactly
+   * that index out of `body`; without it the frame leaves out the card's lone photo
+   * (`slotsOf().aside`), which is none when the card holds two or more.
+   */
+  aside?: { node: ReactNode; side: 'left' | 'right'; width: 'half' | 'wide'; index?: number }
 }): ReactElement {
   const slots = slotsOf(blocks)
   const claim = slots.claim !== null ? blocks[slots.claim] : null
   const lead = slots.lead !== null ? blocks[slots.lead] : null
-  const body = aside || slots.aside === null ? slots.body : [...slots.body, slots.aside].sort((a, b) => a - b)
+  // Everything that is not the claim or the lead, ascending; the aside's own index
+  // is taken out only when the caller draws an aside.
+  const rest = slots.aside === null ? slots.body : [...slots.body, slots.aside].sort((a, b) => a - b)
+  const asideIndex = aside ? (aside.index ?? slots.aside) : null
+  const body = asideIndex === null ? rest : rest.filter((index) => index !== asideIndex)
 
   const head =
     slots.claim !== null && claim?.type === 'heading' ? (
