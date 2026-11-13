@@ -93,19 +93,6 @@ function Picture({ x, y, w, h }: { x: number; y: number; w: number; h: number })
   )
 }
 
-/**
- * The expressive treatment's accent-filled panel behind a heading (or, with
- * `inner` off, behind a number): `bg-slide-accent` with accent-foreground ink.
- */
-function HeadPanel({ x = 12, y = 9, w = 70, h = 10, bar = true }: { x?: number; y?: number; w?: number; h?: number; bar?: boolean }) {
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} rx={2.5} fill={ACCENT} />
-      {bar && <rect x={x + 4} y={y + h / 2 - 2} width={Math.max(8, w - 22)} height={4} rx={2} fill="var(--app-accent-foreground)" opacity={0.9} />}
-    </g>
-  )
-}
-
 /** A figure on its own accent panel, with its label in accent-foreground ink. */
 function FigurePanel({ x, y, w, h, labelW = 0.55 }: { x: number; y: number; w: number; h: number; labelW?: number }) {
   return (
@@ -131,12 +118,11 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'standard':
-      // A left accent border beside the content.
+      // The heading, then the content below it, no border or fill.
       return (
         <>
-          <rect x={12} y={12} width={2.5} height={62} rx={1.25} fill={ACCENT} />
-          <Title x={21} y={13} />
-          {[118, 110, 122, 74].map((w, i) => <Line key={i} x={21} y={28 + i * 9} w={w} />)}
+          <Title x={12} y={13} />
+          {[118, 110, 122, 74].map((w, i) => <Line key={i} x={12} y={28 + i * 9} w={w} />)}
         </>
       )
     case 'imageFocus':
@@ -392,37 +378,36 @@ function structured(layout: LayoutType): ReactNode {
 function expressive(layout: LayoutType): ReactNode {
   switch (layout) {
     case 'hero':
-      // Left-aligned: the heading is its own accent panel, subtitle below.
+      // Left-aligned: the heading in plain ink, subtitle below.
       return (
         <>
-          <HeadPanel x={16} y={22} w={112} h={24} bar={false} />
-          <rect x={24} y={30} width={86} height={8} rx={2.5} fill="var(--app-accent-foreground)" opacity={0.9} />
+          <Title x={16} y={30} w={96} h={9} />
           <Line x={16} y={56} w={70} />
         </>
       )
     case 'standard':
-      // The lead heading on an accent panel, the content below it.
+      // The lead heading, then the content below it.
       return (
         <>
-          <HeadPanel x={12} y={12} w={72} h={12} />
+          <Title x={12} y={15} w={64} />
           {[126, 118, 130, 80].map((w, i) => <Line key={i} x={12} y={34 + i * 10} w={w} />)}
         </>
       )
     case 'imageFocus':
-      // The picture, accent-framed, about three fifths on the left; the heading panel and caption beside it.
+      // The picture, accent-framed, about three fifths on the left; the heading and caption beside it.
       return (
         <>
           <Picture x={12} y={14} w={90} h={62} />
           <rect x={15} y={17} width={84} height={56} rx={1.5} fill="none" stroke={ACCENT} strokeWidth={2} />
-          <HeadPanel x={110} y={24} w={38} h={12} bar={false} />
+          <Title x={110} y={27} w={38} />
           {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={44 + i * 8} w={w} />)}
         </>
       )
     case 'standardSplit':
-      // The lead heading on an accent panel and text on one half, the picture on the other.
+      // The lead heading and text on one half, the picture on the other.
       return (
         <>
-          <HeadPanel x={12} y={22} w={60} h={12} />
+          <Title x={12} y={25} w={60} />
           {[60, 54, 58, 38].map((w, i) => <Line key={i} x={12} y={42 + i * 8} w={w} />)}
           <Picture x={84} y={14} w={64} h={62} />
         </>
@@ -438,10 +423,10 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'statGrid':
-      // Equal accent-filled panels under the heading panel.
+      // Equal accent-filled panels under the heading.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(3).map((i) => (
             <FigurePanel key={i} x={12 + i * 47} y={28} w={42} h={46} />
           ))}
@@ -451,7 +436,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Ledger rows on surfaces, each figure on an accent panel.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
@@ -469,7 +454,7 @@ function expressive(layout: LayoutType): ReactNode {
       // A card per step with a numbered accent disc.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
@@ -487,7 +472,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Numbered cards side by side.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(4).map((i) => {
             const x = 12 + i * 35
             return (
@@ -506,7 +491,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Stacked, divided rows; the first heading in accent.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(2).map((i) => {
             const y = 27 + i * 26
             return (
@@ -528,7 +513,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Filled accent headers over cells on surfaces.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(2).map((i) => {
             const x = 12 + i * 70
             return (
@@ -550,7 +535,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Wrapping pills tinted with the accent, a numbered disc in each.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {[
             [12, 28, 52],
             [68, 28, 44],
@@ -571,7 +556,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Numbered cards.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
@@ -588,7 +573,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Cards with a filled accent check.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(3).map((i) => {
             const y = 25 + i * 18
             return (
@@ -613,7 +598,7 @@ function expressive(layout: LayoutType): ReactNode {
       // Two columns of cards with an accent left edge.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           {range(4).map((i) => {
             const x = 12 + (i % 2) * 70
             const y = 26 + Math.floor(i / 2) * 25
@@ -629,11 +614,11 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'quote':
-      // The lead heading on an accent panel, an oversized accent quote mark,
+      // The lead heading, an oversized accent quote mark,
       // then larger italic lines and the attribution.
       return (
         <>
-          <HeadPanel x={12} y={9} w={60} h={10} />
+          <Title x={12} y={11} w={60} />
           <rect x={14} y={24} width={7} height={9} rx={2} fill={ACCENT} />
           <rect x={24} y={24} width={7} height={9} rx={2} fill={ACCENT} />
           <Line x={14} y={38} w={120} h={5} />
@@ -646,7 +631,7 @@ function expressive(layout: LayoutType): ReactNode {
       // The first paragraph larger, a lede above the prose.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           <rect x={12} y={26} width={120} height={4.5} rx={2} fill={INK} opacity={0.5} />
           <rect x={12} y={34} width={86} height={4.5} rx={2} fill={INK} opacity={0.5} />
           {[112, 104, 110, 70].map((w, i) => <Line key={i} x={12} y={46 + i * 8} w={w} />)}
@@ -656,7 +641,7 @@ function expressive(layout: LayoutType): ReactNode {
       // A featured picture beside two stacked ones.
       return (
         <>
-          <HeadPanel />
+          <Title x={12} y={11} />
           <Picture x={12} y={26} w={66} h={54} />
           <Picture x={82} y={26} w={66} h={25} />
           <Picture x={82} y={55} w={66} h={25} />

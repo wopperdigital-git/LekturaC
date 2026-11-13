@@ -34,8 +34,6 @@ export function FlowLayout({
 }) {
   const photo = singlePhoto(blocks)
   const nodes = inferGroups(blocks, hint)
-  // The expressive treatment sets the card's lead heading on an accent panel.
-  const lead = nodes.find((node) => node.kind === 'leaf' && node.block.type === 'heading')
   return (
     <div className="flex flex-col gap-6">
       {photo && (
@@ -48,7 +46,6 @@ export function FlowLayout({
             block={node.block}
             index={node.index}
             variant={variant}
-            headingPanel={variant === 'expressive' && node === lead}
           />
         ) : (
           <GroupRenderer key={nodeKey(node)} node={node} variant={variant} />

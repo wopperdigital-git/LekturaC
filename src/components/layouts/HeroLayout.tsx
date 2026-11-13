@@ -42,11 +42,8 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
       <div className="flex flex-col items-start gap-6 py-6 text-left">
         {heading && (
           <Adjustable index={heading.index}>
-            {/* The heading is its own accent panel, so a nudge or resize moves
-                the two together; accent-foreground keeps a picked text colour
-                off it (index.css). */}
             <h1
-              className="w-fit max-w-full rounded-slide-sm bg-slide-accent px-10 py-7 font-extrabold tracking-[var(--slide-letter-spacing)] text-slide-accent-foreground"
+              className="font-extrabold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
               style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
             >
               <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />

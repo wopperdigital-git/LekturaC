@@ -47,8 +47,8 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
   if (variant === 'expressive') {
     return onPhoto(
       <div className="flex flex-col gap-6 py-4">
-        {headings.map(({ block, index }, i) => (
-          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} variant="expressive" panel={i === 0} />
+        {headings.map(({ block, index }) => (
+          <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} variant="expressive" />
         ))}
         {quote && (
           <Adjustable index={quote.index}>

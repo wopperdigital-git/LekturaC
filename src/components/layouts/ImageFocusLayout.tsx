@@ -9,8 +9,8 @@ import { textRef } from '@/engine/marks'
  *
  * "Caption" is the card's paragraphs; anything else the card holds (a timeline step
  * that arrived with a photo, a second image) is not drawn here and falls to
- * `Leftovers`, so nothing on the card goes missing. Expressive sets the lead heading
- * on its accent panel and frames the photo in an accent outline.
+ * `Leftovers`, so nothing on the card goes missing. Expressive frames the
+ * photo in an accent outline.
  */
 export function ImageFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const headings = blocksOfTypeIndexed(blocks, 'heading')
@@ -34,14 +34,13 @@ export function ImageFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; 
           />
         )}
         <div className="flex min-w-0 flex-col gap-4">
-          {headings.map(({ block, index }, i) => (
+          {headings.map(({ block, index }) => (
             <Heading
               key={index}
               text={block.text}
               textRef={textRef(index, 'text')}
               size={block.size}
               variant={variant}
-              panel={expressive && i === 0}
             />
           ))}
           {paragraphs.map(({ block, index }) => (

@@ -15,14 +15,13 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
 
   return (
     <div className="flex flex-col gap-5">
-      {headings.map(({ block, index }, i) => (
+      {headings.map(({ block, index }) => (
         <Heading
           key={index}
           text={block.text}
           textRef={textRef(index, 'text')}
           size={block.size}
           variant={variant}
-          panel={expressive && i === 0}
         />
       ))}
       <div className="flex max-w-prose flex-col gap-4">

@@ -21,21 +21,18 @@ export function BlockRenderer({
   block,
   index,
   variant,
-  headingPanel,
   photoClass,
 }: {
   block: ContentBlock
   index: number
   /** Only a heading reads it: the expressive treatment sets it heavier. */
   variant?: VisualStyle
-  /** A heading drawn on the accent panel (the expressive lead heading). */
-  headingPanel?: boolean
   /** Only a photo reads it: how it is cropped and framed (an aspect ratio, a ring). */
   photoClass?: string
 }) {
   return (
     <Adjustable index={index}>
-      <BlockBody block={block} index={index} variant={variant} headingPanel={headingPanel} photoClass={photoClass} />
+      <BlockBody block={block} index={index} variant={variant} photoClass={photoClass} />
     </Adjustable>
   )
 }
@@ -87,13 +84,11 @@ function BlockBody({
   block,
   index,
   variant,
-  headingPanel,
   photoClass,
 }: {
   block: ContentBlock
   index: number
   variant?: VisualStyle
-  headingPanel?: boolean
   photoClass?: string
 }) {
   const itemProps = useItemProps()
@@ -105,7 +100,6 @@ function BlockBody({
           textRef={textRef(index, 'text')}
           size={block.size}
           variant={variant}
-          panel={headingPanel}
         />
       )
     case 'paragraph':
@@ -216,31 +210,22 @@ export function Heading({
   textRef: ref,
   size = 'h2',
   variant,
-  panel = false,
 }: {
   text: string
   textRef: string
   size?: 'h1' | 'h2' | 'h3'
-  /** Expressive sets the heading heavier. */
+  /** Expressive sets the heading heavier. Never a fill: importance is contrast. */
   variant?: VisualStyle
-  /**
-   * Draw the heading on an accent-filled panel (the expressive treatment's lead
-   * heading). The panel is the heading's own box, so a nudge or a resize moves
-   * the two together. The accent-foreground class is what keeps a picked text
-   * colour off it — see the user-colour rule in `index.css`.
-   */
-  panel?: boolean
 }) {
   const sizeVar = `var(--slide-size-${size})`
-  const weight = variant === 'expressive' || panel ? 'font-extrabold' : 'font-semibold'
-  const tone = panel
-    ? 'w-fit max-w-full self-start rounded-slide-sm bg-slide-accent px-6 py-3 text-slide-accent-foreground'
-    : 'text-slide-foreground'
+  const weight = variant === 'expressive' ? 'font-extrabold' : 'font-semibold'
+  // h1 and h2 are tight; the smaller h3 keeps a little more air.
+  const lineHeight = size === 'h3' ? 1.15 : 1.08
   return (
     <MaybeAdjustable forRef={ref}>
       <h2
-        className={`${weight} tracking-[var(--slide-letter-spacing)] ${tone}`}
-        style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: sizeVar, lineHeight: 1.15 }}
+        className={`${weight} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
+        style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: sizeVar, lineHeight }}
       >
         <EditableText textRef={ref} value={text} />
       </h2>
