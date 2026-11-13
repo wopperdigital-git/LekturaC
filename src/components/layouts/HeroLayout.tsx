@@ -39,7 +39,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
 
   if (variant === 'expressive') {
     return onPhoto(
-      <div className="flex flex-col items-start gap-6 py-6 text-left">
+      <div className={`flex flex-col items-start gap-6 py-6 text-left${photo ? '' : ' my-auto'}`}>
         {heading && (
           <Adjustable index={heading.index}>
             <h1
@@ -70,7 +70,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
       className={
         photo
           ? 'flex flex-col items-start gap-5 py-6 text-left'
-          : 'flex flex-col items-center gap-5 py-14 text-center'
+          : 'my-auto flex flex-col items-center gap-5 py-14 text-center'
       }
     >
       <span className="h-1.5 w-14 rounded-full bg-gradient-to-r from-slide-accent to-slide-accent-soft" />

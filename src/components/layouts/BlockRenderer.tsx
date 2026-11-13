@@ -6,7 +6,7 @@ import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
 import { blockIndexOf, useItemProps } from './adjustContext'
-import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
+import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 
 /**
  * Generic single-block renderer, used by layouts that just need to stack
@@ -22,6 +22,7 @@ export function BlockRenderer({
   index,
   variant,
   photoClass,
+  lead,
 }: {
   block: ContentBlock
   index: number
@@ -29,10 +30,15 @@ export function BlockRenderer({
   variant?: VisualStyle
   /** Only a photo reads it: how it is cropped and framed (an aspect ratio, a ring). */
   photoClass?: string
+  /**
+   * Only a paragraph reads it: the sentence right after the slide's claim, drawn larger and
+   * a little softer than body text, with no measure cap (the head zone caps its width).
+   */
+  lead?: boolean
 }) {
   return (
     <Adjustable index={index}>
-      <BlockBody block={block} index={index} variant={variant} photoClass={photoClass} />
+      <BlockBody block={block} index={index} variant={variant} photoClass={photoClass} lead={lead} />
     </Adjustable>
   )
 }
@@ -41,14 +47,14 @@ export function BlockRenderer({
  * Whatever a layout did not draw itself, stacked below what it did.
  *
  * Five frame layouts (`HeroLayout`, `StatHeroLayout`, `QuoteLayout`,
- * `TextFocusLayout`, `StandardSplitLayout`) pick out the block types they
+ * `StandardSplitLayout`, `ImageFocusLayout`) pick out the block types they
  * understand and render only those, so anything else on the card used to be
  * drawn nowhere — while the .pptx export and the narration script both carried
- * it (see `engine/blockPartition.ts`). `StandardLayout` maps every block itself.
- * `FlowLayout` and `GroupRenderer` draw every block by construction and must
- * never use this component — doing so would draw blocks twice. Each of the frame
- * layouts now names the indices it drew and ends with this, so a card cannot
- * hold text that never reaches the screen.
+ * it (see `engine/blockPartition.ts`). The layouts on `SlideFrame` (`StandardLayout`,
+ * `TextFocusLayout`, `FlowLayout`) are handed every index not in the head by
+ * `slotsOf`, so they need none, and must never use this component — doing so would
+ * draw blocks twice. Each frame layout that picks by type names the indices it
+ * drew and ends with this, so a card cannot hold text that never reaches the screen.
  *
  * It renders nothing at all in the normal case, where the layout's own content
  * *is* the whole card — so a well-matched card looks exactly as it did before
@@ -85,11 +91,13 @@ function BlockBody({
   index,
   variant,
   photoClass,
+  lead,
 }: {
   block: ContentBlock
   index: number
   variant?: VisualStyle
   photoClass?: string
+  lead?: boolean
 }) {
   const itemProps = useItemProps()
   switch (block.type) {
@@ -103,6 +111,17 @@ function BlockBody({
         />
       )
     case 'paragraph':
+      if (lead) {
+        return (
+          <p
+            data-lead=""
+            className="text-slide-foreground/85"
+            style={{ fontFamily: SLIDE_BODY_FONT, fontSize: SLIDE_SIZE.lead, lineHeight: 1.35 }}
+          >
+            <EditableText textRef={textRef(index, 'text')} value={block.text} />
+          </p>
+        )
+      }
       return (
         <p
           className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"

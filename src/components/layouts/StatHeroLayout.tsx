@@ -46,7 +46,7 @@ export function StatHeroLayout({
   )
   const beside = (content: ReactNode) =>
     photo ? (
-      <div className="grid grid-cols-1 items-center gap-8 @min-[640px]:grid-cols-2">
+      <div className="my-auto grid grid-cols-1 items-center gap-8 @min-[640px]:grid-cols-2">
         {position % 2 === 1 && <PhotoSide photo={photo} />}
         <div className="min-w-0">{content}</div>
         {position % 2 === 0 && <PhotoSide photo={photo} />}
@@ -61,7 +61,7 @@ export function StatHeroLayout({
         className={
           photo
             ? 'flex flex-col items-start gap-6'
-            : 'flex flex-col items-center gap-8 @min-[640px]:flex-row @min-[640px]:items-center @min-[640px]:gap-12'
+            : 'my-auto flex flex-col items-center gap-8 @min-[640px]:flex-row @min-[640px]:items-center @min-[640px]:gap-12'
         }
       >
         {stat && (
@@ -92,7 +92,7 @@ export function StatHeroLayout({
   }
 
   return beside(
-    <div className="flex flex-col items-center gap-4 py-6 text-center">
+    <div className={`flex flex-col items-center gap-4 py-6 text-center${photo ? '' : ' my-auto'}`}>
       {headings.map(({ block, index }) => (
         <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
       ))}

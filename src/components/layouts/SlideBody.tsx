@@ -38,13 +38,15 @@ const NO_FADING: ReadonlySet<string> = new Set()
  *
  * It fills the whole slide, not just the layout's own height. `SlideSurface` is
  * a 16:9 floor, so a short slide is taller than its content; `flex-1` makes this
- * box grow to the surface's full content area and the layout is centred inside
- * it (the inner wrapper), rather than this box shrinking to the content and being
- * centred by the surface. That matters because everything that draws over the
- * slide — grid, ink, the pen and shape tools, the selection layers — is a child
- * of this box, so it spans the empty bands above and below short content, and
- * its top-left (the grid's and ink's origin) is the slide's, which no longer
- * moves by half the difference when text grows or shrinks.
+ * box grow to the surface's full content area and the layout fills it (the inner
+ * wrapper is a flex column that grows too; `SlideFrame` starts its claim at the
+ * top, and the frames that centre their content ask for it with `my-auto`), rather
+ * than this box shrinking to the content and being centred by the surface. That
+ * matters because everything that draws over the slide — grid, ink, the pen and
+ * shape tools, the selection layers — is a child of this box, so it spans the
+ * empty bands above and below short content, and its top-left (the grid's and
+ * ink's origin) is the slide's, which no longer moves by half the difference when
+ * text grows or shrinks.
  */
 export function SlideBody({
   card,
@@ -110,8 +112,9 @@ export function SlideBody({
       <CardBoxContext.Provider value={{ width }}>
         <BlockDataContext.Provider value={{ adjusts: card.adjusts, inline: card.inline }}>
           <BlockAdjustContext.Provider value={adjusting}>
-          {/* The layout itself, centred in the full-height box. */}
-          <div>{children}</div>
+          {/* The layout itself, filling the full-height box: a layout that wants to be
+              centred (hero, quote, stat hero) asks for it with `my-auto`. */}
+          <div className="flex flex-1 flex-col">{children}</div>
           {/* The editor's graph paper, in this same content-box space. Gated on
               the interaction context so no other surface can ever show it. */}
           {outer && grid.show && <GridOverlay contentWidth={width} />}

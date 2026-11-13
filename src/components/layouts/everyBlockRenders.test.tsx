@@ -343,10 +343,12 @@ describe('a card with one photo', () => {
       }
     })
 
-    it('a list gets the photo as a band above its content', () => {
+    it('a list gets the photo as a band between the claim and its content', () => {
       const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'bulletList', items: ['MARKI1'] }, PHOTO]
       const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', 'structured')} />)
-      expect(html.indexOf(`src="`)).toBeLessThan(html.indexOf('MARKHEAD'))
+      // The claim is the frame's head; the band opens the body zone, ahead of the list.
+      expect(html.indexOf('MARKHEAD')).toBeLessThan(html.indexOf(`src="`))
+      expect(html.indexOf(`src="`)).toBeLessThan(html.indexOf('MARKI1'))
       expect(html).toContain('aspect-[6/1]')
     })
   })
