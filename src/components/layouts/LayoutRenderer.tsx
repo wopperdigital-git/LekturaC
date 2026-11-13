@@ -76,7 +76,7 @@ export function LayoutRenderer({ card, context }: { card: Card; context?: Layout
   if (card.blocks.length === 0) return <div aria-hidden="true" className="my-auto min-h-64" />
   const resolved = resolveLayout(card.layout, card.blocks, context)
   if (rendersAsFlow(resolved)) {
-    return <FlowLayout blocks={card.blocks} variant={card.visualStyle} hint={card.layout} />
+    return <FlowLayout blocks={card.blocks} variant={card.visualStyle} hint={card.layout} layout={resolved} />
   }
   const Component = LAYOUT_COMPONENTS[resolved]
   // `position` is where the card sits in the deck: a split alternates its photo's side by it.

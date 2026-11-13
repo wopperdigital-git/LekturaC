@@ -15,7 +15,7 @@ import { figureSize } from './figureSize'
 */
 const STRUCTURED_FACTOR = 1.714
 const EXPRESSIVE_FACTOR = 2.286
-// The expressive figure's own box: an accent panel (accent-foreground ink).
+// The expressive figure's own box: the slide's one accent panel (accent-foreground ink), marked `data-accent-owner`.
 const STAT_PANEL =
   'min-w-0 max-w-full shrink-0 rounded-slide-sm bg-slide-accent px-10 py-8 text-center text-slide-accent-foreground @min-[640px]:max-w-[55%]'
 // Beside a photo the figure has half the slide, so its panel never also gives up 45% of that.
@@ -72,6 +72,7 @@ export function StatHeroLayout({
             labelRef={textRef(stat.index, 'label')}
             valueSize={figureSize('h1', EXPRESSIVE_FACTOR, stat.block.value, photo ? 4 : 5)}
             panel={photo ? STAT_PANEL_BESIDE_PHOTO : STAT_PANEL}
+            accentOwner
           />
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-4 text-center @min-[640px]:text-left">

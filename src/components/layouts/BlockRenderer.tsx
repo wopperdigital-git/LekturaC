@@ -273,6 +273,8 @@ export function StatBlockView({
   labelRef,
   valueSize = 'var(--slide-size-h1)',
   panel,
+  extrabold = false,
+  accentOwner = false,
 }: {
   value: string
   label: string
@@ -287,14 +289,26 @@ export function StatBlockView({
    * accent-foreground. The panel being the adjusted node, a nudge moves both.
    */
   panel?: string
+  /** The figure is set `font-extrabold` rather than `font-bold` (the expressive treatment). */
+  extrabold?: boolean
+  /**
+   * Marks the panel as the slide's one accent-filled box (`data-accent-owner`). Only
+   * meaningful with `panel`: the attribute sits on the panel's own element, so no
+   * wrapper comes between the `Adjustable` and the box it moves.
+   */
+  accentOwner?: boolean
 }) {
   return (
     <MaybeAdjustable forRef={valueRef}>
       {/* The label inherits this; the value below overrides it with the heading
           font, the way the two read on screen. */}
-      <div className={panel} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}>
+      <div
+        className={panel}
+        data-accent-owner={panel && accentOwner ? '' : undefined}
+        style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}
+      >
         <div
-          className={`font-bold ${panel ? 'text-slide-accent-foreground' : 'text-slide-accent'}`}
+          className={`${extrabold ? 'font-extrabold' : 'font-bold'} ${panel ? 'text-slide-accent-foreground' : 'text-slide-accent'}`}
           style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: valueSize, lineHeight: 1 }}
         >
           <EditableText textRef={valueRef} value={value} />

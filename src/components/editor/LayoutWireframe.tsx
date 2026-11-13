@@ -423,17 +423,26 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'statGrid':
-      // Equal accent-filled panels under the heading.
+      // Equal cells under an accent top rule, the figure in heavy accent ink. No cell
+      // is filled: a stat grid has no accent owner.
       return (
         <>
           <Title x={12} y={11} />
-          {range(3).map((i) => (
-            <FigurePanel key={i} x={12 + i * 47} y={28} w={42} h={46} />
-          ))}
+          {range(3).map((i) => {
+            const x = 12 + i * 47
+            return (
+              <g key={i}>
+                <Rule x={x} y={30} w={42} h={1.5} accent />
+                <Figure x={x} y={39} w={24} h={9} />
+                <Line x={x} y={54} w={36} />
+                <Line x={x} y={61} w={26} />
+              </g>
+            )
+          })}
         </>
       )
     case 'statList':
-      // Ledger rows on surfaces, each figure on an accent panel.
+      // Ledger rows on surfaces, each figure in heavy accent ink (no fill behind it).
       return (
         <>
           <Title x={12} y={11} />
@@ -442,8 +451,7 @@ function expressive(layout: LayoutType): ReactNode {
             return (
               <g key={i}>
                 <Surface x={12} y={y} w={136} h={15} />
-                <rect x={14} y={y + 1.5} width={44} height={12} rx={2.5} fill={ACCENT} />
-                <rect x={19} y={y + 5} width={26} height={5} rx={2} fill="var(--app-accent-foreground)" opacity={0.9} />
+                <Figure x={19} y={y + 4.5} w={26} h={6} />
                 <Line x={66} y={y + 6} w={66 - i * 10} />
               </g>
             )
@@ -510,7 +518,7 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'comparisonTable':
-      // Filled accent headers over cells on surfaces.
+      // Only the first header is filled; the others keep the accent rule. Cells sit on surfaces.
       return (
         <>
           <Title x={12} y={11} />
@@ -518,8 +526,17 @@ function expressive(layout: LayoutType): ReactNode {
             const x = 12 + i * 70
             return (
               <g key={i}>
-                <rect x={x} y={26} width={66} height={10} rx={2} fill={ACCENT} />
-                <rect x={x + 4} y={29.5} width={26} height={3} rx={1.5} fill="var(--app-accent-foreground)" opacity={0.9} />
+                {i === 0 ? (
+                  <>
+                    <rect x={x} y={26} width={66} height={10} rx={2} fill={ACCENT} />
+                    <rect x={x + 4} y={29.5} width={26} height={3} rx={1.5} fill="var(--app-accent-foreground)" opacity={0.9} />
+                  </>
+                ) : (
+                  <>
+                    <Title x={x + 4} y={29.5} w={26} h={3} />
+                    <Rule x={x} y={35} w={66} h={1.5} accent />
+                  </>
+                )}
                 {range(3).map((j) => (
                   <g key={j}>
                     <Surface x={x} y={37 + j * 13} w={66} h={12} r={0} />

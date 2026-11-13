@@ -1,4 +1,5 @@
 import type { ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
+import { accentOwner } from '@/engine/composition'
 import { inferGroups, nodeKey } from '@/engine/groups'
 import { singlePhoto } from '@/engine/blockPartition'
 import { BlockRenderer } from './BlockRenderer'
@@ -25,19 +26,24 @@ import { SLIDE_GAP } from '@/lib/theme-tokens'
  * block at the same index, so nudges and formatting still address it.
  *
  * `hint` is the card's stored `layout`, forwarded so an explicit choice from the
- * Level 2 picker still decides how a bullet list is arranged.
+ * Level 2 picker still decides how a bullet list is arranged. `layout` is the
+ * resolved name (never `'auto'`): `accentOwner` reads it to name the one block that
+ * may be drawn on an accent fill, and every group is told which that is.
  */
 export function FlowLayout({
   blocks,
   variant,
   hint,
+  layout,
 }: {
   blocks: ContentBlock[]
   variant: VisualStyle
   hint: LayoutType
+  layout: Exclude<LayoutType, 'auto'>
 }) {
   const photo = singlePhoto(blocks)
   const nodes = inferGroups(blocks, hint)
+  const accentIndex = accentOwner(blocks, layout)
   return (
     <SlideFrame blocks={blocks} variant={variant}>
       {(body) => {
@@ -60,7 +66,7 @@ export function FlowLayout({
                   />
                 )
               }
-              return <GroupRenderer key={nodeKey(node)} node={node} variant={variant} />
+              return <GroupRenderer key={nodeKey(node)} node={node} variant={variant} accentIndex={accentIndex} />
             })}
           </div>
         )

@@ -22,16 +22,31 @@ const BODY_SIZE = 'var(--slide-size-body)'
  * replaces, moved here as-is so a card looks the same after the move. The
  * heading those layouts drew above their items is now a leaf of its own.
  */
-export function GroupRenderer({ node, variant }: { node: GroupNode; variant: VisualStyle }) {
+export function GroupRenderer({
+  node,
+  variant,
+  accentIndex,
+}: {
+  node: GroupNode
+  variant: VisualStyle
+  /**
+   * The index of the one block the slide may draw on an accent fill (`accentOwner`),
+   * or null when it gives the fill to none. A group fills only the item whose block
+   * index is this one, and marks it `data-accent-owner`; accent as text, a rule or a
+   * small bullet or number disc is not a fill and is not counted.
+   */
+  accentIndex: number | null
+}) {
   const expressive = variant === 'expressive'
   // Every list item is its own element: picked out, edited and removed by itself.
   const itemProps = useItemProps()
 
   switch (node.arrangement) {
     case 'boxes': {
-      // From StatGridLayout: equal cells, an accent-filled panel when
-      // expressive and a top accent rule when structured. Past three cells the
-      // figure steps down to h2 so a long value still fits its column.
+      // From StatGridLayout: equal cells under a top accent rule. A stat is drawn
+      // on an accent panel only when it is the slide's accent owner (expressive
+      // only; a stat grid has none), and the expressive figure is heavier. Past
+      // three cells the figure steps down to h2 so a long value still fits its column.
       const wide = node.items.length <= 3
       const longest = Math.max(...node.items.map(({ block }) => block.value.length))
       const valueSize = figureSize(wide ? 'h1' : 'h2', 1, 'x'.repeat(longest), wide ? 6 : 5)
@@ -41,7 +56,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
           style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
         >
           {node.items.map(({ block, index }) =>
-            expressive ? (
+            expressive && index === accentIndex ? (
               <StatBlockView
                 key={index}
                 value={block.value}
@@ -50,6 +65,8 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                 labelRef={textRef(index, 'label')}
                 valueSize={valueSize}
                 panel="min-w-0 rounded-slide-sm bg-slide-accent p-6 text-slide-accent-foreground"
+                extrabold
+                accentOwner
               />
             ) : (
               <div key={index} className="min-w-0 border-t-2 border-slide-accent pt-4">
@@ -59,6 +76,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                   valueRef={textRef(index, 'value')}
                   labelRef={textRef(index, 'label')}
                   valueSize={valueSize}
+                  extrabold={expressive}
                 />
               </div>
             ),
@@ -120,15 +138,22 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
 
     case 'columns':
       // From ComparisonLayout: stacked rows when expressive, side-by-side cards
-      // when structured. The first column is featured in both.
+      // when structured. The featured column is the accent owner in both (the
+      // structured card has the accent border and tint, the expressive row the
+      // accent heading) and carries `data-accent-owner`; none is featured when
+      // the slide's layout gives no owner.
       if (expressive) {
         return (
           <div className="flex flex-col divide-y divide-slide-border">
-            {node.items.map((group, i) => {
-              const featured = i === 0
+            {node.items.map((group) => {
+              const featured = group.index === accentIndex
               return (
                 <Adjustable key={group.index} index={group.index}>
-                  <div className="flex flex-col gap-3 py-4" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+                  <div
+                    className="flex flex-col gap-3 py-4"
+                    data-accent-owner={featured ? '' : undefined}
+                    style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
+                  >
                     <div className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
                       <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
                     </div>
@@ -156,14 +181,15 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
           className="grid gap-4"
           style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
         >
-          {node.items.map((group, i) => {
-            const featured = i === 0
+          {node.items.map((group) => {
+            const featured = group.index === accentIndex
             return (
               <Adjustable key={group.index} index={group.index}>
                 <div
                   className={`rounded-slide-sm border p-4 ${
                     featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
                   }`}
+                  data-accent-owner={featured ? '' : undefined}
                   style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
                 >
                   <div className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
@@ -347,6 +373,8 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
     case 'statRows':
       // Stats as a ledger: the figure on the left and what it measures beside
       // it, one row per stat. Reads better than a grid once the labels are long.
+      // The figure is accent text in both treatments, never a fill; the expressive
+      // rows sit on a surface card and set it heavier.
       return (
         <div className={expressive ? 'flex flex-col gap-3' : 'flex flex-col divide-y divide-slide-border'}>
           {node.items.map(({ block, index }) => (
@@ -358,7 +386,7 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
                 <div
                   className={
                     expressive
-                      ? 'w-1/3 shrink-0 rounded-slide-sm bg-slide-accent px-5 py-4 font-extrabold text-slide-accent-foreground'
+                      ? 'w-1/3 shrink-0 font-extrabold text-slide-accent'
                       : 'w-1/3 shrink-0 font-bold text-slide-accent'
                   }
                   style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h2)', lineHeight: 1 }}
@@ -425,6 +453,9 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
         element, which is what lets `Adjustable` wrap it like any other block.
       */
       const rows = 1 + Math.max(...node.items.map((group) => group.block.items.length))
+      // The expressive header is filled only for the accent owner. Every other
+      // header takes the structured rule, with the cells' own padding so the
+      // columns still line up.
       return (
         <div
           className="grid gap-x-4"
@@ -438,10 +469,11 @@ export function GroupRenderer({ node, variant }: { node: GroupNode; variant: Vis
               >
                 <div
                   className={
-                    expressive
+                    expressive && group.index === accentIndex
                       ? 'rounded-t-slide-sm bg-slide-accent px-3 py-2 font-semibold text-slide-accent-foreground'
-                      : 'border-b-2 border-slide-accent pb-2 font-semibold text-slide-foreground'
+                      : `border-b-2 border-slide-accent font-semibold text-slide-foreground ${expressive ? 'px-3 py-2' : 'pb-2'}`
                   }
+                  data-accent-owner={expressive && group.index === accentIndex ? '' : undefined}
                 >
                   <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
                 </div>
