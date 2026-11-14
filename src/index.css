@@ -141,6 +141,11 @@
   --slide-muted: #6f6a78;
   --slide-border: #e4e0ee;
   --slide-surface: #fdfcff;
+  /* Ground colours (deep for a title slide, tint for a quote or stat hero); ThemeProvider replaces them per deck. */
+  --slide-ground-deep: #2a2550;
+  --slide-ground-deep-foreground: #f1eefb;
+  --slide-ground-deep-muted: #b9b6cb;
+  --slide-ground-tint: #f0edf7;
   /* The celestial backdrop layer; ThemeProvider replaces it per deck. */
   --slide-backdrop-image: none;
   --slide-font-heading: 'Inter', system-ui, sans-serif;

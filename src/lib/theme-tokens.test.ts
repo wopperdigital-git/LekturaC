@@ -4,6 +4,8 @@ import {
   BUILTIN_THEMES,
   contrastRatio,
   darken,
+  deepMuted,
+  mixHex,
   relativeLuminance,
   stageColor,
   DEFAULT_THEME,
@@ -70,6 +72,51 @@ describe('applyTheme', () => {
       expect(props.get('--slide-backdrop-image')).toBe(theme.celestial.glow)
       expect(props.get('--slide-accent-soft')).toBe(theme.colors.accentSoft)
     }
+  })
+})
+
+describe('ground tokens', () => {
+  it('mixes two colours channel by channel', () => {
+    expect(mixHex('#000000', '#ffffff', 1)).toBe('#000000')
+    expect(mixHex('#000000', '#ffffff', 0)).toBe('#ffffff')
+    expect(mixHex('#102030', '#304050', 0.5)).toBe('#203040')
+  })
+
+  it('gives every theme a deep ground, its ink and a tint that text can be read on', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      expect(contrastRatio(colors.deepForeground, colors.deep), `${id} deep ink`).toBeGreaterThanOrEqual(7)
+      expect(contrastRatio(deepMuted(colors), colors.deep), `${id} deep muted`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.foreground, colors.tint), `${id} tint ink`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.muted, colors.tint), `${id} tint muted`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.accent, colors.tint), `${id} tint accent`).toBeGreaterThanOrEqual(3)
+      expect(colors.deep, `${id} deep differs from background`).not.toBe(colors.background)
+      expect(colors.tint, `${id} tint differs from background`).not.toBe(colors.background)
+    }
+  })
+
+  it('uses no pure white or pure black for a ground or for ink', () => {
+    const keys = ['background', 'foreground', 'surface', 'accentForeground', 'deep', 'deepForeground', 'tint'] as const
+    for (const { id, colors } of BUILTIN_THEMES) {
+      for (const key of keys) {
+        expect(['#ffffff', '#000000'], `${id} ${key}`).not.toContain(colors[key])
+      }
+    }
+  })
+
+  it('writes the ground tokens', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const { element, props } = fakeElement()
+      applyTheme(theme, element)
+      expect(props.get('--slide-ground-deep'), theme.id).toBe(theme.colors.deep)
+      expect(props.get('--slide-ground-deep-foreground'), theme.id).toBe(theme.colors.deepForeground)
+      expect(props.get('--slide-ground-deep-muted'), theme.id).toBe(deepMuted(theme.colors))
+      expect(props.get('--slide-ground-tint'), theme.id).toBe(theme.colors.tint)
+    }
+  })
+
+  it('hands a stored theme without ground colours the current preset', () => {
+    const stored = { id: 'paper', colors: { background: '#f6f1e7' } }
+    expect(resolveTheme(stored).colors.deep).toMatch(/^#[0-9a-f]{6}$/)
   })
 })
 

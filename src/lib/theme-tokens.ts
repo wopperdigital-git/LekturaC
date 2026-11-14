@@ -23,6 +23,12 @@ export interface ThemeTokens {
     muted: string
     border: string
     surface: string
+    /** The dark ground a title slide is drawn on. */
+    deep: string
+    /** Ink for text sitting on the `deep` ground. */
+    deepForeground: string
+    /** A light (or, on a dark theme, a lifted) ground for a quote or a stat hero. */
+    tint: string
   }
   spacing: {
     /** base spacing unit in rem; drives every Tailwind spacing utility (p-*, gap-*, m-*) */
@@ -151,6 +157,24 @@ export function contrastRatio(a: string, b: string): number {
   return (light + 0.05) / (dark + 0.05)
 }
 
+/** Mixes two `#rrggbb` colours channel by channel in sRGB; `weightA` (0 to 1) is how much of `a` is kept. */
+export function mixHex(a: string, b: string, weightA: number): string {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(i, i + 2), 16)
+  const mixed = (i: number) =>
+    Math.round(channel(a, i) * weightA + channel(b, i) * (1 - weightA))
+      .toString(16)
+      .padStart(2, '0')
+  return `#${mixed(1)}${mixed(3)}${mixed(5)}`
+}
+
+/** How much of the ink survives in muted text on the deep ground. */
+export const DEEP_MUTED_WEIGHT = 0.72
+
+/** Muted text on the deep ground: the deep ink pulled toward the ground. Derived, so no theme stores it. */
+export function deepMuted(colors: Pick<ThemeTokens['colors'], 'deep' | 'deepForeground'>): string {
+  return mixHex(colors.deepForeground, colors.deep, DEEP_MUTED_WEIGHT)
+}
+
 /**
  * Writes a ThemeTokens object onto `root` as --slide-* CSS custom properties,
  * scoped to that element (never document.documentElement) so it only affects
@@ -217,6 +241,10 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
     '--slide-muted': colors.muted,
     '--slide-border': colors.border,
     '--slide-surface': colors.surface,
+    '--slide-ground-deep': colors.deep,
+    '--slide-ground-deep-foreground': colors.deepForeground,
+    '--slide-ground-deep-muted': deepMuted(colors),
+    '--slide-ground-tint': colors.tint,
 
     [SLIDE_FONT_VARS.heading]: headingFont,
     [SLIDE_FONT_VARS.body]: bodyFont,
@@ -275,6 +303,9 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       muted: '#6f6a78',
       border: '#e4e0ee',
       surface: '#fdfcff',
+      deep: '#2a2550',
+      deepForeground: '#f1eefb',
+      tint: '#f0edf7',
     },
     spacing: { unit: 0.26 },
     shape: { radius: 1, radiusSm: 0.5, shadow: 'soft' },
@@ -312,11 +343,14 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       background: '#f5efe5',
       foreground: '#201b18',
       accent: '#b85c16',
-      accentForeground: '#ffffff',
+      accentForeground: '#fffdf8',
       accentSoft: '#d49a62',
-      muted: '#76695d',
+      muted: '#6f6257',
       border: '#e0d5c3',
       surface: '#fbf6ec',
+      deep: '#3d2a1c',
+      deepForeground: '#f5efe5',
+      tint: '#ece2d0',
     },
     spacing: { unit: 0.3 },
     shape: { radius: 0.375, radiusSm: 0.25, shadow: 'none' },
@@ -373,6 +407,9 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       muted: '#a9b2d0',
       border: '#242b4d',
       surface: '#121734',
+      deep: '#1b1650',
+      deepForeground: '#f0efff',
+      tint: '#10152e',
     },
     spacing: { unit: 0.26 },
     shape: { radius: 1, radiusSm: 0.5, shadow: 'glow' },
@@ -413,13 +450,16 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
     },
     colors: {
       background: '#111111',
-      foreground: '#ffffff',
+      foreground: '#f6f1ea',
       accent: '#ff5a1f',
       accentForeground: '#180a03',
       accentSoft: '#ffb000',
       muted: '#a8a29e',
       border: '#2f2f2f',
       surface: '#1c1a19',
+      deep: '#3a1608',
+      deepForeground: '#fbeee4',
+      tint: '#1b1816',
     },
     spacing: { unit: 0.28 },
     shape: { radius: 0, radiusSm: 0, shadow: 'flare' },
@@ -458,9 +498,12 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       accent: '#4c8a72',
       accentForeground: '#07160f',
       accentSoft: '#86bfa2',
-      muted: '#61736d',
+      muted: '#586a64',
       border: '#d6e2d9',
       surface: '#f0f5f1',
+      deep: '#1d3b33',
+      deepForeground: '#eef5ef',
+      tint: '#e3ece4',
     },
     spacing: { unit: 0.3 },
     shape: { radius: 1.25, radiusSm: 0.6, shadow: 'soft' },
@@ -514,11 +557,14 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       background: '#f6f1e7',
       foreground: '#1b1a17',
       accent: '#b3261e',
-      accentForeground: '#ffffff',
+      accentForeground: '#fbf8f1',
       accentSoft: '#c2453c',
       muted: '#6b6458',
       border: '#ddd3bf',
       surface: '#fbf8f1',
+      deep: '#5c1712',
+      deepForeground: '#f6f1e7',
+      tint: '#ede5d3',
     },
     spacing: { unit: 0.3 },
     shape: { radius: 0.125, radiusSm: 0.0625, shadow: 'soft' },
@@ -555,6 +601,9 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       muted: '#b4bfb4',
       border: '#3a4a40',
       surface: '#28362e',
+      deep: '#16201b',
+      deepForeground: '#f2f0e6',
+      tint: '#263329',
     },
     spacing: { unit: 0.28 },
     shape: { radius: 0.5, radiusSm: 0.25, shadow: 'none' },
@@ -590,6 +639,9 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       muted: '#a9c3e0',
       border: '#2a5588',
       surface: '#163e6c',
+      deep: '#0a2140',
+      deepForeground: '#eaf2ff',
+      tint: '#133761',
     },
     spacing: { unit: 0.26 },
     shape: { radius: 0.25, radiusSm: 0.125, shadow: 'none' },
@@ -616,17 +668,20 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       letterSpacing: -0.8,
     },
     colors: {
-      background: '#ffffff',
+      background: '#fffaf0',
       foreground: '#111111',
       // Darkened from #ff4f1f (3.3:1) so the accent reads as small label text on the ground and
       // the surface (4.5:1+); ink on it is therefore white, and the soft end of the badge
       // gradient is a deep amber that holds white too. The yellow lives on in the corner block.
       accent: '#cf350a',
-      accentForeground: '#ffffff',
+      accentForeground: '#fffaf0',
       accentSoft: '#b45309',
       muted: '#4a4a4a',
       border: '#111111',
       surface: '#fff7e0',
+      deep: '#1a1a1a',
+      deepForeground: '#fff7e0',
+      tint: '#fff1cc',
     },
     spacing: { unit: 0.28 },
     shape: { radius: 0.75, radiusSm: 0.375, shadow: 'hard' },
@@ -656,11 +711,14 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
       background: '#f4f5f7',
       foreground: '#16202c',
       accent: '#1f4e8c',
-      accentForeground: '#ffffff',
+      accentForeground: '#f4f5f7',
       accentSoft: '#3d6fb3',
       muted: '#5b6675',
       border: '#d9dde3',
-      surface: '#ffffff',
+      surface: '#fafbfc',
+      deep: '#16304f',
+      deepForeground: '#f4f5f7',
+      tint: '#e9ecf1',
     },
     spacing: { unit: 0.28 },
     shape: { radius: 0.375, radiusSm: 0.1875, shadow: 'soft' },
