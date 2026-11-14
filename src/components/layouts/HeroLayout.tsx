@@ -117,7 +117,7 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         <div
           aria-hidden="true"
           data-hero-ornament=""
-          className="pointer-events-none absolute rounded-full bg-slide-accent opacity-30"
+          className="pointer-events-none absolute rounded-full bg-slide-accent opacity-[0.12]"
           style={CIRCLE_STYLE}
         />
       )}

@@ -1077,7 +1077,8 @@ describe.each(STYLES)('redrawn hero (%s)', (style) => {
     expect(circle).toContain('pointer-events-none')
     expect(circle).toContain('rounded-full')
     expect(circle).toContain('bg-slide-accent')
-    expect(circle).toContain('opacity-30')
+    expect(circle).toContain('opacity-[0.12]')
+    expect(circle).not.toContain('opacity-30')
     expect(circle).toMatch(/\babsolute\b/)
     expect(circle).toContain('aspect-ratio:1')
     // It bleeds past the slide's top-right corner through the padding.
@@ -1162,6 +1163,11 @@ describe.each(STYLES)('redrawn quote (%s)', (style) => {
     expect(mark).toContain('var(--slide-font-heading)')
     expect(mark).toContain('font-size:calc(var(--slide-size-h1) * 2.4)')
     expect(mark).toContain('line-height:0.8')
+    // The box hugs the glyph (no clipping), so the quote starts right under it, a tight gap below.
+    expect(mark).toContain('height:0.42em')
+    expect(mark.match(/class="([^"]*)"/)?.[1].split(' ')).toContain('block')
+    expect(mark).not.toMatch(/overflow/)
+    expect(tagWith(out, 'data-quote-text')).toContain(`margin-top:${TIGHT}`)
     expect(wordsOf(out, 'data-quote-mark')).toBe('“')
   })
 

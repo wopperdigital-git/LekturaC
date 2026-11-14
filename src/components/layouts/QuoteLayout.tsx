@@ -36,17 +36,6 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
     ...(paragraph ? [paragraph] : []),
     ...(photo ? [photo] : []),
   ].map((entry) => entry.index)
-  // The photo is positioned against the slide, so it is a sibling of the text.
-  const onPhoto = (content: ReactNode) =>
-    photo ? (
-      <>
-        <BackgroundPhoto block={photo.block} index={photo.index} scrim="even" />
-        <PhotoStage justify="center">{content}</PhotoStage>
-      </>
-    ) : (
-      content
-    )
-
   if (!photo) {
     const expressive = variant === 'expressive'
     return (
@@ -76,6 +65,8 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
                   fontFamily: SLIDE_HEADING_FONT,
                   fontSize: 'calc(var(--slide-size-h1) * 2.4)',
                   lineHeight: 0.8,
+                  // The box hugs the glyph, so the quote starts right under it; the glyph may overhang harmlessly.
+                  height: '0.42em',
                 }}
               >
                 {'“'}
@@ -130,10 +121,18 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
     )
   }
 
-  // With a photo nothing changes: the centred drawing on the scrim, white text.
+  // With a photo nothing changes: the centred drawing on the scrim, white text. The photo is
+  // positioned against the slide, so it is a sibling of the text.
+  const onPhoto = (content: ReactNode) => (
+    <>
+      <BackgroundPhoto block={photo.block} index={photo.index} scrim="even" />
+      <PhotoStage justify="center">{content}</PhotoStage>
+    </>
+  )
+
   if (variant === 'expressive') {
     return onPhoto(
-      <div className={`flex flex-col gap-6 py-4${photo ? '' : ' my-auto'}`}>
+      <div className="flex flex-col gap-6 py-4">
         {headings.map(({ block, index }) => (
           <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} variant="expressive" />
         ))}
@@ -189,7 +188,7 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
   }
 
   return onPhoto(
-    <div className={`flex flex-col items-center gap-6 py-8 text-center${photo ? '' : ' my-auto'}`}>
+    <div className="flex flex-col items-center gap-6 py-8 text-center">
       {headings.map(({ block, index }) => (
         <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
       ))}
