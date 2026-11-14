@@ -97,8 +97,8 @@ const ROOMY_MAX_ITEMS = 6
 
 /**
  * Whether a group's items are few and short enough to draw their text at the lead
- * size (`roomy`) rather than the body size (`normal`): at most four items, the longest
- * at most 48 characters. No items is roomy.
+ * size (`roomy`) rather than the body size (`normal`): at most six items, the longest
+ * at most 64 characters. No items is roomy.
  */
 export function itemStep(texts: string[]): ItemStep {
   const longest = texts.reduce((max, text) => Math.max(max, text.length), 0)
