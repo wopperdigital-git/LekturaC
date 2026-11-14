@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from './contentBlocks'
-import { accentOwner, groundOf, groundOfLayout, slotsOf } from './composition'
+import { accentOwner, fillNode, groundOf, groundOfLayout, itemStep, slotsOf } from './composition'
 import { CPP_DECK } from './fixtures/cppDeck'
+import { GALLERY_DECK } from './fixtures/galleryDeck'
+import { inferGroups } from './groups'
 
 const h: ContentBlock = { type: 'heading', text: 'H' }
 const p: ContentBlock = { type: 'paragraph', text: 'P' }
@@ -74,5 +76,59 @@ describe('groundOf', () => {
   it('keeps an empty card plain, even one named hero', () => {
     expect(groundOf({ layout: 'hero', blocks: [], orderIndex: 0 })).toBe('plain')
     expect(groundOf({ layout: 'hero', blocks: [], orderIndex: 0 }, { isFirstCard: true })).toBe('plain')
+  })
+})
+
+describe('itemStep', () => {
+  it('is roomy for a few short items', () => expect(itemStep(['if', 'switch', 'ternary'])).toBe('roomy'))
+  it('is normal past four items', () => expect(itemStep(['a', 'b', 'c', 'd', 'e'])).toBe('normal'))
+  it('is normal when one item is long', () => expect(itemStep(['a', 'x'.repeat(49)])).toBe('normal'))
+  it('is roomy for none', () => expect(itemStep([])).toBe('roomy'))
+  it('is roomy at the limits: four items of 48 characters', () =>
+    expect(itemStep(Array.from({ length: 4 }, () => 'x'.repeat(48)))).toBe('roomy'))
+})
+
+describe('fillNode', () => {
+  // The inputs FlowLayout hands it: the nodes, the body indices the frame passes on
+  // (the frame leaves a lone photo in the body when no aside is drawn) and that photo.
+  const fillOf = (blocks: ContentBlock[], hint: Parameters<typeof inferGroups>[1] = 'auto') => {
+    const slots = slotsOf(blocks)
+    const body = (slots.aside === null ? slots.body : [...slots.body, slots.aside]).sort((a, b) => a - b)
+    return fillNode(inferGroups(blocks, hint), body, slots.aside)
+  }
+  const card = (id: string) => {
+    const found = GALLERY_DECK.find((c) => c.id === id)
+    if (!found) throw new Error(`no ${id}`)
+    return found
+  }
+
+  it.each([
+    ['g-icons3', 2],
+    ['g-stats3', 1],
+    ['g-timeline', 2],
+    ['g-compare', 1],
+    ['g-list-photo', 1],
+  ])('names the one group of %s (first index %i)', (id, first) => {
+    const c = card(id)
+    expect(fillOf(c.blocks, c.layout)).toBe(first)
+  })
+
+  it('is null for a list between two paragraphs', () => {
+    const c = card('g-standard')
+    expect(fillOf(c.blocks, c.layout)).toBeNull()
+  })
+
+  it('is null for a card with two groups (a list and stats)', () => {
+    const c = card('g-hero-extra')
+    expect(fillOf(c.blocks, c.layout)).toBeNull()
+  })
+
+  it('is null for a card with no group', () => {
+    const c = card('g-text')
+    expect(fillOf(c.blocks, c.layout)).toBeNull()
+  })
+
+  it('is null when a leaf other than the lone photo sits beside the group', () => {
+    expect(fillOf([h, list, p])).toBeNull()
   })
 })

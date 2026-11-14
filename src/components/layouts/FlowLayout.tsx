@@ -1,5 +1,5 @@
 import type { ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
-import { accentOwner } from '@/engine/composition'
+import { accentOwner, fillNode } from '@/engine/composition'
 import { inferGroups, nodeKey } from '@/engine/groups'
 import { singlePhoto } from '@/engine/blockPartition'
 import { BlockRenderer } from './BlockRenderer'
@@ -48,8 +48,9 @@ export function FlowLayout({
     <SlideFrame blocks={blocks} variant={variant}>
       {(body) => {
         const inBody = new Set(body)
+        const filling = fillNode(nodes, body, photo?.index ?? null)
         return (
-          <div className="flex flex-col" style={{ gap: SLIDE_GAP.group }}>
+          <div className="flex flex-1 flex-col" style={{ gap: SLIDE_GAP.group }}>
             {photo && (
               <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[6/1]" />
             )}
@@ -66,7 +67,13 @@ export function FlowLayout({
                   />
                 )
               }
-              return <GroupRenderer key={nodeKey(node)} node={node} variant={variant} accentIndex={accentIndex} />
+              return <GroupRenderer
+                  key={nodeKey(node)}
+                  node={node}
+                  variant={variant}
+                  accentIndex={accentIndex}
+                  fill={nodeKey(node) === filling}
+                />
             })}
           </div>
         )

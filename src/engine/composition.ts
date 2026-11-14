@@ -1,6 +1,7 @@
 import type { Card, ContentBlock, LayoutType } from './contentBlocks'
 import { singlePhoto } from './blockPartition'
 import { resolveLayout, type LayoutContext } from './layoutEngine'
+import { nodeKey, type RenderNode } from './groups'
 
 /**
  * The roles a slide's blocks play, read off the blocks and never stored.
@@ -84,4 +85,39 @@ export function groundOfLayout(layout: Exclude<LayoutType, 'auto'>): Ground {
 export function groundOf(card: Pick<Card, 'layout' | 'blocks' | 'orderIndex'>, context?: LayoutContext): Ground {
   if (card.blocks.length === 0) return 'plain'
   return groundOfLayout(resolveLayout(card.layout, card.blocks, context ?? { isFirstCard: card.orderIndex === 0 }))
+}
+
+/** How much room an arrangement's items get: `roomy` draws their text larger. */
+export type ItemStep = 'roomy' | 'normal'
+
+/** Longest item text that still reads as one short line at the roomy size. */
+const ROOMY_MAX_CHARS = 48
+/** Most items that still sit comfortably at the roomy size. */
+const ROOMY_MAX_ITEMS = 4
+
+/**
+ * Whether a group's items are few and short enough to draw their text at the lead
+ * size (`roomy`) rather than the body size (`normal`): at most four items, the longest
+ * at most 48 characters. No items is roomy.
+ */
+export function itemStep(texts: string[]): ItemStep {
+  const longest = texts.reduce((max, text) => Math.max(max, text.length), 0)
+  return texts.length <= ROOMY_MAX_ITEMS && longest <= ROOMY_MAX_CHARS ? 'roomy' : 'normal'
+}
+
+/**
+ * The key (`nodeKey`, the first block index) of the one group that should fill the
+ * slide's body zone, or null. A group fills only when it is the body's single drawn node
+ * and nothing else in the body is drawn beside it, apart from the lone photo's own leaf
+ * (a photo is drawn as a band above the body, by index). `bodyIndices` is what the frame
+ * hands its child; a node belongs to the body when its first index is in it. Pure: it
+ * reads nodes and indices and never moves, drops or renumbers a block.
+ */
+export function fillNode(nodes: RenderNode[], bodyIndices: number[], photoIndex: number | null): number | null {
+  const inBody = new Set(bodyIndices)
+  const drawn = nodes.filter(
+    (node) => inBody.has(nodeKey(node)) && !(node.kind === 'leaf' && node.index === photoIndex),
+  )
+  if (drawn.length !== 1 || drawn[0].kind !== 'group') return null
+  return nodeKey(drawn[0])
 }

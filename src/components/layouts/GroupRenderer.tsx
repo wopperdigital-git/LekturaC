@@ -26,6 +26,7 @@ export function GroupRenderer({
   node,
   variant,
   accentIndex,
+  fill = false,
 }: {
   node: GroupNode
   variant: VisualStyle
@@ -36,7 +37,16 @@ export function GroupRenderer({
    * small bullet or number disc is not a fill and is not counted.
    */
   accentIndex: number | null
+  /**
+   * True when this group is the only thing in the slide's body zone (`fillNode`). The
+   * arrangement's root then carries `data-fill` and `flex-1`, so it takes the height the
+   * head leaves, and its rows (a column of rows) or cells (a grid, already stretched)
+   * share it. It changes how the arrangement is sized and nothing about what it draws.
+   */
+  fill?: boolean
 }) {
+  const fillAttr = fill ? { 'data-fill': '' } : {}
+  const grow = fill ? ' flex-1' : ''
   const expressive = variant === 'expressive'
   // Every list item is its own element: picked out, edited and removed by itself.
   const itemProps = useItemProps()
@@ -52,7 +62,8 @@ export function GroupRenderer({
       const valueSize = figureSize(wide ? 'h1' : 'h2', 1, 'x'.repeat(longest), wide ? 6 : 5)
       return (
         <div
-          className="grid gap-6"
+          {...fillAttr}
+          className={`grid items-stretch gap-6${grow}`}
           style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
         >
           {node.items.map(({ block, index }) =>
@@ -90,11 +101,11 @@ export function GroupRenderer({
       // vertical accent line with a dot per step when structured.
       if (expressive) {
         return (
-          <ol className="flex flex-col gap-4">
+          <ol {...fillAttr} className={`flex flex-col gap-4${grow}`}>
             {node.items.map((step, i) => (
               <Adjustable key={step.index} index={step.index}>
                 <li
-                  className="flex gap-4 rounded-slide-sm bg-slide-surface p-4"
+                  className={`flex gap-4 rounded-slide-sm bg-slide-surface p-4${grow}`}
                   style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slide-accent text-lg font-extrabold text-slide-accent-foreground">
@@ -115,14 +126,14 @@ export function GroupRenderer({
         )
       }
       return (
-        <ol className="relative flex flex-col gap-6">
+        <ol {...fillAttr} className={`relative flex flex-col gap-6${grow}`}>
           <div
             aria-hidden="true"
             className="absolute inset-y-0 left-[calc(var(--spacing)*1.5)] w-0.5 -translate-x-1/2 bg-gradient-to-b from-slide-accent/45 via-slide-accent-soft/45 to-transparent"
           />
           {node.items.map((step) => (
             <Adjustable key={step.index} index={step.index}>
-              <li className="relative pl-6" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+              <li className={`relative pl-6${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
                 <span className="absolute left-[calc(var(--spacing)*1.5)] top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-slide-accent" />
                 <div className="font-semibold text-slide-accent">
                   <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
@@ -144,13 +155,13 @@ export function GroupRenderer({
       // the slide's layout gives no owner.
       if (expressive) {
         return (
-          <div className="flex flex-col divide-y divide-slide-border">
+          <div {...fillAttr} className={`flex flex-col divide-y divide-slide-border${grow}`}>
             {node.items.map((group) => {
               const featured = group.index === accentIndex
               return (
                 <Adjustable key={group.index} index={group.index}>
                   <div
-                    className="flex flex-col gap-3 py-4"
+                    className={`flex flex-col gap-3 py-4${grow}`}
                     data-accent-owner={featured ? '' : undefined}
                     style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
                   >
@@ -178,7 +189,8 @@ export function GroupRenderer({
       }
       return (
         <div
-          className="grid gap-4"
+          {...fillAttr}
+          className={`grid items-stretch gap-4${grow}`}
           style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
         >
           {node.items.map((group) => {
@@ -221,7 +233,7 @@ export function GroupRenderer({
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <div className="flex flex-wrap gap-3" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+            <div {...fillAttr} className={`flex flex-wrap content-start gap-3${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
                 <div key={i} {...itemProps(list.index, i)} className="flex items-center gap-2 rounded-full bg-slide-accent/10 py-2 pl-2 pr-4">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-xs font-semibold text-slide-accent-foreground">
@@ -238,7 +250,7 @@ export function GroupRenderer({
       }
       return (
         <Adjustable index={list.index}>
-          <div className="grid grid-cols-2 gap-4 @min-[640px]:grid-cols-3" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+          <div {...fillAttr} className={`grid grid-cols-2 items-stretch gap-4 @min-[640px]:grid-cols-3${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
               <div
                 key={i}
@@ -265,9 +277,9 @@ export function GroupRenderer({
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <ol className="flex flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+            <ol {...fillAttr} className={`flex flex-col gap-2${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className="flex items-center gap-4 rounded-slide-sm bg-slide-surface px-4 py-2">
+                <li key={i} {...itemProps(list.index, i)} className={`flex items-center gap-4 rounded-slide-sm bg-slide-surface px-4 py-2${grow}`}>
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-lg font-extrabold text-slide-accent-foreground">
                     {i + 1}
                   </span>
@@ -282,9 +294,9 @@ export function GroupRenderer({
       }
       return (
         <Adjustable index={list.index}>
-          <ol className="flex flex-col divide-y divide-slide-border" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+          <ol {...fillAttr} className={`flex flex-col divide-y divide-slide-border${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
-              <li key={i} {...itemProps(list.index, i)} className="flex items-baseline gap-4 py-3">
+              <li key={i} {...itemProps(list.index, i)} className={`flex items-baseline gap-4 py-3${grow}`}>
                 <span className="shrink-0 text-slide-accent" style={{ fontFamily: SLIDE_HEADING_FONT, fontWeight: 600 }}>
                   {String(i + 1).padStart(2, '0')}
                 </span>
@@ -306,9 +318,9 @@ export function GroupRenderer({
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <ul className="flex flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+            <ul {...fillAttr} className={`flex flex-col gap-2${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className="flex items-center gap-3 rounded-slide-sm bg-slide-surface px-4 py-2">
+                <li key={i} {...itemProps(list.index, i)} className={`flex items-center gap-3 rounded-slide-sm bg-slide-surface px-4 py-2${grow}`}>
                   <CheckMark filled />
                   <span className="text-slide-foreground/90">
                     <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
@@ -321,9 +333,9 @@ export function GroupRenderer({
       }
       return (
         <Adjustable index={list.index}>
-          <ul className="flex flex-col gap-3" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+          <ul {...fillAttr} className={`flex flex-col gap-3${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
-              <li key={i} {...itemProps(list.index, i)} className="flex items-start gap-3">
+              <li key={i} {...itemProps(list.index, i)} className={`flex items-start gap-3${grow}`}>
                 <CheckMark />
                 <span className="text-slide-foreground/90">
                   <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
@@ -342,7 +354,7 @@ export function GroupRenderer({
       if (expressive) {
         return (
           <Adjustable index={list.index}>
-            <ul className="grid grid-cols-2 gap-4" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+            <ul {...fillAttr} className={`grid grid-cols-2 items-stretch gap-4${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
               {list.block.items.map((item, i) => (
                 <li key={i} {...itemProps(list.index, i)} className="rounded-slide-sm border-l-4 border-slide-accent bg-slide-surface p-4">
                   <span className="text-slide-foreground/90">
@@ -356,7 +368,7 @@ export function GroupRenderer({
       }
       return (
         <Adjustable index={list.index}>
-          <ul className="grid grid-cols-2 gap-x-10 gap-y-2" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+          <ul {...fillAttr} className={`grid grid-cols-2 items-stretch gap-x-10 gap-y-2${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
             {list.block.items.map((item, i) => (
               <li key={i} {...itemProps(list.index, i)} className="flex items-start gap-3 border-t border-slide-border pt-3">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-slide-accent" />
@@ -376,11 +388,14 @@ export function GroupRenderer({
       // The figure is accent text in both treatments, never a fill; the expressive
       // rows sit on a surface card and set it heavier.
       return (
-        <div className={expressive ? 'flex flex-col gap-3' : 'flex flex-col divide-y divide-slide-border'}>
+        <div
+          {...fillAttr}
+          className={`${expressive ? 'flex flex-col gap-3' : 'flex flex-col divide-y divide-slide-border'}${grow}`}
+        >
           {node.items.map(({ block, index }) => (
             <Adjustable key={index} index={index}>
               <div
-                className={`flex gap-6 ${expressive ? 'items-center rounded-slide-sm bg-slide-surface p-3' : 'items-baseline py-4'}`}
+                className={`flex gap-6 ${expressive ? 'items-center rounded-slide-sm bg-slide-surface p-3' : 'items-baseline py-4'}${grow}`}
                 style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
               >
                 <div
@@ -407,7 +422,7 @@ export function GroupRenderer({
       // step when structured; numbered cards when expressive.
       const columns = Math.min(node.items.length, 4)
       return (
-        <ol className="grid gap-6" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+        <ol {...fillAttr} className={`grid items-stretch gap-6${grow}`} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
           {node.items.map((step, i) => (
             <Adjustable key={step.index} index={step.index}>
               {expressive ? (
@@ -458,7 +473,8 @@ export function GroupRenderer({
       // columns still line up.
       return (
         <div
-          className="grid gap-x-4"
+          {...fillAttr}
+          className={`grid items-stretch gap-x-4${grow}`}
           style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
         >
           {node.items.map((group) => (
@@ -503,7 +519,7 @@ export function GroupRenderer({
         const [featured, ...rest] = node.items
         const overflow = rest.slice(2)
         return (
-          <div className="flex flex-col gap-3">
+          <div {...fillAttr} className={`flex flex-col gap-3${grow}`}>
             <div className="grid grid-cols-2 gap-3">
               <Adjustable index={featured.index}>
                 <figure className="relative row-span-2 overflow-hidden rounded-slide-sm border border-slide-border">
@@ -542,7 +558,7 @@ export function GroupRenderer({
         )
       }
       return (
-        <div className="grid grid-cols-2 gap-3 @min-[640px]:grid-cols-3">
+        <div {...fillAttr} className={`grid grid-cols-2 gap-3 @min-[640px]:grid-cols-3${grow}`}>
           {node.items.map((img) => (
             <Adjustable key={img.index} index={img.index}>
               <figure className="relative overflow-hidden rounded-slide-sm border border-slide-border">
