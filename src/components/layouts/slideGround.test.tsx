@@ -143,6 +143,15 @@ describe('the ground rules (index.css)', () => {
     }
   })
 
+  it('swaps the accent owner panel from the tint to the surface inside any ground', () => {
+    expect(indexCss).toMatch(/\[data-ground\] \[data-accent-panel\] \{\s*--slide-panel-bg: var\(--slide-surface\);\s*\}/)
+    // The panel's own background reads the variable and falls back to the tint, so a plain slide keeps the tint.
+    const source = readFileSync(new URL('./GroupRenderer.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("'var(--slide-panel-bg, var(--slide-ground-tint))'")
+    // Neither deep nor tint may set the variable itself, or the swap would be a no-op.
+    expect(indexCss.match(/\[data-ground='(?:tint|deep)'\] \{[^}]*\}/g)?.join('') ?? '').not.toContain('--slide-panel-bg')
+  })
+
   it('ignores a picked colour on a deep ground, but only where one was picked', () => {
     const rule = indexCss.split('\n').find((line) => line.startsWith("[data-ground='deep'] :is(")) ?? ''
     for (const part of ["[style^='color:']", "[style*=';color:']", "[style*='; color:']"]) {

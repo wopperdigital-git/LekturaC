@@ -47,23 +47,6 @@ function Surface({ x, y, w, h, r = 3 }: { x: number; y: number; w: number; h: nu
   return <rect x={x} y={y} width={w} height={h} rx={r} fill={INK} opacity={0.07} />
 }
 
-/** A bordered box; `featured` is the accent border and tint. */
-function Outline({ x, y, w, h, featured = false }: { x: number; y: number; w: number; h: number; featured?: boolean }) {
-  return (
-    <rect
-      x={x + 0.5}
-      y={y + 0.5}
-      width={w - 1}
-      height={h - 1}
-      rx={3}
-      fill={featured ? ACCENT : INK}
-      fillOpacity={featured ? 0.12 : 0.05}
-      stroke={featured ? ACCENT : INK}
-      strokeOpacity={featured ? 0.9 : 0.2}
-    />
-  )
-}
-
 function Rule({ x, y, w, h = 0.75, accent = false }: { x: number; y: number; w: number; h?: number; accent?: boolean }) {
   return <rect x={x} y={y} width={w} height={h} fill={accent ? ACCENT : INK} opacity={accent ? 0.9 : 0.18} />
 }
@@ -232,21 +215,20 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'comparison':
-      // Side-by-side cards; the first is featured.
+      // Equal columns: the first group on the tint panel with its heading in accent, the rest bare. A hairline above each item.
       return (
         <>
           <Title />
+          <Surface x={12} y={26} w={66} h={52} />
           {range(2).map((i) => {
             const x = 12 + i * 70
-            const featured = i === 0
             return (
               <g key={i}>
-                <Outline x={x} y={26} w={66} h={52} featured={featured} />
-                {featured ? <Label x={x + 6} y={32} w={28} /> : <Title x={x + 6} y={32} w={28} h={3.5} />}
+                {i === 0 ? <Label x={x + 6} y={32} w={28} /> : <Title x={x + 6} y={32} w={28} h={3.5} />}
                 {range(3).map((j) => (
                   <g key={j}>
-                    <Dot cx={x + 8} cy={45.5 + j * 9} r={1.3} soft={!featured} />
-                    <Line x={x + 12} y={44 + j * 9} w={40 - j * 6} />
+                    <Rule x={x + 6} y={40 + j * 12} w={54} />
+                    <Line x={x + 6} y={44 + j * 12} w={44 - j * 6} />
                   </g>
                 ))}
               </g>
@@ -255,7 +237,7 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'comparisonTable':
-      // Column headings over an accent rule, ruled cells beneath.
+      // Column headings over an accent rule, the first in accent text; a hairline under each cell, no panel.
       return (
         <>
           <Title />
@@ -263,7 +245,7 @@ function structured(layout: LayoutType): ReactNode {
             const x = 12 + i * 70
             return (
               <g key={i}>
-                <Title x={x} y={29} w={30} h={3.5} />
+                {i === 0 ? <Label x={x} y={29} w={30} /> : <Title x={x} y={29} w={30} h={3.5} />}
                 <Rule x={x} y={36} w={66} h={1.5} accent />
                 {range(3).map((j) => (
                   <g key={j}>
@@ -502,20 +484,20 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'comparison':
-      // Stacked, divided rows; the first heading in accent.
+      // Equal columns: the first group on the tint panel with its heading in accent, the rest bare. A small accent square before each item, no rules.
       return (
         <>
           <Title x={12} y={11} />
+          <Surface x={12} y={26} w={66} h={52} />
           {range(2).map((i) => {
-            const y = 27 + i * 26
+            const x = 12 + i * 70
             return (
               <g key={i}>
-                {i > 0 && <Rule x={12} y={y - 3} w={136} />}
-                {i === 0 ? <Label x={12} y={y} w={32} /> : <Title x={12} y={y} w={32} h={3.5} />}
-                {range(2).map((j) => (
+                {i === 0 ? <Label x={x + 6} y={32} w={28} /> : <Title x={x + 6} y={32} w={28} h={3.5} />}
+                {range(3).map((j) => (
                   <g key={j}>
-                    <Dot cx={14} cy={y + 10.5 + j * 7} r={1.3} soft={i > 0} />
-                    <Line x={18} y={y + 9 + j * 7} w={80 - j * 16} />
+                    <rect x={x + 6} y={42.5 + j * 11} width={2.4} height={2.4} fill={ACCENT} />
+                    <Line x={x + 12} y={42 + j * 11} w={40 - j * 6} h={3.5} />
                   </g>
                 ))}
               </g>
@@ -524,29 +506,21 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'comparisonTable':
-      // Only the first header is filled; the others keep the accent rule. Cells sit on surfaces.
+      // The first column on the tint panel with its heading in accent; every heading over an accent rule, a hairline under each cell.
       return (
         <>
           <Title x={12} y={11} />
+          <Surface x={12} y={26} w={66} h={54} />
           {range(2).map((i) => {
             const x = 12 + i * 70
             return (
               <g key={i}>
-                {i === 0 ? (
-                  <>
-                    <rect x={x} y={26} width={66} height={10} rx={2} fill={ACCENT} />
-                    <rect x={x + 4} y={29.5} width={26} height={3} rx={1.5} fill="var(--app-accent-foreground)" opacity={0.9} />
-                  </>
-                ) : (
-                  <>
-                    <Title x={x + 4} y={29.5} w={26} h={3} />
-                    <Rule x={x} y={35} w={66} h={1.5} accent />
-                  </>
-                )}
+                {i === 0 ? <Label x={x + 4} y={29.5} w={26} /> : <Title x={x + 4} y={29.5} w={26} h={3.5} />}
+                <Rule x={x} y={36} w={66} h={1.5} accent />
                 {range(3).map((j) => (
                   <g key={j}>
-                    <Surface x={x} y={37 + j * 13} w={66} h={12} r={0} />
-                    <Line x={x + 4} y={41.5 + j * 13} w={42 - j * 6} />
+                    <Line x={x + 4} y={42 + j * 12} w={42 - j * 6} />
+                    <Rule x={x} y={49 + j * 12} w={66} />
                   </g>
                 ))}
               </g>

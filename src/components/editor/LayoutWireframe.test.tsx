@@ -99,3 +99,39 @@ describe('LayoutWireframe timelines', () => {
     expect(thickness('timelineRow', 'expressive')).toBeGreaterThan(thickness('timelineRow', 'structured'))
   })
 })
+
+/** The comparisons are toned panels and rules: one tint panel for the featured group, no bordered, accent-tinted card. */
+describe('LayoutWireframe comparisons', () => {
+  const panels = (html: string) => html.split('opacity="0.07"').length - 1
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws no bordered or accent-tinted card (%s)', (style) => {
+    for (const layout of ['comparison', 'comparisonTable'] as const) {
+      const html = draw(layout, style)
+      expect(html).not.toContain('fill-opacity')
+      expect(html).not.toContain('stroke')
+      expect(html).not.toContain('<circle')
+    }
+  })
+
+  it('draws one tint panel for the columns in both treatments and one for the table only when expressive', () => {
+    expect(panels(draw('comparison', 'structured'))).toBe(1)
+    expect(panels(draw('comparison', 'expressive'))).toBe(1)
+    expect(panels(draw('comparisonTable', 'structured'))).toBe(0)
+    expect(panels(draw('comparisonTable', 'expressive'))).toBe(1)
+  })
+
+  it('draws a hairline above each structured column item and a square marker before each expressive one', () => {
+    const rules = (style: VisualStyle) => draw('comparison', style).split('height="0.75"').length - 1
+    expect(rules('structured')).toBe(6)
+    expect(rules('expressive')).toBe(0)
+    const squares = (style: VisualStyle) => draw('comparison', style).split('width="2.4"').length - 1
+    expect(squares('structured')).toBe(0)
+    expect(squares('expressive')).toBe(6)
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws an accent rule under each table heading and a hairline under each cell (%s)', (style) => {
+    const html = draw('comparisonTable', style)
+    expect(html.split('height="1.5"').length - 1).toBe(2)
+    expect(html.split('height="0.75"').length - 1).toBe(6)
+  })
+})

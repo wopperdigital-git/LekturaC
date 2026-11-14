@@ -51,11 +51,13 @@ describe('accent is a budget: one filled panel per slide', () => {
     },
   )
 
-  it('fills only the first header of an expressive comparison table', () => {
-    const card = { ...withStyle(CPP_DECK, 'expressive')[4], layout: 'comparisonTable' as const }
+  it.each(['structured', 'expressive'] as const)('marks only the first column of a comparison table (%s)', (style) => {
+    const card = { ...withStyle(CPP_DECK, style)[4], layout: 'comparisonTable' as const }
     const out = renderToStaticMarkup(<LayoutRenderer card={card} />)
     expect(owners(out)).toBe(1)
-    expect((out.match(/bg-slide-accent /g) ?? []).length).toBe(1)
+    // The one panel is a tint, never an accent fill, and only the expressive table draws it.
+    expect(out).not.toMatch(/\bbg-slide-accent(?!\/)/)
+    expect(out.split('data-accent-panel').length - 1).toBe(style === 'expressive' ? 1 : 0)
   })
 
   it('draws the expressive stat hero figure on the one owner panel', () => {

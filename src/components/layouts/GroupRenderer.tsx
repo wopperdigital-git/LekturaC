@@ -64,83 +64,8 @@ export function GroupRenderer({
       return <TimelineColumn items={node.items} expressive={expressive} fill={fill} />
 
     case 'columns':
-      // From ComparisonLayout: stacked rows when expressive, side-by-side cards
-      // when structured. The featured column is the accent owner in both (the
-      // structured card has the accent border and tint, the expressive row the
-      // accent heading) and carries `data-accent-owner`; none is featured when
-      // the slide's layout gives no owner.
-      if (expressive) {
-        return (
-          <div {...fillAttr} className={`flex flex-col divide-y divide-slide-border${grow}`}>
-            {node.items.map((group) => {
-              const featured = group.index === accentIndex
-              return (
-                <Adjustable key={group.index} index={group.index}>
-                  <div
-                    className={`flex flex-col gap-3 py-4${grow}`}
-                    data-accent-owner={featured ? '' : undefined}
-                    style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
-                  >
-                    <div className={`font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
-                      <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
-                    </div>
-                    <ul className="flex flex-col gap-2">
-                      {group.block.items.map((item, j) => (
-                        <li key={j} {...itemProps(group.index, j)} className="flex items-start gap-2 text-slide-foreground/90">
-                          <span
-                            className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                              featured ? 'bg-slide-accent' : 'bg-slide-muted'
-                            }`}
-                          />
-                          <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </Adjustable>
-              )
-            })}
-          </div>
-        )
-      }
-      return (
-        <div
-          {...fillAttr}
-          className={`grid items-stretch gap-4${grow}`}
-          style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
-        >
-          {node.items.map((group) => {
-            const featured = group.index === accentIndex
-            return (
-              <Adjustable key={group.index} index={group.index}>
-                <div
-                  className={`rounded-slide-sm border p-4 ${
-                    featured ? 'border-slide-accent bg-slide-accent/10' : 'border-slide-border bg-slide-surface'
-                  }`}
-                  data-accent-owner={featured ? '' : undefined}
-                  style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
-                >
-                  <div className={`mb-3 font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`}>
-                    <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
-                  </div>
-                  <ul className="flex flex-col gap-2">
-                    {group.block.items.map((item, j) => (
-                      <li key={j} {...itemProps(group.index, j)} className="flex items-start gap-2 text-slide-foreground/90">
-                        <span
-                          className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                            featured ? 'bg-slide-accent' : 'bg-slide-muted'
-                          }`}
-                        />
-                        <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </Adjustable>
-            )
-          })}
-        </div>
-      )
+      // Groups side by side in equal columns, the accent owner's on the tint.
+      return <ComparisonColumns items={node.items} expressive={expressive} fill={fill} accentIndex={accentIndex} itemProps={itemProps} />
 
     case 'chips': {
       // From IconGridLayout. Up to six items are columns of a big numeral over the item's
@@ -181,56 +106,9 @@ export function GroupRenderer({
       // Steps side by side on one track per row: up to five in a row, six or more in two rows.
       return <TimelineRow items={node.items} expressive={expressive} fill={fill} />
 
-    case 'table': {
-      /*
-        Each group is one column of a shared grid, and its cells sit on the
-        parent's rows through `subgrid`, so the nth item of every group lines up
-        even when one wraps onto a second line. Each column is still a single
-        element, which is what lets `Adjustable` wrap it like any other block.
-      */
-      const rows = 1 + Math.max(...node.items.map((group) => group.block.items.length))
-      // The expressive header is filled only for the accent owner. Every other
-      // header takes the structured rule, with the cells' own padding so the
-      // columns still line up.
-      return (
-        <div
-          {...fillAttr}
-          className={`grid items-stretch gap-x-4${grow}`}
-          style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
-        >
-          {node.items.map((group) => (
-            <Adjustable key={group.index} index={group.index}>
-              <div
-                className="grid grid-rows-subgrid"
-                style={{ gridRow: `span ${rows}`, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
-              >
-                <div
-                  className={
-                    expressive && group.index === accentIndex
-                      ? 'rounded-t-slide-sm bg-slide-accent px-3 py-2 font-semibold text-slide-accent-foreground'
-                      : `border-b-2 border-slide-accent font-semibold text-slide-foreground ${expressive ? 'px-3 py-2' : 'pb-2'}`
-                  }
-                  data-accent-owner={expressive && group.index === accentIndex ? '' : undefined}
-                >
-                  <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
-                </div>
-                {group.block.items.map((item, j) => (
-                  <div
-                    key={j}
-                    {...itemProps(group.index, j)}
-                    className={`border-b border-slide-border text-slide-foreground/90 ${
-                      expressive ? 'bg-slide-surface px-3 py-2' : 'py-2'
-                    }`}
-                  >
-                    <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
-                  </div>
-                ))}
-              </div>
-            </Adjustable>
-          ))}
-        </div>
-      )
-    }
+    case 'table':
+      // One column per group on a shared grid, so the nth item of every group lines up.
+      return <ComparisonTable items={node.items} expressive={expressive} fill={fill} accentIndex={accentIndex} itemProps={itemProps} />
 
     case 'gallery': {
       // From GalleryLayout. The expressive mosaic shows a featured image beside
@@ -531,6 +409,191 @@ function CheckMark({ ring, size }: { ring: boolean; size: string }) {
         tick
       )}
     </span>
+  )
+}
+
+/** The groups of a `columns` or `table` comparison, each with its own block index. */
+type ComparisonItems = Extract<GroupNode, { arrangement: 'columns' | 'table' }>['items']
+
+/**
+ * The accent owner's panel: the tint, or the surface on a slide whose ground is already a tint or
+ * deep (`[data-ground] [data-accent-panel]` in `index.css` sets `--slide-panel-bg`).
+ */
+const PANEL_BG = 'var(--slide-panel-bg, var(--slide-ground-tint))'
+
+/** A comparison group's heading: h3, semibold, in accent for the accent owner and the foreground otherwise. */
+const groupHeadingClass = (featured: boolean) => `font-semibold ${featured ? 'text-slide-accent' : 'text-slide-foreground'}`
+const GROUP_HEADING_FONT = { fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h3)' }
+
+/**
+ * Groups side by side in equal columns (stacked below 640px of slide width). The accent owner's
+ * group is drawn on the tint and every other group on the slide's own ground, all with the same
+ * padding so their headings and rows line up; a vertical hairline separates two neighbours that are
+ * both unowned. Items are ruled rows when structured (a hairline above each, the first too, under the
+ * heading) and spaced rows led by a small accent square when expressive, at one size for all the groups'
+ * items together. The rules sit on each group's own element: the `Adjustable` holders are
+ * `display: contents`, so a `divide-x` on the root would put its borders on holders that draw none.
+ * When it fills the body the columns stretch to the zone's height, their rows at the top.
+ */
+function ComparisonColumns({
+  items,
+  expressive,
+  fill,
+  accentIndex,
+  itemProps,
+}: {
+  items: ComparisonItems
+  expressive: boolean
+  fill: boolean
+  accentIndex: number | null
+  itemProps: ItemProps
+}) {
+  const textSize = itemTextSize(items.flatMap(({ block }) => block.items))
+  return (
+    <div
+      {...(fill ? { 'data-fill': '' } : {})}
+      className={`grid @min-[640px]:[grid-template-columns:var(--cmp-cols)]${fill ? ' flex-1' : ''}`}
+      style={
+        {
+          '--cmp-cols': `repeat(${items.length}, minmax(0, 1fr))`,
+          columnGap: SLIDE_GAP.group,
+          rowGap: SLIDE_GAP.group,
+        } as CSSProperties
+      }
+    >
+      {items.map((group, k) => {
+        const featured = group.index === accentIndex
+        const ruled = k > 0 && !featured && items[k - 1].index !== accentIndex
+        return (
+          <Adjustable key={group.index} index={group.index}>
+            <div
+              data-cmp-column=""
+              data-accent-owner={featured ? '' : undefined}
+              data-accent-panel={featured ? '' : undefined}
+              className={`flex min-w-0 flex-col${featured ? ' rounded-slide-sm' : ''}${ruled ? ' @min-[640px]:border-l border-slide-border' : ''}`}
+              style={{
+                fontFamily: SLIDE_BODY_FONT,
+                fontSize: BODY_SIZE,
+                padding: SLIDE_GAP.group,
+                ...(featured ? { background: PANEL_BG } : {}),
+              }}
+            >
+              <div data-group-heading="" className={groupHeadingClass(featured)} style={GROUP_HEADING_FONT}>
+                <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
+              </div>
+              <ul className="flex flex-col" style={{ marginTop: SLIDE_GAP.tight, ...(expressive ? { gap: SLIDE_GAP.tight } : {}) }}>
+                {group.block.items.map((item, j) => (
+                  <li
+                    key={j}
+                    {...itemProps(group.index, j)}
+                    className={`flex min-w-0 items-start${expressive ? '' : ' border-t border-slide-border'}`}
+                    style={expressive ? { gap: SLIDE_GAP.tight } : { paddingBlock: SLIDE_GAP.tight }}
+                  >
+                    {expressive && (
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 bg-slide-accent"
+                        style={{ width: '0.45em', height: '0.45em', fontSize: textSize, marginTop: '0.55em' }}
+                      />
+                    )}
+                    <span
+                      data-item-text=""
+                      className="min-w-0 text-slide-foreground/90"
+                      style={{ fontSize: textSize, ...(expressive ? { fontWeight: 600 } : {}) }}
+                    >
+                      <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </Adjustable>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Each group is one column of a shared grid, and its cells sit on the parent's rows through
+ * `subgrid`, so the nth item of every group lines up even when one wraps onto a second line. Each
+ * column is still a single element, which is what lets `Adjustable` wrap it like any other block. The
+ * header is h3 and semibold over a 2px accent rule, in accent text for the accent owner, whose column
+ * element carries the mark (and, when expressive, the tint panel); each cell is under a hairline.
+ * Expressive columns carry horizontal padding only (so the panel has an edge without the owner's
+ * header sitting lower than the others'). When it fills the body the item rows share the height and
+ * the header row stays its content's height.
+ */
+function ComparisonTable({
+  items,
+  expressive,
+  fill,
+  accentIndex,
+  itemProps,
+}: {
+  items: ComparisonItems
+  expressive: boolean
+  fill: boolean
+  accentIndex: number | null
+  itemProps: ItemProps
+}) {
+  const itemRows = Math.max(...items.map((group) => group.block.items.length))
+  const rows = 1 + itemRows
+  return (
+    <div
+      {...(fill ? { 'data-fill': '' } : {})}
+      className={`grid items-stretch${fill ? ' flex-1' : ''}`}
+      style={{
+        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        columnGap: SLIDE_GAP.group,
+        ...(fill ? { gridTemplateRows: `auto repeat(${itemRows}, minmax(min-content, 1fr))` } : {}),
+      }}
+    >
+      {items.map((group) => {
+        const featured = group.index === accentIndex
+        const panel = expressive && featured
+        return (
+          <Adjustable key={group.index} index={group.index}>
+            <div
+              data-accent-owner={featured ? '' : undefined}
+              data-accent-panel={panel ? '' : undefined}
+              className={`grid min-w-0 grid-rows-subgrid${panel ? ' rounded-slide-sm' : ''}`}
+              style={{
+                gridRow: `span ${rows}`,
+                fontFamily: SLIDE_BODY_FONT,
+                fontSize: BODY_SIZE,
+                ...(expressive ? { paddingInline: SLIDE_GAP.tight } : {}),
+                ...(panel ? { background: PANEL_BG } : {}),
+              }}
+            >
+              <div
+                data-group-heading=""
+                className={`border-b-2 border-slide-accent ${groupHeadingClass(featured)}`}
+                style={{
+                  ...GROUP_HEADING_FONT,
+                  paddingBottom: SLIDE_GAP.tight,
+                  ...(expressive ? { paddingTop: SLIDE_GAP.tight } : {}),
+                }}
+              >
+                <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
+              </div>
+              {group.block.items.map((item, j) => (
+                <div
+                  key={j}
+                  {...itemProps(group.index, j)}
+                  className="border-b border-slide-border text-slide-foreground/90"
+                  style={{ paddingBlock: SLIDE_GAP.tight }}
+                >
+                  <span data-item-text="">
+                    <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Adjustable>
+        )
+      })}
+    </div>
   )
 }
 

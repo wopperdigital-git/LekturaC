@@ -519,6 +519,17 @@ body {
 }
 
 /*
+  The accent owner's panel (a comparison's featured column) is drawn on the tint, which is
+  the slide's own colour on a tinted slide and has no relation to the deep ground's colours, so
+  inside either ground it would not read as a panel. There it takes the surface instead: the
+  panel's own background reads `--slide-panel-bg` with the tint as its fallback. Unlayered, like the rules
+  above, and it is a variable swap, not a prop.
+*/
+[data-ground] [data-accent-panel] {
+  --slide-panel-bg: var(--slide-surface);
+}
+
+/*
   On a deep ground a picked text colour is ignored, like on a photo, but only where one was
   picked: an element or a character span that carries an inline `color`. Character colour marks
   are inline spans (`valueStyle` in `EditableText`) that `Adjustable` never touches, so this

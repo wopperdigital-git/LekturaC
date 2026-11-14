@@ -698,3 +698,242 @@ describe.each(STYLES)('redrawn timelines (%s)', (style) => {
     expect(wide).toContain('align-content:start')
   })
 })
+
+/* Comparisons: side-by-side columns with one toned panel for the accent owner, and a table of ruled cells. */
+
+const COMPARE_IDS = ['g-compare', 'g-compare3', 'g-table']
+
+/** The opening tag of every group or column heading, in document order. */
+const groupHeadingTags = (out: string) => [...out.matchAll(/<div data-group-heading=""[^>]*>/g)].map((m) => m[0])
+/** The words inside every group or column heading, in document order. */
+const groupHeadingWords = (out: string) =>
+  [...out.matchAll(/<div data-group-heading=""[^>]*>(.*?)<\/div>/g)].map((m) => m[1].replace(/<[^>]*>/g, ''))
+/** The opening tag of the element carrying the accent owner mark. */
+const ownerTags = (out: string) => [...out.matchAll(/<div [^>]*data-accent-owner=""[^>]*>/g)].map((m) => m[0])
+/** The opening tag of every column of a comparison: the elements that sit under an `Adjustable`. */
+const columnTags = (out: string) => [...out.matchAll(/<div [^>]*data-cmp-column=""[^>]*>/g)].map((m) => m[0])
+const solidAccent = /\bbg-slide-accent(?!\/)/
+const cmpCard = (layout: LayoutType, groups: number, style: VisualStyle, itemText = 'CELL'): Card => ({
+  id: 'x',
+  orderIndex: 1,
+  layout,
+  visualStyle: style,
+  blocks: [
+    { type: 'heading', text: 'CMPHEAD' },
+    ...Array.from({ length: groups }, (_, g) => ({
+      type: 'comparisonGroup',
+      heading: `GROUP${g}`,
+      items: [0, 1, 2].map((j) => `${itemText}${g}${j}`),
+    })),
+  ] as ContentBlock[],
+})
+const groupsOf = (card: Card) => card.blocks.flatMap((b) => (b.type === 'comparisonGroup' ? [b] : []))
+
+describe.each(STYLES)('redrawn comparisons (%s)', (style) => {
+  const expressive = style === 'expressive'
+  const cards = withStyle(GALLERY_DECK, style)
+  const find = (id: string) => cards.find((c) => c.id === id) as Card
+
+  it.each(COMPARE_IDS)('%s draws no boxed card, no surface, no side tab, no fixed text size and no spacing utility', (id) => {
+    const out = html(find(id))
+    expect(out).not.toMatch(BOXED)
+    expect(out).not.toMatch(SIDE_TAB)
+    expect(out).not.toMatch(FIXED_TEXT_SIZE)
+    expect(out).not.toMatch(SPACING_UTILITY)
+    expect(out).not.toContain('bg-slide-surface')
+    expect(out).not.toContain('divide-')
+  })
+
+  it.each(COMPARE_IDS)('%s has exactly one accent owner', (id) => {
+    const out = html(find(id))
+    expect(ownerTags(out).length).toBe(1)
+    expect(out.split('data-accent-owner').length - 1).toBe(1)
+  })
+
+  it.each(COMPARE_IDS)('%s draws every group heading and item once, in order', (id) => {
+    const out = html(find(id))
+    const groups = groupsOf(find(id))
+    expect(groupHeadingWords(out)).toEqual(groups.map((g) => g.heading))
+    let last = -1
+    // The headings are short words that sit inside other text, so they are checked by the words list above.
+    for (const group of groups) {
+      for (const text of group.items) {
+        expect(out.split(text).length - 1, text).toBe(1)
+        const at = out.indexOf(text)
+        expect(at).toBeGreaterThan(last)
+        last = at
+      }
+    }
+  })
+
+  it.each(COMPARE_IDS)('%s sets every heading at h3 in the heading font, semibold', (id) => {
+    const tags = groupHeadingTags(html(find(id)))
+    expect(tags.length).toBe(groupsOf(find(id)).length)
+    for (const tag of tags) {
+      expect(tag).toContain('font-size:var(--slide-size-h3)')
+      expect(tag).toContain('var(--slide-font-heading)')
+      expect(tag).toContain('font-semibold')
+    }
+  })
+
+  it.each(COMPARE_IDS)('%s sets the owner heading in accent and every other in the foreground', (id) => {
+    groupHeadingTags(html(find(id))).forEach((tag, i) => {
+      if (i === 0) expect(tag).toContain('text-slide-accent')
+      else {
+        expect(tag).toContain('text-slide-foreground')
+        expect(tag).not.toContain('text-slide-accent')
+      }
+    })
+  })
+
+  it('draws a one-group comparison once', () => {
+    for (const layout of ['comparison', 'comparisonTable'] as const) {
+      const out = html(cmpCard(layout, 1, style, 'ONLY'))
+      for (const text of ['GROUP0', 'ONLY00', 'ONLY01', 'ONLY02']) expect(out.split(text).length - 1, text).toBe(1)
+    }
+  })
+
+  describe('columns', () => {
+    it('draws the groups side by side in equal columns from 640px up, in both treatments, with no stacked divider', () => {
+      for (const id of ['g-compare', 'g-compare3']) {
+        const out = html(find(id))
+        const n = groupsOf(find(id)).length
+        const root = out.match(/<div [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+        expect(root).toContain(`repeat(${n}, minmax(0, 1fr))`)
+        expect(root).toContain('@min-[640px]:[grid-template-columns:var(--cmp-cols)]')
+        expect(root).toContain('column-gap:var(--slide-gap-group)')
+        expect(root).not.toContain('flex-col')
+        expect(out).not.toContain('divide-y')
+      }
+    })
+
+    it('puts the same padding on every group, the owner and the others alike, so the headings line up', () => {
+      const cols = columnTags(html(find('g-compare3')))
+      expect(cols.length).toBe(3)
+      for (const tag of cols) expect(tag).toContain('padding:var(--slide-gap-group)')
+    })
+
+    it('draws the accent owner on the tint with rounded corners and no border, and no other group on any ground', () => {
+      const out = html(find('g-compare3'))
+      const [owner] = ownerTags(out)
+      expect(owner).toContain('data-cmp-column=""')
+      expect(owner).toContain('data-accent-panel=""')
+      expect(owner).toContain('background:var(--slide-panel-bg, var(--slide-ground-tint))')
+      expect(owner).toContain('rounded-slide-sm')
+      expect(owner).not.toMatch(/\bborder/)
+      for (const tag of columnTags(out).slice(1)) {
+        expect(tag).not.toContain('background')
+        expect(tag).not.toContain('data-accent-panel')
+        expect(tag).not.toContain('rounded-slide-sm')
+      }
+      expect(out.split('data-accent-panel').length - 1).toBe(1)
+    })
+
+    it('puts a vertical hairline only between two unowned neighbours, on desktop widths only', () => {
+      const cols = columnTags(html(cmpCard('comparison', 4, style)))
+      expect(cols.length).toBe(4)
+      // The owner (first) and the group after it have none; the third and fourth sit beside an unowned neighbour.
+      expect(cols[0]).not.toContain('border-l')
+      expect(cols[1]).not.toContain('border-l')
+      for (const tag of cols.slice(2)) expect(tag).toContain('@min-[640px]:border-l border-slide-border')
+      for (const tag of columnTags(html(find('g-compare')))) expect(tag).not.toContain('border-l')
+    })
+
+    it('sets each structured item under a hairline, including the first, and an expressive one under none', () => {
+      const rows = rowTags(html(find('g-compare3')))
+      expect(rows.length).toBe(9)
+      for (const row of rows) {
+        if (expressive) expect(row).not.toContain('border-t')
+        else expect(row).toContain('border-t border-slide-border')
+      }
+    })
+
+    it('puts a small accent square before each expressive item and no marker when structured', () => {
+      const out = html(find('g-compare3'))
+      const squares = [...out.matchAll(/<span [^>]*aria-hidden="true"[^>]*width:0\.45em[^>]*><\/span>/g)].map((m) => m[0])
+      if (expressive) {
+        expect(squares.length).toBe(9)
+        for (const square of squares) {
+          expect(square).toContain('bg-slide-accent')
+          expect(square).toContain('height:0.45em')
+        }
+        const texts = [...out.matchAll(/<span data-item-text=""[^>]*>/g)].map((m) => m[0])
+        expect(texts.length).toBe(9)
+        for (const tag of texts) expect(tag).toContain('font-weight:600')
+      } else {
+        expect(squares).toEqual([])
+        expect(out).not.toMatch(solidAccent)
+      }
+    })
+
+    it('sets the items at the lead size for a few short items across every group, else the body size', () => {
+      expect(itemTextSizes(html(find('g-compare')))).toEqual(Array(6).fill(LEAD))
+      expect(itemTextSizes(html(find('g-compare3')))).toEqual(Array(9).fill(BODY))
+      expect(itemTextSizes(html(cmpCard('comparison', 2, style, 'x'.repeat(65))))).toEqual(Array(6).fill(BODY))
+      expect(itemTextSizes(html(cmpCard('comparison', 4, style)))).toEqual(Array(12).fill(BODY))
+    })
+
+    it('stretches the columns to the zone height when it fills the body and leaves them their own height otherwise', () => {
+      const root = html(find('g-compare')).match(/<div [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+      expect(root).toMatch(/class="[^"]*\bflex-1\b/)
+      expect(root).not.toContain('align-items')
+      const card = cmpCard('comparison', 2, style)
+      card.blocks.push({ type: 'paragraph', text: 'AFTERCOLUMNS' })
+      expect(html(card)).not.toContain('data-fill')
+    })
+  })
+
+  describe('table', () => {
+    it('draws no solid accent fill anywhere', () => {
+      expect(html(find('g-table'))).not.toMatch(solidAccent)
+    })
+
+    it('keeps one subgrid element per column spanning the header row and every item row', () => {
+      const out = html(find('g-table'))
+      expect(out.split('grid-rows-subgrid').length - 1).toBe(3)
+      expect(out.split('grid-row:span 5').length - 1).toBe(3)
+    })
+
+    it('puts a 2px accent rule under every header and the header text in accent for the owner only', () => {
+      const tags = groupHeadingTags(html(find('g-table')))
+      expect(tags.length).toBe(3)
+      for (const tag of tags) expect(tag).toContain('border-b-2 border-slide-accent')
+      expect(tags[0]).toContain('text-slide-accent')
+      for (const tag of tags.slice(1)) expect(tag).toContain('text-slide-foreground')
+    })
+
+    it('puts a hairline under each cell with a tight vertical padding and no surface', () => {
+      const out = html(find('g-table'))
+      const cells = [...out.matchAll(/<div [^>]*class="[^"]*border-b border-slide-border[^"]*"[^>]*>/g)].map((m) => m[0])
+      expect(cells.length).toBe(12)
+      for (const cell of cells) {
+        expect(cell).toContain('padding-block:var(--slide-gap-tight)')
+        expect(cell).not.toContain('bg-slide-surface')
+      }
+    })
+
+    it('marks the owner column element, with the tint panel only when expressive', () => {
+      const out = html(find('g-table'))
+      const [owner] = ownerTags(out)
+      expect(owner).toContain('grid-rows-subgrid')
+      if (expressive) {
+        expect(owner).toContain('data-accent-panel=""')
+        expect(owner).toContain('background:var(--slide-panel-bg, var(--slide-ground-tint))')
+        expect(owner).toContain('rounded-slide-sm')
+      } else {
+        expect(owner).not.toContain('data-accent-panel')
+        expect(owner).not.toContain('background')
+      }
+      expect(out.split('data-accent-panel').length - 1).toBe(expressive ? 1 : 0)
+    })
+
+    it('shares the height between the item rows and leaves the header row to its content when it fills the body', () => {
+      const root = html(find('g-table')).match(/<div [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+      expect(root).toMatch(/class="[^"]*\bflex-1\b/)
+      expect(root).toContain('grid-template-rows:auto repeat(4, minmax(min-content, 1fr))')
+      const card = cmpCard('comparisonTable', 2, style)
+      card.blocks.push({ type: 'paragraph', text: 'AFTERTABLE' })
+      expect(html(card)).not.toContain('grid-template-rows')
+    })
+  })
+})
