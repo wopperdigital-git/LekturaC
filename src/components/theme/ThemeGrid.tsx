@@ -2,8 +2,8 @@ import { BUILTIN_THEMES, stageColor, type ThemeTokens } from '@/lib/theme-tokens
 
 /**
  * A low-fidelity picture of a theme: its stage, a card on it, and bars standing
- * in for the accent mark, a heading and a subheading — each in the theme's own
- * colour. No words, fonts or backdrop: the picker is for telling palettes apart
+ * in for the accent mark, a heading and a subheading, plus a block of its deep
+ * ground with a bar of its ink, each in the theme's own colour. No words, fonts or backdrop: the picker is for telling palettes apart
  * at a glance, the way the layout picker's wireframes tell arrangements apart,
  * and the slide itself shows the rest the moment a theme is picked.
  *
@@ -21,6 +21,9 @@ function ThemeWireframe({ theme }: { theme: ThemeTokens }) {
       <rect x="24" y="36" width="84" height="9" rx="2" fill={colors.foreground} />
       <rect x="24" y="52" width="60" height="5" rx="2" fill={colors.muted} />
       <rect x="24" y="62" width="44" height="5" rx="2" fill={colors.muted} />
+      {/* The deep ground a title slide is drawn on, with its ink: the theme's second ground. */}
+      <rect x="118" y="22" width="24" height="46" rx="3" fill={colors.deep} data-ground="deep" />
+      <rect x="123" y="31" width="14" height="4" rx="2" fill={colors.deepForeground} data-ground="deep-ink" />
     </svg>
   )
 }

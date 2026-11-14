@@ -85,7 +85,7 @@ export const CHAPTERS: Chapter[] = [
     id: 'themes',
     face: 4,
     tag: '04 / Themes',
-    title: 'Five looks. Light or dark.',
+    title: 'Thirteen looks. Light or dark.',
     body: 'Each theme carries its own type, colour and backdrop. Drag the strip to compare them, then fine-tune the typography and colours.',
     callouts: [],
   },

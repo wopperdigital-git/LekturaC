@@ -646,7 +646,7 @@ describe('fitting the stat, two-column and quote arrangements', () => {
     expect(valueSizes.size).toBe(1)
 
     const labelBoxes = slide.texts.filter(
-      (t) => (t.options as { valign?: string; color?: string }).valign === 'top' && t.options.color === '6f6a78',
+      (t) => (t.options as { valign?: string; color?: string }).valign === 'top' && t.options.color === DEFAULT_THEME.colors.muted.slice(1),
     )
     expect(labelBoxes.length).toBe(6)
     const labelSizes = new Set(labelBoxes.map((t) => (t.options as { fontSize: number }).fontSize))

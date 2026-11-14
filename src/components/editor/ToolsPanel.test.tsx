@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { COLOR_CHOICES, type TextStyle } from '@/engine/textStyle'
-import { DEFAULT_THEME } from '@/lib/theme-tokens'
+import { BUILTIN_THEMES, DEFAULT_THEME } from '@/lib/theme-tokens'
 import { ToolsPanel, type ToolbarLevel } from './ToolsPanel'
 
 /**
@@ -100,6 +100,15 @@ describe('ToolsPanel', () => {
     const html = render(1)
     expect(html).toContain('grid-cols-2')
     expect(html).not.toContain('Exploring Life')
+  })
+
+  // Each tile also shows its theme's deep ground, so the picker reads as two grounds.
+  it("draws each theme's deep ground in its tile", () => {
+    const html = render(1)
+    for (const { colors } of BUILTIN_THEMES) {
+      expect(html).toContain(`fill="${colors.deep}" data-ground="deep"`)
+      expect(html).toContain(`fill="${colors.deepForeground}" data-ground="deep-ink"`)
+    }
   })
 
   // Adding an item moved onto the slide, as a plus under the list. Bringing the

@@ -135,6 +135,12 @@ describe('resolveTheme', () => {
     expect(resolved.name).toBe('Deep Space')
   })
 
+  it('makes Bordo the default theme', () => {
+    expect(DEFAULT_THEME.id).toBe('bordo')
+    expect(DEFAULT_THEME).toBe(BUILTIN_THEMES.find((t) => t.id === 'bordo'))
+    expect(resolveTheme({ id: 'nope' }).id).toBe('bordo')
+  })
+
   it('falls back to the default theme for anything unrecognizable', () => {
     expect(resolveTheme(null)).toBe(DEFAULT_THEME)
     expect(resolveTheme(undefined)).toBe(DEFAULT_THEME)
@@ -149,18 +155,40 @@ function firstFamily(stack: string): string {
 
 const SPACE_THEME_IDS = ['minimal', 'editorial', 'midnight', 'bold', 'sage']
 const NEW_THEME_IDS = ['paper', 'chalk', 'blueprint', 'pop', 'boardroom']
+const WARM_THEME_IDS = ['bordo', 'peacock', 'forest']
 
 describe('built-in themes', () => {
-  it('ships the five space themes first, then paper, chalk, blueprint, pop and boardroom', () => {
-    expect(BUILTIN_THEMES.map((t) => t.id)).toEqual([...SPACE_THEME_IDS, ...NEW_THEME_IDS])
-    expect(BUILTIN_THEMES.map((t) => t.name).slice(5)).toEqual([
-      'Paper',
-      'Chalkboard',
-      'Blueprint',
-      'Pop',
-      'Boardroom',
-    ])
-    expect(new Set(BUILTIN_THEMES.map((t) => t.id)).size).toBe(10)
+  it('ships Bordo, Peacock and Forest first, then the five space themes, then paper, chalk, blueprint, pop and boardroom', () => {
+    expect(BUILTIN_THEMES.map((t) => t.id)).toEqual([...WARM_THEME_IDS, ...SPACE_THEME_IDS, ...NEW_THEME_IDS])
+    expect(BUILTIN_THEMES.map((t) => t.name).slice(0, 3)).toEqual(['Bordo', 'Peacock', 'Forest'])
+    expect(
+      BUILTIN_THEMES.filter((t) => NEW_THEME_IDS.includes(t.id)).map((t) => t.name),
+    ).toEqual(['Paper', 'Chalkboard', 'Blueprint', 'Pop', 'Boardroom'])
+    expect(new Set(BUILTIN_THEMES.map((t) => t.id)).size).toBe(13)
+  })
+
+  // One temperature: each warm theme's grounds and its ink on the deep ground
+  // run red >= green >= blue, so none of them drifts cool.
+  it('keeps the three warm themes on one temperature', () => {
+    const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+    for (const id of WARM_THEME_IDS) {
+      const { colors } = BUILTIN_THEMES.find((t) => t.id === id)!
+      for (const key of ['background', 'tint', 'deepForeground'] as const) {
+        const [r, g, b] = channels(colors[key])
+        expect(r, `${id} ${key} r>=g`).toBeGreaterThanOrEqual(g)
+        expect(g, `${id} ${key} g>=b`).toBeGreaterThanOrEqual(b)
+      }
+    }
+  })
+
+  it('draws the three warm themes in glow only', () => {
+    for (const id of WARM_THEME_IDS) {
+      const { celestial } = BUILTIN_THEMES.find((t) => t.id === id)!
+      expect(celestial.glow, id).toContain('radial-gradient')
+      for (const key of ['stars', 'constellation', 'orbits', 'bodies', 'grid'] as const) {
+        expect(celestial[key], `${id} ${key}`).toBeUndefined()
+      }
+    }
   })
 
   // Text on the slide: body copy and the muted second voice must clear AA
@@ -168,7 +196,7 @@ describe('built-in themes', () => {
   // itself is a mark and a large-heading colour, so it needs the 3:1 of large
   // text rather than 4.5.
   it('keeps the text pairings of every new theme at AA', () => {
-    for (const id of NEW_THEME_IDS) {
+    for (const id of [...WARM_THEME_IDS, ...NEW_THEME_IDS]) {
       const { colors } = BUILTIN_THEMES.find((t) => t.id === id)!
       expect(contrastRatio(colors.foreground, colors.background), `${id} foreground`).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(colors.muted, colors.background), `${id} muted`).toBeGreaterThanOrEqual(4.5)
@@ -201,7 +229,7 @@ describe('built-in themes', () => {
 
   it('gives each new theme its own web font, named by a stack whose first family is the real face', () => {
     const faces = Object.fromEntries(
-      NEW_THEME_IDS.map((id) => {
+      [...WARM_THEME_IDS, ...NEW_THEME_IDS].map((id) => {
         const { typography } = BUILTIN_THEMES.find((t) => t.id === id)!
         return [id, [firstFamily(typography.headingFont), firstFamily(typography.bodyFont)]]
       }),
@@ -209,6 +237,9 @@ describe('built-in themes', () => {
     // The PPTX export names a face by the first family, so it has to be the
     // family PowerPoint knows, not Fontsource's "... Variable" alias.
     expect(faces).toEqual({
+      bordo: ['Bricolage Grotesque', 'Hanken Grotesk'],
+      peacock: ['Source Serif 4', 'Hanken Grotesk'],
+      forest: ['Hanken Grotesk', 'Hanken Grotesk'],
       paper: ['Source Serif 4', 'Source Serif 4'],
       chalk: ['Caveat', 'Atkinson Hyperlegible'],
       blueprint: ['JetBrains Mono', 'Atkinson Hyperlegible'],
@@ -233,7 +264,7 @@ describe('built-in themes', () => {
       'Bricolage Grotesque': '@fontsource-variable/bricolage-grotesque',
       'Hanken Grotesk': '@fontsource-variable/hanken-grotesk',
     }
-    for (const id of NEW_THEME_IDS) {
+    for (const id of [...WARM_THEME_IDS, ...NEW_THEME_IDS]) {
       const { typography } = BUILTIN_THEMES.find((t) => t.id === id)!
       for (const stack of [typography.headingFont, typography.bodyFont]) {
         const family = firstFamily(stack)

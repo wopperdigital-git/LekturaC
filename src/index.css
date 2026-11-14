@@ -130,29 +130,29 @@
   --app-shadow: 0 2px 4px rgba(17, 17, 17, 0.06), 0 12px 30px rgba(17, 17, 17, 0.14);
 
   /* Slide theme fallback — used only where no ThemeProvider scope overrides it.
-     Mirrors the Moonlight preset (the default theme) so an unscoped slide never
+     Mirrors the Bordo preset (the default theme) so an unscoped slide never
      renders in a palette no theme actually uses. */
-  --slide-background: #f7f5fa;
-  --slide-canvas-background: #ebe6f2;
-  --slide-foreground: #17151c;
-  --slide-accent: #6c63ff;
-  --slide-accent-foreground: #0d0a14;
-  --slide-accent-soft: #a9a3ff;
-  --slide-muted: #6f6a78;
-  --slide-border: #e4e0ee;
-  --slide-surface: #fdfcff;
+  --slide-background: #f4e3cc;
+  --slide-canvas-background: #efd7b7;
+  --slide-foreground: #3a0d12;
+  --slide-accent: #12403c;
+  --slide-accent-foreground: #f7e6cf;
+  --slide-accent-soft: #2f6b62;
+  --slide-muted: #6f4a44;
+  --slide-border: #dcc6a8;
+  --slide-surface: #f9ecd9;
   /* Ground colours (deep for a title slide, tint for a quote or stat hero); ThemeProvider replaces them per deck. */
-  --slide-ground-deep: #2a2550;
-  --slide-ground-deep-foreground: #f1eefb;
-  --slide-ground-deep-muted: #b9b6cb;
-  --slide-ground-tint: #f0edf7;
+  --slide-ground-deep: #651620;
+  --slide-ground-deep-foreground: #f7e6cf;
+  --slide-ground-deep-muted: #ceac9e;
+  --slide-ground-tint: #ecd5b8;
   /* The celestial backdrop layer; ThemeProvider replaces it per deck. */
   --slide-backdrop-image: none;
-  --slide-font-heading: 'Inter', system-ui, sans-serif;
-  --slide-font-body: 'Inter', system-ui, sans-serif;
-  --slide-radius: 1rem;
-  --slide-radius-sm: 0.5rem;
-  --slide-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 12px 28px rgba(0, 0, 0, 0.08);
+  --slide-font-heading: 'Bricolage Grotesque', 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  --slide-font-body: 'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif;
+  --slide-radius: 0.5rem;
+  --slide-radius-sm: 0.3rem;
+  --slide-shadow: none;
   /* Kept in sync with CARD_SHADOW in lib/theme-tokens.ts. */
   --slide-card-shadow:
     0 0 0 1px color-mix(in srgb, var(--slide-border) 45%, transparent), 0 1px 2px rgba(0, 0, 0, 0.05),
@@ -161,8 +161,8 @@
   --slide-size-h2: 2.5rem;
   --slide-size-h3: 1.625rem;
   --slide-size-body: 1.25rem;
-  --slide-line-height: 1.55;
-  --slide-letter-spacing: 0;
+  --slide-line-height: 1.5;
+  --slide-letter-spacing: -0.2px;
   /* The gap scale (SLIDE_GAP in lib/theme-tokens.ts). */
   --slide-gap-tight: 0.5rem;
   --slide-gap-group: 1.25rem;

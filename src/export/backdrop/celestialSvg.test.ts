@@ -98,7 +98,7 @@ describe('celestialSvg', () => {
   // top here, matching what `SlideBackdrop` shows on screen — otherwise every
   // overlap's blended colour comes out wrong.
   it('paints glow layers back to front, so layer 0 ends up on top as it does in CSS', () => {
-    const svg = celestialSvg(DEFAULT_THEME) // Moonlight: 3 glow layers
+    const svg = celestialSvg(BUILTIN_THEMES.find((t) => t.id === 'minimal')!) // Moonlight: 3 glow layers
     const at0 = svg.indexOf('fill="url(#glow0)"')
     const at1 = svg.indexOf('fill="url(#glow1)"')
     const at2 = svg.indexOf('fill="url(#glow2)"')

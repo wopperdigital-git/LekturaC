@@ -275,7 +275,8 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
 }
 
 /*
-  Ten themes: five celestial, then five that are not (see below). Each celestial one owns a distinct palette, a distinct atmospheric
+  Thirteen themes: three warm ones first (Bordo, the default, then Peacock and Forest: a cream or sand page, a deep
+  ground for titles, glow-only backdrops), five celestial, then five that are not (see below). Each celestial one owns a distinct palette, a distinct atmospheric
   treatment, and its own two or three decorative elements — the restraint is the
   design. A theme carrying stars *and* constellations *and* orbits *and* a grid
   would stop being distinguishable from its neighbours.
@@ -284,6 +285,105 @@ export function applyTheme(theme: ThemeTokens, root: HTMLElement) {
   stays crisp at any card size and never competes with the text on top of it.
 */
 export const BUILTIN_THEMES: ThemeTokens[] = [
+  {
+    id: 'bordo',
+    name: 'Bordo',
+    typography: {
+      headingFont: "'Bricolage Grotesque', 'Bricolage Grotesque Variable', system-ui, sans-serif",
+      bodyFont: "'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif",
+      scale: [3.5, 2.5, 1.625, 1.25],
+      lineHeight: 1.5,
+      letterSpacing: -0.2,
+    },
+    colors: {
+      background: '#f4e3cc',
+      foreground: '#3a0d12',
+      accent: '#12403c',
+      accentForeground: '#f7e6cf',
+      accentSoft: '#2f6b62',
+      muted: '#6f4a44',
+      border: '#dcc6a8',
+      surface: '#f9ecd9',
+      deep: '#651620',
+      deepForeground: '#f7e6cf',
+      tint: '#ecd5b8',
+    },
+    spacing: { unit: 0.28 },
+    shape: { radius: 0.5, radiusSm: 0.3, shadow: 'none' },
+    // Warm cream with a wine-red ground for titles and a deep green accent. Glow only: a breath of wine at the top right, green at the bottom left.
+    celestial: {
+      glow: [
+        'radial-gradient(110% 70% at 85% -10%, rgba(101,22,32,0.10) 0%, rgba(101,22,32,0) 60%)',
+        'radial-gradient(90% 60% at 6% 108%, rgba(18,64,60,0.08) 0%, rgba(18,64,60,0) 62%)',
+      ].join(', '),
+    },
+  },
+  {
+    id: 'peacock',
+    name: 'Peacock',
+    typography: {
+      headingFont: "'Source Serif 4', 'Source Serif 4 Variable', Georgia, serif",
+      bodyFont: "'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif",
+      scale: [3.5, 2.5, 1.625, 1.25],
+      lineHeight: 1.55,
+      letterSpacing: 0,
+    },
+    colors: {
+      background: '#eadfc8',
+      foreground: '#1c2b2c',
+      accent: '#6b3a1e',
+      accentForeground: '#f1e7d2',
+      accentSoft: '#8a5a3a',
+      muted: '#4f5a56',
+      border: '#d3c5a6',
+      surface: '#f1e8d5',
+      deep: '#0f4a4f',
+      deepForeground: '#f1e7d2',
+      tint: '#dfd1b3',
+    },
+    spacing: { unit: 0.28 },
+    shape: { radius: 0.5, radiusSm: 0.3, shadow: 'none' },
+    // Sand paper with a deep teal ground for titles and a copper accent. Glow only: teal at the top right, copper at the bottom left.
+    celestial: {
+      glow: [
+        'radial-gradient(110% 70% at 85% -10%, rgba(15,74,79,0.10) 0%, rgba(15,74,79,0) 60%)',
+        'radial-gradient(90% 60% at 6% 108%, rgba(107,58,30,0.08) 0%, rgba(107,58,30,0) 62%)',
+      ].join(', '),
+    },
+  },
+  {
+    id: 'forest',
+    name: 'Forest',
+    typography: {
+      headingFont: "'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif",
+      bodyFont: "'Hanken Grotesk', 'Hanken Grotesk Variable', system-ui, sans-serif",
+      scale: [3.5, 2.5, 1.625, 1.25],
+      lineHeight: 1.5,
+      letterSpacing: -0.1,
+    },
+    colors: {
+      background: '#f1e4cb',
+      foreground: '#2b1d18',
+      accent: '#6e1a22',
+      accentForeground: '#f4e8d0',
+      accentSoft: '#8f3a40',
+      muted: '#66574c',
+      border: '#d9c8a8',
+      surface: '#f7ecd8',
+      deep: '#2c3b26',
+      deepForeground: '#f4e8d0',
+      tint: '#e6d6b8',
+    },
+    spacing: { unit: 0.28 },
+    shape: { radius: 0.5, radiusSm: 0.3, shadow: 'none' },
+    // Parchment with a moss-green ground for titles and a brick-red accent. Glow only: moss at the top right, brick at the bottom left.
+    celestial: {
+      glow: [
+        'radial-gradient(110% 70% at 85% -10%, rgba(44,59,38,0.12) 0%, rgba(44,59,38,0) 60%)',
+        'radial-gradient(90% 60% at 6% 108%, rgba(110,26,34,0.07) 0%, rgba(110,26,34,0) 62%)',
+      ].join(', '),
+    },
+  },
   {
     id: 'minimal',
     name: 'Moonlight',
@@ -732,7 +832,8 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
   },
 ]
 
-export const DEFAULT_THEME = BUILTIN_THEMES[0]
+/** Bordo, found by id so the order of the list can change without moving the default. */
+export const DEFAULT_THEME: ThemeTokens = BUILTIN_THEMES.find((t) => t.id === 'bordo')!
 
 /**
  * Resolves a theme loaded from storage back to its current preset definition.
