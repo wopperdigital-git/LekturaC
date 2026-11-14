@@ -41,7 +41,21 @@ export function SlideFrame({
    * that index out of `body`; without it the frame leaves out the card's lone photo
    * (`slotsOf().aside`), which is none when the card holds two or more.
    */
-  aside?: { node: ReactNode; side: 'left' | 'right'; width: 'half' | 'wide'; index?: number }
+  aside?: {
+    node: ReactNode
+    side: 'left' | 'right'
+    width: 'half' | 'wide'
+    index?: number
+    /**
+     * The photo reaches the slide's edge on its own side, its top and its bottom from the
+     * 640px container width up: the cell takes negative margins of `--slide-pad` (the
+     * surface's own padding, the variable `BackgroundPhoto` insets by) and stretches with
+     * the row, so it fills the padding and the surface's `overflow-clip` trims it to the
+     * slide. The text column and the gap are untouched, and below 640px the photo stays
+     * stacked inside the padding. `data-bleed` names the side whenever this is set.
+     */
+    bleed?: boolean
+  }
 }): ReactElement {
   const slots = slotsOf(blocks)
   const claim = slots.claim !== null ? blocks[slots.claim] : null
@@ -88,8 +102,22 @@ export function SlideFrame({
       : aside.side === 'left'
         ? '@min-[640px]:grid-cols-[3fr_2fr]'
         : '@min-[640px]:grid-cols-[2fr_3fr]'
+  // Full literals so Tailwind sees each class. The row's height still comes from the text
+  // column (the aside stretches with it and the photo inside is out of flow), so a tall
+  // slide grows and the photo grows with it.
+  const bleedClass = aside.bleed
+    ? `@min-[640px]:self-stretch @min-[640px]:[margin-block:calc(-1*var(--slide-pad,0px))] ${
+        aside.side === 'left'
+          ? '@min-[640px]:[margin-left:calc(-1*var(--slide-pad,0px))]'
+          : '@min-[640px]:[margin-right:calc(-1*var(--slide-pad,0px))]'
+      }`
+    : ''
   const photo = (
-    <div data-slot="aside" className="min-w-0">
+    <div
+      data-slot="aside"
+      data-bleed={aside.bleed ? aside.side : undefined}
+      className={`min-w-0 ${bleedClass}`.trim()}
+    >
       {aside.node}
     </div>
   )

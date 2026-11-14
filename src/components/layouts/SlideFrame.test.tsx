@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card, ContentBlock } from '@/engine/contentBlocks'
 import { CPP_DECK, withStyle } from '@/engine/fixtures/cppDeck'
+import { GALLERY_DECK } from '@/engine/fixtures/galleryDeck'
 import { LayoutRenderer } from './LayoutRenderer'
 import { SlideFrame } from './SlideFrame'
 
@@ -222,5 +223,122 @@ describe('SlideFrame used directly', () => {
       </SlideFrame>,
     )
     expect(out).toContain('data-body-indices="2,3"')
+  })
+})
+
+describe('the photo frames bleed to the slide edge', () => {
+  const split = GALLERY_DECK.find((card) => card.id === 'g-split-photo') as Card
+  const focus = GALLERY_DECK.find((card) => card.id === 'g-image') as Card
+  const count = (out: string, mark: string) => out.split(mark).length - 1
+  const asideTag = (out: string) => out.match(/<div[^>]*data-slot="aside"[^>]*>/)?.[0] ?? ''
+  const imgTag = (out: string) => out.match(/<img[^>]*>/)?.[0] ?? ''
+  // The class tokens the aside cell carries to reach the slide's top, bottom and outer edge.
+  const PAD = 'calc(-1*var(--slide-pad,0px))'
+  const BLOCK_MARGIN = `@min-[640px]:[margin-block:${PAD}]`
+  const SIDE_MARGIN = {
+    left: `@min-[640px]:[margin-left:${PAD}]`,
+    right: `@min-[640px]:[margin-right:${PAD}]`,
+  }
+
+  describe.each(['structured', 'expressive'] as const)('(%s)', (style) => {
+    const cases = [
+      ['standardSplit at an even position', { ...split, visualStyle: style, orderIndex: 4 }, 'right'],
+      ['standardSplit at an odd position', { ...split, visualStyle: style, orderIndex: 5 }, 'left'],
+      ['imageFocus', { ...focus, visualStyle: style, orderIndex: 4 }, 'left'],
+    ] as const
+
+    it.each(cases)('%s: the aside names its side and reaches the edge on it, the top and the bottom', (_name, card, side) => {
+      const tag = asideTag(html(card as Card))
+      expect(tag).toContain(`data-bleed="${side}"`)
+      expect(tag).toContain(BLOCK_MARGIN)
+      expect(tag).toContain(SIDE_MARGIN[side])
+      expect(tag).not.toContain(SIDE_MARGIN[side === 'left' ? 'right' : 'left'])
+      // It stretches with the row and sets no height of its own, so the slide can still grow.
+      expect(tag).toContain('@min-[640px]:self-stretch')
+      expect(tag).not.toMatch(/overflow-hidden|max-h|min-h|h-\[|style="[^"]*height/)
+    })
+
+    it.each(cases)('%s: the photo fills its cell with no aspect ratio, border or radius from 640px up', (_name, card) => {
+      const out = html(card as Card)
+      const img = imgTag(out)
+      expect(count(out, '<img')).toBe(1)
+      expect(img).toContain('object-cover')
+      expect(img).toContain('@min-[640px]:h-full')
+      expect(img).toContain('@min-[640px]:aspect-auto')
+      expect(img).not.toMatch(/@min-\[640px\]:aspect-\[/)
+      const figure = out.match(/<figure[^>]*>/)?.[0] ?? ''
+      expect(figure).toContain('@min-[640px]:h-full')
+      expect(figure).toContain('@min-[640px]:border-0')
+      expect(figure).toContain('@min-[640px]:rounded-none')
+      // Stacked below 640px it keeps today's shape.
+      expect(img).toContain('aspect-[4/3]')
+    })
+
+    it.each(cases)('%s: every block is drawn once and the credit stays inside the figure', (_name, card) => {
+      const credited = {
+        ...(card as Card),
+        blocks: (card as Card).blocks.map((block) =>
+          block.type === 'image'
+            ? { ...block, credit: { name: 'Ada Lovelace', url: 'https://example.test', source: 'pexels' as const } }
+            : block,
+        ),
+      } as Card
+      const out = html(credited)
+      for (const block of credited.blocks) {
+        if (block.type === 'heading' || block.type === 'paragraph') expect(count(out, block.text), block.text).toBe(1)
+      }
+      expect(count(out, '<img')).toBe(1)
+      expect(count(out, 'data-photo-credit')).toBe(1)
+      const figure = out.slice(out.indexOf('<figure'), out.indexOf('</figure>'))
+      expect(figure).toContain('data-photo-credit')
+    })
+  })
+
+  it('draws the expressive image focus with no accent outline from 640px up, and keeps it stacked', () => {
+    const img = imgTag(html({ ...focus, visualStyle: 'expressive' }))
+    expect(img).toContain('outline-4')
+    expect(img).toContain('@min-[640px]:outline-0')
+    expect(imgTag(html({ ...focus, visualStyle: 'structured' }))).not.toContain('outline')
+  })
+
+  it('leaves a second photo in the body, unbled', () => {
+    const two = { ...split, blocks: [...split.blocks, { type: 'image', url: 'https://example.test/SECOND.png' }] } as Card
+    const out = html(two)
+    expect(count(out, 'src="https://example.test/SECOND.png"')).toBe(1)
+    expect(count(out, '@min-[640px]:absolute')).toBe(1)
+    expect(count(out, 'data-bleed')).toBe(1)
+  })
+
+  const plainBlocks: ContentBlock[] = [
+    { type: 'heading', text: 'PLAINCLAIM' },
+    { type: 'image', url: 'https://example.test/PLAIN.png' },
+  ]
+
+  it('names no side on a frame used without bleed, and adds no margins or stretch', () => {
+    const out = renderToStaticMarkup(
+      <SlideFrame blocks={plainBlocks} variant="structured" aside={{ node: <i>ASIDEPHOTO</i>, side: 'right', width: 'half' }}>
+        {() => <span>BODYZONE</span>}
+      </SlideFrame>,
+    )
+    expect(out).not.toContain('data-bleed')
+    expect(out).not.toContain('margin-block')
+    expect(out).not.toContain('self-stretch')
+  })
+
+  it('names its side on a frame used directly with bleed', () => {
+    for (const side of ['left', 'right'] as const) {
+      const out = renderToStaticMarkup(
+        <SlideFrame blocks={plainBlocks} variant="structured" aside={{ node: <i>ASIDEPHOTO</i>, side, width: 'half', bleed: true }}>
+          {() => <span>BODYZONE</span>}
+        </SlideFrame>,
+      )
+      expect(out).toContain(`data-bleed="${side}"`)
+    }
+  })
+
+  it('draws a photo that does not bleed exactly as before', () => {
+    const out = html({ ...CPP_DECK[6], layout: 'gallery' } as Card)
+    expect(out).not.toContain('@min-[640px]:aspect-auto')
+    expect(out).not.toContain('data-bleed')
   })
 })

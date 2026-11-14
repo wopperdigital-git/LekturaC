@@ -82,6 +82,22 @@ function Picture({ x, y, w, h }: { x: number; y: number; w: number; h: number })
   )
 }
 
+/**
+ * A photo that bleeds: it reaches the tile's top, bottom and outer edge (the frame's
+ * `bleed`), so it is square and unbordered, a flat block with the same small mountain.
+ * `data-wire-photo` names it for the test that pins the bleed.
+ */
+function BleedPicture({ x, w }: { x: number; w: number }) {
+  const cx = x + w / 2
+  return (
+    <g>
+      <rect data-wire-photo="" x={x} y={0} width={w} height={90} fill={INK} opacity={0.12} />
+      <path d={`M${cx - 7} 49l4.5-5.5 3 3.5 2.5-2.5 4.5 4.5z`} fill={INK} opacity={0.22} />
+      <circle cx={cx + 4} cy={37} r={1.6} fill={INK} opacity={0.22} />
+    </g>
+  )
+}
+
 /** A figure on its own accent panel, with its label in accent-foreground ink. */
 function FigurePanel({ x, y, w, h, labelW = 0.55 }: { x: number; y: number; w: number; h: number; labelW?: number }) {
   return (
@@ -115,21 +131,21 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'imageFocus':
-      // The picture takes about three fifths on the left; the heading tops the text column beside it, then the caption.
+      // The picture bleeds off the left, top and bottom edges, about three fifths wide; the heading tops the text column beside it, then the caption.
       return (
         <>
-          <Picture x={12} y={14} w={90} h={62} />
+          <BleedPicture x={0} w={100} />
           <Title x={110} y={14} w={38} />
           {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={28 + i * 8} w={w} />)}
         </>
       )
     case 'standardSplit':
-      // Text on one half, the heading at its top, the picture on the other (the side alternates down the deck; the first slide's is drawn).
+      // Text on one half, the heading at its top, the picture bleeding off the other half's top, bottom and outer edge (the side alternates down the deck; the first slide's is drawn).
       return (
         <>
           <Title y={14} w={58} />
           {[62, 56, 60, 40].map((w, i) => <Line key={i} x={12} y={28 + i * 8} w={w} />)}
-          <Picture x={84} y={14} w={64} h={62} />
+          <BleedPicture x={84} w={76} />
         </>
       )
     case 'statHero':
@@ -387,22 +403,21 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'imageFocus':
-      // The picture, accent-framed, about three fifths on the left; the heading tops the text column beside it, then the caption.
+      // The picture bleeds off the left, top and bottom edges, about three fifths wide, with no frame of its own (the accent outline is only the stacked photo's); the heading tops the text column beside it, then the caption.
       return (
         <>
-          <Picture x={12} y={14} w={90} h={62} />
-          <rect x={15} y={17} width={84} height={56} rx={1.5} fill="none" stroke={ACCENT} strokeWidth={2} />
+          <BleedPicture x={0} w={100} />
           <Title x={110} y={14} w={38} />
           {[38, 34, 36, 24].map((w, i) => <Line key={i} x={110} y={30 + i * 8} w={w} />)}
         </>
       )
     case 'standardSplit':
-      // The lead heading at the top of the text on one half, the picture on the other.
+      // The lead heading at the top of the text on one half, the picture bleeding off the other half's top, bottom and outer edge.
       return (
         <>
           <Title x={12} y={14} w={60} />
           {[60, 54, 58, 38].map((w, i) => <Line key={i} x={12} y={30 + i * 8} w={w} />)}
-          <Picture x={84} y={14} w={64} h={62} />
+          <BleedPicture x={84} w={76} />
         </>
       )
     case 'statHero':

@@ -10,8 +10,10 @@ import { SlideFrame } from './SlideFrame'
  *
  * The aside is the card's FIRST image, named by index so the frame keeps it out of
  * the body even when the card holds two; any other block, a second image included, is
- * drawn by `BlockRenderer` in the body, so nothing on the card goes missing. Expressive
- * frames the photo in an accent outline.
+ * drawn by `BlockRenderer` in the body, so nothing on the card goes missing. From 640px up
+ * the photo bleeds to the slide's left, top and bottom edges (the frame's `bleed`) and
+ * draws no frame of its own; below it, expressive frames the stacked photo in an accent
+ * outline.
  */
 export function ImageFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const photo = blocksOfTypeIndexed(blocks, 'image')[0]
@@ -28,12 +30,14 @@ export function ImageFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; 
                 <BlockRenderer
                   block={photo.block}
                   index={photo.index}
-                  photoClass={`aspect-[4/3] ${expressive ? 'outline-4 -outline-offset-4 outline-slide-accent' : ''}`}
+                  photoClass={`aspect-[4/3] ${expressive ? 'outline-4 -outline-offset-4 outline-slide-accent @min-[640px]:outline-0' : ''}`}
+                  bleed
                 />
               ),
               side: 'left',
               width: 'wide',
               index: photo.index,
+              bleed: true,
             }
           : undefined
       }

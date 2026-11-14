@@ -29,6 +29,34 @@ describe('LayoutWireframe grounds', () => {
   })
 })
 
+/** The photo layouts draw their photo reaching the tile's top, bottom and outer edge, as the slide does. */
+describe('LayoutWireframe bled photos', () => {
+  const photoRect = (html: string) => {
+    const tag = html.match(/<rect data-wire-photo=""[^>]*>/)?.[0] ?? ''
+    const num = (name: string) => Number(tag.match(new RegExp(` ${name}="([0-9.]+)"`))?.[1])
+    return { tag, x: num('x'), y: num('y'), width: num('width'), height: num('height') }
+  }
+
+  it.each<VisualStyle>(['structured', 'expressive'])('reaches the top and bottom, and the outer edge on its side (%s)', (style) => {
+    for (const [layout, side] of [['imageFocus', 'left'], ['standardSplit', 'right']] as const) {
+      const rect = photoRect(draw(layout, style))
+      expect(rect.tag, layout).not.toBe('')
+      expect(rect.y, layout).toBe(0)
+      expect(rect.height, layout).toBe(90)
+      if (side === 'left') expect(rect.x, layout).toBe(0)
+      else expect(rect.x + rect.width, layout).toBe(160)
+    }
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws no frame or rounded corners on the photo (%s)', (style) => {
+    for (const layout of ['imageFocus', 'standardSplit'] as const) {
+      const html = draw(layout, style)
+      expect(photoRect(html).tag).not.toContain('rx=')
+      expect(html).not.toContain('stroke')
+    }
+  })
+})
+
 /** The list arrangements are numerals, ticks and rules: no surface panel and no bordered tile. */
 describe('LayoutWireframe lists', () => {
   it.each<VisualStyle>(['structured', 'expressive'])('draws no surface or bordered tile for a list (%s)', (style) => {

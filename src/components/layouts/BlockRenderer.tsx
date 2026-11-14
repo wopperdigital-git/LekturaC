@@ -22,6 +22,7 @@ export function BlockRenderer({
   index,
   variant,
   photoClass,
+  bleed,
   lead,
 }: {
   block: ContentBlock
@@ -31,6 +32,12 @@ export function BlockRenderer({
   /** Only a photo reads it: how it is cropped and framed (an aspect ratio, a ring). */
   photoClass?: string
   /**
+   * Only a photo reads it: it fills the cell it is drawn in from the slide's 640px width
+   * up, square, with no border and no aspect ratio (`SlideFrame`'s bled aside). Below 640px
+   * it is drawn as ever.
+   */
+  bleed?: boolean
+  /**
    * Only a paragraph reads it: the sentence right after the slide's claim, drawn larger and
    * a little softer than body text, with no measure cap (the head zone caps its width).
    */
@@ -38,7 +45,14 @@ export function BlockRenderer({
 }) {
   return (
     <Adjustable index={index}>
-      <BlockBody block={block} index={index} variant={variant} photoClass={photoClass} lead={lead} />
+      <BlockBody
+        block={block}
+        index={index}
+        variant={variant}
+        photoClass={photoClass}
+        bleed={bleed}
+        lead={lead}
+      />
     </Adjustable>
   )
 }
@@ -92,12 +106,14 @@ function BlockBody({
   index,
   variant,
   photoClass,
+  bleed,
   lead,
 }: {
   block: ContentBlock
   index: number
   variant?: VisualStyle
   photoClass?: string
+  bleed?: boolean
   lead?: boolean
 }) {
   const itemProps = useItemProps()
@@ -152,7 +168,7 @@ function BlockBody({
         />
       )
     case 'image':
-      return <PhotoFigure block={block} className={photoClass} />
+      return <PhotoFigure block={block} className={photoClass} bleed={bleed} />
     case 'quote':
       return (
         <blockquote
@@ -201,17 +217,38 @@ function BlockBody({
  * `Adjustable` around it measures, so the credit travels with the picture and is
  * not an element of its own. `className` crops and frames the picture (the
  * default keeps its own shape).
+ *
+ * `bleed` (the frame's bled aside) makes it the cell's own height from the slide's 640px
+ * width up: the figure is `h-full`, square and unbordered (the surface's own corner radius
+ * trims the outer corners), and the picture is taken out of flow (`absolute inset-0`) with
+ * no aspect ratio, so it fills the cell without its natural height ever setting the row's;
+ * the slide can still grow past 16:9 and the photo grows with it. The aspect ratio the
+ * caller passes still shapes the stacked photo below 640px.
  */
 function PhotoFigure({
   block,
   className = '',
+  bleed = false,
 }: {
   block: Extract<ContentBlock, { type: 'image' }>
   className?: string
+  bleed?: boolean
 }) {
+  const figure = bleed
+    ? ' @min-[640px]:h-full @min-[640px]:rounded-none @min-[640px]:border-0'
+    : ''
+  const picture = bleed
+    ? ' @min-[640px]:absolute @min-[640px]:inset-0 @min-[640px]:h-full @min-[640px]:aspect-auto'
+    : ''
   return (
-    <figure className="relative w-full overflow-hidden rounded-slide-sm border border-slide-border">
-      <img src={block.url} alt={block.alt ?? ''} className={`block w-full object-cover ${className}`} />
+    <figure
+      className={`relative w-full overflow-hidden rounded-slide-sm border border-slide-border${figure}`}
+    >
+      <img
+        src={block.url}
+        alt={block.alt ?? ''}
+        className={`block w-full object-cover ${className}${picture}`}
+      />
       <PhotoCredit credit={block.credit} />
     </figure>
   )

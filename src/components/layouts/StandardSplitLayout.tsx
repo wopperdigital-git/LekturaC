@@ -7,7 +7,8 @@ import { SlideFrame } from './SlideFrame'
  * Text on one half, the photo on the other, on the slide frame: the claim and lead
  * head the text column, the photo is the frame's aside. The photo's side alternates
  * down the deck (the right on the first slide, the left on the next), so neighbouring
- * splits do not look alike; stacked below the slide's 640px.
+ * splits do not look alike; stacked below the slide's 640px. From 640px up the photo
+ * bleeds to the slide's edge on its side (the frame's `bleed`).
  *
  * The aside is the card's FIRST image, named by index so the frame keeps it out of
  * the body even when the card holds two. A second image stays in the body and is drawn
@@ -34,11 +35,12 @@ export function StandardSplitLayout({
         photo
           ? {
               node: (
-                <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[4/3]" />
+                <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[4/3]" bleed />
               ),
               side: photoOnLeft ? 'left' : 'right',
               width: 'half',
               index: photo.index,
+              bleed: true,
             }
           : undefined
       }
