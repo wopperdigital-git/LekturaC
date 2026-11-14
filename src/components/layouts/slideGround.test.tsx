@@ -111,6 +111,21 @@ describe('every surface passes its ground', () => {
       expect(grounds, path).toBe(surfaces)
     }
   })
+
+  // `groundOf(card)` alone reads the first-card rule off `orderIndex`, while a surface draws its layout
+  // with the flag its caller holds; the two must come from the same signal.
+  it('hands groundOf the first-card flag the layout is drawn with, in every surface', () => {
+    const drawing = sources.filter((path) => readFileSync(path, 'utf8').includes('<SlideSurface'))
+    for (const path of drawing) {
+      const source = readFileSync(path, 'utf8')
+      const surfaces = source.match(/<SlideSurface/g)?.length ?? 0
+      const withFlag = source.match(/groundOf\(\s*[\w.]+\s*,\s*\{\s*isFirstCard/g)?.length ?? 0
+      const calls = source.match(/groundOf\(/g)?.length ?? 0
+      expect(calls, path).toBeGreaterThanOrEqual(1)
+      expect(withFlag, path).toBe(calls)
+      expect(withFlag, path).toBeGreaterThanOrEqual(surfaces > 0 ? 1 : 0)
+    }
+  })
 })
 
 /*

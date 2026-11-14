@@ -79,6 +79,24 @@ describe('ToolsPanel', () => {
     expect(at('>Fill<')).toBeLessThan(at('Theme</h3>'))
   })
 
+  // A colour picked on a deep-ground slide is ignored there, so the bar must not offer one.
+  it('disables the Fill bar with its reason when the slide is on a deep ground', () => {
+    const reason = "Title slides use the theme's colours"
+    const html = render(2, {}, { fillDisabledReason: reason })
+    const trigger = html.match(/<button[^>]*aria-label="Fill colour[^"]*"[^>]*>/)?.[0] ?? ''
+    expect(trigger).toContain('disabled=""')
+    const escaped = reason.replace("'", '&#x27;')
+    expect(trigger).toContain(`title="${escaped}"`)
+    expect(html).toContain(`>${escaped}</p>`)
+  })
+
+  it('keeps the Fill bar enabled, with no reason, otherwise', () => {
+    const html = render(2)
+    const trigger = html.match(/<button[^>]*aria-label="Fill colour[^"]*"[^>]*>/)?.[0] ?? ''
+    expect(trigger).not.toContain('disabled=""')
+    expect(html).not.toContain('Title slides use the theme')
+  })
+
   // Figma's Fill row has a remove button only once there is a fill; with none, a
   // remove button would be a control that does nothing.
   it('offers Remove fill only when a colour is set', () => {

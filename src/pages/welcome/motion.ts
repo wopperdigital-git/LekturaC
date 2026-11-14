@@ -354,8 +354,8 @@ function initThemeStrip(root: HTMLElement, reduce: boolean): () => void {
   const step = () => (cards[1]?.offsetLeft ?? 0) - (cards[0]?.offsetLeft ?? 0)
   const centreOn = (card: HTMLElement) => clampX(viewport.clientWidth / 2 - (card.offsetLeft + card.offsetWidth / 2))
 
-  // start with the middle card centred
-  gsap.set(track, { x: centreOn(cards[Math.floor(cards.length / 2)]) })
+  // start with the second card centred, so the first (the default theme) is still in view beside it
+  gsap.set(track, { x: centreOn(cards[Math.min(1, cards.length - 1)]) })
   pose()
 
   const [drag] = Draggable.create(track, {

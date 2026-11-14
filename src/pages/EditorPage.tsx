@@ -22,6 +22,7 @@ import { EditorToolbar } from '@/components/editor/EditorToolbar'
 import type { PenPopover } from '@/components/editor/PenPopover'
 import type { ShapePopover } from '@/components/editor/ShapePopover'
 import { DEFAULT_TOOL, type EditorTool } from '@/engine/editorTool'
+import { groundOf } from '@/engine/composition'
 import { DEFAULT_GRID, type EditorGrid } from '@/components/editor/gridContext'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { ModeTabs } from '@/components/editor/ModeTabs'
@@ -827,6 +828,12 @@ export function EditorPage() {
         : scope.kind === 'card'
           ? 'this slide'
           : 'whole deck'
+  // A card on a deep ground ignores every picked text colour, so the Fill bar says so at
+  // card, element and character scope. The first-card flag is the one the canvas draws with.
+  const fillDisabledReason =
+    selectedCard && groundOf(selectedCard, { isFirstCard: selectedIndex === 0 }) === 'deep'
+      ? "Title slides use the theme's colours"
+      : undefined
   const markState = {
     bold: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'bold'),
     italic: hasTextSelection && hasMarkThroughout(activeInline?.marks ?? [], textRange!, 'italic'),
@@ -1468,6 +1475,7 @@ export function EditorPage() {
                 }}
                 theme={store.theme}
                 onThemeChange={store.setTheme}
+                fillDisabledReason={fillDisabledReason}
                 tab={panelTab}
                 // The slide the editor is on: the selected one, else the outline's active
                 // one (the same rule the pen uses). No stepper — the canvas is the viewer.

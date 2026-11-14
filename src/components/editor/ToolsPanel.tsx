@@ -97,6 +97,7 @@ export function ToolsPanel({
   onThemeChange,
   tab = 'design',
   narrationTab,
+  fillDisabledReason,
 }: {
   level: ToolbarLevel
   /** Plain words for what the text tools are writing to right now. */
@@ -129,6 +130,12 @@ export function ToolsPanel({
    * abort a generation in flight. With none, there is no Narration tab.
    */
   narrationTab?: ReactNode
+  /**
+   * Why the Fill bar is off, when it is: a card on a deep ground ignores every picked
+   * text colour (a title slide uses the theme's own), so the bar says so instead of
+   * writing a colour that cannot show. Absent = enabled. Deck scope never sets it.
+   */
+  fillDisabledReason?: string
 }) {
   /*
     Font, size and colour act on the narrowest thing selected. With characters
@@ -305,7 +312,8 @@ export function ToolsPanel({
             )
           }
         >
-          <FillPicker value={activeColor} onChange={setColor} />
+          <FillPicker value={activeColor} onChange={setColor} disabledReason={fillDisabledReason} />
+          {fillDisabledReason && <p className="mt-1.5 text-[11px] text-app-muted">{fillDisabledReason}</p>}
         </Section>
 
         <Section title="Theme" icon={<BrushIcon />}>
@@ -674,11 +682,15 @@ function FontRow({
 function FillPicker({
   value,
   onChange,
+  disabledReason,
 }: {
   value: string
   onChange: (color: string | null) => void
+  /** Set when the bar is off: it is a plain disabled button whose tooltip is the reason. */
+  disabledReason?: string
 }) {
-  const [open, setOpen] = useState(false)
+  const [pressed, setOpen] = useState(false)
+  const open = pressed && !disabledReason
   const trigger = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
   const place = useFloatingMenu(open, () => setOpen(false), trigger, menu)
@@ -693,9 +705,10 @@ function FillPicker({
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        disabled={disabledReason !== undefined}
         aria-label={`Fill colour — ${label}`}
-        title={`Fill colour — ${label}`}
-        className={`${FIELD} w-full cursor-pointer gap-2 px-1.5 ${FOCUS_RING} ${
+        title={disabledReason ?? `Fill colour — ${label}`}
+        className={`${FIELD} w-full cursor-pointer gap-2 px-1.5 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING} ${
           open ? 'bg-app-background ring-1 ring-app-foreground' : ''
         }`}
       >

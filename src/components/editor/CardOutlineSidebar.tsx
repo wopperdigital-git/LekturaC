@@ -113,7 +113,7 @@ function CardThumbnail({
           {/* Same merged style as the canvas, so a Level 2 edit shows up in the
               rail immediately rather than only on the big card. */}
           <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
-            <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={groundOf(card)}>
+            <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={groundOf(card, { isFirstCard: index === 0 })}>
               <SlideBody card={card}>
                 <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
               </SlideBody>

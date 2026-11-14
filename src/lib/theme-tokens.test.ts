@@ -82,6 +82,13 @@ describe('ground tokens', () => {
     expect(mixHex('#102030', '#304050', 0.5)).toBe('#203040')
   })
 
+  /*
+    A deep ground should read as a different ground from the page behind the slide. These two
+    dark themes are still short of 1.3:1 (Deep Space 1.19, Solar Flare 1.17); recorded here, not
+    exempted silently, until their deep colours are reworked. Fixing one means removing its id.
+  */
+  const KNOWN_CLOSE = ['midnight', 'bold']
+
   it('gives every theme a deep ground, its ink and a tint that text can be read on', () => {
     for (const { id, colors } of BUILTIN_THEMES) {
       expect(contrastRatio(colors.deepForeground, colors.deep), `${id} deep ink`).toBeGreaterThanOrEqual(7)
@@ -90,7 +97,17 @@ describe('ground tokens', () => {
       expect(contrastRatio(colors.muted, colors.tint), `${id} tint muted`).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(colors.accent, colors.tint), `${id} tint accent`).toBeGreaterThanOrEqual(3)
       expect(colors.deep, `${id} deep differs from background`).not.toBe(colors.background)
+      if (!KNOWN_CLOSE.includes(id)) {
+        expect(contrastRatio(colors.deep, colors.background), `${id} deep apart from its page`).toBeGreaterThanOrEqual(1.3)
+      }
       expect(colors.tint, `${id} tint differs from background`).not.toBe(colors.background)
+    }
+  })
+
+  it('keeps KNOWN_CLOSE honest: each id is a theme that is still short of the floor', () => {
+    for (const id of KNOWN_CLOSE) {
+      const colors = BUILTIN_THEMES.find((t) => t.id === id)!.colors
+      expect(contrastRatio(colors.deep, colors.background), id).toBeLessThan(1.3)
     }
   })
 
@@ -116,7 +133,9 @@ describe('ground tokens', () => {
 
   it('hands a stored theme without ground colours the current preset', () => {
     const stored = { id: 'paper', colors: { background: '#f6f1e7' } }
-    expect(resolveTheme(stored).colors.deep).toMatch(/^#[0-9a-f]{6}$/)
+    const paper = BUILTIN_THEMES.find((t) => t.id === 'paper')!.colors
+    const { deep, deepForeground, tint } = resolveTheme(stored).colors
+    expect({ deep, deepForeground, tint }).toEqual({ deep: paper.deep, deepForeground: paper.deepForeground, tint: paper.tint })
   })
 })
 
