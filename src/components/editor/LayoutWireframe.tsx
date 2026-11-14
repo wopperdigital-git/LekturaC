@@ -277,25 +277,25 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'iconGrid':
-      // Bordered tiles, each with a numbered accent disc.
+      // Columns under a hairline: a big accent numeral over a line of text. No box.
       return (
         <>
           <Title />
-          {range(6).map((i) => {
-            const x = 12 + (i % 3) * 46
-            const y = 25 + Math.floor(i / 3) * 29
+          {range(3).map((i) => {
+            const x = 12 + i * 47
             return (
               <g key={i}>
-                <Outline x={x} y={y} w={43} h={26} />
-                <Dot cx={x + 8} cy={y + 8} r={3.5} />
-                <Line x={x + 5} y={y + 16} w={30} />
+                <Rule x={x} y={29} w={42} />
+                <Figure x={x} y={35} w={16} h={10} />
+                <Line x={x} y={52} w={36} />
+                <Line x={x} y={59} w={26} />
               </g>
             )
           })}
         </>
       )
     case 'numberedList':
-      // Divided rows, a zero-padded accent number before each.
+      // Ruled rows: a big accent numeral in its own column, the text beside it.
       return (
         <>
           <Title />
@@ -303,32 +303,33 @@ function structured(layout: LayoutType): ReactNode {
             const y = 28 + i * 13
             return (
               <g key={i}>
-                {i > 0 && <Rule x={12} y={y - 4} w={136} />}
-                <Label x={12} y={y} w={8} />
-                <Line x={26} y={y + 0.25} w={[96, 82, 104, 70][i]} />
+                {i > 0 && <Rule x={12} y={y - 3} w={136} />}
+                <Label x={12} y={y} w={12} h={6} />
+                <Line x={36} y={y + 1.5} w={[96, 82, 104, 70][i]} />
               </g>
             )
           })}
         </>
       )
     case 'checklist':
-      // A plain accent tick per row.
+      // Ruled rows: a plain accent tick in the numeral's column, the text beside it.
       return (
         <>
           <Title />
           {range(4).map((i) => {
-            const y = 28 + i * 12
+            const y = 28 + i * 13
             return (
               <g key={i}>
-                <Tick x={12} y={y - 1} />
-                <Line x={24} y={y} w={[90, 76, 98, 64][i]} />
+                {i > 0 && <Rule x={12} y={y - 3} w={136} />}
+                <Tick x={13} y={y - 0.5} />
+                <Line x={36} y={y + 1.5} w={[90, 76, 98, 64][i]} />
               </g>
             )
           })}
         </>
       )
     case 'splitList':
-      // Two columns of cells, each under a thin rule, a square accent bullet.
+      // Two columns of ruled rows, a small square accent marker before each.
       return (
         <>
           <Title />
@@ -338,8 +339,8 @@ function structured(layout: LayoutType): ReactNode {
             return (
               <g key={i}>
                 <Rule x={x} y={y} w={64} />
-                <rect x={x} y={y + 5} width={2} height={2} fill={ACCENT} />
-                <Line x={x + 6} y={y + 4.5} w={44 - (i % 3) * 8} />
+                <rect x={x} y={y + 6.5} width={3} height={3} fill={ACCENT} />
+                <Line x={x + 10} y={y + 6.5} w={44 - (i % 3) * 8} />
               </g>
             )
           })}
@@ -555,82 +556,67 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'iconGrid':
-      // Wrapping pills tinted with the accent, a numbered disc in each.
-      return (
-        <>
-          <Title x={12} y={11} />
-          {[
-            [12, 28, 52],
-            [68, 28, 44],
-            [116, 28, 32],
-            [12, 43, 40],
-            [56, 43, 58],
-            [12, 58, 48],
-          ].map(([x, y, w], i) => (
-            <g key={i}>
-              <rect x={x} y={y} width={w} height={11} rx={5.5} fill={ACCENT} opacity={0.14} />
-              <Dot cx={x + 5.5} cy={y + 5.5} r={3.5} />
-              <Line x={x + 12} y={y + 4} w={w - 17} />
-            </g>
-          ))}
-        </>
-      )
-    case 'numberedList':
-      // Numbered cards.
+      // Columns of a big accent numeral over a line of text, no rule and no box.
       return (
         <>
           <Title x={12} y={11} />
           {range(3).map((i) => {
-            const y = 25 + i * 18
+            const x = 12 + i * 47
             return (
               <g key={i}>
-                <Surface x={12} y={y} w={136} h={15} />
-                <Dot cx={21} cy={y + 7.5} r={5} />
-                <Line x={30} y={y + 6} w={[96, 82, 104][i]} />
+                <Figure x={x} y={30} w={20} h={12} />
+                <Line x={x} y={50} w={38} h={3.5} />
+                <Line x={x} y={57} w={28} />
+              </g>
+            )
+          })}
+        </>
+      )
+    case 'numberedList':
+      // Rows: a big accent numeral, the text beside it, only space between rows. No box.
+      return (
+        <>
+          <Title x={12} y={11} />
+          {range(4).map((i) => {
+            const y = 26 + i * 14
+            return (
+              <g key={i}>
+                <Figure x={12} y={y} w={14} h={9} />
+                <Line x={38} y={y + 3} w={[96, 82, 104, 70][i]} h={3.5} />
               </g>
             )
           })}
         </>
       )
     case 'checklist':
-      // Cards with a filled accent check.
+      // Rows: an accent tick in an unfilled ring, the text beside it. No box.
       return (
         <>
           <Title x={12} y={11} />
-          {range(3).map((i) => {
-            const y = 25 + i * 18
+          {range(4).map((i) => {
+            const y = 26 + i * 14
             return (
               <g key={i}>
-                <Surface x={12} y={y} w={136} h={15} />
-                <Dot cx={21} cy={y + 7.5} r={5} />
-                <path
-                  d={`M18.8 ${y + 7.6}l1.5 1.5 3-3.3`}
-                  fill="none"
-                  stroke="var(--app-accent-foreground)"
-                  strokeWidth={1.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <Line x={30} y={y + 6} w={[90, 76, 98][i]} />
+                <circle cx={18} cy={y + 4.5} r={4.5} fill="none" stroke={ACCENT} strokeWidth={1.2} />
+                <Tick x={15} y={y + 2.2} />
+                <Line x={34} y={y + 3} w={[90, 76, 98, 64][i]} h={3.5} />
               </g>
             )
           })}
         </>
       )
     case 'splitList':
-      // Two columns of cards with an accent left edge.
+      // Two columns of rows, an accent numeral before each, only space between rows.
       return (
         <>
           <Title x={12} y={11} />
-          {range(4).map((i) => {
+          {range(6).map((i) => {
             const x = 12 + (i % 2) * 70
-            const y = 26 + Math.floor(i / 2) * 25
+            const y = 27 + Math.floor(i / 2) * 18
             return (
               <g key={i}>
-                <Surface x={x} y={y} w={66} h={21} />
-                <rect x={x} y={y} width={2.5} height={21} rx={1} fill={ACCENT} />
-                <Line x={x + 8} y={y + 7} w={44 - i * 4} />
-                <Line x={x + 8} y={y + 12} w={30} />
+                <Label x={x} y={y + 1} w={8} h={5} />
+                <Line x={x + 14} y={y + 2} w={44 - (i % 3) * 8} />
               </g>
             )
           })}

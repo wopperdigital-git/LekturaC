@@ -28,3 +28,16 @@ describe('LayoutWireframe grounds', () => {
     }
   })
 })
+
+/** The list arrangements are numerals, ticks and rules: no surface panel and no bordered tile. */
+describe('LayoutWireframe lists', () => {
+  it.each<VisualStyle>(['structured', 'expressive'])('draws no surface or bordered tile for a list (%s)', (style) => {
+    for (const layout of ['iconGrid', 'numberedList', 'checklist', 'splitList'] as const) {
+      const html = draw(layout, style)
+      expect(html).not.toContain('opacity="0.07"')
+      expect(html).not.toContain('fill-opacity')
+      // No accent disc behind a numeral: the only circle is the expressive checklist's unfilled ring.
+      if (layout !== 'checklist') expect(html).not.toContain('<circle')
+    }
+  })
+})

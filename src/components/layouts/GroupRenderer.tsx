@@ -1,7 +1,9 @@
+import type { CSSProperties } from 'react'
+import { itemStep } from '@/engine/composition'
 import type { VisualStyle } from '@/engine/contentBlocks'
 import type { GroupNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
-import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
+import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
 import { StatBlockView } from './BlockRenderer'
@@ -227,159 +229,33 @@ export function GroupRenderer({
       )
 
     case 'chips': {
-      // From IconGridLayout: pill chips when expressive, numbered tiles when
-      // structured. A list group always holds exactly one list.
+      // From IconGridLayout. Up to six items are columns of a big numeral over the item's
+      // text; seven or more are too many columns to read, so they are drawn as numbered rows.
+      // A list group always holds exactly one list.
       const [list] = node.items
-      if (expressive) {
-        return (
-          <Adjustable index={list.index}>
-            <div {...fillAttr} className={`flex flex-wrap content-start gap-3${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-              {list.block.items.map((item, i) => (
-                <div key={i} {...itemProps(list.index, i)} className="flex items-center gap-2 rounded-full bg-slide-accent/10 py-2 pl-2 pr-4">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-xs font-semibold text-slide-accent-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="text-slide-foreground/90">
-                    <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Adjustable>
-        )
+      if (list.block.items.length > MAX_CHIP_COLUMNS) {
+        return <RuledRows list={list} kind="numbered" expressive={expressive} fill={fill} itemProps={itemProps} />
       }
-      return (
-        <Adjustable index={list.index}>
-          <div {...fillAttr} className={`grid grid-cols-2 items-stretch gap-4 @min-[640px]:grid-cols-3${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-            {list.block.items.map((item, i) => (
-              <div
-                key={i}
-                {...itemProps(list.index, i)}
-                className="flex flex-col items-start gap-2 rounded-slide-sm border border-slide-border bg-slide-surface p-4"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slide-accent text-sm font-semibold text-slide-accent-foreground">
-                  {i + 1}
-                </span>
-                <span className="text-slide-foreground/90">
-                  <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                </span>
-              </div>
-            ))}
-          </div>
-        </Adjustable>
-      )
+      return <NumeralColumns list={list} expressive={expressive} fill={fill} itemProps={itemProps} />
     }
 
     case 'numbered': {
-      // From NumberedListLayout: numbered cards when expressive, divided rows
-      // with zero-padded numbers when structured.
+      // From NumberedListLayout: ruled rows with the numeral as the graphic.
       const [list] = node.items
-      if (expressive) {
-        return (
-          <Adjustable index={list.index}>
-            <ol {...fillAttr} className={`flex flex-col gap-2${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-              {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className={`flex items-center gap-4 rounded-slide-sm bg-slide-surface px-4 py-2${grow}`}>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slide-accent to-slide-accent-soft text-lg font-extrabold text-slide-accent-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="text-slide-foreground/90">
-                    <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </Adjustable>
-        )
-      }
-      return (
-        <Adjustable index={list.index}>
-          <ol {...fillAttr} className={`flex flex-col divide-y divide-slide-border${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-            {list.block.items.map((item, i) => (
-              <li key={i} {...itemProps(list.index, i)} className={`flex items-baseline gap-4 py-3${grow}`}>
-                <span className="shrink-0 text-slide-accent" style={{ fontFamily: SLIDE_HEADING_FONT, fontWeight: 600 }}>
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-                <span className="text-slide-foreground/90">
-                  <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                </span>
-              </li>
-            ))}
-          </ol>
-        </Adjustable>
-      )
+      return <RuledRows list={list} kind="numbered" expressive={expressive} fill={fill} itemProps={itemProps} />
     }
 
     case 'checklist': {
-      // A list drawn as things to tick off: a plain check per row when
-      // structured, a filled check on a card when expressive. Reached only by
-      // choosing it — the classifier never awards it.
+      // A list drawn as things to tick off: the numbered rows with a tick for the numeral.
+      // Reached only by choosing it, the classifier never awards it.
       const [list] = node.items
-      if (expressive) {
-        return (
-          <Adjustable index={list.index}>
-            <ul {...fillAttr} className={`flex flex-col gap-2${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-              {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className={`flex items-center gap-3 rounded-slide-sm bg-slide-surface px-4 py-2${grow}`}>
-                  <CheckMark filled />
-                  <span className="text-slide-foreground/90">
-                    <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Adjustable>
-        )
-      }
-      return (
-        <Adjustable index={list.index}>
-          <ul {...fillAttr} className={`flex flex-col gap-3${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-            {list.block.items.map((item, i) => (
-              <li key={i} {...itemProps(list.index, i)} className={`flex items-start gap-3${grow}`}>
-                <CheckMark />
-                <span className="text-slide-foreground/90">
-                  <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Adjustable>
-      )
+      return <RuledRows list={list} kind="checklist" expressive={expressive} fill={fill} itemProps={itemProps} />
     }
 
     case 'split': {
-      // Two columns of items: ruled cells when structured, accent-edged cards
-      // when expressive. Suits a longer list that would otherwise run tall.
+      // Two columns of ruled rows. Suits a longer list that would otherwise run tall.
       const [list] = node.items
-      if (expressive) {
-        return (
-          <Adjustable index={list.index}>
-            <ul {...fillAttr} className={`grid grid-cols-2 items-stretch gap-4${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-              {list.block.items.map((item, i) => (
-                <li key={i} {...itemProps(list.index, i)} className="rounded-slide-sm border-l-4 border-slide-accent bg-slide-surface p-4">
-                  <span className="text-slide-foreground/90">
-                    <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Adjustable>
-        )
-      }
-      return (
-        <Adjustable index={list.index}>
-          <ul {...fillAttr} className={`grid grid-cols-2 items-stretch gap-x-10 gap-y-2${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-            {list.block.items.map((item, i) => (
-              <li key={i} {...itemProps(list.index, i)} className="flex items-start gap-3 border-t border-slide-border pt-3">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-slide-accent" />
-                <span className="text-slide-foreground/90">
-                  <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Adjustable>
-      )
+      return <RuledRows list={list} kind="split" expressive={expressive} fill={fill} itemProps={itemProps} />
     }
 
     case 'statRows':
@@ -581,8 +457,200 @@ export function GroupRenderer({
   }
 }
 
-/** A tick, plain or on a filled disc. Decorative: the item's own text carries the meaning. */
-function CheckMark({ filled = false }: { filled?: boolean }) {
+
+/** The item props a layout spreads per item: `useItemProps()`'s return value. */
+type ItemProps = ReturnType<typeof useItemProps>
+/** A list group's one list: its block index and its items. */
+type ListNode = { index: number; block: { items: string[] } }
+
+/** Most items drawn as columns of numerals; more fall back to numbered rows. */
+const MAX_CHIP_COLUMNS = 6
+/** Most items a numbered list draws in one column; more flow into two. */
+const MAX_SINGLE_COLUMN_ITEMS = 6
+
+/** `01`, `02`, ... The numerals are decoration, drawn beside the item, never part of its text. */
+const numeralText = (i: number) => String(i + 1).padStart(2, '0')
+
+/** The size of a list's item text: the lead size for a few short items, the body size otherwise. */
+const itemTextSize = (items: string[]) => (itemStep(items) === 'roomy' ? SLIDE_SIZE.lead : BODY_SIZE)
+
+function Numeral({
+  i,
+  size,
+  expressive,
+  width,
+}: {
+  i: number
+  size: string
+  expressive: boolean
+  width?: string
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className="shrink-0 text-slide-accent"
+      style={{
+        fontFamily: SLIDE_HEADING_FONT,
+        fontSize: size,
+        fontWeight: expressive ? 800 : 600,
+        lineHeight: 1,
+        ...(width ? { width } : {}),
+      }}
+    >
+      {numeralText(i)}
+    </span>
+  )
+}
+
+/**
+ * Up to six items as columns, each a big accent numeral over the item's text: one row of
+ * equal columns for up to four, three columns in two rows for five or six. A column is
+ * under a hairline when structured and bare when expressive. When it fills the body the
+ * columns stretch to the zone's height with their content at the top.
+ */
+function NumeralColumns({
+  list,
+  expressive,
+  fill,
+  itemProps,
+}: {
+  list: ListNode
+  expressive: boolean
+  fill: boolean
+  itemProps: ItemProps
+}) {
+  const items = list.block.items
+  const columns = Math.max(1, items.length <= 4 ? items.length : 3)
+  const textSize = itemTextSize(items)
+  return (
+    <Adjustable index={list.index}>
+      <ol
+        {...(fill ? { 'data-fill': '' } : {})}
+        className={`grid${fill ? ' flex-1' : ''}`}
+        style={{
+          fontFamily: SLIDE_BODY_FONT,
+          fontSize: BODY_SIZE,
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gap: SLIDE_GAP.section,
+          ...(fill ? { gridAutoRows: 'minmax(min-content, 1fr)' } : {}),
+        }}
+      >
+        {items.map((item, i) => (
+          <li
+            key={i}
+            {...itemProps(list.index, i)}
+            className={`flex min-w-0 flex-col${expressive ? '' : ' border-t border-slide-border'}`}
+            style={{ gap: SLIDE_GAP.tight, ...(expressive ? {} : { paddingTop: SLIDE_GAP.tight }) }}
+          >
+            <Numeral
+              i={i}
+              size={expressive ? 'calc(var(--slide-size-h1) * 1.25)' : 'var(--slide-size-h1)'}
+              expressive={expressive}
+            />
+            <span
+              className="min-w-0 text-slide-foreground/90"
+              style={{ fontSize: textSize, ...(expressive ? { fontWeight: 600 } : {}) }}
+            >
+              <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Adjustable>
+  )
+}
+
+/**
+ * The list arrangements built from ruled rows: a mark (numeral, tick or square) in a fixed
+ * column, the item's text beside it, centred in the row. Structured rows are separated by
+ * a hairline, expressive ones by `SLIDE_GAP.tight` of space alone. `numbered` past six items
+ * and `split` are two columns of rows (`numbered` flows down the first column then the
+ * second from 640px of slide width up, one column below it; `split` reads across). When it
+ * fills the body the rows share the zone's height.
+ */
+function RuledRows({
+  list,
+  kind,
+  expressive,
+  fill,
+  itemProps,
+}: {
+  list: ListNode
+  kind: 'numbered' | 'checklist' | 'split'
+  expressive: boolean
+  fill: boolean
+  itemProps: ItemProps
+}) {
+  const items = list.block.items
+  const textSize = itemTextSize(items)
+  const long = kind === 'numbered' && items.length > MAX_SINGLE_COLUMN_ITEMS
+  const grid = long || kind === 'split'
+  const Tag = kind === 'numbered' ? 'ol' : 'ul'
+  const rows = Math.ceil(items.length / 2)
+  const rowSize = fill ? 'minmax(min-content, 1fr)' : 'auto'
+
+  const mark = (i: number) => {
+    if (kind === 'numbered') {
+      const size = long ? 'var(--slide-size-h3)' : expressive ? 'var(--slide-size-h1)' : 'var(--slide-size-h2)'
+      return <Numeral i={i} size={size} expressive={expressive} width="3.5em" />
+    }
+    if (kind === 'split') {
+      if (expressive) return <Numeral i={i} size="var(--slide-size-h3)" expressive width="2.5em" />
+      return (
+        <span aria-hidden="true" className="flex shrink-0 items-center" style={{ width: '1.5em', fontSize: textSize }}>
+          <span className="block bg-slide-accent" style={{ width: '0.5em', height: '0.5em' }} />
+        </span>
+      )
+    }
+    return <CheckMark ring={expressive} size={textSize} />
+  }
+
+  let className = grid ? 'grid' : 'flex flex-col'
+  const style: Record<string, string | number> = { fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }
+  if (!grid && !expressive) className += ' divide-y divide-slide-border'
+  if (!grid && expressive) style.gap = SLIDE_GAP.tight
+  if (long) {
+    className +=
+      ' grid-cols-1 @min-[640px]:grid-cols-2 @min-[640px]:grid-flow-col @min-[640px]:[grid-template-rows:var(--list-rows)]'
+    style['--list-rows'] = `repeat(${rows}, ${rowSize})`
+  }
+  if (kind === 'split') className += ' grid-cols-2'
+  if (grid) {
+    style.columnGap = SLIDE_GAP.section
+    style.rowGap = expressive ? SLIDE_GAP.tight : 0
+    if (fill) style.gridAutoRows = rowSize
+  }
+  if (fill) className += ' flex-1'
+
+  return (
+    <Adjustable index={list.index}>
+      <Tag {...(fill ? { 'data-fill': '' } : {})} className={className} style={style as CSSProperties}>
+        {items.map((item, i) => (
+          <li
+            key={i}
+            {...itemProps(list.index, i)}
+            className={`flex min-w-0 items-center${fill && !grid ? ' flex-1' : ''}${
+              grid && !expressive ? ' border-t border-slide-border' : ''
+            }`}
+            style={expressive ? undefined : { paddingBlock: SLIDE_GAP.tight }}
+          >
+            {mark(i)}
+            <span className="min-w-0 text-slide-foreground/90" style={{ fontSize: textSize }}>
+              <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
+            </span>
+          </li>
+        ))}
+      </Tag>
+    </Adjustable>
+  )
+}
+
+/**
+ * A tick in the numeral's column: plain in accent when structured, inside an unfilled accent
+ * ring when expressive. Decorative: the item's own text carries the meaning. Sized from the
+ * item's own text size, so it stays in proportion to the row.
+ */
+function CheckMark({ ring, size }: { ring: boolean; size: string }) {
   const tick = (
     <svg
       viewBox="0 0 24 24"
@@ -592,15 +660,24 @@ function CheckMark({ filled = false }: { filled?: boolean }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      className={filled ? 'h-3.5 w-3.5' : 'mt-1 h-5 w-5 shrink-0 text-slide-accent'}
+      className="shrink-0 text-slide-accent"
+      style={ring ? { width: '1em', height: '1em' } : { width: '1.4em', height: '1.4em' }}
     >
       <path d="M5 13l4 4L19 7" />
     </svg>
   )
-  if (!filled) return tick
   return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slide-accent text-slide-accent-foreground">
-      {tick}
+    <span aria-hidden="true" className="flex shrink-0 items-center" style={{ width: '2.5em', fontSize: size }}>
+      {ring ? (
+        <span
+          className="flex shrink-0 items-center justify-center rounded-full border-2 border-slide-accent"
+          style={{ width: '1.9em', height: '1.9em' }}
+        >
+          {tick}
+        </span>
+      ) : (
+        tick
+      )}
     </span>
   )
 }

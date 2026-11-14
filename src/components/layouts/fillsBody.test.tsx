@@ -25,4 +25,19 @@ describe.each(['structured', 'expressive'] as const)('a lone group fills the bod
   it.each(NOT)('%s has no data-fill', (id) => {
     expect(count(html(find(id)))).toBe(0)
   })
+
+  it('a list beside a paragraph does not fill', () => {
+    const card: Card = {
+      id: 'mixed',
+      orderIndex: 1,
+      layout: 'iconGrid',
+      visualStyle: style,
+      blocks: [
+        { type: 'heading', text: 'Head' },
+        { type: 'bulletList', items: ['one', 'two', 'three'] },
+        { type: 'paragraph', text: 'After the list.' },
+      ],
+    }
+    expect(count(html(card))).toBe(0)
+  })
 })
