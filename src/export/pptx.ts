@@ -67,6 +67,11 @@ export async function exportDeckToPptx(deck: ExportableDeck): Promise<void> {
     a shared reference. A 30-card deck would carry thirty ~1.5MB PNGs instead
     of one. Every slide is created from this one master instead, so the image
     part is written once and every slide just points at it.
+
+    The exception is a tinted or deep slide (a quote, a stat hero, a title): its
+    renderer assigns `slide.background = { color }`, a flat colour and not image
+    data, so it adds no media part and the one-image rule above still holds. A plain
+    slide assigns nothing and keeps the master.
   */
   const MASTER = 'LEKTURA_BACKDROP'
   pptx.defineSlideMaster({ title: MASTER, background })

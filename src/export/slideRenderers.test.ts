@@ -4,7 +4,9 @@ import { slideGroup } from './slideGroup'
 import { cardBoxes } from './blockBoxes'
 import { resolveLayout } from '@/engine/layoutEngine'
 import { addCredit } from './photoPlacement'
-import { DEFAULT_THEME } from '@/lib/theme-tokens'
+import { BUILTIN_THEMES, DEFAULT_THEME, deepMuted, type ThemeTokens } from '@/lib/theme-tokens'
+import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
+import { CPP_DECK } from '@/engine/fixtures/cppDeck'
 import { CREATABLE_KINDS, layoutForKind, starterBlocks, type CreatableKind } from '@/engine/cardTemplates'
 import { contentBlockSchema, type Card, type ContentBlock } from '@/engine/contentBlocks'
 import { textRef } from '@/engine/marks'
@@ -47,17 +49,24 @@ function fakeSlide() {
   const images: Record<string, unknown>[] = []
   /** Every call in the order made, so a test can check what sits above what. */
   const order: ('text' | 'shape' | 'image')[] = []
+  /** Every `slide.background = ...` assignment, in order; a plain slide makes none. */
+  const backgrounds: { color: string }[] = []
 
   const slide: PptxSlide & {
     texts: Captured[]
     shapes: typeof shapes
     images: typeof images
     order: typeof order
+    backgrounds: typeof backgrounds
   } = {
     texts,
     shapes,
     images,
     order,
+    backgrounds,
+    set background(value: { color: string }) {
+      backgrounds.push(value)
+    },
     addImage(options) {
       images.push(options)
       order.push('image')
@@ -1295,6 +1304,151 @@ describe('photos in the exported file', () => {
     it('is sized by the renderer measurer, not a guess', () => {
       const wide = () => 10
       expect(draw({ w: 4 }, wide).texts).toHaveLength(0)
+    })
+  })
+})
+
+describe('the ground in the exported file', () => {
+  const strip = (color: string) => color.replace(/^#/, '')
+  const midnight = BUILTIN_THEMES.find((t) => t.id === 'midnight')!
+
+  /** As `exportDeckToPptx` calls it: the style is the deck's merged with the card's. */
+  function renderOn(
+    card: Card,
+    theme: ThemeTokens = DEFAULT_THEME,
+    images: Map<string, string> = new Map(),
+    deckStyle: TextStyle = {},
+  ) {
+    const isFirstCard = card.orderIndex === 0
+    const context: RenderContext = { images, layout: resolveLayout(card.layout, card.blocks, { isFirstCard }) }
+    const slide = fakeSlide()
+    RENDERERS[slideGroup(card, isFirstCard)](
+      slide,
+      card,
+      theme,
+      mergeTextStyle(deckStyle, card.textStyle),
+      estimateMeasurer,
+      context,
+    )
+    return slide
+  }
+
+  const allColors = (slide: ReturnType<typeof fakeSlide>) =>
+    slide.texts.flatMap((t) => [t.options.color, ...t.runs.map((r) => r.options.color)]).filter(Boolean)
+
+  const [title, list, , , , quote] = CPP_DECK
+
+  describe.each([
+    ['a light theme', DEFAULT_THEME],
+    ['a dark theme', midnight],
+  ])('the title slide on %s', (_name, theme) => {
+    const c = theme.colors
+
+    it('sets the slide background to the deep colour and its words in the deep ink, together', () => {
+      const slide = renderOn(title, theme)
+      expect(slide.backgrounds).toEqual([{ color: strip(c.deep) }])
+      const byText = (needle: string) => slide.texts.find((t) => t.text.includes(needle))!
+      expect(byText('Control Structures').options.color).toBe(strip(c.deepForeground))
+      expect(byText('decides what to do').options.color).toBe(strip(deepMuted(c)))
+      for (const color of allColors(slide)) expect(color).not.toBe(strip(c.foreground))
+    })
+  })
+
+  it('ignores every stored colour pick on a deep slide: deck, card, element and character', () => {
+    const card: Card = {
+      ...title,
+      textStyle: { color: '#ff0000' },
+      inline: {
+        '0': { style: { color: '#00ff00' } },
+        '0:text': {
+          style: { color: '#0000ff' },
+          marks: [{ type: 'color', start: 0, end: 7, value: '#ff00ff' }],
+        },
+        '1:text': { marks: [{ type: 'color', start: 0, end: 3, value: '#ffff00' }] },
+      },
+    }
+    const slide = renderOn(card, DEFAULT_THEME, new Map(), { color: '#abcdef' })
+    const picks = ['ff0000', '00ff00', '0000ff', 'ff00ff', 'ffff00', 'abcdef']
+    for (const color of allColors(slide)) expect(picks).not.toContain(color)
+    expect(slide.texts[0].options.color).toBe(strip(DEFAULT_THEME.colors.deepForeground))
+  })
+
+  it('keeps a stored colour pick on a tinted slide, as the screen does', () => {
+    const card: Card = { ...quote, textStyle: { color: '#ff0000' } }
+    expect(renderOn(card).texts[0].options.color).toBe('ff0000')
+  })
+
+  it('draws a quote slide on the tint with the theme own inks', () => {
+    const slide = renderOn(quote)
+    expect(slide.backgrounds).toEqual([{ color: strip(DEFAULT_THEME.colors.tint) }])
+    const heading = slide.texts.find((t) => t.text.includes('A rule worth keeping'))!
+    expect(heading.options.color).toBe(strip(DEFAULT_THEME.colors.foreground))
+    const attribution = slide.texts.find((t) => t.text.includes('Kent Beck'))!
+    expect(attribution.options.color).toBe(strip(DEFAULT_THEME.colors.muted))
+  })
+
+  it('draws a stat hero slide on the tint', () => {
+    const card = cardOf([
+      { type: 'heading', text: 'One number' },
+      { type: 'stat', value: '42', label: 'the answer' },
+    ])
+    expect(resolveLayout(card.layout, card.blocks, { isFirstCard: false })).toBe('statHero')
+    const slide = renderOn({ ...card, orderIndex: 1 })
+    expect(slide.backgrounds).toEqual([{ color: strip(DEFAULT_THEME.colors.tint) }])
+  })
+
+  it('uses the same colours on a nudged title slide', () => {
+    const card: Card = { ...title, adjusts: { '1': { dx: 0.02, dy: 0, rotation: 0 } } }
+    expect(slideGroup(card, true)).toBe('adjusted')
+    const slide = renderOn(card)
+    expect(slide.backgrounds).toEqual([{ color: strip(DEFAULT_THEME.colors.deep) }])
+    expect(slide.texts.length).toBeGreaterThan(0)
+    for (const color of allColors(slide)) {
+      expect([strip(DEFAULT_THEME.colors.deepForeground), strip(deepMuted(DEFAULT_THEME.colors))]).toContain(color)
+    }
+  })
+
+  it('sets no background on a plain slide and draws exactly what it drew before', () => {
+    for (const card of CPP_DECK.slice(1, 5)) {
+      const grounded = renderOn(card)
+      const bare = fakeSlide()
+      RENDERERS[slideGroup(card, false)](bare, card, DEFAULT_THEME, {}, estimateMeasurer)
+      expect(grounded.backgrounds).toEqual([])
+      expect(grounded.texts).toEqual(bare.texts)
+      expect(grounded.shapes).toEqual(bare.shapes)
+      expect(grounded.order).toEqual(bare.order)
+    }
+    expect(renderOn(list).backgrounds).toEqual([])
+  })
+
+  it('treats a hero with no blocks as plain', () => {
+    const card: Card = { ...cardOf([], 'hero'), orderIndex: 0 }
+    expect(renderOn(card).backgrounds).toEqual([])
+  })
+
+  describe('with a fetched background photo', () => {
+    const URL_A = 'https://images.pexels.com/photos/9/lake.jpeg'
+    const JPEG =
+      'data:image/jpeg;base64,' +
+      btoa(String.fromCharCode(0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1))
+    const withPhoto = (card: Card): Card => ({
+      ...card,
+      blocks: [...card.blocks, { type: 'image', url: URL_A, alt: 'A lake' }],
+    })
+
+    it.each([
+      ['hero', title],
+      ['quote', quote],
+    ])('leaves a %s slide as it is: the photo is the ground, no background, white text', (_name, base) => {
+      const slide = renderOn(withPhoto(base), DEFAULT_THEME, new Map([[URL_A, JPEG]]))
+      expect(slide.images).toHaveLength(1)
+      expect(slide.backgrounds).toEqual([])
+      for (const color of allColors(slide)) expect(String(color).toUpperCase()).toBe('FFFFFF')
+    })
+
+    it('uses the ground again when the picture could not be fetched', () => {
+      const slide = renderOn(withPhoto(title))
+      expect(slide.backgrounds).toEqual([{ color: strip(DEFAULT_THEME.colors.deep) }])
     })
   })
 })

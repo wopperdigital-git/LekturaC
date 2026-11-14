@@ -1,10 +1,12 @@
 import type { Card, ContentBlock, ImageBlock, LayoutType } from '@/engine/contentBlocks'
 import { singlePhoto } from '@/engine/blockPartition'
+import { groundOfLayout, type Ground } from '@/engine/composition'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { TextStyle } from '@/engine/textStyle'
 import { textRef } from '@/engine/marks'
 import { parseTextRef } from '@/engine/blockText'
 import { cardBoxes, type Box } from './blockBoxes'
+import { groundColors, groundTheme, withoutStoredColors } from './ground'
 import type { PptxTextRun } from './textRun'
 import { SIZE_SCALE_KEY, faceName, hex, markedRuns, resolveRunStyle } from './textRun'
 import type { PptxGroup } from './slideGroup'
@@ -32,6 +34,12 @@ export interface PptxSlide {
   addText(text: string | PptxTextRun[], options: Record<string, unknown>): void
   addShape(shape: string, options: Record<string, unknown>): void
   addImage(options: Record<string, unknown>): void
+  /**
+   * The slide's own flat background, which replaces the deck master's. Only a tinted or
+   * deep slide assigns it (a plain slide keeps the master, so the backdrop image is
+   * still written once); a colour, never image data, so it adds no media part.
+   */
+  background?: { color: string }
 }
 
 /**
@@ -1630,11 +1638,49 @@ const onPhotoGround =
     addCredit(slide, photo.block, whole, bodyFace(theme, style), measure, { pill: false })
   }
 
+/*
+  The slide's ground, read off the resolved layout the caller already put in the context
+  (the same one the arrangement was chosen from, so the two cannot disagree): a title
+  slide is deep, a quote and a stat hero are tinted, the rest are plain.
+
+  A hero or quote whose lone photo is placed is plain here: the photo covers the whole
+  slide under its scrim with white text, exactly as before, and a background colour
+  or the ground's inks would only be hidden by it (or, for the accent rule, show on it).
+*/
+function groundOnSlide(card: Card, context: RenderContext): Ground {
+  if (!context.layout || card.blocks.length === 0) return 'plain'
+  if (context.layout === 'hero' || context.layout === 'quote') {
+    const photo = singlePhoto(card.blocks)
+    if (photo && usablePhoto(context.images, photo.block.url)) return 'plain'
+  }
+  return groundOfLayout(context.layout)
+}
+
+/*
+  Paints a tinted or deep slide: its own flat background, and every word drawn with the
+  ground's colours. The renderers are handed a theme already moved onto the ground
+  (`groundTheme`), so none of them has a ground branch. On the deep ground every stored
+  colour pick is dropped first, as on screen. Outermost, so `background` is assigned on
+  the real slide and not on one of the wrappers inside. A plain slide takes the first
+  line and nothing else changes: no background assignment, the same theme, the same card.
+*/
+const grounded =
+  (render: SlideRenderer): SlideRenderer =>
+  (slide, card, theme, style, measure, context = NO_CONTEXT) => {
+    const ground = groundOnSlide(card, context)
+    if (ground === 'plain') return render(slide, card, theme, style, measure, context)
+    slide.background = { color: hex(groundColors(theme, ground).background) }
+    if (ground === 'tint') return render(slide, card, groundTheme(theme, ground), style, measure, context)
+    const { color: _color, ...unpicked } = style
+    void _color
+    render(slide, withoutStoredColors(card), groundTheme(theme, ground), unpicked, measure, context)
+  }
+
 export const RENDERERS: Record<PptxGroup, SlideRenderer> = {
-  title: sized(onPhotoGround(renderTitle, 'hero', 45)),
+  title: grounded(sized(onPhotoGround(renderTitle, 'hero', 45))),
   body: sized(renderBody),
-  stat: sized(renderStat),
+  stat: grounded(sized(renderStat)),
   twoCol: sized(renderTwoCol),
-  quote: sized(onPhotoGround(renderQuote, 'quote', 40)),
-  adjusted: sized(renderAdjusted),
+  quote: grounded(sized(onPhotoGround(renderQuote, 'quote', 40))),
+  adjusted: grounded(sized(renderAdjusted)),
 }
