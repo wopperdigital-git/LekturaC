@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { Fragment, type CSSProperties } from 'react'
 import { itemStep } from '@/engine/composition'
 import { MAX_CHIP_ITEMS } from '@/engine/layoutEngine'
 import type { VisualStyle } from '@/engine/contentBlocks'
@@ -60,55 +60,8 @@ export function GroupRenderer({
       return <StatColumns items={node.items} expressive={expressive} fill={fill} />
 
     case 'timeline':
-      // From TimelineLayout: a numbered card per step when expressive, a
-      // vertical accent line with a dot per step when structured.
-      if (expressive) {
-        return (
-          <ol {...fillAttr} className={`flex flex-col gap-4${grow}`}>
-            {node.items.map((step, i) => (
-              <Adjustable key={step.index} index={step.index}>
-                <li
-                  className={`flex gap-4 rounded-slide-sm bg-slide-surface p-4${grow}`}
-                  style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
-                >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slide-accent text-lg font-extrabold text-slide-accent-foreground">
-                    {i + 1}
-                  </span>
-                  <div>
-                    <div className="font-semibold text-slide-accent">
-                      <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
-                    </div>
-                    <div className="text-slide-foreground/90">
-                      <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
-                    </div>
-                  </div>
-                </li>
-              </Adjustable>
-            ))}
-          </ol>
-        )
-      }
-      return (
-        <ol {...fillAttr} className={`relative flex flex-col gap-6${grow}`}>
-          <div
-            aria-hidden="true"
-            className="absolute inset-y-0 left-[calc(var(--spacing)*1.5)] w-0.5 -translate-x-1/2 bg-gradient-to-b from-slide-accent/45 via-slide-accent-soft/45 to-transparent"
-          />
-          {node.items.map((step) => (
-            <Adjustable key={step.index} index={step.index}>
-              <li className={`relative pl-6${grow}`} style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-                <span className="absolute left-[calc(var(--spacing)*1.5)] top-1 h-3 w-3 -translate-x-1/2 rounded-full bg-slide-accent" />
-                <div className="font-semibold text-slide-accent">
-                  <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
-                </div>
-                <div className="text-slide-foreground/90">
-                  <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
-                </div>
-              </li>
-            </Adjustable>
-          ))}
-        </ol>
-      )
+      // Steps down one continuous track: a dot per step when structured, the step number when expressive.
+      return <TimelineColumn items={node.items} expressive={expressive} fill={fill} />
 
     case 'columns':
       // From ComparisonLayout: stacked rows when expressive, side-by-side cards
@@ -224,48 +177,9 @@ export function GroupRenderer({
       // per stat. Reads better than a grid once the labels are long.
       return <StatLedger items={node.items} expressive={expressive} fill={fill} />
 
-    case 'timelineRow': {
-      // The steps side by side, wrapping after four. A rule with a dot over each
-      // step when structured; numbered cards when expressive.
-      const columns = Math.min(node.items.length, 4)
-      return (
-        <ol {...fillAttr} className={`grid items-stretch gap-6${grow}`} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
-          {node.items.map((step, i) => (
-            <Adjustable key={step.index} index={step.index}>
-              {expressive ? (
-                <li
-                  className="flex flex-col gap-3 rounded-slide-sm bg-slide-surface p-4"
-                  style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slide-accent text-lg font-extrabold text-slide-accent-foreground">
-                    {i + 1}
-                  </span>
-                  <div className="font-semibold text-slide-accent">
-                    <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
-                  </div>
-                  <div className="text-slide-foreground/90">
-                    <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
-                  </div>
-                </li>
-              ) : (
-                <li style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
-                  <div className="relative mb-4 h-3">
-                    <span className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-slide-accent/40" />
-                    <span className="absolute left-0 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-slide-accent" />
-                  </div>
-                  <div className="font-semibold text-slide-accent">
-                    <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
-                  </div>
-                  <div className="text-slide-foreground/90">
-                    <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
-                  </div>
-                </li>
-              )}
-            </Adjustable>
-          ))}
-        </ol>
-      )
-    }
+    case 'timelineRow':
+      // Steps side by side on one track per row: up to five in a row, six or more in two rows.
+      return <TimelineRow items={node.items} expressive={expressive} fill={fill} />
 
     case 'table': {
       /*
@@ -750,5 +664,173 @@ function StatLedger({ items, expressive, fill }: { items: StatItems; expressive:
         </Adjustable>
       ))}
     </div>
+  )
+}
+
+/** The steps of a `timeline` or `timelineRow` group, each with its own block index. */
+type StepItems = Extract<GroupNode, { arrangement: 'timeline' | 'timelineRow' }>['items']
+
+/** The step label's line height, shared by the label and the node beside it so the node sits on the label's first line. */
+const STEP_LABEL_LINE = 1.3
+/** The track's thickness in px: structured, and expressive which is 2px thicker. */
+const trackThickness = (expressive: boolean) => (expressive ? 4 : 2)
+
+/** The size of a step's text: the lead size for a few short steps, the body size otherwise. */
+const stepTextSize = (items: StepItems) => itemTextSize(items.map(({ block }) => block.text))
+
+/** A step's label (accent, h3, semibold) over its text, both editable runs under the step's own address. */
+function StepWords({ step, textSize }: { step: StepItems[number]; textSize: string }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <div
+        data-step-label=""
+        className="text-slide-accent"
+        style={{
+          fontFamily: SLIDE_HEADING_FONT,
+          fontSize: 'var(--slide-size-h3)',
+          fontWeight: 600,
+          lineHeight: STEP_LABEL_LINE,
+        }}
+      >
+        <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
+      </div>
+      <div data-step-text="" className="text-slide-foreground" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: textSize }}>
+        <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Steps down one continuous track. The track is a single decorative line behind the nodes, the
+ * full height of the arrangement, at the centre of the node column; each node is positioned so it
+ * is drawn over the track. Structured nodes are a small accent dot, expressive ones the step number
+ * on a patch of the slide's background so the track does not run through it. When it fills the body
+ * the steps share the height, their content at the top.
+ */
+function TimelineColumn({ items, expressive, fill }: { items: StepItems; expressive: boolean; fill: boolean }) {
+  const textSize = stepTextSize(items)
+  const thickness = trackThickness(expressive)
+  return (
+    <ol
+      {...(fill ? { 'data-fill': '' } : {})}
+      className={`relative flex flex-col${fill ? ' flex-1' : ''}`}
+      style={{ gap: SLIDE_GAP.group, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
+    >
+      <div
+        aria-hidden="true"
+        data-track=""
+        className="absolute inset-y-0 bg-slide-accent/40"
+        style={{ left: `calc(1.25em - ${thickness / 2}px)`, width: `${thickness}px` }}
+      />
+      {items.map((step, i) => (
+        <Adjustable key={step.index} index={step.index}>
+          <li
+            className={`flex items-start${fill ? ' flex-1' : ''}`}
+            style={{ gap: SLIDE_GAP.tight, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
+          >
+            <span
+              aria-hidden="true"
+              className={`relative flex shrink-0 items-center justify-center${expressive ? ' bg-slide-background' : ''}`}
+              style={{ width: '2.5em', height: `calc(var(--slide-size-h3) * ${STEP_LABEL_LINE})` }}
+            >
+              {expressive ? (
+                <span
+                  data-step-number=""
+                  className="text-slide-accent"
+                  style={{
+                    fontFamily: SLIDE_HEADING_FONT,
+                    fontSize: 'var(--slide-size-h3)',
+                    fontWeight: 800,
+                    lineHeight: STEP_LABEL_LINE,
+                  }}
+                >
+                  {i + 1}
+                </span>
+              ) : (
+                <span className="block rounded-full bg-slide-accent" style={{ width: '0.75em', height: '0.75em' }} />
+              )}
+            </span>
+            <StepWords step={step} textSize={textSize} />
+          </li>
+        </Adjustable>
+      ))}
+    </ol>
+  )
+}
+
+/** Most steps one row of a horizontal timeline holds; more wrap into two rows. */
+const MAX_ROW_STEPS = 5
+
+/**
+ * Steps side by side in equal columns, a full-width track above each row of them. The track is a
+ * grid item spanning every column; a step's node (a dot at its column's left edge, drawn over the
+ * track) is pulled up onto it by half its own height, and expressive steps have no dot but the step
+ * number above the label. Six or more steps wrap into two rows of `ceil(n / 2)`, each with its
+ * own track. When it fills the body the step rows share the height, content at the top.
+ */
+function TimelineRow({ items, expressive, fill }: { items: StepItems; expressive: boolean; fill: boolean }) {
+  const textSize = stepTextSize(items)
+  const thickness = trackThickness(expressive)
+  const columns = items.length <= MAX_ROW_STEPS ? items.length : Math.ceil(items.length / 2)
+  const rowCount = Math.ceil(items.length / columns)
+  const stepRow = fill ? 'minmax(min-content, 1fr)' : 'auto'
+  return (
+    <ol
+      {...(fill ? { 'data-fill': '' } : {})}
+      className={`grid${fill ? ' flex-1' : ''}`}
+      style={{
+        fontFamily: SLIDE_BODY_FONT,
+        fontSize: BODY_SIZE,
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        gridTemplateRows: Array.from({ length: rowCount }, () => `auto ${stepRow}`).join(' '),
+        columnGap: SLIDE_GAP.group,
+        ...(fill ? { alignContent: 'start' } : {}),
+      }}
+    >
+      {items.map((step, i) => (
+        <Fragment key={step.index}>
+          {i % columns === 0 && (
+            <div
+              aria-hidden="true"
+              data-track=""
+              className="bg-slide-accent/40"
+              style={{
+                gridColumn: '1 / -1',
+                height: `${thickness}px`,
+                ...(i > 0 ? { marginTop: SLIDE_GAP.section } : {}),
+              }}
+            />
+          )}
+          <Adjustable index={step.index}>
+            <li className="flex min-w-0 flex-col" style={{ gap: SLIDE_GAP.tight, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}>
+              {expressive ? (
+                <span
+                  aria-hidden="true"
+                  data-step-number=""
+                  className="block text-slide-accent"
+                  style={{
+                    fontFamily: SLIDE_HEADING_FONT,
+                    fontSize: 'var(--slide-size-h1)',
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    marginTop: SLIDE_GAP.tight,
+                  }}
+                >
+                  {i + 1}
+                </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="relative block rounded-full bg-slide-accent"
+                  style={{ width: '0.75em', height: '0.75em', marginTop: `calc(-0.375em - ${thickness / 2}px)` }}
+                />
+              )}
+              <StepWords step={step} textSize={textSize} />
+            </li>
+          </Adjustable>
+        </Fragment>
+      ))}
+    </ol>
   )
 }

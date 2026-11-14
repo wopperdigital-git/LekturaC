@@ -195,16 +195,16 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'timeline':
-      // A vertical accent line with a dot per step.
+      // One continuous track down the left edge, a small dot per step, the label over its text.
       return (
         <>
           <Title />
-          <rect x={15.25} y={28} width={1.5} height={52} fill={ACCENT} opacity={0.4} />
+          <rect data-wire-track="" x={15.25} y={26} width={1.5} height={52} fill={ACCENT} opacity={0.4} />
           {range(3).map((i) => {
             const y = 29 + i * 17
             return (
               <g key={i}>
-                <Dot cx={16} cy={y + 2} />
+                <Dot cx={16} cy={y + 2} r={2} />
                 <Label x={24} y={y} w={32} />
                 <Line x={24} y={y + 6.5} w={96 - i * 12} />
               </g>
@@ -213,16 +213,16 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'timelineRow':
-      // Steps side by side, a rule with a dot over each.
+      // Steps side by side on one full-width track, a dot at each column's left edge.
       return (
         <>
           <Title />
+          <rect data-wire-track="" x={12} y={37.25} width={136} height={1.5} fill={ACCENT} opacity={0.4} />
           {range(4).map((i) => {
             const x = 12 + i * 35
             return (
               <g key={i}>
-                <rect x={x} y={37.25} width={30} height={1.5} fill={ACCENT} opacity={0.4} />
-                <Dot cx={x + 2.5} cy={38} />
+                <Dot cx={x + 2} cy={38} r={2} />
                 <Label x={x} y={47} w={22} />
                 <Line x={x} y={55} w={28} />
                 <Line x={x} y={61} w={20} />
@@ -465,37 +465,37 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'timeline':
-      // A card per step with a numbered accent disc.
+      // A thicker track down the left edge with the step number on it, the label over its text.
       return (
         <>
           <Title x={12} y={11} />
+          <rect data-wire-track="" x={14.5} y={26} width={3} height={52} fill={ACCENT} opacity={0.4} />
           {range(3).map((i) => {
-            const y = 25 + i * 18
+            const y = 28 + i * 17
             return (
               <g key={i}>
-                <Surface x={12} y={y} w={136} h={15} />
-                <Dot cx={21} cy={y + 7.5} r={5} />
-                <Label x={30} y={y + 3.5} w={30} h={3} />
-                <Line x={30} y={y + 9} w={96 - i * 12} />
+                <rect x={13} y={y} width={6} height={5.5} rx={1.2} fill={ACCENT} />
+                <Label x={26} y={y} w={30} h={3} />
+                <Line x={26} y={y + 6.5} w={96 - i * 12} />
               </g>
             )
           })}
         </>
       )
     case 'timelineRow':
-      // Numbered cards side by side.
+      // One thicker full-width track, a large step number above each label.
       return (
         <>
           <Title x={12} y={11} />
+          <rect data-wire-track="" x={12} y={28} width={136} height={3} fill={ACCENT} opacity={0.4} />
           {range(4).map((i) => {
             const x = 12 + i * 35
             return (
               <g key={i}>
-                <Surface x={x} y={27} w={31} h={48} />
-                <Dot cx={x + 8} cy={36} r={5} />
-                <Label x={x + 4} y={45} w={20} h={3} />
-                <Line x={x + 4} y={53} w={23} />
-                <Line x={x + 4} y={59} w={16} />
+                <rect x={x} y={34} width={9} height={10} rx={1.5} fill={ACCENT} />
+                <Label x={x} y={49} w={22} h={3} />
+                <Line x={x} y={57} w={28} />
+                <Line x={x} y={63} w={20} />
               </g>
             )
           })}

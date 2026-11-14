@@ -500,3 +500,201 @@ describe.each(STYLES)('redrawn stats (%s)', (style) => {
     })
   })
 })
+
+/* Timelines: one continuous track per row of steps, a node per step, the label and its text beside it. */
+
+const TIMELINE_IDS = ['g-timeline', 'g-timelinerow', 'g-timelinerow6']
+
+/** The opening tag of every timeline track, step label, text and number, and the words inside each label and text. */
+const trackTags = (out: string) => [...out.matchAll(/<div [^>]*data-track=""[^>]*>/g)].map((m) => m[0])
+const stepLabelTags = (out: string) => [...out.matchAll(/<div data-step-label=""[^>]*>/g)].map((m) => m[0])
+const stepTextTags = (out: string) => [...out.matchAll(/<div data-step-text=""[^>]*>/g)].map((m) => m[0])
+const stepNumberTags = (out: string) => [...out.matchAll(/<span [^>]*data-step-number=""[^>]*>[^<]*<\/span>/g)].map((m) => m[0])
+const stepWords = (out: string, hook: 'label' | 'text') =>
+  [...out.matchAll(new RegExp(`<div data-step-${hook}=""[^>]*>(.*?)</div>`, 'g'))].map((m) => m[1].replace(/<[^>]*>/g, ''))
+const stepsOf = (card: Card) => card.blocks.flatMap((b) => (b.type === 'timelineStep' ? [b] : []))
+const SPACING_UTILITY = /class="[^"]*\b(gap|space-y|space-x|p|px|py|pl|pt|pb)-\d/
+const STEP_FONT_SIZE = 'font-size:var(--slide-size-h3)'
+
+const stepCard = (layout: LayoutType, count: number, style: VisualStyle, text = 'STEPTEXT'): Card => ({
+  id: 'x',
+  orderIndex: 1,
+  layout,
+  visualStyle: style,
+  blocks: [
+    { type: 'heading', text: 'STEPHEAD' },
+    ...Array.from({ length: count }, (_, i) => ({
+      type: 'timelineStep',
+      label: `STEPLABEL${String.fromCharCode(65 + i)}`,
+      text: `${text}${String.fromCharCode(65 + i)}`,
+    })),
+  ] as ContentBlock[],
+})
+
+describe.each(STYLES)('redrawn timelines (%s)', (style) => {
+  const expressive = style === 'expressive'
+  const cards = withStyle(GALLERY_DECK, style)
+  const find = (id: string) => cards.find((c) => c.id === id) as Card
+
+  it.each(TIMELINE_IDS)('%s draws no boxed card, no numeral disc, no surface, no gradient and no fixed text size', (id) => {
+    const out = html(find(id))
+    expect(out).not.toMatch(BOXED)
+    expect(out).not.toMatch(NUMERAL_DISC)
+    expect(out).not.toMatch(SIDE_TAB)
+    expect(out).not.toMatch(FIXED_TEXT_SIZE)
+    expect(out).not.toMatch(SPACING_UTILITY)
+    expect(out).not.toContain('bg-slide-surface')
+    expect(out).not.toContain('bg-gradient')
+    expect(out).not.toContain('data-accent-owner')
+  })
+
+  it.each([
+    ['g-timeline', 1],
+    ['g-timelinerow', 1],
+    ['g-timelinerow6', 2],
+  ])('%s draws %i track element(s): empty, hidden from assistive technology and in accent', (id, count) => {
+    const out = html(find(id))
+    const tags = trackTags(out)
+    expect(tags.length).toBe(count)
+    for (const tag of tags) {
+      expect(tag).toContain('aria-hidden="true"')
+      expect(tag).toContain('bg-slide-accent/40')
+    }
+    // The track holds nothing: it is a sibling of the steps, never a wrapper around them.
+    expect(out.split('data-track=""').length - 1).toBe(count)
+    expect(out.match(/<div [^>]*data-track=""[^>]*><\/div>/g)?.length).toBe(count)
+  })
+
+  it('draws the vertical track as one line the height of the arrangement, 2px thick and 4px when expressive', () => {
+    const [track] = trackTags(html(find('g-timeline')))
+    expect(track).toContain('inset-y-0')
+    expect(track).toContain(`width:${expressive ? 4 : 2}px`)
+  })
+
+  it('draws each horizontal track across every column, 2px thick and 4px when expressive', () => {
+    for (const id of ['g-timelinerow', 'g-timelinerow6']) {
+      for (const track of trackTags(html(find(id)))) {
+        expect(track).toContain('grid-column:1 / -1')
+        expect(track).toContain(`height:${expressive ? 4 : 2}px`)
+      }
+    }
+  })
+
+  it.each(TIMELINE_IDS)('%s sets every label at h3 in the heading font, accent and semibold', (id) => {
+    const tags = stepLabelTags(html(find(id)))
+    expect(tags.length).toBe(stepsOf(find(id)).length)
+    for (const tag of tags) {
+      expect(tag).toContain(STEP_FONT_SIZE)
+      expect(tag).toContain('var(--slide-font-heading)')
+      expect(tag).toContain('text-slide-accent')
+      expect(tag).toContain('font-weight:600')
+    }
+  })
+
+  it.each(TIMELINE_IDS)('%s draws every step once, label and text, in order, one element per step', (id) => {
+    const out = html(find(id))
+    const steps = stepsOf(find(id))
+    expect(stepWords(out, 'label')).toEqual(steps.map((s) => s.label))
+    expect(stepWords(out, 'text')).toEqual(steps.map((s) => s.text))
+    for (const s of steps) {
+      expect(out.split(s.label).length - 1).toBe(1)
+      expect(out.split(s.text).length - 1).toBe(1)
+    }
+    expect(rowTags(out).length).toBe(steps.length)
+  })
+
+  it('draws a one-step timeline once in both arrangements (a lone step is a leaf, not a group, so it has no track)', () => {
+    for (const layout of ['timeline', 'timelineRow'] as const) {
+      const out = html(stepCard(layout, 1, style, 'ONLYTEXT'))
+      expect(out.split('STEPLABELA').length - 1).toBe(1)
+      expect(out.split('ONLYTEXTA').length - 1).toBe(1)
+      expect(trackTags(out).length).toBe(0)
+    }
+  })
+
+  it('draws a two-step timeline as a group with one track, each step once', () => {
+    for (const layout of ['timeline', 'timelineRow'] as const) {
+      const out = html(stepCard(layout, 2, style, 'PAIRTEXT'))
+      expect(trackTags(out).length).toBe(1)
+      expect(rowTags(out).length).toBe(2)
+      for (const letter of ['A', 'B']) {
+        expect(out.split('STEPLABEL' + letter).length - 1).toBe(1)
+        expect(out.split('PAIRTEXT' + letter).length - 1).toBe(1)
+      }
+    }
+  })
+
+  it('sets the step text at the lead size for a few short steps and body size for many or long ones', () => {
+    const size = (tags: string[]) => tags.map((tag) => tag.match(/font-size:([^;"]+)/)?.[1])
+    expect(size(stepTextTags(html(find('g-timeline'))))).toEqual(Array(4).fill(LEAD))
+    expect(size(stepTextTags(html(find('g-timelinerow6'))))).toEqual(Array(6).fill(LEAD))
+    expect(size(stepTextTags(html(stepCard('timelineRow', 7, style))))).toEqual(Array(7).fill(BODY))
+    expect(size(stepTextTags(html(stepCard('timeline', 2, style, 'x'.repeat(65)))))).toEqual([BODY, BODY])
+  })
+
+  it('puts a dot on the track per step when structured and the step number when expressive', () => {
+    for (const id of ['g-timeline', 'g-timelinerow']) {
+      const out = html(find(id))
+      const dots = out.split('width:0.75em;height:0.75em').length - 1
+      const numbers = stepNumberTags(out)
+      if (expressive) {
+        expect(dots).toBe(0)
+        expect(numbers.map((tag) => tag.replace(/<[^>]*>/g, ''))).toEqual(['1', '2', '3', '4'])
+      } else {
+        expect(dots).toBe(4)
+        expect(numbers).toEqual([])
+      }
+    }
+  })
+
+  if (expressive) {
+    it('sets the vertical step number at h3 on a patch of the slide background, the horizontal one at h1', () => {
+      const out = html(find('g-timeline'))
+      for (const tag of stepNumberTags(out)) {
+        expect(tag).toContain(STEP_FONT_SIZE)
+        expect(tag).toContain('font-weight:800')
+        expect(tag).toContain('text-slide-accent')
+      }
+      expect(out.split('bg-slide-background').length - 1).toBe(4)
+      const row = html(find('g-timelinerow'))
+      for (const tag of stepNumberTags(row)) {
+        expect(tag).toContain('font-size:var(--slide-size-h1)')
+        expect(tag).toContain('font-weight:800')
+        expect(tag).toContain('aria-hidden="true"')
+      }
+    })
+  } else {
+    it('draws no step number and no background patch when structured', () => {
+      expect(html(find('g-timeline'))).not.toContain('bg-slide-background')
+      expect(html(find('g-timelinerow6'))).not.toContain('data-step-number')
+    })
+  }
+
+  it('arranges up to five steps in one row and wraps six or more into two rows of ceil(n / 2)', () => {
+    const columns = (n: number) => html(stepCard('timelineRow', n, style)).match(/grid-template-columns:repeat\((\d+), /)?.[1]
+    expect([2, 4, 5].map(columns)).toEqual(['2', '4', '5'])
+    expect([6, 7, 8].map(columns)).toEqual(['3', '4', '4'])
+    expect(trackTags(html(stepCard('timelineRow', 5, style))).length).toBe(1)
+    expect(trackTags(html(stepCard('timelineRow', 7, style))).length).toBe(2)
+  })
+
+  it('draws the second row of a wrapped timeline after the first, its track between them', () => {
+    const out = html(find('g-timelinerow6'))
+    const tracks = [...out.matchAll(/data-track=""/g)].map((m) => m.index as number)
+    const at = (label: string) => out.indexOf(label)
+    expect(tracks[0]).toBeLessThan(at('Mon'))
+    expect(at('Wed')).toBeLessThan(tracks[1])
+    expect(tracks[1]).toBeLessThan(at('Thu'))
+  })
+
+  it('gives the arrangement the remaining height with the steps sharing it, content at the top', () => {
+    const column = html(find('g-timeline'))
+    const root = column.match(/<ol [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+    expect(root).toMatch(/class="[^"]*\bflex-1\b/)
+    for (const row of rowTags(column)) expect(row).toMatch(/\bflex-1\b/)
+    const wide = html(find('g-timelinerow')).match(/<ol [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+    expect(wide).toMatch(/class="[^"]*\bflex-1\b/)
+    expect(wide).toContain('minmax(min-content, 1fr)')
+    expect(wide).toContain('align-content:start')
+  })
+})

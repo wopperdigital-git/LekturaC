@@ -64,3 +64,38 @@ describe('LayoutWireframe stats', () => {
     expect(hairlines('expressive')).toBe(0)
   })
 })
+
+/** The timelines are one continuous track with a node per step: no surface panel, no numeral disc. */
+describe('LayoutWireframe timelines', () => {
+  const tracks = (html: string) => html.split('data-wire-track').length - 1
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws no surface or bordered tile (%s)', (style) => {
+    for (const layout of ['timeline', 'timelineRow'] as const) {
+      const html = draw(layout, style)
+      expect(html).not.toContain('opacity="0.07"')
+      expect(html).not.toContain('fill-opacity')
+    }
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws one track, not one per step (%s)', (style) => {
+    for (const layout of ['timeline', 'timelineRow'] as const) expect(tracks(draw(layout, style))).toBe(1)
+  })
+
+  it('draws a dot per step when structured and none when expressive, which draws the numbers', () => {
+    const dots = (layout: 'timeline' | 'timelineRow', style: VisualStyle) => draw(layout, style).split('<circle').length - 1
+    expect(dots('timeline', 'structured')).toBe(3)
+    expect(dots('timelineRow', 'structured')).toBe(4)
+    expect(dots('timeline', 'expressive')).toBe(0)
+    expect(dots('timelineRow', 'expressive')).toBe(0)
+  })
+
+  it('draws the expressive track thicker than the structured one', () => {
+    const thickness = (layout: 'timeline' | 'timelineRow', style: VisualStyle) => {
+      const tag = draw(layout, style).match(/<rect data-wire-track=""[^>]*>/)?.[0] ?? ''
+      const size = (name: string) => Number(tag.match(new RegExp(name + '="([0-9.]+)"'))?.[1])
+      return Math.min(size('width'), size('height'))
+    }
+    expect(thickness('timeline', 'expressive')).toBeGreaterThan(thickness('timeline', 'structured'))
+    expect(thickness('timelineRow', 'expressive')).toBeGreaterThan(thickness('timelineRow', 'structured'))
+  })
+})
