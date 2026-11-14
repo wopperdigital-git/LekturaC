@@ -169,16 +169,16 @@ function structured(layout: LayoutType): ReactNode {
             return (
               <g key={i}>
                 <Rule x={x} y={30} w={42} h={0.75} accent />
-                <Figure x={x} y={36} w={32} h={14} />
-                <Line x={x} y={56} w={38} />
-                <Line x={x} y={63} w={26} />
+                <Figure x={x} y={35} w={36} h={18} />
+                <Line x={x} y={59} w={38} />
+                <Line x={x} y={66} w={26} />
               </g>
             )
           })}
         </>
       )
     case 'statList':
-      // A ledger: a hairline between rows, the figure right-aligned in the left third, its label beside it.
+      // A ledger: a hairline between rows, the figure left-aligned on the heading's edge in the first quarter, its label beside it.
       return (
         <>
           <Title />
@@ -187,8 +187,8 @@ function structured(layout: LayoutType): ReactNode {
             return (
               <g key={i}>
                 {i > 0 && <Rule x={12} y={y - 3} w={136} />}
-                <Figure x={30} y={y + 2} w={28} h={8} />
-                <Line x={66} y={y + 4} w={72 - i * 10} h={3.5} />
+                <Figure x={12} y={y + 2} w={26} h={8} />
+                <Line x={52} y={y + 4} w={84 - i * 10} h={3.5} />
               </g>
             )
           })}
@@ -439,9 +439,9 @@ function expressive(layout: LayoutType): ReactNode {
             const x = 12 + i * 47
             return (
               <g key={i}>
-                <Figure x={x} y={32} w={38} h={17} />
-                <Line x={x} y={56} w={38} />
-                <Line x={x} y={63} w={26} />
+                <Figure x={x} y={30} w={41} h={22} />
+                <Line x={x} y={59} w={38} />
+                <Line x={x} y={66} w={26} />
               </g>
             )
           })}
@@ -449,7 +449,7 @@ function expressive(layout: LayoutType): ReactNode {
       )
     case 'statList':
       // Ledger rows separated by space alone: no surface and no rule, each figure in heavy accent
-      // ink, right-aligned in the left third, its label beside it.
+      // ink, left-aligned on the heading's edge in the first quarter, its label beside it.
       return (
         <>
           <Title x={12} y={11} />
@@ -457,8 +457,8 @@ function expressive(layout: LayoutType): ReactNode {
             const y = 27 + i * 18
             return (
               <g key={i}>
-                <Figure x={26} y={y + 1} w={32} h={11} />
-                <Line x={66} y={y + 4.5} w={66 - i * 10} h={3.5} />
+                <Figure x={12} y={y + 1} w={30} h={11} />
+                <Line x={52} y={y + 4.5} w={80 - i * 10} h={3.5} />
               </g>
             )
           })}

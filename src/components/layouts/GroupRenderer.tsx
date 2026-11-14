@@ -625,29 +625,32 @@ type StatItems = Extract<GroupNode, { arrangement: 'boxes' | 'statRows' }>['item
 
 /**
  * How a grid of stats is laid out for a count: the columns, the figure's size as a multiple of
- * the h1 step, and how many characters of it fit a column at that size before it steps down.
- * Up to three stats are one row of wide columns with a large figure, four are a narrower row,
- * five and six are three to a row in two rows and seven or more four to a row.
+ * the h1 step, and how many characters of it fit a column at that size before that figure steps
+ * down. Up to three stats are one row of wide columns, four a narrower row, five and six are
+ * three to a row in two rows and seven or more four to a row. The character budgets come from the
+ * column width at the 976px slide (about 270px for three columns, 190px for four) over about
+ * 0.65em a character at the heavier expressive size.
  */
 function statColumnPlan(count: number) {
-  if (count <= 3) return { columns: Math.max(1, count), factor: 1.4, fullChars: 4 }
-  if (count === 4) return { columns: 4, factor: 1.15, fullChars: 3 }
-  if (count <= 6) return { columns: 3, factor: 1, fullChars: 5 }
-  return { columns: 4, factor: 1, fullChars: 4 }
+  if (count <= 3) return { columns: Math.max(1, count), factor: 2.2, fullChars: 3 }
+  if (count === 4) return { columns: 4, factor: 1.7, fullChars: 3 }
+  if (count <= 6) return { columns: 3, factor: 1.4, fullChars: 4 }
+  return { columns: 4, factor: 1.4, fullChars: 3 }
 }
 
 /**
  * Stats as columns on one baseline. The grid's rows come in pairs, a figure row and a label row,
  * and each stat is ONE element (so one `Adjustable`) that spans both rows and takes them from the
  * grid through `subgrid`: every figure in a row shares a baseline, and a label that wraps never
- * pushes a figure. The figure size is one for the whole grid, set by its longest value, so a long
- * number steps every figure down together. When it fills the body the label rows share the
- * height and each figure and label sits at the top of its column.
+ * pushes a figure. Each figure is sized by its own value, so one long number steps down alone, and
+ * sits at the foot of the figure row so a smaller one shares its neighbours' baseline. The label is
+ * at the lead size when the labels are few and short, else the body size. When it fills the body
+ * the label rows share the height and each figure and label sits at the top of its column.
  */
 function StatColumns({ items, expressive, fill }: { items: StatItems; expressive: boolean; fill: boolean }) {
   const { columns, factor, fullChars } = statColumnPlan(items.length)
-  const longest = Math.max(...items.map(({ block }) => block.value.length))
-  const figure = figureSize('h1', factor * (expressive ? 1.15 : 1), 'x'.repeat(longest), fullChars)
+  const figureFactor = factor * (expressive ? 1.15 : 1)
+  const labelSize = itemStep(items.map(({ block }) => block.label)) === 'roomy' ? SLIDE_SIZE.lead : BODY_SIZE
   return (
     <div
       {...(fill ? { 'data-fill': '' } : {})}
@@ -677,14 +680,15 @@ function StatColumns({ items, expressive, fill }: { items: StatItems; expressive
               className="min-w-0 text-slide-accent"
               style={{
                 fontFamily: SLIDE_HEADING_FONT,
-                fontSize: figure,
+                fontSize: figureSize('h1', figureFactor, block.value, fullChars),
                 fontWeight: expressive ? 800 : 600,
                 lineHeight: 1,
+                alignSelf: 'end',
               }}
             >
               <EditableText textRef={textRef(index, 'value')} value={block.value} />
             </div>
-            <div data-stat-label="" className="min-w-0 text-slide-muted" style={{ fontSize: BODY_SIZE }}>
+            <div data-stat-label="" className="min-w-0 text-slide-muted" style={{ fontSize: labelSize }}>
               <EditableText textRef={textRef(index, 'label')} value={block.label} />
             </div>
           </div>
@@ -695,10 +699,10 @@ function StatColumns({ items, expressive, fill }: { items: StatItems; expressive
 }
 
 /** The share of a ledger row its figure column takes. */
-const LEDGER_FIGURE_WIDTH = '34%'
+const LEDGER_FIGURE_WIDTH = '24%'
 
 /**
- * Stats as a ledger: a right-aligned figure column (h2 when structured, h1 and heavier when
+ * Stats as a ledger: a left-aligned figure column on the frame's left edge (h2 when structured, h1 and heavier when
  * expressive), the label beside it at the labels' own step. Structured rows are separated by a
  * hairline, expressive ones by `SLIDE_GAP.tight` of space. The figure size is one for the whole
  * ledger, set by its longest value. When it fills the body the rows share the height.
@@ -706,7 +710,7 @@ const LEDGER_FIGURE_WIDTH = '34%'
 function StatLedger({ items, expressive, fill }: { items: StatItems; expressive: boolean; fill: boolean }) {
   const labelSize = itemStep(items.map(({ block }) => block.label)) === 'roomy' ? SLIDE_SIZE.lead : BODY_SIZE
   const longest = 'x'.repeat(Math.max(...items.map(({ block }) => block.value.length)))
-  const figure = expressive ? figureSize('h1', 1, longest, 7) : figureSize('h2', 1, longest, 10)
+  const figure = expressive ? figureSize('h1', 1, longest, 5) : figureSize('h2', 1, longest, 8)
   return (
     <div
       {...(fill ? { 'data-fill': '' } : {})}
@@ -728,7 +732,7 @@ function StatLedger({ items, expressive, fill }: { items: StatItems; expressive:
           >
             <div
               data-stat-figure=""
-              className="shrink-0 text-right text-slide-accent"
+              className="shrink-0 text-slide-accent"
               style={{
                 width: LEDGER_FIGURE_WIDTH,
                 fontFamily: SLIDE_HEADING_FONT,

@@ -350,26 +350,39 @@ describe.each(STYLES)('redrawn stats (%s)', (style) => {
       expect(out.split('border-t border-slide-accent').length - 1).toBe(expressive ? 0 : 3)
     })
 
-    it('sets the labels at body size in muted ink', () => {
-      for (const tag of labelTags(html(find('g-stats3')))) {
-        expect(tag).toContain('text-slide-muted')
-        expect(tag).toContain('font-size:var(--slide-size-body)')
+    it('sets the labels in muted ink', () => {
+      for (const tag of labelTags(html(find('g-stats3')))) expect(tag).toContain('text-slide-muted')
+    })
+
+    it('grows the figure to 2.2 times h1 for up to three columns, 1.7 for four and 1.4 for five or more', () => {
+      const bump = expressive ? 1.15 : 1
+      const factor = (values: string[]) => figureFactor(figureTags(html(statCard('statGrid', values, style)))[0])
+      expect(factor(['1', '2', '3'])).toBeCloseTo(2.2 * bump, 3)
+      expect(factor(['1', '2', '3', '4'])).toBeCloseTo(1.7 * bump, 3)
+      expect(factor(['1', '2', '3', '4', '5'])).toBeCloseTo(1.4 * bump, 3)
+      expect(factor(['1', '2', '3', '4', '5', '6', '7'])).toBeCloseTo(1.4 * bump, 3)
+    })
+
+    it('sizes each figure by its own value: only the long one steps down, the short ones are at the full factor', () => {
+      const sizes = figureTags(html(find('g-stats5'))).map(figureFactor)
+      expect(sizes.length).toBe(5)
+      const full = 1.4 * (expressive ? 1.15 : 1)
+      for (const [i, size] of sizes.entries()) {
+        if (i === 2) expect(size).toBeLessThan(full * 0.6)
+        else expect(size).toBeCloseTo(full, 3)
       }
     })
 
-    it('grows the figure past h1 for up to three columns, less for four and h1 itself for five or more', () => {
-      const bump = expressive ? 1.15 : 1
-      const factor = (values: string[]) => figureFactor(figureTags(html(statCard('statGrid', values, style)))[0])
-      expect(factor(['1', '2', '3'])).toBeCloseTo(1.4 * bump, 3)
-      expect(factor(['1', '2', '3', '4'])).toBeCloseTo(1.15 * bump, 3)
-      expect(factor(['1', '2', '3', '4', '5'])).toBeCloseTo(1 * bump, 3)
+    it('sits each figure at the foot of the shared figure row so a smaller one keeps its neighbours baseline', () => {
+      for (const tag of figureTags(html(find('g-stats5')))) expect(tag).toContain('align-self:end')
     })
 
-    it('steps every figure down together when the longest value will not fit, and no figure grows past its factor', () => {
-      const long = figureTags(html(find('g-stats5'))).map(figureFactor)
-      const short = figureTags(html(statCard('statGrid', ['1', '2', '3', '4', '5'], style))).map(figureFactor)
-      expect(new Set(long).size).toBe(1)
-      expect(long[0]).toBeLessThan(short[0] * 0.75)
+    it('sets the labels at the lead size for a few short labels and body size otherwise', () => {
+      const size = (tags: string[]) => tags.map((tag) => tag.match(/font-size:([^;"]+)/)?.[1])
+      expect(size(labelTags(html(find('g-stats3'))))).toEqual(Array(3).fill(LEAD))
+      expect(size(labelTags(html(find('g-stats5'))))).toEqual(Array(5).fill(LEAD))
+      const long = statCard('statGrid', ['1', '2', '3'], style, 'x'.repeat(65))
+      expect(size(labelTags(html(long)))).toEqual(Array(3).fill(BODY))
     })
 
     it('lays five or six stats out three to a row and seven or more four to a row', () => {
@@ -381,10 +394,10 @@ describe.each(STYLES)('redrawn stats (%s)', (style) => {
 
     it('gives the grid the remaining height with the pair at the top of each column when it fills the body', () => {
       const out = html(find('g-stats3'))
-      expect(out).toContain('data-fill=""')
-      expect(out).toContain('flex-1')
-      expect(out).toContain('align-content:start')
-      expect(out).toContain('grid-auto-rows:auto minmax(min-content, 1fr)')
+      const root = out.match(/<div [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+      expect(root).toMatch(/class="[^"]*\bflex-1\b/)
+      expect(root).toContain('align-content:start')
+      expect(root).toContain('grid-auto-rows:auto minmax(min-content, 1fr)')
     })
 
     it('draws a one-stat grid once', () => {
@@ -400,13 +413,13 @@ describe.each(STYLES)('redrawn stats (%s)', (style) => {
   })
 
   describe('statRows', () => {
-    it('draws a right-aligned figure column 34% wide in accent', () => {
+    it('draws a left-aligned figure column 24% wide in accent', () => {
       const tags = figureTags(html(find('g-statlist')))
       expect(tags.length).toBe(4)
       for (const tag of tags) {
-        expect(tag).toContain('text-right')
+        expect(tag).not.toContain('text-right')
         expect(tag).toContain('text-slide-accent')
-        expect(tag).toContain('width:34%')
+        expect(tag).toContain('width:24%')
         expect(tag).toContain(`font-weight:${expressive ? 800 : 600}`)
       }
     })
@@ -441,9 +454,12 @@ describe.each(STYLES)('redrawn stats (%s)', (style) => {
 
     it('puts a section gap between the figure and its label and shares the height when it fills', () => {
       const out = html(find('g-statlist'))
-      expect(out).toContain('data-fill=""')
+      const root = out.match(/<div [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+      expect(root).toMatch(/class="[^"]*\bflex-1\b/)
       expect(out).toContain('gap:var(--slide-gap-section)')
-      expect(out.split('flex-1').length - 1).toBeGreaterThanOrEqual(5)
+      const rows = [...out.matchAll(/<div class="flex [^"]*items-center[^"]*"[^>]*>/g)].map((m) => m[0])
+      expect(rows.length).toBe(4)
+      for (const row of rows) expect(row).toMatch(/\bflex-1\b/)
     })
 
     it('draws every stat once', () => {
