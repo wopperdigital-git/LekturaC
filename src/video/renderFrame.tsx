@@ -91,7 +91,7 @@ function videoSlide(o: {
 }) {
   const { card, theme, textStyle, isFirstCard, onStage, onFit } = o
   // The ground is read with the same first-card flag the layout is drawn with, so the two cannot disagree.
-  const ground = groundOf({ ...card, orderIndex: isFirstCard ? 0 : Math.max(card.orderIndex, 1) })
+  const ground = groundOf(card, { isFirstCard })
   return (
     <ThemeProvider theme={theme}>
       <SlideStage

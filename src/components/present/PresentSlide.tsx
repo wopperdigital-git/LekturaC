@@ -21,7 +21,7 @@ export function PresentSlide({
   isFirstCard: boolean
 }) {
   // The ground is read with the same first-card flag the layout is drawn with, so the two cannot disagree.
-  const ground = groundOf({ ...card, orderIndex: isFirstCard ? 0 : Math.max(card.orderIndex, 1) })
+  const ground = groundOf(card, { isFirstCard })
   return (
     <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
       <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={ground}>

@@ -521,8 +521,9 @@ body {
 /*
   On a deep ground a picked text colour is ignored, like on a photo, but only where one was
   picked: an element or a character span that carries an inline `color`. Character colour marks
-  are inline spans (`valueStyle` in `EditableText`) and so is an element pick (`Adjustable`
-  stops writing it here, this is the backstop for the frame before it runs). The attribute
+  are inline spans (`valueStyle` in `EditableText`) that `Adjustable` never touches, so this
+  rule is what ignores them (an element pick is handled by `Adjustable`, which writes none
+  here, and a deck or card pick by the rule above). The attribute
   match is on the inline style text: `color:` at the start or after a `;` (with or without a
   space, since the DOM and the server serialise differently), which `background-color:` and
   `--slide-user-color:` do not match. Muted text and other theme-coloured text carry no inline

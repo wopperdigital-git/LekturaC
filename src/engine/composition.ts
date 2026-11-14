@@ -1,6 +1,6 @@
 import type { Card, ContentBlock, LayoutType } from './contentBlocks'
 import { singlePhoto } from './blockPartition'
-import { resolveLayout } from './layoutEngine'
+import { resolveLayout, type LayoutContext } from './layoutEngine'
 
 /**
  * The roles a slide's blocks play, read off the blocks and never stored.
@@ -75,10 +75,13 @@ export function groundOfLayout(layout: Exclude<LayoutType, 'auto'>): Ground {
 }
 
 /**
- * A card's ground, read off the layout it is drawn with. It builds the same
- * layout context `LayoutRenderer`'s callers hand it (`isFirstCard` is the
- * first position in the deck), so the ground and the drawn layout cannot disagree.
+ * A card's ground, read off the layout it is drawn with. A surface that hands its
+ * layout an explicit context passes the same object here, so the ground and the
+ * drawn layout cannot disagree; with none, the card is first when its `orderIndex`
+ * is 0. A card with no blocks is always plain: even one named `hero` draws only the
+ * blank placeholder, which must not paint the deep ground.
  */
-export function groundOf(card: Pick<Card, 'layout' | 'blocks' | 'orderIndex'>): Ground {
-  return groundOfLayout(resolveLayout(card.layout, card.blocks, { isFirstCard: card.orderIndex === 0 }))
+export function groundOf(card: Pick<Card, 'layout' | 'blocks' | 'orderIndex'>, context?: LayoutContext): Ground {
+  if (card.blocks.length === 0) return 'plain'
+  return groundOfLayout(resolveLayout(card.layout, card.blocks, context ?? { isFirstCard: card.orderIndex === 0 }))
 }

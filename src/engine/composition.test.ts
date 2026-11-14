@@ -59,4 +59,20 @@ describe('groundOf', () => {
   it('follows an explicit hero anywhere in the deck', () => {
     expect(groundOf({ ...CPP_DECK[1], layout: 'hero' })).toBe('deep')
   })
+  it('uses an explicit context as given, whatever the orderIndex says', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'A title' },
+      { type: 'paragraph', text: 'One short line.' },
+    ]
+    expect(groundOf({ layout: 'auto', blocks, orderIndex: 2 }, { isFirstCard: true })).toBe('deep')
+    expect(groundOf({ layout: 'auto', blocks, orderIndex: 2 }, { isFirstCard: false })).toBe('plain')
+    expect(groundOf({ layout: 'auto', blocks, orderIndex: 0 }, { isFirstCard: false })).toBe('plain')
+    expect(groundOf({ layout: 'auto', blocks, orderIndex: 0 }, { isFirstCard: true })).toBe('deep')
+    expect(groundOf({ layout: 'auto', blocks, orderIndex: 0 })).toBe('deep')
+    expect(groundOf({ layout: 'auto', blocks, orderIndex: 2 })).toBe('plain')
+  })
+  it('keeps an empty card plain, even one named hero', () => {
+    expect(groundOf({ layout: 'hero', blocks: [], orderIndex: 0 })).toBe('plain')
+    expect(groundOf({ layout: 'hero', blocks: [], orderIndex: 0 }, { isFirstCard: true })).toBe('plain')
+  })
 })

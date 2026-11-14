@@ -74,7 +74,7 @@ export function SlidePreview({
 
   const scale = frameWidth > 0 ? frameWidth / BASE_WIDTH : 0
   // The ground is read with the same first-card flag the layout is drawn with, so the two cannot disagree.
-  const ground = groundOf({ ...card, orderIndex: isFirstCard ? 0 : Math.max(card.orderIndex, 1) })
+  const ground = groundOf(card, { isFirstCard })
 
   return (
     <div ref={frameRef} className={`relative overflow-hidden bg-app-surface ${className}`}>

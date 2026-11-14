@@ -54,6 +54,25 @@ describe('a slide is painted on its ground', () => {
     expect(draw({ ...card, orderIndex: 2 })).not.toContain('data-ground="deep"')
   })
 
+  it('paints a cover tile drawn as the first card on the deep ground, whatever its orderIndex', () => {
+    const card: Card = {
+      id: 'cover',
+      orderIndex: 2,
+      layout: 'auto',
+      visualStyle: 'structured',
+      blocks: [
+        { type: 'heading', text: 'A title' },
+        { type: 'paragraph', text: 'One short line.' },
+      ],
+    }
+    expect(draw(card, true)).toContain('data-ground="deep"')
+  })
+
+  it('leaves an empty card named hero on no ground', () => {
+    const card: Card = { id: 'empty', orderIndex: 0, layout: 'hero', visualStyle: 'structured', blocks: [] }
+    expect(draw(card)).not.toContain('data-ground')
+  })
+
   it('reads the ground with the first-card flag the layout is drawn with', () => {
     const card: Card = {
       id: 'auto-title',
@@ -86,7 +105,10 @@ describe('every surface passes its ground', () => {
     const drawing = sources.filter((path) => readFileSync(path, 'utf8').includes('<SlideSurface'))
     expect(drawing.length).toBeGreaterThanOrEqual(6)
     for (const path of drawing) {
-      expect(readFileSync(path, 'utf8'), path).toContain('ground=')
+      const source = readFileSync(path, 'utf8')
+      const surfaces = source.match(/<SlideSurface/g)?.length ?? 0
+      const grounds = source.match(/\sground=\{/g)?.length ?? 0
+      expect(grounds, path).toBe(surfaces)
     }
   })
 })
@@ -108,7 +130,9 @@ describe('the ground rules (index.css)', () => {
 
   it('ignores a picked colour on a deep ground, but only where one was picked', () => {
     const rule = indexCss.split('\n').find((line) => line.startsWith("[data-ground='deep'] :is(")) ?? ''
-    expect(rule).toContain("[style^='color:']")
+    for (const part of ["[style^='color:']", "[style*=';color:']", "[style*='; color:']"]) {
+      expect(rule, part).toContain(part)
+    }
     expect(rule).toContain(':not([data-on-photo] *)')
     const at = indexCss.indexOf(rule)
     expect(indexCss.slice(at, indexCss.indexOf('}', at))).toContain('color: var(--slide-ground-deep-foreground) !important;')
