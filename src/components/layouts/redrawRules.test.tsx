@@ -572,12 +572,13 @@ describe.each(STYLES)('redrawn timelines (%s)', (style) => {
     expect(track).toContain(`width:${expressive ? 4 : 2}px`)
   })
 
-  it('sets the vertical track and node column in rem, so an element size pick on a step cannot move a node off the track', () => {
+  it('sizes the vertical track and node column from the body size of the list, so an element size pick on a step cannot move a node off the track', () => {
     const out = html(find('g-timeline'))
     const [track] = trackTags(out)
-    expect(track).toMatch(/left:calc\([\d.]+rem - /)
+    expect(out).toContain('--timeline-unit:var(--slide-size-body)')
+    expect(track).toMatch(/left:calc\(var\(--timeline-unit\) \* 1\.25 - /)
     expect(track).toContain('role="presentation"')
-    expect(out).toMatch(/width:3\.125rem;height:calc\(var\(--slide-size-h3\)/)
+    expect(out).toMatch(/width:calc\(var\(--timeline-unit\) \* 2\.5\);height:calc\(var\(--slide-size-h3\)/)
     expect(out).not.toMatch(/width:2\.5em/)
   })
 

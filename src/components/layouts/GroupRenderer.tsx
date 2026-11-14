@@ -775,11 +775,14 @@ function StepWords({ step, textSize }: { step: StepItems[number]; textSize: stri
  * the steps share the height, their content at the top.
  */
 /**
- * The vertical timeline's node column and the track at its centre, in `rem`: the step's own
+ * The vertical timeline's node column and the track at its centre, as multiples of
+ * `--timeline-unit`: the body size as the `ol` sees it (a `var()` in a custom property is
+ * substituted where it is declared, so the steps inherit the resolved value). A step's own
  * `li` can carry an element size pick (`--slide-size-body`), which would move an `em` node
- * column off a track measured on the `ol`. 3.125rem is 2.5em at the default 1.25rem body.
+ * column off a track measured on the `ol`; a card or deck pick still scales both.
  */
-const TIMELINE_NODE_COLUMN_REM = 3.125
+const TIMELINE_NODE_COLUMN = 2.5
+const TIMELINE_UNIT = { '--timeline-unit': 'var(--slide-size-body)' } as CSSProperties
 
 function TimelineColumn({ items, expressive, fill }: { items: StepItems; expressive: boolean; fill: boolean }) {
   const textSize = stepTextSize(items)
@@ -788,14 +791,14 @@ function TimelineColumn({ items, expressive, fill }: { items: StepItems; express
     <ol
       {...(fill ? { 'data-fill': '' } : {})}
       className={`relative flex flex-col${fill ? ' flex-1' : ''}`}
-      style={{ gap: SLIDE_GAP.group, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
+      style={{ ...TIMELINE_UNIT, gap: SLIDE_GAP.group, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
     >
       <li
         role="presentation"
         aria-hidden="true"
         data-track=""
         className="absolute inset-y-0 bg-slide-accent/40"
-        style={{ left: `calc(${TIMELINE_NODE_COLUMN_REM / 2}rem - ${thickness / 2}px)`, width: `${thickness}px` }}
+        style={{ left: `calc(var(--timeline-unit) * ${TIMELINE_NODE_COLUMN / 2} - ${thickness / 2}px)`, width: `${thickness}px` }}
       />
       {items.map((step, i) => (
         <Adjustable key={step.index} index={step.index}>
@@ -806,7 +809,7 @@ function TimelineColumn({ items, expressive, fill }: { items: StepItems; express
             <span
               aria-hidden="true"
               className={`relative flex shrink-0 items-center justify-center${expressive ? ' bg-slide-background' : ''}`}
-              style={{ width: `${TIMELINE_NODE_COLUMN_REM}rem`, height: `calc(var(--slide-size-h3) * ${STEP_LABEL_LINE})` }}
+              style={{ width: `calc(var(--timeline-unit) * ${TIMELINE_NODE_COLUMN})`, height: `calc(var(--slide-size-h3) * ${STEP_LABEL_LINE})` }}
             >
               {expressive ? (
                 <span
