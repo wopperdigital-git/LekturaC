@@ -26,6 +26,11 @@ import { StudentClassPage } from '@/pages/classroom/StudentClassPage'
 /** The landing page pulls in GSAP and Lenis; lazy, so the app bundle never carries them. */
 const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 
+/** Development only: the fixture deck in every theme, no account needed. Dropped from a production build. */
+const DevSlidesPage = import.meta.env.DEV
+  ? lazy(() => import('@/pages/DevSlidesPage').then((m) => ({ default: m.DevSlidesPage })))
+  : null
+
 /** The narration page is gone; its script lives in the editor's Narration tab. Old links land on the deck. */
 function NarrateRedirect() {
   const { id } = useParams<{ id: string }>()
@@ -68,6 +73,16 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
+        {DevSlidesPage && (
+          <Route
+            path="/dev/slides"
+            element={
+              <Suspense fallback={null}>
+                <DevSlidesPage />
+              </Suspense>
+            }
+          />
+        )}
         <Route
           path="/welcome"
           element={
