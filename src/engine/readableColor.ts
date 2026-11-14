@@ -16,6 +16,12 @@ import { HEX_COLOR, type TextStyle } from './textStyle'
   `MIN_TEXT_CONTRAST` against the slide background go; a readable pick stays,
   whatever the theme.
 
+  "The slide background" is the theme's plain ground. A pick is checked only
+  against that, so on a card drawn on the deep ground (the title slide) every
+  pick is ignored at render time instead (`index.css`, `Adjustable`): a pick
+  that reads on the plain ground can vanish on the deep one. Picks are kept,
+  not dropped, so they show again on every other slide.
+
   Pure; the store runs it when the theme changes and when a deck is opened.
 */
 

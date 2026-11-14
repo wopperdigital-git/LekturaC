@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { Card } from '@/engine/contentBlocks'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
+import { groundOf } from '@/engine/composition'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
@@ -72,6 +73,8 @@ export function SlidePreview({
   }, [])
 
   const scale = frameWidth > 0 ? frameWidth / BASE_WIDTH : 0
+  // The ground is read with the same first-card flag the layout is drawn with, so the two cannot disagree.
+  const ground = groundOf({ ...card, orderIndex: isFirstCard ? 0 : Math.max(card.orderIndex, 1) })
 
   return (
     <div ref={frameRef} className={`relative overflow-hidden bg-app-surface ${className}`}>
@@ -94,7 +97,7 @@ export function SlidePreview({
               style={{ minHeight: BASE_HEIGHT, paddingBlock: STAGE_PADDING_Y_PX }}
             >
               <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-                <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card">
+                <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card" ground={ground}>
                   {/* `SlideBody` is what makes a nudged element sit where the
                       user put it here as well — it carries the card's width
                       into the coordinate space the nudges are stored in. */}

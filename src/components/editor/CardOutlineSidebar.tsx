@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { SlideSurface } from '@/components/theme/SlideSurface'
+import { groundOf } from '@/engine/composition'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
@@ -112,7 +113,7 @@ function CardThumbnail({
           {/* Same merged style as the canvas, so a Level 2 edit shows up in the
               rail immediately rather than only on the big card. */}
           <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
-            <SlideSurface className="w-full rounded-slide shadow-slide-card">
+            <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={groundOf(card)}>
               <SlideBody card={card}>
                 <LayoutRenderer card={card} context={{ isFirstCard: index === 0 }} />
               </SlideBody>

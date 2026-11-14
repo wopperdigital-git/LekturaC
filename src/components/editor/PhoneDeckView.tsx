@@ -6,6 +6,7 @@ import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { ScaledSlide } from '@/components/theme/ScaledSlide'
 import { SlideSurface } from '@/components/theme/SlideSurface'
+import { groundOf } from '@/engine/composition'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
@@ -94,7 +95,7 @@ export function PhoneDeckView({
                   </h2>
                   <ScaledSlide>
                     <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-                      <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card">
+                      <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card" ground={groundOf(card)}>
                         <SlideBody card={card}>
                           <LayoutRenderer card={card} context={{ isFirstCard: i === 0 }} />
                         </SlideBody>

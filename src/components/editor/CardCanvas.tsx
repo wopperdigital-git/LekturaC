@@ -5,6 +5,7 @@ import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { BlockAdjustContext } from '@/components/layouts/adjustContext'
 import { SlideSurface } from '@/components/theme/SlideSurface'
+import { groundOf } from '@/engine/composition'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { listTarget } from '@/engine/listItems'
@@ -149,7 +150,7 @@ export function CardCanvas({
                     it on cannot be expressed by an inner CSS scope. See TextStyleScope.
                   */}
                   <TextStyleScope style={mergeTextStyle(deckTextStyle, card.textStyle)}>
-                    <SlideSurface className="w-full rounded-slide shadow-slide-card">
+                    <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={groundOf(card)}>
                       {/*
                         Only the selected card gets the *text* editing provider, so a
                         stray click can't start typing into a card nobody chose. That

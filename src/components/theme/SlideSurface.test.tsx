@@ -41,6 +41,13 @@ describe('SlideSurface', () => {
     expect(roomy).not.toContain('sm:[--slide-pad')
   })
 
+  it('stamps its ground, and nothing at all for a plain one', () => {
+    expect(renderToStaticMarkup(<SlideSurface ground="deep">x</SlideSurface>)).toContain('data-ground="deep"')
+    expect(renderToStaticMarkup(<SlideSurface ground="tint">x</SlideSurface>)).toContain('data-ground="tint"')
+    expect(renderToStaticMarkup(<SlideSurface ground="plain">x</SlideSurface>)).not.toContain('data-ground')
+    expect(html).not.toContain('data-ground')
+  })
+
   it('has SlideBody fill the floor and leave placement to the layout', () => {
     // Ink, grid and the drawing tools are children of SlideBody, so it must span
     // the whole slide, not shrink to the content and be centred by the surface or by itself.

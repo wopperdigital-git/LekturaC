@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import type { Card } from '@/engine/contentBlocks'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
+import { groundOf } from '@/engine/composition'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
@@ -89,6 +90,8 @@ function videoSlide(o: {
   onFit: (node: HTMLDivElement | null) => void
 }) {
   const { card, theme, textStyle, isFirstCard, onStage, onFit } = o
+  // The ground is read with the same first-card flag the layout is drawn with, so the two cannot disagree.
+  const ground = groundOf({ ...card, orderIndex: isFirstCard ? 0 : Math.max(card.orderIndex, 1) })
   return (
     <ThemeProvider theme={theme}>
       <SlideStage
@@ -105,7 +108,7 @@ function videoSlide(o: {
           style={{ width: SLIDE_WIDTH_PX, transformOrigin: 'center center' }}
         >
           <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-            <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card">
+            <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card" ground={ground}>
               <SlideBody card={card}>
                 <LayoutRenderer card={card} context={{ isFirstCard }} />
               </SlideBody>

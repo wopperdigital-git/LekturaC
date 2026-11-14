@@ -10,6 +10,7 @@ import {
   BlockDataContext,
   CardBoxContext,
   FIXED_ELEMENT_ATTR,
+  GROUND_ATTR,
   ON_PHOTO_ATTR,
   blockStyleKey,
   canGrab,
@@ -100,7 +101,10 @@ export function Adjustable({
     node.style.maxWidth = geometry.maxWidth ?? ''
     node.style.maxHeight = geometry.maxHeight ?? ''
 
-    applyTextStyle(node, style, theme, node.closest(`[${ON_PHOTO_ATTR}]`) !== null)
+    // Text on a photo and text on a deep ground ignore a picked colour (see the rules in index.css).
+    const colourIgnored =
+      node.closest(`[${ON_PHOTO_ATTR}]`) !== null || node.closest(`[${GROUND_ATTR}="deep"]`) !== null
+    applyTextStyle(node, style, theme, colourIgnored)
     // The move cursor over the whole element while it can be grabbed (see `index.css`).
     if (grabbable) node.setAttribute('data-element-grabbable', '')
     else node.removeAttribute('data-element-grabbable')
@@ -158,7 +162,7 @@ export function Adjustable({
   are preserved and only the multiplier changes, exactly as `TextStyleScope`
   does it one level up.
 */
-function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: ThemeTokens, onPhoto: boolean) {
+function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: ThemeTokens, colourIgnored: boolean) {
   node.style.textAlign = style?.align ?? ''
   // Room to align *in* — see `stretchesInFlexColumn`. Only for an element
   // somebody has explicitly aligned, so an untouched one keeps the exact size
@@ -176,8 +180,9 @@ function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: 
     reaches the descendants — a layout colours a stat's label or a list item with
     its own utility class, and an inherited colour loses to that.
   */
-  // Text on a photo is always white on its scrim (see the on-photo rule in index.css), whatever was picked.
-  const color = onPhoto ? undefined : style?.color
+  // Text on a photo is always white on its scrim, and text on a deep ground is that ground's foreground
+  // (see the on-photo and deep-ground rules in index.css), whatever was picked.
+  const color = colourIgnored ? undefined : style?.color
   node.style.color = color ?? ''
   if (color) {
     node.setAttribute('data-deck-color', 'true')

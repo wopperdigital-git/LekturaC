@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
+import type { Ground } from '@/engine/composition'
+import { GROUND_ATTR } from '@/components/layouts/adjustContext'
 
 /**
  * One slide's card: a solid panel in the theme's own background colour.
@@ -36,6 +38,11 @@ import type { CSSProperties, ReactNode } from 'react'
  * insets itself by its negative), so the two cannot disagree on any surface. The
  * canvas, presenter and outline pad `fluid` (2rem, 2.5rem from a 640px screen);
  * the cover, the phone view and the video pad `roomy` (2.5rem always).
+ *
+ * `ground` is the card's ground (`groundOf`): it is stamped as `data-ground` ("tint" or
+ * "deep"; a plain card carries no attribute) and `index.css` re-points the `--slide-*`
+ * colour variables inside it, so `bg-slide-background` and every layout's own colour
+ * utilities follow without a layout knowing. Every surface that draws a slide passes it.
  */
 export const SLIDE_SURFACE_CLASS =
   'relative isolate flex aspect-video flex-col overflow-clip bg-slide-background p-[var(--slide-pad)]'
@@ -50,16 +57,22 @@ const PADDING_CLASS: Record<SlidePadding, string> = {
 export function SlideSurface({
   className = '',
   padding = 'fluid',
+  ground = 'plain',
   style,
   children,
 }: {
   className?: string
   padding?: SlidePadding
+  ground?: Ground
   style?: CSSProperties
   children: ReactNode
 }) {
   return (
-    <div className={`${SLIDE_SURFACE_CLASS} ${PADDING_CLASS[padding]} ${className}`} style={style}>
+    <div
+      className={`${SLIDE_SURFACE_CLASS} ${PADDING_CLASS[padding]} ${className}`}
+      style={style}
+      {...(ground === 'plain' ? {} : { [GROUND_ATTR]: ground })}
+    >
       {children}
     </div>
   )

@@ -246,3 +246,11 @@ export const FIXED_ELEMENT_ATTR = 'data-fixed-element'
  * photo has no single background colour for a pick to be checked against.
  */
 export const ON_PHOTO_ATTR = 'data-on-photo'
+
+/**
+ * Stamped on a slide surface whose card is drawn on a tinted or deep ground
+ * (`SlideSurface`'s `ground`). `index.css` re-points the `--slide-*` colours inside
+ * it, and on a deep ground ignores every picked text colour, since a pick was only
+ * checked against the plain ground.
+ */
+export const GROUND_ATTR = 'data-ground'

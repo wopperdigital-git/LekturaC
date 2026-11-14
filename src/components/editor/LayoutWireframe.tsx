@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { LayoutType, VisualStyle } from '@/engine/contentBlocks'
+import { groundOfLayout } from '@/engine/composition'
 
 /*
   A low-fidelity picture of one layout variety for the Layout picker: bars for
@@ -11,6 +12,11 @@ import type { LayoutType, VisualStyle } from '@/engine/contentBlocks'
 
   App chrome: painted with `app-*` tokens, never the deck's theme. Drawn in a
   160×90 viewBox (16:9) and scaled to the tile.
+
+  The ground follows `groundOfLayout`, as the slide does: the hero is drawn on a
+  filled ground with its bars in the page colour (the deep ground swaps text and
+  background together), a quote and a stat hero on a faint tint, the rest on the
+  tile's own surface.
 */
 
 const INK = 'var(--app-foreground)'
@@ -678,9 +684,27 @@ export function LayoutWireframe({
   visualStyle: VisualStyle
   className?: string
 }) {
+  const ground = layout === 'auto' ? 'plain' : groundOfLayout(layout)
+  const drawing = visualStyle === 'expressive' ? expressive(layout) : structured(layout)
   return (
     <svg viewBox="0 0 160 90" className={className} aria-hidden="true" preserveAspectRatio="xMidYMid meet">
-      {visualStyle === 'expressive' ? expressive(layout) : structured(layout)}
+      {ground === 'deep' ? (
+        <>
+          <rect data-wire-ground="deep" x={0} y={0} width={160} height={90} fill={INK} opacity={0.88} />
+          {/* The bars read the same two custom properties as everywhere else, so on the deep ground they
+              are re-pointed to the page colour: ink and ground swap, and the accent bar becomes ink too. */}
+          <g style={{ '--app-foreground': 'var(--app-background)', '--app-accent': 'var(--app-background)' } as CSSProperties}>
+            {drawing}
+          </g>
+        </>
+      ) : (
+        <>
+          {ground === 'tint' && (
+            <rect data-wire-ground="tint" x={0} y={0} width={160} height={90} fill={ACCENT} opacity={0.1} />
+          )}
+          {drawing}
+        </>
+      )}
     </svg>
   )
 }

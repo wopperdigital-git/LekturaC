@@ -468,8 +468,13 @@ body {
   featured table header) is left alone, and so is everything nested inside such an
   element (the editable run's own span): it is coloured for contrast against the
   fill, and forcing the picked colour onto it would make it unreadable.
+
+  Nothing inside a deep ground (`data-ground='deep'`, the title slide) takes a deck or
+  card pick either, and neither does the surface itself: a pick was only checked
+  against the plain ground (`engine/readableColor.ts`), so it could vanish on the deep
+  one. The deep-ground rule below handles the picks that ride inline on a node.
 */
-[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-on-photo] *) {
+[data-deck-color='true'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-on-photo] *):not([data-ground='deep']):not([data-ground='deep'] *) {
   color: var(--slide-user-color);
 }
 
@@ -486,6 +491,47 @@ body {
 */
 [data-on-photo] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *) {
   color: #fff !important;
+}
+
+/*
+  A card's ground (`SlideSurface`'s `ground`, from `groundOf`). Every layout colours its text
+  with `slide-*` utilities (`text-slide-foreground`, `text-slide-muted`, `bg-slide-accent`,
+  ...), so the ground re-points those variables inside the surface instead of any layout
+  naming a ground: the surface's own `bg-slide-background` follows too. The values are
+  written on the theme scope by `applyTheme` (with `:root` fallbacks above); the deep ground
+  swaps the foreground, muted, accent and surface families together so text and its
+  background always change as a pair. Unlayered, like the rules around it, and a plain card
+  has no attribute.
+*/
+[data-ground='tint'] {
+  --slide-background: var(--slide-ground-tint);
+}
+
+[data-ground='deep'] {
+  --slide-background: var(--slide-ground-deep);
+  --slide-foreground: var(--slide-ground-deep-foreground);
+  --slide-muted: var(--slide-ground-deep-muted);
+  --slide-accent: var(--slide-ground-deep-foreground);
+  --slide-accent-foreground: var(--slide-ground-deep);
+  --slide-accent-soft: var(--slide-ground-deep-muted);
+  --slide-border: color-mix(in srgb, var(--slide-ground-deep-foreground) 25%, var(--slide-ground-deep));
+  --slide-surface: color-mix(in srgb, var(--slide-ground-deep-foreground) 8%, var(--slide-ground-deep));
+}
+
+/*
+  On a deep ground a picked text colour is ignored, like on a photo, but only where one was
+  picked: an element or a character span that carries an inline `color`. Character colour marks
+  are inline spans (`valueStyle` in `EditableText`) and so is an element pick (`Adjustable`
+  stops writing it here, this is the backstop for the frame before it runs). The attribute
+  match is on the inline style text: `color:` at the start or after a `;` (with or without a
+  space, since the DOM and the server serialise differently), which `background-color:` and
+  `--slide-user-color:` do not match. Muted text and other theme-coloured text carry no inline
+  colour, so they keep the tones the re-pointed variables give them. Text on a photo keeps its
+  white (the photo rule wins there) and text on an accent fill keeps its accent-foreground ink,
+  like the rules above.
+*/
+[data-ground='deep'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):is([style^='color:'], [style*=';color:'], [style*='; color:']):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-on-photo] *) {
+  color: var(--slide-ground-deep-foreground) !important;
 }
 
 [data-on-photo] {
