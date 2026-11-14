@@ -18,9 +18,9 @@ const BODY_SIZE = 'var(--slide-size-body)'
  * `card.blocks` — that is its `textRef` and its `card.adjusts` key, so
  * formatting, nudges and text editing keep working unchanged.
  *
- * Each arrangement is the item-drawing half of the whole-card layout it
- * replaces, moved here as-is so a card looks the same after the move. The
- * heading those layouts drew above their items is now a leaf of its own.
+ * Each arrangement draws its items under their original indices. Which element may
+ * be accent-filled or featured is decided by `accentIndex`, never by the arrangement
+ * itself. The heading above the items is a leaf of its own.
  */
 export function GroupRenderer({
   node,

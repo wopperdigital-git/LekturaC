@@ -12,11 +12,11 @@ import { SlideSurface, SLIDE_SURFACE_CLASS } from './SlideSurface'
 describe('SlideSurface', () => {
   const html = renderToStaticMarkup(<SlideSurface>x</SlideSurface>)
 
-  it('is a centred 16:9 floor that clips its corners without becoming a scroll container', () => {
+  it('is a 16:9 floor that places nothing and clips its corners without becoming a scroll container', () => {
     expect(html).toContain('aspect-video')
     expect(html).toContain('overflow-clip')
     expect(html).toContain('flex-col')
-    expect(html).toContain('justify-center')
+    expect(html).not.toContain('justify-center')
     expect(html).not.toContain('overflow-hidden')
   })
 
@@ -41,9 +41,9 @@ describe('SlideSurface', () => {
     expect(roomy).not.toContain('sm:[--slide-pad')
   })
 
-  it('has SlideBody fill the floor and centre the layout inside itself', () => {
+  it('has SlideBody fill the floor and leave placement to the layout', () => {
     // Ink, grid and the drawing tools are children of SlideBody, so it must span
-    // the whole slide, not shrink to the content and be centred by the surface.
+    // the whole slide, not shrink to the content and be centred by the surface or by itself.
     const body = renderToStaticMarkup(
       <SlideSurface>
         <SlideBody card={{ adjusts: undefined, inline: undefined, overlay: undefined }}>
@@ -54,7 +54,7 @@ describe('SlideSurface', () => {
     const bodyTag = body.match(/<div[^>]*data-slide-body[^>]*>/)?.[0] ?? ''
     expect(bodyTag).toContain('flex-1')
     expect(bodyTag).toContain('flex-col')
-    expect(bodyTag).toContain('justify-center')
+    expect(bodyTag).not.toContain('justify-center')
     expect(bodyTag).toContain('@container')
   })
 })

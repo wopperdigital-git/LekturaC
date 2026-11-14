@@ -18,7 +18,9 @@ import { textRef } from '@/engine/marks'
  * marks and selection address it exactly as before. Zone wrappers sit outside those
  * holders and are not elements of their own.
  *
- * A card with no heading has no head element at all. `aside` draws a photo beside
+ * The head zone is always the full width of the text column (no width cap on the
+ * wrapper), so a centred or right-aligned heading aligns against the column's edges
+ * and not against some narrower box. A card with no heading has no head element at all. `aside` draws a photo beside
  * the text column from the slide's 640px width up (stacked below it); without it the
  * photo's index stays in the body list, so the caller draws it where it sits. A card
  * with a second photo keeps that one in the body, drawn where it sits.
@@ -52,11 +54,7 @@ export function SlideFrame({
 
   const head =
     slots.claim !== null && claim?.type === 'heading' ? (
-      <div
-        data-slot="head"
-        className="flex flex-col"
-        style={{ gap: SLIDE_GAP.tight, maxWidth: aside ? '100%' : '80%' }}
-      >
+      <div data-slot="head" className="flex flex-col" style={{ gap: SLIDE_GAP.tight }}>
         <Heading
           text={claim.text}
           textRef={textRef(slots.claim, 'text')}

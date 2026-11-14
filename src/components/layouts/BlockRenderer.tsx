@@ -46,15 +46,16 @@ export function BlockRenderer({
 /**
  * Whatever a layout did not draw itself, stacked below what it did.
  *
- * Five frame layouts (`HeroLayout`, `StatHeroLayout`, `QuoteLayout`,
- * `StandardSplitLayout`, `ImageFocusLayout`) pick out the block types they
- * understand and render only those, so anything else on the card used to be
- * drawn nowhere — while the .pptx export and the narration script both carried
- * it (see `engine/blockPartition.ts`). The layouts on `SlideFrame` (`StandardLayout`,
- * `TextFocusLayout`, `FlowLayout`) are handed every index not in the head by
- * `slotsOf`, so they need none, and must never use this component — doing so would
- * draw blocks twice. Each frame layout that picks by type names the indices it
- * drew and ends with this, so a card cannot hold text that never reaches the screen.
+ * Three frame layouts (`HeroLayout`, `StatHeroLayout`, `QuoteLayout`) pick out the
+ * block types they understand and render only those, so anything else on the card
+ * used to be drawn nowhere — while the .pptx export and the narration script both
+ * carried it (see `engine/blockPartition.ts`). The layouts that draw every block
+ * through `SlideFrame` (`FlowLayout` with `GroupRenderer`, `StandardLayout`,
+ * `TextFocusLayout`, `StandardSplitLayout`, `ImageFocusLayout`) are handed every
+ * index not in the head by `slotsOf`, so they need none, and must never use this
+ * component — doing so would draw blocks twice. Each frame layout that picks by type
+ * names the indices it drew and ends with this, so a card cannot hold text that never
+ * reaches the screen.
  *
  * It renders nothing at all in the normal case, where the layout's own content
  * *is* the whole card — so a well-matched card looks exactly as it did before

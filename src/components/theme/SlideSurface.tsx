@@ -17,8 +17,9 @@ import type { CSSProperties, ReactNode } from 'react'
  * over the stage's decoration.
  *
  * The card is presentation-shaped: a 16:9 FLOOR, not a fixed box. `aspect-video`
- * sets the ratio and the height stays `auto`, so a short slide is 16:9 with its
- * content centred (`flex flex-col justify-center`). A taller slide must grow, not
+ * sets the ratio and the height stays `auto`, so a short slide is 16:9. The surface
+ * only sets that floor: `SlideBody` fills it and the layout places itself inside
+ * (top-anchored, or `my-auto` for the frames that centre). A taller slide must grow, not
  * clip, and that rests on one CSS detail: with an aspect-ratio and `height:
  * auto`, the box's automatic minimum height is its content height *unless it is
  * a scroll container*. `overflow: hidden` is a scroll container, so it would pin
@@ -37,7 +38,7 @@ import type { CSSProperties, ReactNode } from 'react'
  * the cover, the phone view and the video pad `roomy` (2.5rem always).
  */
 export const SLIDE_SURFACE_CLASS =
-  'relative isolate flex aspect-video flex-col justify-center overflow-clip bg-slide-background p-[var(--slide-pad)]'
+  'relative isolate flex aspect-video flex-col overflow-clip bg-slide-background p-[var(--slide-pad)]'
 
 export type SlidePadding = 'fluid' | 'roomy'
 

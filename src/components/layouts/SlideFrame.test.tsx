@@ -41,11 +41,43 @@ describe('SlideFrame through the layouts', () => {
       ],
     } as Card
     const out = html(card)
-    expect(out.indexOf('Claim')).toBeLessThan(out.indexOf('Before'))
+    const head = out.indexOf('data-slot="head"')
+    const body = out.indexOf('data-slot="body"')
+    expect(head).toBeGreaterThan(-1)
+    expect(body).toBeGreaterThan(head)
+    // The claim is in the head zone: after its opening and before the body zone opens.
+    expect(out.indexOf('Claim')).toBeGreaterThan(head)
+    expect(out.indexOf('Claim')).toBeLessThan(body)
+    // The paragraph before it is not a lead; it sits in the body zone.
+    expect(out.indexOf('Before')).toBeGreaterThan(body)
+    expect(out).not.toContain('data-lead')
   })
 
   it('makes the lead paragraph the element Adjustable holds', () => {
-    expect(html(CPP_DECK[1])).toMatch(/<p[^>]*data-lead/)
+    // The holder `display: contents` div carries the block index and the lead <p> is its
+    // direct child, so a nudge or a selection of block 1 lands on the lead itself.
+    expect(html(CPP_DECK[1])).toMatch(/data-block-index="1"[^>]*><p[^>]*data-lead/)
+  })
+
+  it('has a head zone and no lead when the heading is not followed by a paragraph', () => {
+    const card = {
+      ...CPP_DECK[1],
+      blocks: [
+        { type: 'heading', text: 'Claim only' },
+        { type: 'bulletList', items: ['alpha', 'beta'] },
+      ],
+    } as Card
+    const out = html(card)
+    expect(out).toContain('data-slot="head"')
+    expect(out).not.toContain('data-lead')
+  })
+
+  it('gives the head zone the full width of its column, with no inline max-width', () => {
+    for (const card of [CPP_DECK[1], CPP_DECK[6], { ...CPP_DECK[6], layout: 'imageFocus' } as Card]) {
+      const tag = html(card).match(/<div[^>]*data-slot="head"[^>]*>/)?.[0] ?? ''
+      expect(tag).not.toBe('')
+      expect(tag).not.toMatch(/max-width/)
+    }
   })
 })
 
@@ -82,6 +114,59 @@ describe('the photo layouts on the frame', () => {
     // The first photo is the aside, so it comes after the head; the second sits in the body zone.
     expect(out.indexOf('src="https://example.test/FIRSTPHOTO.png"')).toBeGreaterThan(out.indexOf('data-slot="aside"'))
     expect(out.indexOf('data-slot="body"')).toBeLessThan(out.indexOf('src="https://example.test/SECONDPHOTO.png"'))
+  })
+})
+
+describe('photo cards without a heading, and image focus', () => {
+  const count = (out: string, mark: string) => out.split(mark).length - 1
+
+  it.each(['standardSplit', 'imageFocus'] as const)('draws a headless %s card with an aside and no head', (layout) => {
+    const card = {
+      ...CPP_DECK[6],
+      layout,
+      blocks: [
+        { type: 'paragraph', text: 'HEADLESSBODY' },
+        { type: 'image', url: 'https://example.test/HEADLESS.png' },
+        { type: 'bulletList', items: ['HEADLESSITEM'] },
+      ],
+    } as Card
+    const out = html(card)
+    expect(out).not.toContain('data-slot="head"')
+    expect(count(out, 'data-slot="aside"')).toBe(1)
+    for (const mark of ['HEADLESSBODY', 'HEADLESSITEM', 'src="https://example.test/HEADLESS.png"'])
+      expect(count(out, mark), mark).toBe(1)
+  })
+
+  describe.each(['structured', 'expressive'] as const)('imageFocus (%s)', (style) => {
+    const card = {
+      ...CPP_DECK[6],
+      layout: 'imageFocus',
+      visualStyle: style,
+      orderIndex: 6,
+      blocks: [
+        { type: 'heading', text: 'FOCUSCLAIM' },
+        { type: 'paragraph', text: 'FOCUSLEAD' },
+        { type: 'image', url: 'https://example.test/FOCUSFIRST.png' },
+      ],
+    } as Card
+
+    it('puts the photo in the aside on the left, before the head', () => {
+      const out = html(card)
+      expect(count(out, 'data-slot="aside"')).toBe(1)
+      expect(out.indexOf('data-slot="aside"')).toBeLessThan(out.indexOf('data-slot="head"'))
+      expect(out.indexOf('src="https://example.test/FOCUSFIRST.png"')).toBeGreaterThan(out.indexOf('data-slot="aside"'))
+    })
+
+    it('draws a second photo once, in the body after the aside', () => {
+      const two = {
+        ...card,
+        blocks: [...card.blocks, { type: 'image', url: 'https://example.test/FOCUSSECOND.png' }],
+      } as Card
+      const out = html(two)
+      for (const mark of ['src="https://example.test/FOCUSFIRST.png"', 'src="https://example.test/FOCUSSECOND.png"'])
+        expect(count(out, mark), mark).toBe(1)
+      expect(out.indexOf('src="https://example.test/FOCUSSECOND.png"')).toBeGreaterThan(out.indexOf('data-slot="body"'))
+    })
   })
 })
 

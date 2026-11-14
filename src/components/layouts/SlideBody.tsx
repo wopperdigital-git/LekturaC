@@ -106,7 +106,7 @@ export function SlideBody({
     // (inline-size containment never affects its height, so the floor can grow it).
     <div
       ref={ref}
-      className="@container relative flex flex-1 flex-col justify-center"
+      className="@container relative flex flex-1 flex-col"
       {...{ [SLIDE_BODY_ATTR]: true }}
     >
       <CardBoxContext.Provider value={{ width }}>

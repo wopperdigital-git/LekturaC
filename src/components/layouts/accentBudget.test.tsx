@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { Card } from '@/engine/contentBlocks'
 import { CPP_DECK, withStyle } from '@/engine/fixtures/cppDeck'
 import { LayoutRenderer } from './LayoutRenderer'
 
@@ -23,6 +24,32 @@ describe('accent is a budget: one filled panel per slide', () => {
     const out = renderToStaticMarkup(<LayoutRenderer card={CPP_DECK[4]} />)
     expect(owners(out)).toBe(1)
   })
+
+  it('features only the first group of an expressive comparison', () => {
+    const out = renderToStaticMarkup(<LayoutRenderer card={withStyle(CPP_DECK, 'expressive')[4]} />)
+    expect(owners(out)).toBe(1)
+  })
+
+  it.each(['structured', 'expressive'] as const)(
+    'gives a comparison split into two runs one accent owner, not one per run (%s)',
+    (style) => {
+      const card = {
+        ...CPP_DECK[4],
+        layout: 'comparison' as const,
+        visualStyle: style,
+        blocks: [
+          { type: 'heading', text: 'Two runs' },
+          { type: 'comparisonGroup', heading: 'A', items: ['a1'] },
+          { type: 'comparisonGroup', heading: 'B', items: ['b1'] },
+          { type: 'paragraph', text: 'Between the runs.' },
+          { type: 'comparisonGroup', heading: 'C', items: ['c1'] },
+          { type: 'comparisonGroup', heading: 'D', items: ['d1'] },
+        ],
+      } as Card
+      const out = renderToStaticMarkup(<LayoutRenderer card={card} />)
+      expect(owners(out)).toBe(1)
+    },
+  )
 
   it('fills only the first header of an expressive comparison table', () => {
     const card = { ...withStyle(CPP_DECK, 'expressive')[4], layout: 'comparisonTable' as const }
