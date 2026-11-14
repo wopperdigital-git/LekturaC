@@ -41,3 +41,26 @@ describe('LayoutWireframe lists', () => {
     }
   })
 })
+
+/** The stat arrangements are figures, hairlines and space: no surface panel and no bordered tile. */
+describe('LayoutWireframe stats', () => {
+  it.each<VisualStyle>(['structured', 'expressive'])('draws no surface or bordered tile for a stat grid or list (%s)', (style) => {
+    for (const layout of ['statGrid', 'statList'] as const) {
+      const html = draw(layout, style)
+      expect(html).not.toContain('opacity="0.07"')
+      expect(html).not.toContain('fill-opacity')
+    }
+  })
+
+  it('draws an accent hairline over each structured stat column and none over an expressive one', () => {
+    const hairlines = (style: VisualStyle) => draw('statGrid', style).split('height="0.75"').length - 1
+    expect(hairlines('structured')).toBe(3)
+    expect(hairlines('expressive')).toBe(0)
+  })
+
+  it('draws hairlines between structured ledger rows and none between expressive ones', () => {
+    const hairlines = (style: VisualStyle) => draw('statList', style).split('height="0.75"').length - 1
+    expect(hairlines('structured')).toBe(2)
+    expect(hairlines('expressive')).toBe(0)
+  })
+})

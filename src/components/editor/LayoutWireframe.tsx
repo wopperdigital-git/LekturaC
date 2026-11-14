@@ -150,17 +150,17 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'statHero':
-      // Centred: heading, big figure, its label, a line of text.
+      // Centred: heading, a very large figure in accent, its label at lead size, a line of text.
       return (
         <>
-          <Title x={48} y={14} w={64} />
-          <Figure x={56} y={30} w={48} h={16} />
-          <Line x={60} y={52} w={40} />
-          <Line x={44} y={62} w={72} />
+          <Title x={48} y={12} w={64} />
+          <Figure x={47} y={25} w={66} h={24} />
+          <Line x={54} y={54} w={52} h={3.5} />
+          <Line x={42} y={65} w={76} />
         </>
       )
     case 'statGrid':
-      // Equal columns, each under an accent top rule.
+      // Equal columns, each under a hairline in accent: the figure large over its label.
       return (
         <>
           <Title />
@@ -168,17 +168,17 @@ function structured(layout: LayoutType): ReactNode {
             const x = 12 + i * 47
             return (
               <g key={i}>
-                <Rule x={x} y={32} w={42} h={1.5} accent />
-                <Figure x={x} y={40} w={24} />
-                <Line x={x} y={54} w={36} />
-                <Line x={x} y={61} w={26} />
+                <Rule x={x} y={30} w={42} h={0.75} accent />
+                <Figure x={x} y={36} w={32} h={14} />
+                <Line x={x} y={56} w={38} />
+                <Line x={x} y={63} w={26} />
               </g>
             )
           })}
         </>
       )
     case 'statList':
-      // A ledger: divided rows, the figure in the left third.
+      // A ledger: a hairline between rows, the figure right-aligned in the left third, its label beside it.
       return (
         <>
           <Title />
@@ -187,8 +187,8 @@ function structured(layout: LayoutType): ReactNode {
             return (
               <g key={i}>
                 {i > 0 && <Rule x={12} y={y - 3} w={136} />}
-                <Figure x={12} y={y + 2} w={28} h={7} />
-                <Line x={60} y={y + 4} w={78 - i * 10} />
+                <Figure x={30} y={y + 2} w={28} h={8} />
+                <Line x={66} y={y + 4} w={72 - i * 10} h={3.5} />
               </g>
             )
           })}
@@ -430,8 +430,8 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'statGrid':
-      // Equal cells under an accent top rule, the figure in heavy accent ink. No cell
-      // is filled: a stat grid has no accent owner.
+      // Bare columns: no rule and no fill (a stat grid has no accent owner), the figure in
+      // heavy accent ink, larger than the structured one, over its label.
       return (
         <>
           <Title x={12} y={11} />
@@ -439,27 +439,26 @@ function expressive(layout: LayoutType): ReactNode {
             const x = 12 + i * 47
             return (
               <g key={i}>
-                <Rule x={x} y={30} w={42} h={1.5} accent />
-                <Figure x={x} y={39} w={24} h={9} />
-                <Line x={x} y={54} w={36} />
-                <Line x={x} y={61} w={26} />
+                <Figure x={x} y={32} w={38} h={17} />
+                <Line x={x} y={56} w={38} />
+                <Line x={x} y={63} w={26} />
               </g>
             )
           })}
         </>
       )
     case 'statList':
-      // Ledger rows on surfaces, each figure in heavy accent ink (no fill behind it).
+      // Ledger rows separated by space alone: no surface and no rule, each figure in heavy accent
+      // ink, right-aligned in the left third, its label beside it.
       return (
         <>
           <Title x={12} y={11} />
           {range(3).map((i) => {
-            const y = 25 + i * 18
+            const y = 27 + i * 18
             return (
               <g key={i}>
-                <Surface x={12} y={y} w={136} h={15} />
-                <Figure x={19} y={y + 4.5} w={26} h={6} />
-                <Line x={66} y={y + 6} w={66 - i * 10} />
+                <Figure x={26} y={y + 1} w={32} h={11} />
+                <Line x={66} y={y + 4.5} w={66 - i * 10} h={3.5} />
               </g>
             )
           })}

@@ -272,3 +272,215 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
     }
   })
 })
+
+/* Stats: the figure is the graphic. A column of figures on one baseline, a ledger, and the lone hero figure. */
+
+const STAT_IDS = ['g-stats3', 'g-stats5', 'g-statlist', 'g-stathero']
+
+/** The opening tag of every stat figure, and of every stat label, in document order. */
+const figureTags = (out: string) => [...out.matchAll(/<div data-stat-figure=""[^>]*>/g)].map((match) => match[0])
+const labelTags = (out: string) => [...out.matchAll(/<div data-stat-label=""[^>]*>/g)].map((match) => match[0])
+/** The words inside every stat figure, and inside every stat label, in document order. */
+const innerTexts = (out: string, hook: 'figure' | 'label') =>
+  [...out.matchAll(new RegExp(`<div data-stat-${hook}=""[^>]*>(.*?)</div>`, 'g'))].map((m) => m[1].replace(/<[^>]*>/g, ''))
+/** The number a figure's `calc(var(--slide-size-hN) * n)` multiplies its step by. */
+const figureFactor = (tag: string) => Number(tag.match(/font-size:calc\(var\(--slide-size-h\d\) \* ([\d.]+)\)/)?.[1])
+
+const statCard = (layout: LayoutType, values: string[], style: VisualStyle, label = 'LABEL'): Card => ({
+  id: 'x',
+  orderIndex: 1,
+  layout,
+  visualStyle: style,
+  blocks: [
+    { type: 'heading', text: 'STATHEAD' },
+    ...values.map((value, i) => ({ type: 'stat', value, label: `${label}${String.fromCharCode(65 + i)}` })),
+  ] as ContentBlock[],
+})
+
+describe.each(STYLES)('redrawn stats (%s)', (style) => {
+  const expressive = style === 'expressive'
+  const cards = withStyle(GALLERY_DECK, style)
+  const find = (id: string) => cards.find((c) => c.id === id) as Card
+
+  it.each(STAT_IDS)('%s draws no boxed card, no surface and no fixed text size', (id) => {
+    const out = html(find(id))
+    expect(out).not.toMatch(BOXED)
+    expect(out).not.toMatch(FIXED_TEXT_SIZE)
+    expect(out).not.toMatch(SIDE_TAB)
+    // The expressive hero keeps its one accent panel, which is not a surface.
+    expect(out).not.toContain('bg-slide-surface')
+  })
+
+  describe('boxes', () => {
+    it('draws every figure and label once, the long value too', () => {
+      const out = html(find('g-stats5'))
+      const stats = find('g-stats5').blocks.flatMap((b) => (b.type === 'stat' ? [b] : []))
+      expect(stats.length).toBe(5)
+      expect(innerTexts(out, 'figure')).toEqual(stats.map((b) => b.value))
+      expect(innerTexts(out, 'label')).toEqual(stats.map((b) => b.label))
+      expect(out.split('1,250,000').length - 1).toBe(1)
+      expect(figureTags(out).length).toBe(5)
+      expect(labelTags(out).length).toBe(5)
+    })
+
+    it('keeps each stat one element on the figure row and the label row of a shared grid', () => {
+      const out = html(find('g-stats3'))
+      expect(out.split('grid-rows-subgrid').length - 1).toBe(3)
+      expect(out.split('grid-row:span 2').length - 1).toBe(3)
+      // Within each stat the figure comes before its label, and a label comes before the next figure.
+      const figures = [...out.matchAll(/data-stat-figure=""/g)].map((m) => m.index as number)
+      const labels = [...out.matchAll(/data-stat-label=""/g)].map((m) => m.index as number)
+      expect(figures.length).toBe(3)
+      figures.forEach((at, i) => {
+        expect(at).toBeLessThan(labels[i])
+        if (i > 0) expect(labels[i - 1]).toBeLessThan(at)
+      })
+    })
+
+    it('sets each figure in accent, in the heading font, heavier when expressive', () => {
+      for (const tag of figureTags(html(find('g-stats3')))) {
+        expect(tag).toContain('text-slide-accent')
+        expect(tag).toContain('var(--slide-font-heading)')
+        expect(tag).toContain(`font-weight:${expressive ? 800 : 600}`)
+      }
+    })
+
+    it('puts a rule in accent over each structured column and none over an expressive one', () => {
+      const out = html(find('g-stats3'))
+      expect(out.split('border-t border-slide-accent').length - 1).toBe(expressive ? 0 : 3)
+    })
+
+    it('sets the labels at body size in muted ink', () => {
+      for (const tag of labelTags(html(find('g-stats3')))) {
+        expect(tag).toContain('text-slide-muted')
+        expect(tag).toContain('font-size:var(--slide-size-body)')
+      }
+    })
+
+    it('grows the figure past h1 for up to three columns, less for four and h1 itself for five or more', () => {
+      const bump = expressive ? 1.15 : 1
+      const factor = (values: string[]) => figureFactor(figureTags(html(statCard('statGrid', values, style)))[0])
+      expect(factor(['1', '2', '3'])).toBeCloseTo(1.4 * bump, 3)
+      expect(factor(['1', '2', '3', '4'])).toBeCloseTo(1.15 * bump, 3)
+      expect(factor(['1', '2', '3', '4', '5'])).toBeCloseTo(1 * bump, 3)
+    })
+
+    it('steps every figure down together when the longest value will not fit, and no figure grows past its factor', () => {
+      const long = figureTags(html(find('g-stats5'))).map(figureFactor)
+      const short = figureTags(html(statCard('statGrid', ['1', '2', '3', '4', '5'], style))).map(figureFactor)
+      expect(new Set(long).size).toBe(1)
+      expect(long[0]).toBeLessThan(short[0] * 0.75)
+    })
+
+    it('lays five or six stats out three to a row and seven or more four to a row', () => {
+      expect(html(statCard('statGrid', ['1', '2', '3', '4', '5'], style))).toContain('repeat(3, minmax(0, 1fr))')
+      expect(html(statCard('statGrid', ['1', '2', '3', '4', '5', '6'], style))).toContain('repeat(3, minmax(0, 1fr))')
+      expect(html(statCard('statGrid', ['1', '2', '3', '4', '5', '6', '7'], style))).toContain('repeat(4, minmax(0, 1fr))')
+      expect(html(statCard('statGrid', ['1', '2', '3', '4'], style))).toContain('repeat(4, minmax(0, 1fr))')
+    })
+
+    it('gives the grid the remaining height with the pair at the top of each column when it fills the body', () => {
+      const out = html(find('g-stats3'))
+      expect(out).toContain('data-fill=""')
+      expect(out).toContain('flex-1')
+      expect(out).toContain('align-content:start')
+      expect(out).toContain('grid-auto-rows:auto minmax(min-content, 1fr)')
+    })
+
+    it('draws a one-stat grid once', () => {
+      const out = html(statCard('statGrid', ['ONLYFIGURE'], style, 'ONLYLABEL'))
+      expect(out.split('ONLYFIGURE').length - 1).toBe(1)
+      expect(out.split('ONLYLABELA').length - 1).toBe(1)
+      expect(figureTags(out).length).toBe(1)
+    })
+
+    it('has no accent owner', () => {
+      expect(html(find('g-stats5'))).not.toContain('data-accent-owner')
+    })
+  })
+
+  describe('statRows', () => {
+    it('draws a right-aligned figure column 34% wide in accent', () => {
+      const tags = figureTags(html(find('g-statlist')))
+      expect(tags.length).toBe(4)
+      for (const tag of tags) {
+        expect(tag).toContain('text-right')
+        expect(tag).toContain('text-slide-accent')
+        expect(tag).toContain('width:34%')
+        expect(tag).toContain(`font-weight:${expressive ? 800 : 600}`)
+      }
+    })
+
+    it('sets the figure at h2 when structured and h1 when expressive', () => {
+      for (const tag of figureTags(html(find('g-statlist')))) {
+        expect(tag).toContain(`font-size:calc(var(--slide-size-${expressive ? 'h1' : 'h2'}) * 1.000)`)
+      }
+    })
+
+    it('separates structured rows by a hairline between rows only and expressive rows by space alone', () => {
+      const out = html(find('g-statlist'))
+      const root = out.match(/<div [^>]*data-fill=""[^>]*>/)?.[0] ?? ''
+      const rows = [...out.matchAll(/<div class="flex [^"]*items-center[^"]*"[^>]*>/g)].map((m) => m[0])
+      expect(rows.length).toBe(4)
+      expect(out).not.toContain('divide-')
+      if (expressive) {
+        expect(out).not.toMatch(/border-t|border-b/)
+        expect(root).toContain(`gap:${TIGHT}`)
+      } else {
+        expect(rows[0]).not.toContain('border-t')
+        for (const row of rows.slice(1)) expect(row).toContain('border-t border-slide-border')
+      }
+    })
+
+    it('sets the label at the lead size for a few short labels and body size otherwise', () => {
+      const size = (tags: string[]) => tags.map((tag) => tag.match(/font-size:([^;"]+)/)?.[1])
+      expect(size(labelTags(html(find('g-statlist'))))).toEqual(Array(4).fill(LEAD))
+      const long = statCard('statList', ['1', '2'], style, 'x'.repeat(65))
+      expect(size(labelTags(html(long)))).toEqual([BODY, BODY])
+    })
+
+    it('puts a section gap between the figure and its label and shares the height when it fills', () => {
+      const out = html(find('g-statlist'))
+      expect(out).toContain('data-fill=""')
+      expect(out).toContain('gap:var(--slide-gap-section)')
+      expect(out.split('flex-1').length - 1).toBeGreaterThanOrEqual(5)
+    })
+
+    it('draws every stat once', () => {
+      const out = html(find('g-statlist'))
+      for (const block of find('g-statlist').blocks) {
+        if (block.type !== 'stat') continue
+        expect(out.split(block.label).length - 1).toBe(1)
+      }
+    })
+  })
+
+  describe('statHero', () => {
+    it('draws exactly one accent owner when expressive and at most one when structured', () => {
+      const owners = html(find('g-stathero')).split('data-accent-owner').length - 1
+      if (expressive) expect(owners).toBe(1)
+      else expect(owners).toBeLessThanOrEqual(1)
+    })
+
+    it('sets the figure at 2.2 times h1 with a tight line height, and its label at the lead size', () => {
+      const out = html(find('g-stathero'))
+      const [figure] = figureTags(out)
+      expect(figure).toContain('font-size:calc(var(--slide-size-h1) * 2.200)')
+      expect(figure).toContain('line-height:0.95')
+      // Accent text when structured; on the expressive panel it is the panel's own ink.
+      expect(figure).toMatch(expressive ? /text-slide-accent-foreground/ : /text-slide-accent(?!-)/)
+      expect(labelTags(out)[0]).toContain(`font-size:${LEAD}`)
+    })
+
+    it('steps a long figure down so it fits', () => {
+      const card = statCard('statHero', ['1,250,000,000'], style)
+      expect(figureFactor(figureTags(html(card))[0])).toBeLessThan(1.5)
+    })
+
+    it('draws the figure and its label once', () => {
+      const out = html(find('g-stathero'))
+      expect(out.split('100%').length - 1).toBe(1)
+      expect(out.split('of loops need an exit').length - 1).toBe(1)
+    })
+  })
+})

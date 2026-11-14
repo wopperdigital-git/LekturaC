@@ -7,7 +7,6 @@ import { textRef } from '@/engine/marks'
 import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
-import { StatBlockView } from './BlockRenderer'
 import { EditableText } from './EditableText'
 import { useItemProps } from './adjustContext'
 import { figureSize } from './figureSize'
@@ -55,49 +54,10 @@ export function GroupRenderer({
   const itemProps = useItemProps()
 
   switch (node.arrangement) {
-    case 'boxes': {
-      // From StatGridLayout: equal cells under a top accent rule. A stat is drawn
-      // on an accent panel only when it is the slide's accent owner (expressive
-      // only; a stat grid has none), and the expressive figure is heavier. Past
-      // three cells the figure steps down to h2 so a long value still fits its column.
-      const wide = node.items.length <= 3
-      const longest = Math.max(...node.items.map(({ block }) => block.value.length))
-      const valueSize = figureSize(wide ? 'h1' : 'h2', 1, 'x'.repeat(longest), wide ? 6 : 5)
-      return (
-        <div
-          {...fillAttr}
-          className={`grid items-stretch gap-6${grow}`}
-          style={{ gridTemplateColumns: `repeat(${node.items.length}, minmax(0, 1fr))` }}
-        >
-          {node.items.map(({ block, index }) =>
-            expressive && index === accentIndex ? (
-              <StatBlockView
-                key={index}
-                value={block.value}
-                label={block.label}
-                valueRef={textRef(index, 'value')}
-                labelRef={textRef(index, 'label')}
-                valueSize={valueSize}
-                panel="min-w-0 rounded-slide-sm bg-slide-accent p-6 text-slide-accent-foreground"
-                extrabold
-                accentOwner
-              />
-            ) : (
-              <div key={index} className="min-w-0 border-t-2 border-slide-accent pt-4">
-                <StatBlockView
-                  value={block.value}
-                  label={block.label}
-                  valueRef={textRef(index, 'value')}
-                  labelRef={textRef(index, 'label')}
-                  valueSize={valueSize}
-                  extrabold={expressive}
-                />
-              </div>
-            ),
-          )}
-        </div>
-      )
-    }
+    case 'boxes':
+      // Stats as figures on a shared baseline: each stat a column under a hairline (structured)
+      // or bare (expressive), the figure in accent over its label. A stat grid has no accent owner.
+      return <StatColumns items={node.items} expressive={expressive} fill={fill} />
 
     case 'timeline':
       // From TimelineLayout: a numbered card per step when expressive, a
@@ -260,39 +220,9 @@ export function GroupRenderer({
     }
 
     case 'statRows':
-      // Stats as a ledger: the figure on the left and what it measures beside
-      // it, one row per stat. Reads better than a grid once the labels are long.
-      // The figure is accent text in both treatments, never a fill; the expressive
-      // rows sit on a surface card and set it heavier.
-      return (
-        <div
-          {...fillAttr}
-          className={`${expressive ? 'flex flex-col gap-3' : 'flex flex-col divide-y divide-slide-border'}${grow}`}
-        >
-          {node.items.map(({ block, index }) => (
-            <Adjustable key={index} index={index}>
-              <div
-                className={`flex gap-6 ${expressive ? 'items-center rounded-slide-sm bg-slide-surface p-3' : 'items-baseline py-4'}${grow}`}
-                style={{ fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
-              >
-                <div
-                  className={
-                    expressive
-                      ? 'w-1/3 shrink-0 font-extrabold text-slide-accent'
-                      : 'w-1/3 shrink-0 font-bold text-slide-accent'
-                  }
-                  style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h2)', lineHeight: 1 }}
-                >
-                  <EditableText textRef={textRef(index, 'value')} value={block.value} />
-                </div>
-                <div className="text-slide-foreground/90">
-                  <EditableText textRef={textRef(index, 'label')} value={block.label} />
-                </div>
-              </div>
-            </Adjustable>
-          ))}
-        </div>
-      )
+      // Stats as a ledger: a right-aligned figure column and what it measures beside it, one row
+      // per stat. Reads better than a grid once the labels are long.
+      return <StatLedger items={node.items} expressive={expressive} fill={fill} />
 
     case 'timelineRow': {
       // The steps side by side, wrapping after four. A rule with a dot over each
@@ -687,5 +617,134 @@ function CheckMark({ ring, size }: { ring: boolean; size: string }) {
         tick
       )}
     </span>
+  )
+}
+
+/** The stat blocks of a `boxes` or `statRows` group, each with its own block index. */
+type StatItems = Extract<GroupNode, { arrangement: 'boxes' | 'statRows' }>['items']
+
+/**
+ * How a grid of stats is laid out for a count: the columns, the figure's size as a multiple of
+ * the h1 step, and how many characters of it fit a column at that size before it steps down.
+ * Up to three stats are one row of wide columns with a large figure, four are a narrower row,
+ * five and six are three to a row in two rows and seven or more four to a row.
+ */
+function statColumnPlan(count: number) {
+  if (count <= 3) return { columns: Math.max(1, count), factor: 1.4, fullChars: 4 }
+  if (count === 4) return { columns: 4, factor: 1.15, fullChars: 3 }
+  if (count <= 6) return { columns: 3, factor: 1, fullChars: 5 }
+  return { columns: 4, factor: 1, fullChars: 4 }
+}
+
+/**
+ * Stats as columns on one baseline. The grid's rows come in pairs, a figure row and a label row,
+ * and each stat is ONE element (so one `Adjustable`) that spans both rows and takes them from the
+ * grid through `subgrid`: every figure in a row shares a baseline, and a label that wraps never
+ * pushes a figure. The figure size is one for the whole grid, set by its longest value, so a long
+ * number steps every figure down together. When it fills the body the label rows share the
+ * height and each figure and label sits at the top of its column.
+ */
+function StatColumns({ items, expressive, fill }: { items: StatItems; expressive: boolean; fill: boolean }) {
+  const { columns, factor, fullChars } = statColumnPlan(items.length)
+  const longest = Math.max(...items.map(({ block }) => block.value.length))
+  const figure = figureSize('h1', factor * (expressive ? 1.15 : 1), 'x'.repeat(longest), fullChars)
+  return (
+    <div
+      {...(fill ? { 'data-fill': '' } : {})}
+      className={`grid${fill ? ' flex-1' : ''}`}
+      style={{
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        columnGap: SLIDE_GAP.section,
+        rowGap: SLIDE_GAP.tight,
+        gridAutoRows: fill ? 'auto minmax(min-content, 1fr)' : 'auto',
+        ...(fill ? { alignContent: 'start' } : {}),
+      }}
+    >
+      {items.map(({ block, index }, i) => (
+        <Adjustable key={index} index={index}>
+          <div
+            className={`grid min-w-0 grid-rows-subgrid${expressive ? '' : ' border-t border-slide-accent'}`}
+            style={{
+              gridRow: 'span 2',
+              fontFamily: SLIDE_BODY_FONT,
+              fontSize: BODY_SIZE,
+              ...(expressive ? {} : { paddingTop: SLIDE_GAP.tight }),
+              ...(i >= columns ? { marginTop: SLIDE_GAP.group } : {}),
+            }}
+          >
+            <div
+              data-stat-figure=""
+              className="min-w-0 text-slide-accent"
+              style={{
+                fontFamily: SLIDE_HEADING_FONT,
+                fontSize: figure,
+                fontWeight: expressive ? 800 : 600,
+                lineHeight: 1,
+              }}
+            >
+              <EditableText textRef={textRef(index, 'value')} value={block.value} />
+            </div>
+            <div data-stat-label="" className="min-w-0 text-slide-muted" style={{ fontSize: BODY_SIZE }}>
+              <EditableText textRef={textRef(index, 'label')} value={block.label} />
+            </div>
+          </div>
+        </Adjustable>
+      ))}
+    </div>
+  )
+}
+
+/** The share of a ledger row its figure column takes. */
+const LEDGER_FIGURE_WIDTH = '34%'
+
+/**
+ * Stats as a ledger: a right-aligned figure column (h2 when structured, h1 and heavier when
+ * expressive), the label beside it at the labels' own step. Structured rows are separated by a
+ * hairline, expressive ones by `SLIDE_GAP.tight` of space. The figure size is one for the whole
+ * ledger, set by its longest value. When it fills the body the rows share the height.
+ */
+function StatLedger({ items, expressive, fill }: { items: StatItems; expressive: boolean; fill: boolean }) {
+  const labelSize = itemStep(items.map(({ block }) => block.label)) === 'roomy' ? SLIDE_SIZE.lead : BODY_SIZE
+  const longest = 'x'.repeat(Math.max(...items.map(({ block }) => block.value.length)))
+  const figure = expressive ? figureSize('h1', 1, longest, 7) : figureSize('h2', 1, longest, 10)
+  return (
+    <div
+      {...(fill ? { 'data-fill': '' } : {})}
+      className={`flex flex-col${fill ? ' flex-1' : ''}`}
+      style={expressive ? { gap: SLIDE_GAP.tight } : undefined}
+    >
+      {items.map(({ block, index }, i) => (
+        <Adjustable key={index} index={index}>
+          {/* The hairline is on the row itself: the `Adjustable` holder is `display: contents`, so a
+              `divide-y` on the root would put its borders on holders that draw none. */}
+          <div
+            className={`flex ${fill ? 'flex-1 items-center' : 'items-baseline'}${expressive || i === 0 ? '' : ' border-t border-slide-border'}`}
+            style={{
+              gap: SLIDE_GAP.section,
+              fontFamily: SLIDE_BODY_FONT,
+              fontSize: BODY_SIZE,
+              ...(expressive ? {} : { paddingBlock: SLIDE_GAP.tight }),
+            }}
+          >
+            <div
+              data-stat-figure=""
+              className="shrink-0 text-right text-slide-accent"
+              style={{
+                width: LEDGER_FIGURE_WIDTH,
+                fontFamily: SLIDE_HEADING_FONT,
+                fontSize: figure,
+                fontWeight: expressive ? 800 : 600,
+                lineHeight: 1,
+              }}
+            >
+              <EditableText textRef={textRef(index, 'value')} value={block.value} />
+            </div>
+            <div data-stat-label="" className="min-w-0 text-slide-foreground/90" style={{ fontSize: labelSize }}>
+              <EditableText textRef={textRef(index, 'label')} value={block.label} />
+            </div>
+          </div>
+        </Adjustable>
+      ))}
+    </div>
   )
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { leftoverBlocks } from '@/engine/blockPartition'
 import { textRef } from '@/engine/marks'
@@ -273,8 +273,11 @@ export function StatBlockView({
   valueRef,
   labelRef,
   valueSize = 'var(--slide-size-h1)',
+  labelSize = 'var(--slide-size-body)',
+  lineHeight = 1,
+  gap,
   panel,
-  extrabold = false,
+  panelStyle,
   accentOwner = false,
 }: {
   value: string
@@ -283,6 +286,12 @@ export function StatBlockView({
   labelRef: string
   /** CSS font-size of the figure. The default is the theme's h1 step. */
   valueSize?: string
+  /** CSS font-size of the label. The default is the theme's body step. */
+  labelSize?: string
+  /** Line height of the figure. */
+  lineHeight?: number
+  /** The space between the figure and its label, a `SLIDE_GAP` step. The default is a small fixed one. */
+  gap?: string
   /**
    * Classes that make the figure's own box an accent-filled panel (the
    * expressive treatment). They must carry `bg-slide-accent` and
@@ -290,8 +299,8 @@ export function StatBlockView({
    * accent-foreground. The panel being the adjusted node, a nudge moves both.
    */
   panel?: string
-  /** The figure is set `font-extrabold` rather than `font-bold` (the expressive treatment). */
-  extrabold?: boolean
+  /** Inline style for the panel's own box (its padding), merged over the font settings. */
+  panelStyle?: CSSProperties
   /**
    * Marks the panel as the slide's one accent-filled box (`data-accent-owner`). Only
    * meaningful with `panel`: the attribute sits on the panel's own element, so no
@@ -306,15 +315,20 @@ export function StatBlockView({
       <div
         className={panel}
         data-accent-owner={panel && accentOwner ? '' : undefined}
-        style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}
+        style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)', ...panelStyle }}
       >
         <div
-          className={`${extrabold ? 'font-extrabold' : 'font-bold'} ${panel ? 'text-slide-accent-foreground' : 'text-slide-accent'}`}
-          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: valueSize, lineHeight: 1 }}
+          data-stat-figure=""
+          className={`font-bold ${panel ? 'text-slide-accent-foreground' : 'text-slide-accent'}`}
+          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: valueSize, lineHeight }}
         >
           <EditableText textRef={valueRef} value={value} />
         </div>
-        <div className={`mt-2 ${panel ? 'text-slide-accent-foreground/85' : 'text-slide-muted'}`}>
+        <div
+          data-stat-label=""
+          className={`${gap ? '' : 'mt-2 '}${panel ? 'text-slide-accent-foreground/85' : 'text-slide-muted'}`}
+          style={{ fontSize: labelSize, ...(gap ? { marginTop: gap } : {}) }}
+        >
           <EditableText textRef={labelRef} value={label} />
         </div>
       </div>
