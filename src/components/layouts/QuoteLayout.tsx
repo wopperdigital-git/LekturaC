@@ -5,7 +5,7 @@ import { Heading, Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
-import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
+import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 import { BackgroundPhoto, PhotoStage } from './BackgroundPhoto'
 
 /*
@@ -15,6 +15,9 @@ import { BackgroundPhoto, PhotoStage } from './BackgroundPhoto'
 */
 const STRUCTURED_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 0.9)'
 const EXPRESSIVE_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 1.1)'
+// Without a photo the quote is set at the h2 step itself (a regular weight), a little larger when expressive.
+const PLAIN_QUOTE_SIZE = 'var(--slide-size-h2)'
+const PLAIN_EXPRESSIVE_QUOTE_SIZE = 'calc(var(--slide-size-h2) * 1.15)'
 
 /**
  * Cinematic pull-quote treatment for a card built around one verbatim line. With one
@@ -44,6 +47,90 @@ export function QuoteLayout({ blocks, variant }: { blocks: ContentBlock[]; varia
       content
     )
 
+  if (!photo) {
+    const expressive = variant === 'expressive'
+    return (
+      <div
+        data-quote-root=""
+        className="my-auto flex flex-col items-start text-left"
+        style={{ gap: SLIDE_GAP.group }}
+      >
+        {headings.map(({ block, index }) => (
+          <Heading
+            key={index}
+            text={block.text}
+            textRef={textRef(index, 'text')}
+            size={block.size}
+            variant={expressive ? 'expressive' : undefined}
+          />
+        ))}
+        {quote && (
+          <Adjustable index={quote.index}>
+            {/* The mark and the rule are decoration inside the one element this holder moves, so they travel with the quote. */}
+            <div className="flex w-full flex-col items-start" style={{ fontFamily: SLIDE_BODY_FONT }}>
+              <span
+                aria-hidden="true"
+                data-quote-mark=""
+                className="pointer-events-none block select-none text-slide-accent"
+                style={{
+                  fontFamily: SLIDE_HEADING_FONT,
+                  fontSize: 'calc(var(--slide-size-h1) * 2.4)',
+                  lineHeight: 0.8,
+                }}
+              >
+                {'“'}
+              </span>
+              <p
+                data-quote-text=""
+                className="text-slide-foreground"
+                style={{
+                  fontFamily: SLIDE_HEADING_FONT,
+                  fontSize: expressive ? PLAIN_EXPRESSIVE_QUOTE_SIZE : PLAIN_QUOTE_SIZE,
+                  fontWeight: expressive ? 600 : 400,
+                  lineHeight: 1.25,
+                  maxWidth: '85%',
+                  marginTop: SLIDE_GAP.tight,
+                }}
+              >
+                <EditableText textRef={textRef(quote.index, 'text')} value={quote.block.text} />
+              </p>
+              {quote.block.attribution && (
+                <div
+                  data-quote-attribution=""
+                  className="flex items-center uppercase tracking-[0.14em] text-slide-muted"
+                  style={{ fontSize: SLIDE_SIZE.eyebrow, gap: SLIDE_GAP.tight, marginTop: SLIDE_GAP.group }}
+                >
+                  <span
+                    aria-hidden="true"
+                    data-quote-rule=""
+                    className="pointer-events-none block shrink-0 bg-slide-accent"
+                    style={{ width: '2rem', height: '2px' }}
+                  />
+                  <EditableText
+                    textRef={textRef(quote.index, 'attribution')}
+                    value={quote.block.attribution}
+                  />
+                </div>
+              )}
+            </div>
+          </Adjustable>
+        )}
+        {paragraph && (
+          <Adjustable index={paragraph.index}>
+            <p
+              className="max-w-md text-[length:var(--slide-size-body)] text-slide-foreground/80"
+              style={{ fontFamily: SLIDE_BODY_FONT }}
+            >
+              <EditableText textRef={textRef(paragraph.index, 'text')} value={paragraph.block.text} />
+            </p>
+          </Adjustable>
+        )}
+        <Leftovers blocks={blocks} consumed={consumed} />
+      </div>
+    )
+  }
+
+  // With a photo nothing changes: the centred drawing on the scrim, white text.
   if (variant === 'expressive') {
     return onPhoto(
       <div className={`flex flex-col gap-6 py-4${photo ? '' : ' my-auto'}`}>

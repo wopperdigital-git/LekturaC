@@ -135,3 +135,31 @@ describe('LayoutWireframe comparisons', () => {
     expect(html.split('height="0.75"').length - 1).toBe(6)
   })
 })
+
+/** The hero sits at the foot of the slide; only the expressive one draws the circle. The quote is left-aligned. */
+describe('LayoutWireframe hero and quote', () => {
+  it.each<VisualStyle>(['structured', 'expressive'])('draws the hero title in the lower half and the subtitle under it (%s)', (style) => {
+    const html = draw('hero', style)
+    const ys = [...html.matchAll(/<rect x="16" y="([\d.]+)"/g)].map((m) => Number(m[1]))
+    // The rule, the title and the subtitle, top to bottom, all below the middle of the 90-high drawing.
+    expect(ys.length).toBe(3)
+    for (const y of ys) expect(y).toBeGreaterThanOrEqual(45)
+    expect([...ys].sort((a, b) => a - b)).toEqual(ys)
+  })
+
+  it('draws one 30% accent circle on the expressive hero only', () => {
+    expect(draw('hero', 'structured')).not.toContain('<circle')
+    const html = draw('hero', 'expressive')
+    expect(html.split('<circle').length - 1).toBe(1)
+    expect(html).toContain('opacity="0.3"')
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws the quote left-aligned: a mark at the left, no centring (%s)', (style) => {
+    const html = draw('quote', style)
+    expect(html).not.toContain('text-anchor')
+    expect(html).toMatch(/<text x="14"/)
+    expect(html).toContain('data-wire-ground="tint"')
+    // Quote lines and the attribution start on the left edge, never centred.
+    expect(html).not.toMatch(/<rect x="(30|38|50|66)"/)
+  })
+})

@@ -133,7 +133,7 @@ function BlockBody({
       )
     case 'bulletList':
       return (
-        <ul className="flex max-w-prose flex-col gap-2" style={{ fontFamily: SLIDE_BODY_FONT }}>
+        <ul className="flex max-w-prose flex-col gap-2 text-slide-foreground" style={{ fontFamily: SLIDE_BODY_FONT }}>
           {block.items.map((item, i) => (
             <li key={i} {...itemProps(index, i)} className="flex items-start gap-2 text-[length:var(--slide-size-body)]">
               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slide-accent" />

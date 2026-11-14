@@ -35,6 +35,7 @@ const itemTextSizes = (out: string) =>
   [...out.matchAll(/<span data-item-text=""[^>]*style="[^"]*?font-size:([^;"]+)/g)].map((match) => match[1])
 
 const LEAD = 'calc(var(--slide-size-body) * 1.2)'
+const EYEBROW = 'calc(var(--slide-size-body) * 0.65)'
 const BODY = 'var(--slide-size-body)'
 const TIGHT = 'var(--slide-gap-tight)'
 
@@ -977,5 +978,259 @@ describe.each(STYLES)('redrawn comparisons (%s)', (style) => {
       card.blocks.push({ type: 'paragraph', text: 'AFTERTABLE' })
       expect(html(card)).not.toContain('grid-template-rows')
     })
+  })
+})
+
+/* Hero and quote: the title at the foot of the slide on the deep ground, the quote left-aligned under an oversized mark. */
+
+const PHOTO_BLOCK: ContentBlock = { type: 'image', url: 'https://example.test/GROUND.png', alt: 'ground' }
+
+/** The opening tag of the first element carrying the attribute `hook`. */
+const tagWith = (out: string, hook: string) => out.match(new RegExp(`<[a-z0-9]+ [^>]*${hook}=""[^>]*>`))?.[0] ?? ''
+/** The opening tag of every element carrying the attribute `hook`, in order. */
+const tagsWith = (out: string, hook: string) =>
+  [...out.matchAll(new RegExp(`<[a-z0-9]+ [^>]*${hook}=""[^>]*>`, 'g'))].map((m) => m[0])
+/** The words inside the first element carrying `hook`, tags removed. */
+const wordsOf = (out: string, hook: string) =>
+  out.match(new RegExp(`<([a-z0-9]+) [^>]*${hook}=""[^>]*>(.*?)</\\1>`))?.[2].replace(/<[^>]*>/g, '') ?? ''
+
+/**
+ * Hard-coded colours: a `#` plus 3, 6 or 8 hex digits inside a `class` or `style` attribute value. Photo data
+ * URIs (in `src`) and `url(#...)` references are not colours and are left out.
+ */
+const hardCodedColours = (out: string): string[] =>
+  [...out.matchAll(/\b(?:class|style)="([^"]*)"/g)].flatMap((attribute) =>
+    [
+      ...attribute[1]
+        .replace(/url\(#[^)]*\)/g, '')
+        .matchAll(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-fA-F])/g),
+    ].map((m) => m[0]),
+  )
+
+describe('the colour check itself', () => {
+  it('finds a hex colour in a style or class and nothing in a url reference or a src', () => {
+    expect(hardCodedColours('<p style="color:#fff">')).toEqual(['#fff'])
+    expect(hardCodedColours('<p class="bg-[#12ab34]" style="fill:#ffffff80">')).toEqual(['#12ab34', '#ffffff80'])
+    expect(hardCodedColours('<rect style="fill:url(#g)"/><img src="data:image/svg+xml;utf8,%23fff#8fb8c9"/>')).toEqual([])
+  })
+})
+
+const HERO_TITLE_SIZE = (expressive: boolean) => `calc(var(--slide-size-h1) * ${expressive ? 1.45 : 1.2})`
+
+describe.each(STYLES)('redrawn hero (%s)', (style) => {
+  const expressive = style === 'expressive'
+  const cards = withStyle(GALLERY_DECK, style)
+  const find = (id: string) => cards.find((c) => c.id === id) as Card
+
+  it('sets the title larger than h1 with a tight line height, extrabold when expressive', () => {
+    const title = tagWith(html(find('g-hero')), 'data-hero-title')
+    expect(title).toContain(`font-size:${HERO_TITLE_SIZE(expressive)}`)
+    expect(title).toContain('line-height:1')
+    expect(title).not.toContain('line-height:1.')
+    expect(title).toMatch(expressive ? /\bfont-extrabold\b/ : /\bfont-bold\b/)
+    expect(title).not.toMatch(expressive ? /\bfont-bold\b/ : /\bfont-extrabold\b/)
+    expect(title).toContain('var(--slide-font-heading)')
+    expect(title.startsWith('<h1')).toBe(true)
+  })
+
+  it('sets the subtitle at the lead size, at most 62% wide, in muted ink', () => {
+    const subtitle = tagWith(html(find('g-hero')), 'data-hero-subtitle')
+    expect(subtitle).toContain(`font-size:${LEAD}`)
+    expect(subtitle).toContain('max-width:62%')
+    expect(subtitle).toContain('text-slide-muted')
+    expect(subtitle).toContain('var(--slide-font-body)')
+  })
+
+  it('sits at the foot of the slide on the left, with a tight gap to the subtitle and a group gap under the rule', () => {
+    const out = html(find('g-hero'))
+    const root = tagWith(out, 'data-hero-root')
+    expect(root).toMatch(/class="[^"]*\bmt-auto\b/)
+    expect(root).not.toMatch(/\bmy-auto\b/)
+    expect(root).toContain('items-start')
+    expect(root).toContain('text-left')
+    expect(tagWith(out, 'data-hero-subtitle')).toContain(`margin-top:${TIGHT}`)
+    expect(tagWith(out, 'data-hero-rule')).toContain('margin-bottom:var(--slide-gap-group)')
+  })
+
+  it('draws one eyebrow rule above the title, 4rem by 3px in accent, hidden from assistive technology', () => {
+    const out = html(find('g-hero'))
+    expect(tagsWith(out, 'data-hero-rule').length).toBe(1)
+    const rule = tagWith(out, 'data-hero-rule')
+    expect(rule).toContain('aria-hidden="true"')
+    expect(rule).toContain('bg-slide-accent')
+    expect(rule).toContain('pointer-events-none')
+    expect(rule).toContain('width:4rem')
+    expect(rule).toContain('height:3px')
+    expect(out.indexOf('data-hero-rule')).toBeLessThan(out.indexOf('data-hero-title'))
+  })
+
+  it('draws the large decorative circle only when expressive, before the text and clear of every press', () => {
+    const out = html(find('g-hero'))
+    const circles = tagsWith(out, 'data-hero-ornament')
+    if (!expressive) {
+      expect(circles).toEqual([])
+      return
+    }
+    expect(circles.length).toBe(1)
+    const [circle] = circles
+    expect(circle).toContain('aria-hidden="true"')
+    expect(circle).toContain('pointer-events-none')
+    expect(circle).toContain('rounded-full')
+    expect(circle).toContain('bg-slide-accent')
+    expect(circle).toContain('opacity-30')
+    expect(circle).toMatch(/\babsolute\b/)
+    expect(circle).toContain('aspect-ratio:1')
+    // It bleeds past the slide's top-right corner through the padding.
+    expect(circle).toContain('top:calc(-1 * var(--slide-pad, 0px)')
+    expect(circle).toContain('right:calc(-1 * var(--slide-pad, 0px)')
+    // A sibling drawn before the text, so the text paints over it; it holds nothing.
+    expect(out.indexOf('data-hero-ornament')).toBeLessThan(out.indexOf('data-hero-root'))
+    expect(out).toMatch(/data-hero-ornament=""[^>]*><\/div>/)
+    // The text block is positioned, so it paints above the circle.
+    expect(tagWith(out, 'data-hero-root')).toMatch(/\brelative\b/)
+  })
+
+  it('draws its words once, the title in an h1', () => {
+    const out = html(find('g-hero'))
+    expect(out.split('Control Structures in C++').length - 1).toBe(1)
+    expect(out.split('How a program decides what to do next.').length - 1).toBe(1)
+    expect(wordsOf(out, 'data-hero-title')).toBe('Control Structures in C++')
+  })
+
+  it('keeps the photo drawing unchanged: no foot placement, no rule, no circle', () => {
+    const card = { ...find('g-hero'), blocks: [...find('g-hero').blocks, PHOTO_BLOCK] }
+    const out = html(card)
+    expect(out).toContain('data-on-photo')
+    expect(out).not.toContain('data-hero-root')
+    expect(out).not.toContain('data-hero-ornament')
+    expect(out).not.toContain('data-hero-rule')
+    expect(tagWith(out, 'data-hero-title')).toContain('font-size:var(--slide-size-h1)')
+    expect(tagWith(out, 'data-hero-title')).toContain('line-height:1.05')
+  })
+
+  describe('with leftovers on the deep ground', () => {
+    const extra = () => find('g-hero-extra')
+
+    it('draws every block once', () => {
+      const out = html(extra())
+      for (const text of [
+        'Control Structures in C++',
+        'How a program decides what to do next.',
+        'Branches',
+        'Loops',
+        'Jumps',
+        'loop forms',
+        'branch forms',
+      ]) {
+        expect(out.split(text).length - 1, text).toBe(1)
+      }
+    })
+
+    it('draws the leftovers below the subtitle, after a group gap', () => {
+      const out = html(extra())
+      expect(out.indexOf('Branches')).toBeGreaterThan(out.indexOf('How a program decides'))
+      expect(out).toContain('margin-top:var(--slide-gap-group)')
+    })
+
+    it('hard-codes no colour', () => {
+      expect(hardCodedColours(html(extra()))).toEqual([])
+    })
+
+    it('sets the leftover bullet list in the slide ink, which the deep ground re-points', () => {
+      const out = html(extra())
+      const lists = [...out.matchAll(/<ul [^>]*>/g)].map((m) => m[0])
+      expect(lists.length).toBe(1)
+      for (const list of lists) expect(list).toMatch(/class="[^"]*\btext-slide-foreground\b/)
+    })
+  })
+})
+
+describe.each(STYLES)('redrawn quote (%s)', (style) => {
+  const expressive = style === 'expressive'
+  const cards = withStyle(GALLERY_DECK, style)
+  const find = (id: string) => cards.find((c) => c.id === id) as Card
+  const QUOTE = 'Make it work, make it right, then make it fast.'
+
+  it('draws one oversized opening mark, hidden from assistive technology, in accent', () => {
+    const out = html(find('g-quote'))
+    const marks = tagsWith(out, 'data-quote-mark')
+    expect(marks.length).toBe(1)
+    const [mark] = marks
+    expect(mark).toContain('aria-hidden="true"')
+    expect(mark).toContain('text-slide-accent')
+    expect(mark).toContain('pointer-events-none')
+    expect(mark).toContain('var(--slide-font-heading)')
+    expect(mark).toContain('font-size:calc(var(--slide-size-h1) * 2.4)')
+    expect(mark).toContain('line-height:0.8')
+    expect(wordsOf(out, 'data-quote-mark')).toBe('“')
+  })
+
+  it('draws the heading above the mark, and the mark above the quote', () => {
+    const out = html(find('g-quote'))
+    const at = (needle: string) => out.indexOf(needle)
+    expect(at('A rule worth keeping')).toBeLessThan(at('data-quote-mark'))
+    expect(at('data-quote-mark')).toBeLessThan(at('data-quote-text'))
+    expect(at('data-quote-text')).toBeLessThan(at('data-quote-attribution'))
+  })
+
+  it('sets the quote at the h2 step (a little larger and semibold when expressive), never italic, at most 85% wide', () => {
+    const out = html(find('g-quote'))
+    const text = tagWith(out, 'data-quote-text')
+    expect(tagsWith(out, 'data-quote-text').length).toBe(1)
+    expect(text).toContain(`font-size:${expressive ? 'calc(var(--slide-size-h2) * 1.15)' : 'var(--slide-size-h2)'}`)
+    expect(text).toContain(`font-weight:${expressive ? 600 : 400}`)
+    expect(text).toContain('max-width:85%')
+    expect(text).toContain('line-height:1.25')
+    expect(text).not.toMatch(/\bitalic\b/)
+    expect(out.split(QUOTE).length - 1).toBe(1)
+    expect(wordsOf(out, 'data-quote-text')).toBe(QUOTE)
+  })
+
+  it('draws the attribution once as an uppercase eyebrow, with an accent rule before it and no dash prefix', () => {
+    const out = html(find('g-quote'))
+    expect(tagsWith(out, 'data-quote-attribution').length).toBe(1)
+    const attribution = tagWith(out, 'data-quote-attribution')
+    expect(attribution).toContain('uppercase')
+    expect(attribution).toContain('tracking-[0.14em]')
+    expect(attribution).toContain('text-slide-muted')
+    expect(attribution).toContain(`font-size:${EYEBROW}`)
+    expect(attribution).toContain('items-center')
+    expect(out.split('Kent Beck').length - 1).toBe(1)
+    expect(wordsOf(out, 'data-quote-attribution')).toBe('Kent Beck')
+    const rule = tagWith(out, 'data-quote-rule')
+    expect(rule).toContain('aria-hidden="true"')
+    expect(rule).toContain('bg-slide-accent')
+    expect(rule).toContain('width:2rem')
+    expect(rule).toContain('height:2px')
+    expect(out.indexOf('data-quote-rule')).toBeLessThan(out.indexOf('Kent Beck'))
+    expect(out).not.toContain('\u2014')
+  })
+
+  it('is left-aligned on the frame and centred vertically, with no italic and no centred text', () => {
+    const out = html(find('g-quote'))
+    const root = tagWith(out, 'data-quote-root')
+    expect(root).toMatch(/class="[^"]*\bmy-auto\b/)
+    expect(root).toContain('items-start')
+    expect(root).toContain('text-left')
+    expect(root).not.toMatch(/\btext-center\b|\bitems-center\b/)
+    expect(out).not.toMatch(/\bitalic\b/)
+  })
+
+  it('draws its decoration as empty or glyph-only hidden spans, never as a run', () => {
+    const out = html(find('g-quote'))
+    expect(out).toMatch(/data-quote-mark=""[^>]*>“<\/span>/)
+    expect(out).toMatch(/data-quote-rule=""[^>]*><\/span>/)
+  })
+
+  it('keeps the photo drawing unchanged: its own mark and italic quote, the dash before the attribution', () => {
+    const card = { ...find('g-quote'), blocks: [...find('g-quote').blocks, PHOTO_BLOCK] }
+    const out = html(card)
+    expect(out).toContain('data-on-photo')
+    expect(out).not.toContain('data-quote-root')
+    expect(out).not.toContain('data-quote-text')
+    if (!expressive) expect(out).toContain('text-center')
+    expect(out).toContain(expressive ? 'calc(var(--slide-size-h1) * 3)' : 'font-size:var(--slide-size-h1)')
+    expect(out).toMatch(/\bitalic\b/)
+    expect(out).toContain('\u2014')
   })
 })

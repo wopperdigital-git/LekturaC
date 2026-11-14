@@ -35,9 +35,14 @@ const paragraph: ContentBlock = { type: 'paragraph', text: 'A line under it.' }
 const quote: ContentBlock = { type: 'quote', text: 'Make it work.', attribution: 'Kent Beck' }
 const stat: ContentBlock = { type: 'stat', value: '42', label: 'answers' }
 
-describe.each(['structured', 'expressive'] as const)('frames that centre themselves (%s)', (style) => {
-  it('hero without a photo', () => {
-    expect(rootClasses(html(card('hero', [heading, paragraph], style)))).toContain('my-auto')
+describe.each(['structured', 'expressive'] as const)('frames that place themselves (%s)', (style) => {
+  it('hero without a photo sits at the foot of the slide, not in the middle', () => {
+    // The expressive circle is drawn before the text, so the text root is found by its hook.
+    const tag = html(card('hero', [heading, paragraph], style)).match(/<div[^>]*data-hero-root[^>]*>/)?.[0]
+    expect(tag).toBeDefined()
+    const classes = (tag?.match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/)
+    expect(classes).toContain('mt-auto')
+    expect(classes).not.toContain('my-auto')
   })
 
   it('quote without a photo', () => {

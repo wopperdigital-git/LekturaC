@@ -98,12 +98,12 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i)
 function structured(layout: LayoutType): ReactNode {
   switch (layout) {
     case 'hero':
-      // Left-aligned: a short accent bar, the title, a muted subtitle.
+      // At the foot, left-aligned: a short accent rule, the title, a muted subtitle at most 62% wide.
       return (
         <>
-          <rect x={16} y={26} width={16} height={2.5} rx={1.25} fill={ACCENT} />
-          <Title x={16} y={36} w={100} h={9} />
-          <Line x={16} y={53} w={64} />
+          <rect x={16} y={48} width={16} height={1.5} fill={ACCENT} />
+          <Title x={16} y={55} w={104} h={11} />
+          <Line x={16} y={71} w={72} h={3.5} />
         </>
       )
     case 'standard':
@@ -329,16 +329,18 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'quote':
-      // Centred: an accent quote mark, italic lines, muted attribution.
+      // Left-aligned: the heading, an accent quote mark, regular lines at most 85% wide, then a rule and a small attribution.
       return (
         <>
-          <text x={80} y={36} textAnchor="middle" fontSize={26} fontFamily="Georgia, serif" fill={ACCENT}>
-            “
+          <Title x={16} y={9} w={56} h={5} />
+          <text x={14} y={38} fontSize={26} fontFamily="Georgia, serif" fill={ACCENT}>
+            {'“'}
           </text>
-          <Line x={30} y={38} w={100} h={4} />
-          <Line x={38} y={46} w={84} h={4} />
-          <Line x={50} y={54} w={60} h={4} />
-          <Line x={66} y={65} w={28} />
+          <Line x={16} y={42} w={104} h={4} />
+          <Line x={16} y={50} w={86} h={4} />
+          <Line x={16} y={58} w={58} h={4} />
+          <Rule x={16} y={70.5} w={8} h={1.5} accent />
+          <Line x={28} y={69.5} w={26} h={3} />
         </>
       )
     case 'textFocus':
@@ -367,11 +369,13 @@ function structured(layout: LayoutType): ReactNode {
 function expressive(layout: LayoutType): ReactNode {
   switch (layout) {
     case 'hero':
-      // Left-aligned: the heading in plain ink, subtitle below.
+      // As the structured one with a larger title, and one big accent circle bleeding past the top-right corner.
       return (
         <>
-          <Title x={16} y={30} w={96} h={9} />
-          <Line x={16} y={56} w={70} />
+          <circle cx={148} cy={2} r={36} fill={ACCENT} opacity={0.3} />
+          <rect x={16} y={45} width={16} height={1.5} fill={ACCENT} />
+          <Title x={16} y={52} w={116} h={14} />
+          <Line x={16} y={71} w={72} h={3.5} />
         </>
       )
     case 'standard':
@@ -596,17 +600,18 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'quote':
-      // The lead heading, an oversized accent quote mark,
-      // then larger italic lines and the attribution.
+      // The heading, a larger accent quote mark, semibold lines at most 85% wide, then a rule and a small attribution.
       return (
         <>
-          <Title x={12} y={11} w={60} />
-          <rect x={14} y={24} width={7} height={9} rx={2} fill={ACCENT} />
-          <rect x={24} y={24} width={7} height={9} rx={2} fill={ACCENT} />
-          <Line x={14} y={38} w={120} h={5} />
-          <Line x={14} y={47} w={108} h={5} />
-          <Line x={14} y={56} w={74} h={5} />
-          <Line x={14} y={69} w={32} />
+          <Title x={16} y={9} w={56} h={5} />
+          <text x={14} y={40} fontSize={32} fontFamily="Georgia, serif" fill={ACCENT}>
+            {'“'}
+          </text>
+          <Line x={16} y={44} w={108} h={5} />
+          <Line x={16} y={53} w={90} h={5} />
+          <Line x={16} y={62} w={62} h={5} />
+          <Rule x={16} y={74.5} w={8} h={1.5} accent />
+          <Line x={28} y={73.5} w={26} h={3} />
         </>
       )
     case 'textFocus':
