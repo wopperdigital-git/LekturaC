@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MIN_FRAME_H, MIN_FRAME_W, HANDLES, type Frame } from './frame'
-import { clampFrame, frameCenter, moveFrame, resizeFrame, rotatedBounds } from './frameGeometry'
+import { actionsInside, clampFrame, frameCenter, moveFrame, resizeFrame, rotatedBounds } from './frameGeometry'
 
 const base: Frame = { x: 200, y: 100, w: 400, h: 200, rotation: 0 }
 
@@ -157,5 +157,26 @@ describe('clampFrame / moveFrame', () => {
     expect(next.w).toBe(base.w)
     expect(next.h).toBe(base.h)
     expect(frameCenter(next)).toEqual({ x: CARD.w, y: CARD.h })
+  })
+})
+
+describe('actionsInside', () => {
+  const f = (x: number, y: number, w = 200, h = 100) => ({ x, y, w, h })
+  it('is false for a frame inside the box', () => {
+    expect(actionsInside(f(100, 50), CARD)).toBe(false)
+  })
+  it('is true when the top is at the box top, and when it is above it', () => {
+    expect(actionsInside(f(100, 0), CARD)).toBe(true)
+    expect(actionsInside(f(100, -40), CARD)).toBe(true)
+  })
+  it('is true when the right edge is at the box width, and when it is past it', () => {
+    expect(actionsInside(f(CARD.w - 200, 50), CARD)).toBe(true)
+    expect(actionsInside(f(CARD.w - 160, 50), CARD)).toBe(true)
+  })
+  it('is false for a frame touching only the left or the bottom edge', () => {
+    expect(actionsInside(f(0, 50), CARD)).toBe(false)
+    expect(actionsInside(f(-40, 50), CARD)).toBe(false)
+    expect(actionsInside(f(100, CARD.h - 100), CARD)).toBe(false)
+    expect(actionsInside(f(100, CARD.h - 60), CARD)).toBe(false)
   })
 })

@@ -336,9 +336,22 @@ describe('the photo frames bleed to the slide edge', () => {
     }
   })
 
-  it('draws a photo that does not bleed exactly as before', () => {
-    const out = html({ ...CPP_DECK[6], layout: 'gallery' } as Card)
-    expect(out).not.toContain('@min-[640px]:aspect-auto')
+  it('draws a photo that does not bleed with exactly the classes it always had', () => {
+    const card = {
+      ...CPP_DECK[1],
+      layout: 'standard',
+      blocks: [
+        { type: 'heading', text: 'LEAFCLAIM' },
+        { type: 'image', url: 'https://example.test/LEAF.png' },
+      ],
+    } as Card
+    const out = html(card)
+    expect(out.match(/<figure[^>]*>/)?.[0]).toBe(
+      '<figure class="relative w-full overflow-hidden rounded-slide-sm border border-slide-border">',
+    )
+    expect(imgTag(out)).toBe(
+      '<img src="https://example.test/LEAF.png" alt="" class="block w-full object-cover "/>',
+    )
     expect(out).not.toContain('data-bleed')
   })
 })

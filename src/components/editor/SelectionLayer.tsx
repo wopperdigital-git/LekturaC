@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState }
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { NO_ADJUST, type BlockAdjust } from '@/engine/blockAdjust'
 import type { Frame, Handle } from '@/engine/frame'
-import { clampFrame } from '@/engine/frameGeometry'
+import { actionsInside, clampFrame } from '@/engine/frameGeometry'
 import { gridCell, snapMove, snapResize } from '@/engine/gridSnap'
 import { useEditorGrid } from './gridContext'
 import { BlockAdjustContext, BlockDataContext } from '@/components/layouts/adjustContext'
@@ -188,6 +188,8 @@ export function SelectionLayer({
       {!itemPicked && <SelectionOverlay frame={frame} onChange={onChange} onCommit={onCommit} />}
       <ElementActions
         frame={frame}
+        // A frame at the slide's top or right edge (a bled photo) would have the buttons clipped away.
+        inside={actionsInside(frame, measured.card)}
         removeLabel={itemPicked ? 'Remove item' : 'Remove element'}
         onRemove={adjusting?.remove}
         onReplace={replace}

@@ -195,6 +195,19 @@ export function clampFrame(frame: Frame, container: Container): Frame {
   return normalize({ ...frame, x: frame.x + (cx - center.x), y: frame.y + (cy - center.y) })
 }
 
+/*
+  Whether the bin and Replace must be drawn inside the frame rather than outside its
+  top-right corner. They sit above the frame's top edge and beyond its right edge, so
+  they are clipped away by the slide when the frame starts at or above the content box's
+  top or ends at or past its right edge, which is where a photo that bleeds to the slide's
+  edge sits (the surface's padding lies outside the content box). `frame` and `box` are in
+  the same space `SelectionLayer` measures: pixels of the content box, origin top-left.
+  The measured frame is used as is, not rotated.
+*/
+export function actionsInside(frame: Pick<Frame, 'x' | 'y' | 'w'>, box: Pick<Container, 'w'>): boolean {
+  return frame.y <= 0 || frame.x + frame.w >= box.w
+}
+
 /** Moves `frame` by a pixel delta, keeping it reachable inside its card. */
 export function moveFrame(frame: Frame, dx: number, dy: number, container: Container): Frame {
   return clampFrame({ ...frame, x: frame.x + dx, y: frame.y + dy }, container)
