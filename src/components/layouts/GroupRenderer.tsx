@@ -33,10 +33,10 @@ export function GroupRenderer({
   node: GroupNode
   variant: VisualStyle
   /**
-   * The index of the one block the slide may draw on an accent fill (`accentOwner`),
-   * or null when it gives the fill to none. A group fills only the item whose block
-   * index is this one, and marks it `data-accent-owner`; accent as text, a rule or a
-   * small bullet or number disc is not a fill and is not counted.
+   * The index of the one block the slide gives its accent (`accentOwner`), or null when
+   * it gives it to none. A group marks only the item whose block index is this one with
+   * `data-accent-owner`, drawn as a tint panel or an accent heading; accent as text, a
+   * rule or a small bullet or number is not counted.
    */
   accentIndex: number | null
   /**
@@ -481,12 +481,15 @@ function ComparisonColumns({
               <div data-group-heading="" className={groupHeadingClass(featured)} style={GROUP_HEADING_FONT}>
                 <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
               </div>
-              <ul className="flex flex-col" style={{ marginTop: SLIDE_GAP.tight, ...(expressive ? { gap: SLIDE_GAP.tight } : {}) }}>
+              <ul
+                className={`flex flex-col${fill ? ' flex-1' : ''}`}
+                style={{ marginTop: SLIDE_GAP.tight, ...(expressive ? { gap: SLIDE_GAP.tight } : {}) }}
+              >
                 {group.block.items.map((item, j) => (
                   <li
                     key={j}
                     {...itemProps(group.index, j)}
-                    className={`flex min-w-0 items-start${expressive ? '' : ' border-t border-slide-border'}`}
+                    className={`flex min-w-0 ${fill ? 'flex-1 items-center' : 'items-start'}${expressive ? '' : ' border-t border-slide-border'}`}
                     style={expressive ? { gap: SLIDE_GAP.tight } : { paddingBlock: SLIDE_GAP.tight }}
                   >
                     {expressive && (
@@ -581,10 +584,10 @@ function ComparisonTable({
                 <div
                   key={j}
                   {...itemProps(group.index, j)}
-                  className="border-b border-slide-border text-slide-foreground/90"
+                  className={`border-b border-slide-border text-slide-foreground/90${fill ? ' flex items-center' : ''}`}
                   style={{ paddingBlock: SLIDE_GAP.tight }}
                 >
-                  <span data-item-text="">
+                  <span data-item-text="" className={fill ? 'min-w-0' : undefined}>
                     <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
                   </span>
                 </div>

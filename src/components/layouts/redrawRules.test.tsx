@@ -881,6 +881,32 @@ describe.each(STYLES)('redrawn comparisons (%s)', (style) => {
       card.blocks.push({ type: 'paragraph', text: 'AFTERCOLUMNS' })
       expect(html(card)).not.toContain('data-fill')
     })
+    it('shares the panel height between the rows when it fills the body, each item centred in its row', () => {
+      for (const id of ['g-compare', 'g-compare3']) {
+        const out = html(find(id))
+        const lists = [...out.matchAll(/<ul [^>]*>/g)].map((m) => m[0])
+        expect(lists.length).toBe(groupsOf(find(id)).length)
+        for (const list of lists) expect(list).toMatch(/class="[^"]*\bflex-1\b/)
+        const rows = rowTags(out)
+        expect(rows.length).toBe(groupsOf(find(id)).length * 3)
+        for (const row of rows) {
+          expect(row).toMatch(/class="[^"]*\bflex-1\b/)
+          expect(row).toMatch(/class="[^"]*\bitems-center\b/)
+          expect(row).not.toMatch(/\bitems-start\b/)
+        }
+      }
+    })
+
+    it('leaves the rows at their own height, at the top, when the comparison does not fill the body', () => {
+      const card = cmpCard('comparison', 2, style)
+      card.blocks.push({ type: 'paragraph', text: 'AFTERCOLUMNS' })
+      const out = html(card)
+      for (const list of [...out.matchAll(/<ul [^>]*>/g)].map((m) => m[0])) expect(list).not.toContain('flex-1')
+      for (const row of rowTags(out)) {
+        expect(row).not.toContain('flex-1')
+        expect(row).toContain('items-start')
+      }
+    })
   })
 
   describe('table', () => {
@@ -925,6 +951,22 @@ describe.each(STYLES)('redrawn comparisons (%s)', (style) => {
         expect(owner).not.toContain('background')
       }
       expect(out.split('data-accent-panel').length - 1).toBe(expressive ? 1 : 0)
+    })
+
+    it('centres each cell in its row when it fills the body and leaves it alone otherwise', () => {
+      const cells = (out: string) =>
+        [...out.matchAll(/<div [^>]*class="[^"]*border-b border-slide-border[^"]*"[^>]*>/g)].map((m) => m[0])
+      const filled = cells(html(find('g-table')))
+      expect(filled.length).toBe(12)
+      for (const cell of filled) {
+        expect(cell).toMatch(/class="[^"]*\bflex\b/)
+        expect(cell).toMatch(/class="[^"]*\bitems-center\b/)
+      }
+      const card = cmpCard('comparisonTable', 2, style)
+      card.blocks.push({ type: 'paragraph', text: 'AFTERTABLE' })
+      const loose = cells(html(card))
+      expect(loose.length).toBe(6)
+      for (const cell of loose) expect(cell).not.toContain('items-center')
     })
 
     it('shares the height between the item rows and leaves the header row to its content when it fills the body', () => {
