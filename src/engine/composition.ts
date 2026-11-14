@@ -1,5 +1,6 @@
-import type { ContentBlock, LayoutType } from './contentBlocks'
+import type { Card, ContentBlock, LayoutType } from './contentBlocks'
 import { singlePhoto } from './blockPartition'
+import { resolveLayout } from './layoutEngine'
 
 /**
  * The roles a slide's blocks play, read off the blocks and never stored.
@@ -55,4 +56,29 @@ export function accentOwner(blocks: ContentBlock[], layout: Exclude<LayoutType, 
     default:
       return null
   }
+}
+
+/** The ground a slide is drawn on: the page colour, a tint of it, or the theme's deep colour. */
+export type Ground = 'plain' | 'tint' | 'deep'
+
+/** The ground a resolved layout asks for: the title slide is deep, a quote and a stat hero are tinted, the rest are plain. */
+export function groundOfLayout(layout: Exclude<LayoutType, 'auto'>): Ground {
+  switch (layout) {
+    case 'hero':
+      return 'deep'
+    case 'quote':
+    case 'statHero':
+      return 'tint'
+    default:
+      return 'plain'
+  }
+}
+
+/**
+ * A card's ground, read off the layout it is drawn with. It builds the same
+ * layout context `LayoutRenderer`'s callers hand it (`isFirstCard` is the
+ * first position in the deck), so the ground and the drawn layout cannot disagree.
+ */
+export function groundOf(card: Pick<Card, 'layout' | 'blocks' | 'orderIndex'>): Ground {
+  return groundOfLayout(resolveLayout(card.layout, card.blocks, { isFirstCard: card.orderIndex === 0 }))
 }

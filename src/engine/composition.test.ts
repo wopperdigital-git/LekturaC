@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from './contentBlocks'
-import { accentOwner, slotsOf } from './composition'
+import { accentOwner, groundOf, groundOfLayout, slotsOf } from './composition'
+import { CPP_DECK } from './fixtures/cppDeck'
 
 const h: ContentBlock = { type: 'heading', text: 'H' }
 const p: ContentBlock = { type: 'paragraph', text: 'P' }
@@ -40,5 +41,22 @@ describe('accentOwner', () => {
     expect(accentOwner([h, group, group], 'comparisonTable')).toBe(1)
     expect(accentOwner([h, stat, stat], 'statGrid')).toBeNull()
     expect(accentOwner([h, list], 'iconGrid')).toBeNull()
+  })
+})
+
+describe('groundOf', () => {
+  it('puts the title slide on the deep ground', () => {
+    expect(groundOf(CPP_DECK[0])).toBe('deep')
+  })
+  it('puts a quote and a stat hero on the tinted ground', () => {
+    expect(groundOf(CPP_DECK[5])).toBe('tint')
+    expect(groundOfLayout('statHero')).toBe('tint')
+  })
+  it('leaves every other layout plain', () => {
+    for (const i of [1, 2, 3, 4, 6]) expect(groundOf(CPP_DECK[i]), String(i)).toBe('plain')
+    expect(groundOf({ layout: 'auto', blocks: [], orderIndex: 3 })).toBe('plain')
+  })
+  it('follows an explicit hero anywhere in the deck', () => {
+    expect(groundOf({ ...CPP_DECK[1], layout: 'hero' })).toBe('deep')
   })
 })
