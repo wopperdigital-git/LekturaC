@@ -29,7 +29,7 @@ const numerals = (out: string) =>
 const numeralTags = (out: string) =>
   [...out.matchAll(/<[a-z]+[^>]*aria-hidden="true"[^>]*>\d{2}<\/[a-z]+>/g)].map((match) => match[0])
 /** The opening tags of the list's item containers (`li`), in order. */
-const rowTags = (out: string) => [...out.matchAll(/<li\b[^>]*>/g)].map((match) => match[0])
+const rowTags = (out: string) => [...out.matchAll(/<li\b[^>]*>/g)].map((match) => match[0]).filter((tag) => !tag.includes('data-track'))
 /** The font size on each item's text element, in order. */
 const itemTextSizes = (out: string) =>
   [...out.matchAll(/<span data-item-text=""[^>]*style="[^"]*?font-size:([^;"]+)/g)].map((match) => match[1])
@@ -507,7 +507,7 @@ describe.each(STYLES)('redrawn stats (%s)', (style) => {
 const TIMELINE_IDS = ['g-timeline', 'g-timelinerow', 'g-timelinerow6']
 
 /** The opening tag of every timeline track, step label, text and number, and the words inside each label and text. */
-const trackTags = (out: string) => [...out.matchAll(/<div [^>]*data-track=""[^>]*>/g)].map((m) => m[0])
+const trackTags = (out: string) => [...out.matchAll(/<li [^>]*data-track=""[^>]*>/g)].map((m) => m[0])
 const stepLabelTags = (out: string) => [...out.matchAll(/<div data-step-label=""[^>]*>/g)].map((m) => m[0])
 const stepTextTags = (out: string) => [...out.matchAll(/<div data-step-text=""[^>]*>/g)].map((m) => m[0])
 const stepNumberTags = (out: string) => [...out.matchAll(/<span [^>]*data-step-number=""[^>]*>[^<]*<\/span>/g)].map((m) => m[0])
@@ -563,13 +563,22 @@ describe.each(STYLES)('redrawn timelines (%s)', (style) => {
     }
     // The track holds nothing: it is a sibling of the steps, never a wrapper around them.
     expect(out.split('data-track=""').length - 1).toBe(count)
-    expect(out.match(/<div [^>]*data-track=""[^>]*><\/div>/g)?.length).toBe(count)
+    expect(out.match(/<li [^>]*data-track=""[^>]*><\/li>/g)?.length).toBe(count)
   })
 
   it('draws the vertical track as one line the height of the arrangement, 2px thick and 4px when expressive', () => {
     const [track] = trackTags(html(find('g-timeline')))
     expect(track).toContain('inset-y-0')
     expect(track).toContain(`width:${expressive ? 4 : 2}px`)
+  })
+
+  it('sets the vertical track and node column in rem, so an element size pick on a step cannot move a node off the track', () => {
+    const out = html(find('g-timeline'))
+    const [track] = trackTags(out)
+    expect(track).toMatch(/left:calc\([\d.]+rem - /)
+    expect(track).toContain('role="presentation"')
+    expect(out).toMatch(/width:3\.125rem;height:calc\(var\(--slide-size-h3\)/)
+    expect(out).not.toMatch(/width:2\.5em/)
   })
 
   it('draws each horizontal track across every column, 2px thick and 4px when expressive', () => {

@@ -214,6 +214,50 @@ export function measurableNode(holder: Element): HTMLElement | null {
 }
 
 /**
+ * Whether this element is a child of a column flex container.
+ *
+ * Used to stretch an explicitly aligned element, and to let a height reach an element
+ * that has `flex: 1` (see `flexForHeight`).
+ *
+ * The alignment case, in full: stretching gives its text somewhere to go.
+ *
+ * `text-align` positions a run *inside* its element's box, so an element whose
+ * box hugs its text has nothing to move. That is the normal case in the layouts
+ * that centre with `items-center` — structured `HeroLayout`, `QuoteLayout` and
+ * `StatHeroLayout` — where a flex child is sized to its content: clicking
+ * "left" stored the value, lit the button via `renderedAlign`, and moved
+ * nothing. A toolbar reporting a change that did not happen is worse than one
+ * that does nothing, so an explicit alignment now widens the box it aligns in.
+ *
+ * Restricted to a **column** flex parent deliberately. In a row flex container
+ * `align-self` runs down the *vertical* axis, so stretching there would make the
+ * stat in expressive `StatHeroLayout` full-height rather than giving it width.
+ * Grid children already stretch along the inline axis by default, and block
+ * elements are already full-width, so neither needs anything.
+ */
+export function inFlexColumn(node: HTMLElement): boolean {
+  const parent = layoutParent(node)
+  if (!parent) return false
+  const { display, flexDirection } = getComputedStyle(parent)
+  if (display !== 'flex' && display !== 'inline-flex') return false
+  return flexDirection === 'column' || flexDirection === 'column-reverse'
+}
+
+/**
+ * The element that actually lays this one out.
+ *
+ * Not `parentElement`: that is the `Adjustable` holder, which is
+ * `display: contents` and generates no box, so it is never the flex container
+ * this element belongs to. Any other boxless ancestor is skipped for the same
+ * reason.
+ */
+function layoutParent(node: HTMLElement): HTMLElement | null {
+  let parent = node.parentElement
+  while (parent && getComputedStyle(parent).display === 'contents') parent = parent.parentElement
+  return parent
+}
+
+/**
  * The card's content box, which is the coordinate space every adjustment is
  * measured against.
  *

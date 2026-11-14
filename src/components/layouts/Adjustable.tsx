@@ -1,5 +1,5 @@
 import { useContext, useLayoutEffect, useRef, type ReactNode } from 'react'
-import { adjustStyle } from '@/engine/blockAdjust'
+import { adjustStyle, flexForHeight } from '@/engine/blockAdjust'
 import type { TextStyle } from '@/engine/textStyle'
 import { SLIDE_FONT_VARS, type ThemeTokens } from '@/lib/theme-tokens'
 import { useSlideTheme } from '@/components/theme/slideThemeContext'
@@ -14,6 +14,7 @@ import {
   ON_PHOTO_ATTR,
   blockStyleKey,
   canGrab,
+  inFlexColumn,
   measurableNode,
 } from './adjustContext'
 import { useTextEditing } from './textEditingContext'
@@ -100,6 +101,8 @@ export function Adjustable({
     node.style.height = geometry.height ?? ''
     node.style.maxWidth = geometry.maxWidth ?? ''
     node.style.maxHeight = geometry.maxHeight ?? ''
+    // A height on a `flex-1` child of a column is ignored unless its flex is turned off.
+    node.style.flex = flexForHeight(geometry.height !== undefined, inFlexColumn(node))
 
     // Text on a photo and text on a deep ground ignore a picked colour (see the rules in index.css).
     const colourIgnored =
@@ -164,10 +167,10 @@ export function Adjustable({
 */
 function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: ThemeTokens, colourIgnored: boolean) {
   node.style.textAlign = style?.align ?? ''
-  // Room to align *in* — see `stretchesInFlexColumn`. Only for an element
+  // Room to align *in* — see `inFlexColumn`. Only for an element
   // somebody has explicitly aligned, so an untouched one keeps the exact size
   // its layout gave it.
-  node.style.alignSelf = style?.align && stretchesInFlexColumn(node) ? 'stretch' : ''
+  node.style.alignSelf = style?.align && inFlexColumn(node) ? 'stretch' : ''
   // Empty string rather than 'normal': these have to fall back to whatever the
   // layout's own classes say, not override them with a neutral value.
   node.style.fontWeight = style?.bold ? '700' : ''
@@ -207,43 +210,4 @@ function applyTextStyle(node: HTMLElement, style: TextStyle | undefined, theme: 
     if (scale && scale !== 1) node.style.setProperty(property, `${theme.typography.scale[i] * scale}rem`)
     else node.style.removeProperty(property)
   })
-}
-
-/**
- * Whether stretching this element would give its text somewhere to go.
- *
- * `text-align` positions a run *inside* its element's box, so an element whose
- * box hugs its text has nothing to move. That is the normal case in the layouts
- * that centre with `items-center` — structured `HeroLayout`, `QuoteLayout` and
- * `StatHeroLayout` — where a flex child is sized to its content: clicking
- * "left" stored the value, lit the button via `renderedAlign`, and moved
- * nothing. A toolbar reporting a change that did not happen is worse than one
- * that does nothing, so an explicit alignment now widens the box it aligns in.
- *
- * Restricted to a **column** flex parent deliberately. In a row flex container
- * `align-self` runs down the *vertical* axis, so stretching there would make the
- * stat in expressive `StatHeroLayout` full-height rather than giving it width.
- * Grid children already stretch along the inline axis by default, and block
- * elements are already full-width, so neither needs anything.
- */
-function stretchesInFlexColumn(node: HTMLElement): boolean {
-  const parent = layoutParent(node)
-  if (!parent) return false
-  const { display, flexDirection } = getComputedStyle(parent)
-  if (display !== 'flex' && display !== 'inline-flex') return false
-  return flexDirection === 'column' || flexDirection === 'column-reverse'
-}
-
-/**
- * The element that actually lays this one out.
- *
- * Not `parentElement`: that is the `Adjustable` holder, which is
- * `display: contents` and generates no box, so it is never the flex container
- * this element belongs to. Any other boxless ancestor is skipped for the same
- * reason.
- */
-function layoutParent(node: HTMLElement): HTMLElement | null {
-  let parent = node.parentElement
-  while (parent && getComputedStyle(parent).display === 'contents') parent = parent.parentElement
-  return parent
 }

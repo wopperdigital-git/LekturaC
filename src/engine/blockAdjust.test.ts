@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adjustStyle, isNeutral, normalizeAdjust, parseAdjusts, NO_ADJUST } from './blockAdjust'
+import { adjustStyle, flexForHeight, isNeutral, normalizeAdjust, parseAdjusts, NO_ADJUST } from './blockAdjust'
 
 describe('parseAdjusts', () => {
   it('reads a well-formed record', () => {
@@ -169,5 +169,14 @@ describe('adjustStyle', () => {
     const style = adjustStyle({ dx: 0, dy: 0, w: 0.5, rotation: 0 }, CARD_W)
     expect(style.maxHeight).toBeUndefined()
     expect(adjustStyle({ dx: 0.2, dy: 0, rotation: 0 }, CARD_W).maxWidth).toBeUndefined()
+  })
+})
+
+describe('flexForHeight', () => {
+  it('is none only for a height on a child of a column flex parent', () => {
+    expect(flexForHeight(true, true)).toBe('none')
+    expect(flexForHeight(true, false)).toBe('')
+    expect(flexForHeight(false, true)).toBe('')
+    expect(flexForHeight(false, false)).toBe('')
   })
 })

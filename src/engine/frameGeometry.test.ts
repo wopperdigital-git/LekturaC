@@ -165,12 +165,20 @@ describe('actionsInside', () => {
   it('is false for a frame inside the box', () => {
     expect(actionsInside(f(100, 50), CARD)).toBe(false)
   })
-  it('is true when the top is at the box top, and when it is above it', () => {
-    expect(actionsInside(f(100, 0), CARD)).toBe(true)
+  it('is false when the top is at the box top, or half a pixel above it', () => {
+    expect(actionsInside(f(100, 0), CARD)).toBe(false)
+    expect(actionsInside(f(100, -0.5), CARD)).toBe(false)
+  })
+  it('is true when the top is 2px above the box top, and further', () => {
+    expect(actionsInside(f(100, -2), CARD)).toBe(true)
     expect(actionsInside(f(100, -40), CARD)).toBe(true)
   })
-  it('is true when the right edge is at the box width, and when it is past it', () => {
-    expect(actionsInside(f(CARD.w - 200, 50), CARD)).toBe(true)
+  it('is false when the right edge is at the box width, or half a pixel past it', () => {
+    expect(actionsInside(f(CARD.w - 200, 50), CARD)).toBe(false)
+    expect(actionsInside(f(CARD.w - 199.5, 50), CARD)).toBe(false)
+  })
+  it('is true when the right edge is 2px past the box width, and further', () => {
+    expect(actionsInside(f(CARD.w - 198, 50), CARD)).toBe(true)
     expect(actionsInside(f(CARD.w - 160, 50), CARD)).toBe(true)
   })
   it('is false for a frame touching only the left or the bottom edge', () => {

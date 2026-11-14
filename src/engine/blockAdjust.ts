@@ -155,3 +155,14 @@ export function adjustStyle(
     ...(adjust.h === undefined ? {} : { height: `${px(adjust.h)}px`, maxHeight: 'none' }),
   }
 }
+
+/**
+ * The `flex` an adjusted element needs. A height on a child of a column flex
+ * container is ignored while the child has `flex: 1` (the flex basis replaces
+ * `height`), as the `fill` roots in `GroupRenderer` do, so it becomes `none`
+ * (neither grows nor shrinks, basis `auto` = the height) then. Empty otherwise,
+ * so the layout's own `flex-*` classes apply again.
+ */
+export function flexForHeight(hasHeight: boolean, parentIsFlexColumn: boolean): 'none' | '' {
+  return hasHeight && parentIsFlexColumn ? 'none' : ''
+}

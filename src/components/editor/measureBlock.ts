@@ -1,8 +1,8 @@
-import { normalizeAdjust, type BlockAdjust } from '@/engine/blockAdjust'
+import { flexForHeight, normalizeAdjust, type BlockAdjust } from '@/engine/blockAdjust'
 import type { Frame } from '@/engine/frame'
 import type { Container } from '@/engine/frameGeometry'
 import type { TextAlign } from '@/engine/textStyle'
-import { BLOCK_INDEX_ATTR, FIXED_ELEMENT_ATTR, measurableNode } from '@/components/layouts/adjustContext'
+import { BLOCK_INDEX_ATTR, FIXED_ELEMENT_ATTR, inFlexColumn, measurableNode } from '@/components/layouts/adjustContext'
 
 /*
   Turning what the browser laid out into what gets stored, and back.
@@ -53,7 +53,7 @@ export function measureAt(
   card: HTMLElement,
   size?: { w: number; h: number },
 ): Frame {
-  const { transform, width, height, maxWidth, maxHeight } = node.style
+  const { transform, width, height, maxWidth, maxHeight, flex } = node.style
 
   node.style.transform = ''
   if (size) {
@@ -63,6 +63,8 @@ export function measureAt(
     // a position for a width the element was never going to have.
     node.style.maxWidth = 'none'
     node.style.maxHeight = 'none'
+    // The probe's height must reach a `flex-1` child of a column too (see `flexForHeight`).
+    node.style.flex = flexForHeight(true, inFlexColumn(node))
   }
 
   const rect = node.getBoundingClientRect()
@@ -83,6 +85,7 @@ export function measureAt(
   node.style.height = height
   node.style.maxWidth = maxWidth
   node.style.maxHeight = maxHeight
+  node.style.flex = flex
 
   return {
     x: (rect.left - base.left) / scale,

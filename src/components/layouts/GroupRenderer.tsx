@@ -587,7 +587,7 @@ function ComparisonTable({
                   className={`border-b border-slide-border text-slide-foreground/90${fill ? ' flex items-center' : ''}`}
                   style={{ paddingBlock: SLIDE_GAP.tight }}
                 >
-                  <span data-item-text="" className={fill ? 'min-w-0' : undefined}>
+                  <span data-item-text="" className={fill ? 'min-w-0 flex-1' : undefined}>
                     <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
                   </span>
                 </div>
@@ -774,6 +774,13 @@ function StepWords({ step, textSize }: { step: StepItems[number]; textSize: stri
  * on a patch of the slide's background so the track does not run through it. When it fills the body
  * the steps share the height, their content at the top.
  */
+/**
+ * The vertical timeline's node column and the track at its centre, in `rem`: the step's own
+ * `li` can carry an element size pick (`--slide-size-body`), which would move an `em` node
+ * column off a track measured on the `ol`. 3.125rem is 2.5em at the default 1.25rem body.
+ */
+const TIMELINE_NODE_COLUMN_REM = 3.125
+
 function TimelineColumn({ items, expressive, fill }: { items: StepItems; expressive: boolean; fill: boolean }) {
   const textSize = stepTextSize(items)
   const thickness = trackThickness(expressive)
@@ -783,11 +790,12 @@ function TimelineColumn({ items, expressive, fill }: { items: StepItems; express
       className={`relative flex flex-col${fill ? ' flex-1' : ''}`}
       style={{ gap: SLIDE_GAP.group, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
     >
-      <div
+      <li
+        role="presentation"
         aria-hidden="true"
         data-track=""
         className="absolute inset-y-0 bg-slide-accent/40"
-        style={{ left: `calc(1.25em - ${thickness / 2}px)`, width: `${thickness}px` }}
+        style={{ left: `calc(${TIMELINE_NODE_COLUMN_REM / 2}rem - ${thickness / 2}px)`, width: `${thickness}px` }}
       />
       {items.map((step, i) => (
         <Adjustable key={step.index} index={step.index}>
@@ -798,7 +806,7 @@ function TimelineColumn({ items, expressive, fill }: { items: StepItems; express
             <span
               aria-hidden="true"
               className={`relative flex shrink-0 items-center justify-center${expressive ? ' bg-slide-background' : ''}`}
-              style={{ width: '2.5em', height: `calc(var(--slide-size-h3) * ${STEP_LABEL_LINE})` }}
+              style={{ width: `${TIMELINE_NODE_COLUMN_REM}rem`, height: `calc(var(--slide-size-h3) * ${STEP_LABEL_LINE})` }}
             >
               {expressive ? (
                 <span
@@ -857,7 +865,8 @@ function TimelineRow({ items, expressive, fill }: { items: StepItems; expressive
       {items.map((step, i) => (
         <Fragment key={step.index}>
           {i % columns === 0 && (
-            <div
+            <li
+              role="presentation"
               aria-hidden="true"
               data-track=""
               className="bg-slide-accent/40"
