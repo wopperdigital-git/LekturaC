@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { itemStep } from '@/engine/composition'
+import { MAX_CHIP_ITEMS } from '@/engine/layoutEngine'
 import type { VisualStyle } from '@/engine/contentBlocks'
 import type { GroupNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
@@ -233,7 +234,7 @@ export function GroupRenderer({
       // text; seven or more are too many columns to read, so they are drawn as numbered rows.
       // A list group always holds exactly one list.
       const [list] = node.items
-      if (list.block.items.length > MAX_CHIP_COLUMNS) {
+      if (list.block.items.length > MAX_CHIP_ITEMS) {
         return <RuledRows list={list} kind="numbered" expressive={expressive} fill={fill} itemProps={itemProps} />
       }
       return <NumeralColumns list={list} expressive={expressive} fill={fill} itemProps={itemProps} />
@@ -457,16 +458,13 @@ export function GroupRenderer({
   }
 }
 
-
 /** The item props a layout spreads per item: `useItemProps()`'s return value. */
 type ItemProps = ReturnType<typeof useItemProps>
 /** A list group's one list: its block index and its items. */
 type ListNode = { index: number; block: { items: string[] } }
 
-/** Most items drawn as columns of numerals; more fall back to numbered rows. */
-const MAX_CHIP_COLUMNS = 6
-/** Most items a numbered list draws in one column; more flow into two. */
-const MAX_SINGLE_COLUMN_ITEMS = 6
+/** Most items a numbered list draws in one column; more flow into two. The chips' limit: a list too long for columns of numerals is the one that wants two columns of rows. */
+const MAX_SINGLE_COLUMN_ITEMS = MAX_CHIP_ITEMS
 
 /** `01`, `02`, ... The numerals are decoration, drawn beside the item, never part of its text. */
 const numeralText = (i: number) => String(i + 1).padStart(2, '0')
@@ -520,8 +518,15 @@ function NumeralColumns({
   itemProps: ItemProps
 }) {
   const items = list.block.items
-  const columns = Math.max(1, items.length <= 4 ? items.length : 3)
-  const textSize = itemTextSize(items)
+  const singleRow = items.length <= 4
+  const columns = Math.max(1, singleRow ? items.length : 3)
+  // Chip items are short by definition, so the text is always at the lead size. In a single row the
+  // numeral is larger and the text sits at the foot of the column, so a filled slide has no empty lower half.
+  const numeralSize = singleRow
+    ? `calc(var(--slide-size-h1) * ${expressive ? 2 : 1.6})`
+    : expressive
+      ? 'calc(var(--slide-size-h1) * 1.25)'
+      : 'var(--slide-size-h1)'
   return (
     <Adjustable index={list.index}>
       <ol
@@ -542,14 +547,11 @@ function NumeralColumns({
             className={`flex min-w-0 flex-col${expressive ? '' : ' border-t border-slide-border'}`}
             style={{ gap: SLIDE_GAP.tight, ...(expressive ? {} : { paddingTop: SLIDE_GAP.tight }) }}
           >
-            <Numeral
-              i={i}
-              size={expressive ? 'calc(var(--slide-size-h1) * 1.25)' : 'var(--slide-size-h1)'}
-              expressive={expressive}
-            />
+            <Numeral i={i} size={numeralSize} expressive={expressive} />
             <span
-              className="min-w-0 text-slide-foreground/90"
-              style={{ fontSize: textSize, ...(expressive ? { fontWeight: 600 } : {}) }}
+              data-item-text=""
+              className={`min-w-0 text-slide-foreground/90${singleRow ? ' mt-auto' : ''}`}
+              style={{ fontSize: SLIDE_SIZE.lead, ...(expressive ? { fontWeight: 600 } : {}) }}
             >
               <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
             </span>
@@ -605,6 +607,14 @@ function RuledRows({
     return <CheckMark ring={expressive} size={textSize} />
   }
 
+  // A hairline between rows only: none above the first row of either column. In the column-flow list
+  // the second column's first row has its rule below 640px, where it stacks under the first column.
+  const ruleAbove = (i: number) => {
+    if (!grid || expressive || i === 0) return ''
+    if (kind === 'split') return i < 2 ? '' : ' border-t border-slide-border'
+    return ` border-t border-slide-border${i === rows ? ' @min-[640px]:border-t-0' : ''}`
+  }
+
   let className = grid ? 'grid' : 'flex flex-col'
   const style: Record<string, string | number> = { fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }
   if (!grid && !expressive) className += ' divide-y divide-slide-border'
@@ -629,13 +639,11 @@ function RuledRows({
           <li
             key={i}
             {...itemProps(list.index, i)}
-            className={`flex min-w-0 items-center${fill && !grid ? ' flex-1' : ''}${
-              grid && !expressive ? ' border-t border-slide-border' : ''
-            }`}
+            className={`flex min-w-0 items-center${fill && !grid ? ' flex-1' : ''}${ruleAbove(i)}`}
             style={expressive ? undefined : { paddingBlock: SLIDE_GAP.tight }}
           >
             {mark(i)}
-            <span className="min-w-0 text-slide-foreground/90" style={{ fontSize: textSize }}>
+            <span data-item-text="" className="min-w-0 text-slide-foreground/90" style={{ fontSize: textSize }}>
               <EditableText textRef={textRef(list.index, 'items', i)} value={item} />
             </span>
           </li>

@@ -81,11 +81,11 @@ describe('groundOf', () => {
 
 describe('itemStep', () => {
   it('is roomy for a few short items', () => expect(itemStep(['if', 'switch', 'ternary'])).toBe('roomy'))
-  it('is normal past four items', () => expect(itemStep(['a', 'b', 'c', 'd', 'e'])).toBe('normal'))
-  it('is normal when one item is long', () => expect(itemStep(['a', 'x'.repeat(49)])).toBe('normal'))
+  it('is roomy at six items', () => expect(itemStep(['a', 'b', 'c', 'd', 'e', 'f'])).toBe('roomy'))
+  it('is normal at seven items', () => expect(itemStep(['a', 'b', 'c', 'd', 'e', 'f', 'g'])).toBe('normal'))
+  it('is normal when one text is 65 characters', () => expect(itemStep(['a', 'x'.repeat(65)])).toBe('normal'))
+  it('is roomy at exactly 64 characters', () => expect(itemStep(['x'.repeat(64)])).toBe('roomy'))
   it('is roomy for none', () => expect(itemStep([])).toBe('roomy'))
-  it('is roomy at the limits: four items of 48 characters', () =>
-    expect(itemStep(Array.from({ length: 4 }, () => 'x'.repeat(48)))).toBe('roomy'))
 })
 
 describe('fillNode', () => {

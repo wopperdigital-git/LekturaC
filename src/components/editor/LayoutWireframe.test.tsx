@@ -37,7 +37,7 @@ describe('LayoutWireframe lists', () => {
       expect(html).not.toContain('opacity="0.07"')
       expect(html).not.toContain('fill-opacity')
       // No accent disc behind a numeral: the only circle is the expressive checklist's unfilled ring.
-      if (layout !== 'checklist') expect(html).not.toContain('<circle')
+      if (!(layout === 'checklist' && style === 'expressive')) expect(html).not.toContain('<circle')
     }
   })
 })

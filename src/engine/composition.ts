@@ -91,9 +91,9 @@ export function groundOf(card: Pick<Card, 'layout' | 'blocks' | 'orderIndex'>, c
 export type ItemStep = 'roomy' | 'normal'
 
 /** Longest item text that still reads as one short line at the roomy size. */
-const ROOMY_MAX_CHARS = 48
+const ROOMY_MAX_CHARS = 64
 /** Most items that still sit comfortably at the roomy size. */
-const ROOMY_MAX_ITEMS = 4
+const ROOMY_MAX_ITEMS = 6
 
 /**
  * Whether a group's items are few and short enough to draw their text at the lead

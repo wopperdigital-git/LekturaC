@@ -277,7 +277,7 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'iconGrid':
-      // Columns under a hairline: a big accent numeral over a line of text. No box.
+      // Columns under a hairline: a big accent numeral at the top, the text at the foot of the column. No box.
       return (
         <>
           <Title />
@@ -286,9 +286,9 @@ function structured(layout: LayoutType): ReactNode {
             return (
               <g key={i}>
                 <Rule x={x} y={29} w={42} />
-                <Figure x={x} y={35} w={16} h={10} />
-                <Line x={x} y={52} w={36} />
-                <Line x={x} y={59} w={26} />
+                <Figure x={x} y={35} w={24} h={14} />
+                <Line x={x} y={66} w={36} />
+                <Line x={x} y={73} w={26} />
               </g>
             )
           })}
@@ -329,7 +329,7 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'splitList':
-      // Two columns of ruled rows, a small square accent marker before each.
+      // Two columns of rows with a hairline between them, a small square accent marker before each.
       return (
         <>
           <Title />
@@ -338,7 +338,7 @@ function structured(layout: LayoutType): ReactNode {
             const y = 28 + Math.floor(i / 2) * 16
             return (
               <g key={i}>
-                <Rule x={x} y={y} w={64} />
+                {i > 1 && <Rule x={x} y={y} w={64} />}
                 <rect x={x} y={y + 6.5} width={3} height={3} fill={ACCENT} />
                 <Line x={x + 10} y={y + 6.5} w={44 - (i % 3) * 8} />
               </g>
@@ -556,7 +556,7 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'iconGrid':
-      // Columns of a big accent numeral over a line of text, no rule and no box.
+      // Columns: a bigger accent numeral at the top, the text at the foot of the column. No rule, no box.
       return (
         <>
           <Title x={12} y={11} />
@@ -564,9 +564,9 @@ function expressive(layout: LayoutType): ReactNode {
             const x = 12 + i * 47
             return (
               <g key={i}>
-                <Figure x={x} y={30} w={20} h={12} />
-                <Line x={x} y={50} w={38} h={3.5} />
-                <Line x={x} y={57} w={28} />
+                <Figure x={x} y={30} w={30} h={18} />
+                <Line x={x} y={66} w={38} h={3.5} />
+                <Line x={x} y={73} w={28} />
               </g>
             )
           })}
