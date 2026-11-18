@@ -400,7 +400,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-compare3': 'comparison', 'g-table': 'comparisonTable', 'g-quote': 'quote', 'g-text': 'textFocus',
     'g-standard': 'standard', 'g-split-photo': 'standardSplit', 'g-image': 'imageFocus',
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'hero', 'g-sidehead': 'numberedList',
-    'g-sidehead-stats': 'statGrid', 'g-splitbody': 'iconGrid',
+    'g-sidehead-stats': 'statGrid', 'g-splitbody': 'iconGrid', 'g-section': 'section', 'g-statement': 'statement',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
@@ -412,13 +412,15 @@ describe('classifier stability over the fixture decks', () => {
     'g-compare3': 'comparison', 'g-table': 'comparison', 'g-quote': 'quote', 'g-text': 'textFocus',
     'g-standard': 'iconGrid', 'g-split-photo': 'standardSplit', 'g-image': 'standardSplit',
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'statGrid', 'g-sidehead': 'numberedList',
-    'g-sidehead-stats': 'statGrid', 'g-splitbody': 'comparison',
+    'g-sidehead-stats': 'statGrid', 'g-splitbody': 'comparison', 'g-section': 'standard', 'g-statement': 'standard',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
   /** The cards a ruling moves under the classifier, old to new. Every other card must be unchanged. */
   const MOVED_AUTO: Record<string, [string, string]> = {
     'g-list-photo': ['iconGrid', 'photoList'],
+    'g-section': ['standard', 'section'],
+    'g-statement': ['standard', 'statement'],
   }
 
   const cards = [...GALLERY_DECK, ...CPP_DECK]

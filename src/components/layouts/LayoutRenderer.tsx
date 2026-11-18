@@ -9,6 +9,8 @@ import { StatHeroLayout } from './StatHeroLayout'
 import { QuoteLayout } from './QuoteLayout'
 import { TextFocusLayout } from './TextFocusLayout'
 import { ImageFocusLayout } from './ImageFocusLayout'
+import { SectionLayout } from './SectionLayout'
+import { StatementLayout } from './StatementLayout'
 
 /*
   The layouts now drawn by `FlowLayout` rather than a component of their own.
@@ -55,9 +57,9 @@ const LAYOUT_COMPONENTS: Record<
   statHero: StatHeroLayout,
   quote: QuoteLayout,
   textFocus: TextFocusLayout,
-  // Stand-ins: the five frames below are drawn as the standard frame until their own components land.
-  section: StandardLayout,
-  statement: StandardLayout,
+  section: SectionLayout,
+  statement: StatementLayout,
+  // Stand-ins: the three frames below are drawn as the standard frame until their own components land.
   twoColumn: StandardLayout,
   statSplit: StandardLayout,
   photoList: StandardLayout,

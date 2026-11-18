@@ -49,6 +49,16 @@ describe.each(['structured', 'expressive'] as const)('frames that place themselv
     expect(rootClasses(html(card('quote', [heading, quote], style)))).toContain('my-auto')
   })
 
+  it('statement centres itself', () => {
+    expect(rootClasses(html(card('statement', [heading, paragraph], style)))).toContain('my-auto')
+  })
+
+  it('section sits at the foot of the slide, not in the middle', () => {
+    const classes = rootClasses(html(card('section', [heading], style)))
+    expect(classes).toContain('mt-auto')
+    expect(classes).not.toContain('my-auto')
+  })
+
   it('stat hero without a photo', () => {
     expect(rootClasses(html(card('statHero', [heading, stat], style)))).toContain('my-auto')
   })

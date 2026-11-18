@@ -31,6 +31,8 @@ const EXPECTED: Array<[string, string]> = [
   ['g-sidehead', 'numberedList'],
   ['g-sidehead-stats', 'statGrid'],
   ['g-splitbody', 'iconGrid'],
+  ['g-section', 'section'],
+  ['g-statement', 'statement'],
 ]
 
 describe('GALLERY_DECK', () => {

@@ -332,6 +332,12 @@ const SPECS: Spec[] = [
       group('Easy to fix', 'Add the update line', 'Check the condition'),
     ],
   ],
+  ['g-section', 'section', [heading('Part two: making decisions')]],
+  [
+    'g-statement',
+    'statement',
+    [heading('One rule to keep'), paragraph('Every loop needs a way to end, or the program never finishes.')],
+  ],
 ]
 
 /**

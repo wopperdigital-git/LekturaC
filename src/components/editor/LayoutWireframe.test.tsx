@@ -14,6 +14,29 @@ describe('LayoutWireframe grounds', () => {
     expect(html).not.toContain('data-wire-ground="tint"')
   })
 
+  it.each<VisualStyle>(['structured', 'expressive'])('draws a section on a filled ground, its numeral big and its title at the foot (%s)', (style) => {
+    const html = draw('section', style)
+    expect(html).toContain('data-wire-ground="deep"')
+    expect(html).not.toContain('data-wire-ground="tint"')
+    // The numeral bar and the title bar, both on the left edge, the title below the numeral and in the lower half.
+    const ys = [...html.matchAll(/<rect x="16" y="([\d.]+)"/g)].map((m) => Number(m[1]))
+    expect(ys.length).toBeGreaterThanOrEqual(3)
+    expect(ys[ys.length - 1]).toBeGreaterThanOrEqual(45)
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws a statement on a tint, one thick bar over a thin one, centred vertically (%s)', (style) => {
+    const html = draw('statement', style)
+    expect(html).toContain('data-wire-ground="tint"')
+    expect(html).not.toContain('data-wire-ground="deep"')
+    const bars = [...html.matchAll(/<rect x="16" y="([\d.]+)" width="[\d.]+" height="([\d.]+)"/g)].map((m) => ({ y: Number(m[1]), h: Number(m[2]) }))
+    expect(bars.length).toBe(2)
+    expect(bars[0].h).toBeGreaterThan(bars[1].h)
+    const top = bars[0].y
+    const bottom = bars[1].y + bars[1].h
+    // Roughly the middle of the 90-high drawing: equal space above and below.
+    expect(Math.abs(top - (90 - bottom))).toBeLessThanOrEqual(6)
+  })
+
   it.each<VisualStyle>(['structured', 'expressive'])('draws a quote and a stat hero on a faint tint (%s)', (style) => {
     for (const layout of ['quote', 'statHero'] as const) {
       const html = draw(layout, style)

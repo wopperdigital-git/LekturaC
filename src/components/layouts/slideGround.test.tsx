@@ -24,6 +24,20 @@ describe('a slide is painted on its ground', () => {
     expect(draw(CPP_DECK[5])).toContain('data-ground="tint"')
   })
 
+  it('draws a section on the deep ground and a statement on the tint, anywhere in the deck', () => {
+    const base: Card = { id: 'n', orderIndex: 4, layout: 'auto', visualStyle: 'structured', blocks: [] }
+    const section: Card = { ...base, blocks: [{ type: 'heading', text: 'Part two' }] }
+    const statement: Card = {
+      ...base,
+      blocks: [
+        { type: 'heading', text: 'One idea' },
+        { type: 'paragraph', text: 'Said in a single short line.' },
+      ],
+    }
+    expect(draw(section)).toContain('data-ground="deep"')
+    expect(draw(statement)).toContain('data-ground="tint"')
+  })
+
   it('draws a list slide on the plain ground', () => {
     expect(draw(CPP_DECK[1])).not.toContain('data-ground')
   })
