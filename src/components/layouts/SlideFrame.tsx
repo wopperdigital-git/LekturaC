@@ -4,16 +4,7 @@ import { slotsOf, type Composition } from '@/engine/composition'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BlockRenderer, Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
-
-/**
- * The body indices the frame hands its child (everything but the claim and lead, ascending,
- * minus the drawn aside), for callers that must know them before the frame renders.
- */
-export function frameBody(blocks: ContentBlock[], asideIndex: number | null = null): number[] {
-  const slots = slotsOf(blocks)
-  const rest = slots.aside === null ? slots.body : [...slots.body, slots.aside].sort((a, b) => a - b)
-  return asideIndex === null ? rest : rest.filter((index) => index !== asideIndex)
-}
+import { ZONE_WIDTH, frameBody } from './slideFrameParts'
 
 /**
  * The zone panel: a tinted, rounded box one zone of a composed slide is drawn on. It is a
@@ -23,7 +14,6 @@ export function frameBody(blocks: ContentBlock[], asideIndex: number | null = nu
  * (numerals): an unregistered custom property is substituted as tokens and resolved where it
  * is used, so `100cqi` there is the nearest container, the panel. Off a panel it is unset.
  */
-export const ZONE_WIDTH = { '--zone-width': '100cqi' } as CSSProperties
 const PANEL_STYLE: CSSProperties = {
   ...ZONE_WIDTH,
   backgroundColor: 'var(--slide-ground-tint)',

@@ -5,7 +5,8 @@ import { inferGroups, nodeKey } from '@/engine/groups'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BlockRenderer } from './BlockRenderer'
 import { BodyNode } from './BodyNode'
-import { SlideFrame, ZONE_WIDTH, frameBody } from './SlideFrame'
+import { SlideFrame } from './SlideFrame'
+import { ZONE_WIDTH, frameBody } from './slideFrameParts'
 
 /**
  * A list beside the card's photo: the photo is the frame's aside, bleeding to the slide's

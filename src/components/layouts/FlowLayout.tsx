@@ -4,7 +4,8 @@ import { inferGroups, nodeKey } from '@/engine/groups'
 import { singlePhoto } from '@/engine/blockPartition'
 import { BlockRenderer } from './BlockRenderer'
 import { GroupRenderer } from './GroupRenderer'
-import { BodyUnits, SlideFrame, frameBody } from './SlideFrame'
+import { BodyUnits, SlideFrame } from './SlideFrame'
+import { frameBody } from './slideFrameParts'
 
 /**
  * A card drawn as a sequence of leaves and groups, in the author's order.

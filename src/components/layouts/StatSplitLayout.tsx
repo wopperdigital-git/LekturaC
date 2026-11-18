@@ -5,7 +5,8 @@ import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/li
 import { Adjustable } from './Adjustable'
 import { BodyNode } from './BodyNode'
 import { EditableText } from './EditableText'
-import { SlideFrame, ZONE_WIDTH } from './SlideFrame'
+import { SlideFrame } from './SlideFrame'
+import { ZONE_WIDTH } from './slideFrameParts'
 import { figureSize } from './figureSize'
 
 /** A figure of up to this many characters is drawn at full size; a longer one steps down. */

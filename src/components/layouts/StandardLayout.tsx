@@ -1,7 +1,8 @@
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { compositionOf } from '@/engine/composition'
 import { BlockRenderer } from './BlockRenderer'
-import { BodyUnits, SlideFrame, frameBody } from './SlideFrame'
+import { BodyUnits, SlideFrame } from './SlideFrame'
+import { frameBody } from './slideFrameParts'
 
 /**
  * The plain stacked slide: the claim and lead in the frame's head, every other block

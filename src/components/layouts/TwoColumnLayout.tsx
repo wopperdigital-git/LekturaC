@@ -2,7 +2,8 @@ import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { inferGroups, nodeKey } from '@/engine/groups'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BodyNode } from './BodyNode'
-import { SlideFrame, ZONE_WIDTH } from './SlideFrame'
+import { SlideFrame } from './SlideFrame'
+import { ZONE_WIDTH } from './slideFrameParts'
 
 /**
  * Prose on two columns: the claim and lead head the slide on the frame, and the body flows

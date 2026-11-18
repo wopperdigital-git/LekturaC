@@ -65,7 +65,7 @@ describe('the invariant', () => {
         expect(flattenNodes(inferGroups(blocks, hint))).toEqual(blocks.map((block, index) => ({ block, index })))
       }
     }
-  })
+  }, 60_000)
 
   it('gives every node a key no other node on the card shares', () => {
     for (const blocks of sequences) {

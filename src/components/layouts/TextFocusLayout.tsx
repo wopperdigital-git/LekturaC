@@ -2,7 +2,8 @@ import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { compositionOf } from '@/engine/composition'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BlockRenderer } from './BlockRenderer'
-import { BodyUnits, SlideFrame, frameBody } from './SlideFrame'
+import { BodyUnits, SlideFrame } from './SlideFrame'
+import { frameBody } from './slideFrameParts'
 
 /**
  * Flowing prose for narrative cards with no natural list or number structure: the claim
