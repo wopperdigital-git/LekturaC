@@ -71,3 +71,13 @@ export function pointRun(blocks: ContentBlock[], index: number): { start: number
   if (!unit) return null
   return { start: unit[0], end: unit[unit.length - 1] }
 }
+
+/**
+ * Which block carries the add-row plus when `selected` is picked: the last row of the run of term
+ * rows holding it (the plus sits under the table, not under whichever row was picked), or `null`
+ * when `selected` is not a point or the card is full (`MAX_BLOCKS`, so no row could be added).
+ */
+export function rowPlusCarrier(blocks: ContentBlock[], selected: number): number | null {
+  if (blocks.length >= MAX_BLOCKS) return null
+  return pointRun(blocks, selected)?.end ?? null
+}

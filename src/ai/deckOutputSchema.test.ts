@@ -88,3 +88,38 @@ describe('deckOutputSchema leniency', () => {
     },
   )
 })
+
+describe('deckOutputSchema and the structured blocks', () => {
+  // The model cannot write a point, a callout or a code block, nor a heading kicker (they are hand-made
+  // only). The mirror is built on the same generated block union, so the structured-output grammar never
+  // offers them and a stray one is refused (the one retry fires) or stripped, never stored.
+  function deckWithBlocks(blocks: unknown[]) {
+    return {
+      title: 'T',
+      blueprint: 'inform',
+      brief: { objective: 'O', audienceKnowledgeLevel: 'beginner', presentationType: 'other', freshnessRequired: false, keyQuestions: [] },
+      cards: [
+        {
+          plan: { purpose: 'hook', audienceQuestion: 'q', keyMessage: 'k', visualType: 'text', layoutFamily: 'list', transition: '', importance: 'essential' },
+          blocks,
+          visualStyle: 'structured',
+          speakerNotes: 'n',
+          claims: [],
+        },
+      ],
+    }
+  }
+
+  it.each([
+    ['point', { type: 'point', label: 'Term', text: 'Meaning' }],
+    ['callout', { type: 'callout', text: 'Key idea' }],
+    ['code', { type: 'code', code: 'x = 1' }],
+  ])('refuses a %s block', (_name, block) => {
+    expect(deckOutputSchema.safeParse(deckWithBlocks([{ type: 'heading', text: 'H' }, block])).success).toBe(false)
+  })
+
+  it('strips a heading kicker rather than keeping it', () => {
+    const parsed = deckOutputSchema.parse(deckWithBlocks([{ type: 'heading', text: 'H', kicker: 'PART ONE' }]))
+    expect(parsed.cards[0].blocks[0]).toEqual({ type: 'heading', text: 'H' })
+  })
+})

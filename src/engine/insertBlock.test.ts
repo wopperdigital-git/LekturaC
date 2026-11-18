@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Card, ContentBlock } from './contentBlocks'
-import { pointRun, withBlockInserted } from './insertBlock'
+import { pointRun, rowPlusCarrier, withBlockInserted } from './insertBlock'
 import { MAX_BLOCKS } from './newContent'
 import { withBlockRemoved } from './removeElement'
 import { textRef } from './marks'
 
-const heading: ContentBlock = { type: 'heading', text: 'Title' }
+const heading: ContentBlock = { type: 'heading', text: 'Title', kicker: 'Part one' }
 const paragraph = (text: string): ContentBlock => ({ type: 'paragraph', text })
 const point = (label: string): ContentBlock => ({ type: 'point', label, text: `${label} means` })
 const bullets: ContentBlock = { type: 'bulletList', items: ['a', 'b', 'c'] }
@@ -21,6 +21,7 @@ const FIXTURE: Editable = {
   blocks: [heading, point('A'), point('B'), bullets, paragraph('p'), group],
   inline: {
     [textRef(0, 'text')]: bold,
+    [textRef(0, 'kicker')]: bold,
     '0': { style: { align: 'center' } },
     [textRef(1, 'label')]: bold,
     [textRef(1, 'text')]: bold,
@@ -53,7 +54,7 @@ describe('withBlockInserted', () => {
     const keys = Object.keys(result.inline ?? {}).sort()
     expect(keys).toEqual(
       [
-        '0:text', '0',
+        '0:text', '0:kicker', '0',
         '1:label', '1:text', '1',
         '3:label', '3',
         '4:items:0', '4:items:2', '4',
@@ -77,6 +78,8 @@ describe('withBlockInserted', () => {
     expect(result.adjusts?.['6']).toEqual(nudge(0.15))
     expect(result.inline?.['1:text']).toEqual(bold)
     expect(result.inline?.['0:text']).toBeUndefined()
+    expect(result.inline?.['1:kicker']).toEqual(bold)
+    expect(result.inline?.['0:kicker']).toBeUndefined()
   })
 
   it('at the end shifts nothing', () => {
@@ -157,5 +160,33 @@ describe('pointRun', () => {
     const blocks = [point('A'), heading, point('B')]
     expect(pointRun(blocks, 0)).toEqual({ start: 0, end: 0 })
     expect(pointRun(blocks, 2)).toEqual({ start: 2, end: 2 })
+  })
+})
+
+describe('rowPlusCarrier', () => {
+  const blocks = [heading, point('A'), point('B'), point('C'), paragraph('p'), point('D')]
+
+  it('is the last row of the run holding the selected point, whichever row is selected', () => {
+    expect(rowPlusCarrier(blocks, 1)).toBe(3)
+    expect(rowPlusCarrier(blocks, 2)).toBe(3)
+    expect(rowPlusCarrier(blocks, 3)).toBe(3)
+  })
+
+  it('is the point itself when it is a run of one', () => {
+    expect(rowPlusCarrier(blocks, 5)).toBe(5)
+  })
+
+  it('is null for a block that is not a point, or an index out of range', () => {
+    expect(rowPlusCarrier(blocks, 0)).toBeNull()
+    expect(rowPlusCarrier(blocks, 4)).toBeNull()
+    expect(rowPlusCarrier(blocks, 99)).toBeNull()
+  })
+
+  it('is null when the card is full, since a row could not be added', () => {
+    const full = [point('A'), ...Array.from({ length: MAX_BLOCKS - 1 }, () => paragraph('x'))]
+    expect(full).toHaveLength(MAX_BLOCKS)
+    expect(rowPlusCarrier(full, 0)).toBeNull()
+    expect(rowPlusCarrier(full.slice(1), 0)).toBeNull()
+    expect(rowPlusCarrier([point('A'), ...full.slice(2)], 0)).toBe(0)
   })
 })

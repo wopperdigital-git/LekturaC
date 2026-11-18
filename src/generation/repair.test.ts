@@ -152,4 +152,28 @@ describe('applyRepairs', () => {
     const result = applyRepairs(original, response, [0])
     expect(result.deck.cards[0].role).toBeUndefined()
   })
+
+  // The model cannot write the structured blocks or a kicker (hand-made only), so a replacement holding
+  // one is not a valid GeneratedCard: it is dropped and the original card stays.
+  it.each([
+    ['point', { type: 'point', label: 'Term', text: 'Meaning' }],
+    ['callout', { type: 'callout', text: 'Key idea' }],
+    ['code', { type: 'code', code: 'x = 1' }],
+  ])('drops a replacement holding a %s block', (_name, block) => {
+    const original = deck([validCard('Original slide one')])
+    const bad = validCard('Repaired slide one', { blocks: [{ type: 'heading', text: 'Repaired slide one' }, block] as GeneratedCard['blocks'] })
+    const result = applyRepairs(original, { repairs: [{ slide: 1, card: bad }] }, [0])
+    expect(result.deck.cards[0]).toEqual(original.cards[0])
+    expect(result.repaired).toEqual([])
+  })
+
+  it('lands a replacement but strips a heading kicker the model added', () => {
+    const original = deck([validCard('Original slide one')])
+    const withKicker = validCard('Repaired slide one', {
+      blocks: [{ type: 'heading', text: 'Repaired slide one', kicker: 'PART ONE' }] as unknown as GeneratedCard['blocks'],
+    })
+    const result = applyRepairs(original, { repairs: [{ slide: 1, card: withKicker }] }, [0])
+    expect(result.repaired).toEqual([0])
+    expect(result.deck.cards[0].blocks[0]).toEqual({ type: 'heading', text: 'Repaired slide one' })
+  })
 })

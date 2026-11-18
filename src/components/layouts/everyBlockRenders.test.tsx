@@ -130,6 +130,32 @@ const REALISTIC: { name: string; blocks: ContentBlock[] }[] = [
     ],
   },
   {
+    name: 'term rows with a paragraph',
+    blocks: [
+      { type: 'heading', text: 'MARKH7', kicker: 'MARKK7' },
+      { type: 'point', label: 'MARKPT1', text: 'MARKPM1' },
+      { type: 'point', label: 'MARKPT2', text: 'MARKPM2' },
+      { type: 'point', label: 'MARKPT3', text: 'MARKPM3' },
+      { type: 'paragraph', text: 'MARKP7' },
+    ],
+  },
+  {
+    name: 'a callout beside a short list',
+    blocks: [
+      { type: 'heading', text: 'MARKH8' },
+      { type: 'bulletList', items: ['MARKI8A', 'MARKI8B'] },
+      { type: 'callout', label: 'MARKCL8', text: 'MARKCT8' },
+    ],
+  },
+  {
+    name: 'a code slide',
+    blocks: [
+      { type: 'heading', text: 'MARKH9' },
+      { type: 'paragraph', text: 'MARKP9' },
+      { type: 'code', code: 'MARKSRC9', label: 'MARKCODEL9', caption: 'MARKCODEC9' },
+    ],
+  },
+  {
     name: 'a gallery of four images',
     blocks: [
       { type: 'heading', text: 'MARKH6' },
@@ -226,20 +252,25 @@ const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter(
 )
 
 describe('an image-free card draws every block once, composed or not', () => {
-  const composedAs = new Set<string>()
-
   describe.each(LAYOUTS)('%s', (layout) => {
     it.each(VARIANTS)('(%s) draws every block of an image-free kitchen-sink card', (variant) => {
       const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
       expectEveryBlockDrawn(html, IMAGE_FREE_SINK)
-      const kind = html.match(/data-composition="(\w+)"/)?.[1]
-      if (kind) composedAs.add(kind)
     })
   })
 
-  // Runs after the renders above (tests in a file run in order), so the zoned path is known to be exercised.
-  it('at least one of those runs is a side head, so the zoned path is exercised', () => {
-    expect(composedAs.has('sideHead')).toBe(true)
+  // Self-contained (it renders for itself, so it passes or fails alone, as with `-t`): the zoned path is
+  // really exercised, because some layout and treatment lands this card in a side head.
+  it('at least one of those layouts is a side head, so the zoned path is exercised', () => {
+    const kinds = new Set<string>()
+    for (const layout of LAYOUTS) {
+      for (const variant of VARIANTS) {
+        const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
+        const kind = html.match(/data-composition="(\w+)"/)?.[1]
+        if (kind) kinds.add(kind)
+      }
+    }
+    expect(kinds.has('sideHead')).toBe(true)
   })
 })
 

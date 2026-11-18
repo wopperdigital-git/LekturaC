@@ -227,9 +227,9 @@ describe('a callout', () => {
     const panel = slide.shapes.find((s) => s.shape === 'roundRect')!
     expect(fillOf(panel)).toBe(hex(c.accent))
     expect(textOf(slide, 'Always close the file').options.color).toBe(hex(c.accentForeground))
-    expect(textOf(slide, 'Remember').options.color).toBe(hex(c.accentForeground))
+    expect(textOf(slide, 'REMEMBER').options.color).toBe(hex(c.accentForeground))
     // Label above the text, both on the panel.
-    const label = textOf(slide, 'Remember').options
+    const label = textOf(slide, 'REMEMBER').options
     const body = textOf(slide, 'Always close the file').options
     expect(label.y as number).toBeLessThan(body.y as number)
     expect(label.fontSize as number).toBeLessThan(body.fontSize as number)
@@ -244,7 +244,7 @@ describe('a callout', () => {
     expect(fillOf(panels[0])).toBe(hex(c.accent))
     expect(fillOf(panels[1])).toBe(hex(c.tint))
     expect(textOf(slide, 'A second idea').options.color).toBe(hex(c.foreground))
-    expect(textOf(slide, 'Also').options.color).toBe(hex(smallAccentInk(c)))
+    expect(textOf(slide, 'ALSO').options.color).toBe(hex(smallAccentInk(c)))
   })
 
   it('works without a label', () => {
@@ -264,7 +264,7 @@ describe('a callout', () => {
     const panel = slide.shapes.find((s) => s.shape === 'roundRect')!
     expect(fillOf(panel)).toBe(hex(c.accent))
     expect(textOf(slide, 'Always close the file')).toBeDefined()
-    expect(textOf(slide, 'Remember')).toBeDefined()
+    expect(textOf(slide, 'REMEMBER')).toBeDefined()
     // The panel is the user's frame: it starts where their box starts and is at least as tall.
     const { boxes, height } = cardBoxes(card, DEFAULT_THEME.typography.scale)
     const fit = fitCard(height)
@@ -395,7 +395,7 @@ describe('every arrangement carries the structured blocks', () => {
     { type: 'callout', label: 'KeyLabel', text: 'Key text' },
     { type: 'code', label: 'CodeLabel', code: 'x = 1', caption: 'CodeCaption' },
   ]
-  const words = ['TermOne', 'Meaning one', 'TermTwo', 'Meaning two', 'KeyLabel', 'Key text', 'CodeLabel', 'x = 1', 'CodeCaption']
+  const words = ['TermOne', 'Meaning one', 'TermTwo', 'Meaning two', 'KEYLABEL', 'Key text', 'CodeLabel', 'x = 1', 'CodeCaption']
   const kicked: ContentBlock = { type: 'heading', text: 'Heading', kicker: 'Kicker words' }
 
   const cases: [string, Card][] = [
@@ -435,8 +435,8 @@ describe('every arrangement carries the structured blocks', () => {
     const slide = renderOn(cases.find(([n]) => n === 'a body slide')![1])
     const y = (needle: string) => textOf(slide, needle).options.y as number
     expect(y('Prose')).toBeLessThan(y('TermOne'))
-    expect(y('TermOne')).toBeLessThan(y('KeyLabel'))
-    expect(y('KeyLabel')).toBeLessThan(y('CodeLabel'))
+    expect(y('TermOne')).toBeLessThan(y('KEYLABEL'))
+    expect(y('KEYLABEL')).toBeLessThan(y('CodeLabel'))
   })
 })
 
@@ -462,7 +462,7 @@ describe('on a placed photo (hero)', () => {
     const slide = renderOn(card, DEFAULT_THEME, new Map([[URL_A, JPEG]]))
     expect(textOf(slide, 'Welcome').options.color).toBe('ffffff')
     expect(textOf(slide, 'The idea').options.color).toBe(hex(c.accentForeground))
-    expect(textOf(slide, 'Key').options.color).toBe(hex(c.accentForeground))
+    expect(textOf(slide, 'KEY').options.color).toBe(hex(c.accentForeground))
     expect(textOf(slide, 'x = 1').options.color).toBe(hex(c.deepForeground))
     expect(textOf(slide, 'main.cpp').options.color).toBe(hex(deepMuted(c)))
     expect(textOf(slide, 'Tiny').options.color).toBe(hex(deepMuted(c)))
@@ -490,7 +490,7 @@ describe('size picks on the structured blocks', () => {
   ])('%s', (_name, extra) => {
     it.each([
       ['a point (term and meaning)', 1, ['TermX', 'Meaning x']],
-      ['a callout (label and text)', 2, ['LabelX', 'Callout x']],
+      ['a callout (label and text)', 2, ['LABELX', 'Callout x']],
       ['code', 3, ['codeX']],
     ])('an element size pick on %s makes its text larger', (_what, index, needles) => {
       const base = renderOn(cardOf(blocks, extra))
@@ -512,7 +512,7 @@ describe('small type floors', () => {
       cardOf([{ type: 'heading', text: 'Loops', kicker: 'Part two' }, { type: 'callout', label: 'Key', text: 'Idea' }]),
     )
     expect(textOf(slide, 'PART TWO').options.fontSize as number).toBeGreaterThanOrEqual(10)
-    expect(textOf(slide, 'Key').options.fontSize as number).toBeGreaterThanOrEqual(10)
+    expect(textOf(slide, 'KEY').options.fontSize as number).toBeGreaterThanOrEqual(10)
   })
 })
 
@@ -612,6 +612,27 @@ describe('the kicker capitals', () => {
   it('keep the typed words when capitals would change the length, so marks stay on their letters', () => {
     const slide = renderOn(cardOf([{ type: 'heading', text: 'T', kicker: 'straße' }]))
     expect(textOf(slide, 'straße')).toBeDefined()
+  })
+})
+
+describe('the callout label capitals', () => {
+  it('are set at export time, as the screen sets them', () => {
+    const slide = renderOn(cardOf([HEADING, { type: 'callout', label: 'Remember this', text: 'Always close the file' }]))
+    expect(textOf(slide, 'REMEMBER THIS')).toBeDefined()
+    expect(slide.texts.some((t) => t.text === 'Remember this')).toBe(false)
+  })
+
+  it('keep the typed words when capitals would change the length, so marks stay on their letters', () => {
+    const slide = renderOn(cardOf([HEADING, { type: 'callout', label: 'straße', text: 'Idea' }]))
+    expect(textOf(slide, 'straße')).toBeDefined()
+  })
+
+  it('leave the callout text and a code label as typed', () => {
+    const slide = renderOn(
+      cardOf([HEADING, { type: 'callout', label: 'Key', text: 'Idea in lowercase' }, { type: 'code', label: 'Shell', code: 'ls' }]),
+    )
+    expect(textOf(slide, 'Idea in lowercase')).toBeDefined()
+    expect(textOf(slide, 'Shell')).toBeDefined()
   })
 })
 

@@ -260,7 +260,7 @@ export function kickerOf(card: Card, index: number): string | null {
 }
 
 /**
- * A kicker's words as the file shows them: in capitals, as the screen sets them. Marks are character
+ * A kicker's (or a callout label's) words as the file shows them: in capitals, as the screen sets them. Marks are character
  * offsets, so a string whose capitals change its length (a German sharp s) is kept as typed.
  */
 export function kickerText(text: string): string {
@@ -410,8 +410,10 @@ export function calloutBlock(env: Env, index: number, block: CalloutBlock, owner
       const textPt = stepPt(tenth(pt * relScale(env, text)), LEAD_RATIO)
       const labelFace = headingFace(env.theme, label ?? env.style)
       const textFace = bodyFace(env.theme, text)
+      // The label is set in capitals here (`kickerText`), as the screen's small capitals do.
+      const labelText = block.label ? kickerText(block.label) : ''
       const labelH = block.label
-        ? boxHeight(block.label, innerW, labelFace, labelPt, { bold: true, markBold: markBold(env.card, labelRef), scale: markScale(env.card, labelRef) }, env.measure)
+        ? boxHeight(labelText, innerW, labelFace, labelPt, { bold: true, markBold: markBold(env.card, labelRef), scale: markScale(env.card, labelRef) }, env.measure)
         : 0
       const textH = boxHeight(block.text, innerW, textFace, textPt, { bold: text.bold, italic: text.italic, lineSpacing: env.theme.typography.lineHeight, markBold: markBold(env.card, textRefKey), scale: markScale(env.card, textRefKey) }, env.measure)
       const heightIn = 2 * PANEL_PAD + labelH + textH
@@ -433,7 +435,7 @@ export function calloutBlock(env: Env, index: number, block: CalloutBlock, owner
             line: { type: 'none' },
           })
           if (block.label && label) {
-            addBox(slide, markedRuns(block.label, marksFor(env.card, labelRef)), { x: x + PANEL_PAD, y: y + PANEL_PAD, w: innerW, h: labelH }, {
+            addBox(slide, markedRuns(labelText, marksFor(env.card, labelRef)), { x: x + PANEL_PAD, y: y + PANEL_PAD, w: innerW, h: labelH }, {
               fontFace: labelFace,
               fontSize: labelPt,
               color: hex(ink ?? label.color ?? env.inks.smallAccent),

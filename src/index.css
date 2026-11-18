@@ -484,12 +484,13 @@ body {
   background for a pick to be checked against, so the scrim decides. `!important`
   because the colour has to win over the element's own inline colour (an element
   pick) and a character colour mark, not only over layered utilities. Text on an accent
-  fill keeps its accent-foreground ink, like the rule above.
+  fill keeps its accent-foreground ink, like the rule above, and a code panel and a callout that is not
+  filled (`data-callout-quiet`, drawn on the tint) keep their own inks: white on those would be light on light.
 
   The stage lets presses through (the photo behind it is a selectable element), and
   takes them back only on the elements themselves.
 */
-[data-on-photo] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-code]):not([data-code] *) {
+[data-on-photo] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-code]):not([data-code] *):not([data-callout-quiet]):not([data-callout-quiet] *) {
   color: #fff !important;
 }
 

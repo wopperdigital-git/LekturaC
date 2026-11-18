@@ -52,8 +52,7 @@ export function SelectionLayer({
     one unless it is the last. Its frame is measured with the selection and held beside it.
   */
   const [rowEnd, setRowEnd] = useState<{ index: number; frame: Frame } | null>(null)
-  const runEnd =
-    selected !== null && adjusting?.canAddRow?.(selected) ? (adjusting.rowRunEnd?.(selected) ?? selected) : null
+  const runEnd = selected === null ? null : (adjusting?.rowPlusCarrier?.(selected) ?? null)
   const runEndAdjust = runEnd === null ? undefined : data?.adjusts?.[String(runEnd)]
   // Bumped to re-measure when nothing in props changed but the layout did — a
   // window resize, or the card reflowing around an edit.

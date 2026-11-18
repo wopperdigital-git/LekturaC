@@ -289,6 +289,13 @@ describe('the stylesheet and the video draw code the same way', () => {
     expect(deepMarks).toContain(':not([data-code]):not([data-code] *)')
   })
 
+  it('keeps the white-on-a-photo rule off a callout panel that is not filled, whose own ink is dark on its tint', () => {
+    const onPhoto = ruleFor('[data-on-photo] :is(')
+    expect(onPhoto).toContain(':not([data-callout-quiet]):not([data-callout-quiet] *)')
+    // The filled owner is already spared by its accent-foreground ink.
+    expect(onPhoto).toContain(":not([class*='accent-foreground'])")
+  })
+
   it('forces a character colour inside the code panel to the panel ink, light or dark', () => {
     const own = ruleFor('[data-code] :is(p, span, div)')
     expect(own).toContain("[style^='color:']")
