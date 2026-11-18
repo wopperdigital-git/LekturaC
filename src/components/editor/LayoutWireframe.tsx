@@ -418,10 +418,10 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'section':
-      // As the structured one with a larger numeral and a heavier title.
+      // As the structured one with a heavier title: the numeral is the same size in both treatments, as in the JSX.
       return (
         <>
-          <Figure x={16} y={30} w={32} h={17} />
+          <Figure x={16} y={36} w={26} h={13} />
           <rect x={16} y={52} width={16} height={1.5} fill={ACCENT} />
           <Title x={16} y={59} w={92} h={11} />
         </>

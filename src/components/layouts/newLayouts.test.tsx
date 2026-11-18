@@ -62,7 +62,7 @@ describe.each(['structured', 'expressive'] as const)('section (%s)', (style) => 
 
   it('draws a lone photo through the leftovers, once', () => {
     const markup = html(card('section', [heading, photo], style))
-    expect(count(markup, 'a section photo')).toBeGreaterThanOrEqual(1)
+    expect(count(markup, `src="${photo.type === 'image' ? photo.url : ''}"`)).toBe(1)
     expect(count(markup, 'Loops and branches')).toBe(1)
   })
 })
@@ -95,5 +95,22 @@ describe.each(['structured', 'expressive'] as const)('statement (%s)', (style) =
   it('draws a heading-only card without a paragraph', () => {
     const markup = html(card('statement', [heading], style))
     expect(count(markup, 'Loops and branches')).toBe(1)
+  })
+})
+
+describe.each(['structured', 'expressive'] as const)('section and statement stay editable (%s)', (style) => {
+  it('wraps the section heading in its own holder', () => {
+    expect(html(card('section', [heading], style))).toMatch(/data-block-index="0"[^>]*><h1/)
+  })
+
+  it('wraps the statement heading and paragraph in their own holders', () => {
+    const markup = html(card('statement', [heading, lead], style))
+    expect(markup).toMatch(/data-block-index="0"[^>]*><h1/)
+    expect(markup).toMatch(/data-block-index="1"[^>]*><p/)
+  })
+
+  it('caps the statement at a reading measure of 14 times the h1 step', () => {
+    const tag = tagWith(html(card('statement', [heading, lead], style)), 'data-statement-root')
+    expect(tag).toContain('max-width:calc(var(--slide-size-h1) * 14)')
   })
 })

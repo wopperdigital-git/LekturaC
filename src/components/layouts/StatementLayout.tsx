@@ -7,12 +7,12 @@ import { Adjustable } from './Adjustable'
 import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 
 const HEADING_SIZE = 'var(--slide-size-h1)'
-const STATEMENT_WIDTH = 'calc(var(--slide-size-h1) * 22)'
+const STATEMENT_WIDTH = 'calc(var(--slide-size-h1) * 14)'
 const EXPRESSIVE_HEADING_SIZE = 'calc(var(--slide-size-h1) * 1.15)'
 
 /**
  * One idea on the tint: the heading at h1 and a single short line under it, left-aligned and
- * centred vertically on its own root (`my-auto`). The block is capped at 22 times the h1
+ * centred vertically on its own root (`my-auto`). The block is capped at 14 times the h1
  * step, so the line breaks like a statement and not like a paragraph. The first heading
  * and first paragraph are drawn here; anything else on the card is a leftover, since the
  * picker offers this layout for a heading and a paragraph of any length.
