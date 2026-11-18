@@ -401,6 +401,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-standard': 'standard', 'g-split-photo': 'standardSplit', 'g-image': 'imageFocus',
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'hero', 'g-sidehead': 'numberedList',
     'g-sidehead-stats': 'statGrid', 'g-splitbody': 'iconGrid', 'g-section': 'section', 'g-statement': 'statement',
+    'g-twocol': 'twoColumn', 'g-statsplit': 'statSplit', 'g-photolist': 'photoList',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
@@ -413,6 +414,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-standard': 'iconGrid', 'g-split-photo': 'standardSplit', 'g-image': 'standardSplit',
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'statGrid', 'g-sidehead': 'numberedList',
     'g-sidehead-stats': 'statGrid', 'g-splitbody': 'comparison', 'g-section': 'standard', 'g-statement': 'standard',
+    'g-twocol': 'textFocus', 'g-statsplit': 'statHero', 'g-photolist': 'numberedList',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
@@ -421,6 +423,8 @@ describe('classifier stability over the fixture decks', () => {
     'g-list-photo': ['iconGrid', 'photoList'],
     'g-section': ['standard', 'section'],
     'g-statement': ['standard', 'statement'],
+    'g-statsplit': ['statHero', 'statSplit'],
+    'g-photolist': ['numberedList', 'photoList'],
   }
 
   const cards = [...GALLERY_DECK, ...CPP_DECK]

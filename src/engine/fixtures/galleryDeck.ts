@@ -338,6 +338,43 @@ const SPECS: Spec[] = [
     'statement',
     [heading('One rule to keep'), paragraph('Every loop needs a way to end, or the program never finishes.')],
   ],
+  [
+    'g-twocol',
+    'twoColumn',
+    [
+      heading('Why loops matter'),
+      paragraph('A program that could only run each line once would be a calculator with a long tape.'),
+      paragraph('A loop lets the same lines run again with a new value, so a few lines can handle a thousand cases.'),
+      paragraph('The cost is that a loop must also know when to stop, and that is where most mistakes live.'),
+    ],
+  ],
+  [
+    'g-statsplit',
+    'statSplit',
+    [
+      heading('Where loop bugs come from'),
+      stat('72%', 'of loop bugs are a missing update'),
+      list(
+        'Forgot to change the counter',
+        'Compared with the wrong operator',
+        'Changed the counter inside the body',
+      ),
+    ],
+  ],
+  [
+    'g-photolist',
+    'photoList',
+    [
+      heading('Tracing a loop on paper'),
+      list(
+        'Write down the starting value of the counter.',
+        'Check the condition before each pass of the body.',
+        'Run the body once and note what it changed.',
+        'Apply the update and check the condition again.',
+      ),
+      photo('A notebook with a loop traced in pencil'),
+    ],
+  ],
 ]
 
 /**

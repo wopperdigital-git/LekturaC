@@ -114,3 +114,140 @@ describe.each(['structured', 'expressive'] as const)('section and statement stay
     expect(tag).toContain('max-width:calc(var(--slide-size-h1) * 14)')
   })
 })
+
+const para = (text: string): ContentBlock => ({ type: 'paragraph', text })
+const bullets = (...items: string[]): ContentBlock => ({ type: 'bulletList', items })
+const figure: ContentBlock = { type: 'stat', value: '42%', label: 'of loops need no update' }
+const listBlock = bullets('Find the start', 'Check the condition', 'Run the body')
+
+describe.each(['structured', 'expressive'] as const)('twoColumn (%s)', (style) => {
+  const blocks: ContentBlock[] = [heading, lead, para('Second paragraph in the body.'), para('Third paragraph in the body.'), listBlock]
+
+  it('draws every block once', () => {
+    const markup = html(card('twoColumn', blocks, style))
+    for (const text of [
+      'Loops and branches',
+      'Every program decides what to do next.',
+      'Second paragraph in the body.',
+      'Third paragraph in the body.',
+      'Find the start',
+      'Check the condition',
+      'Run the body',
+    ]) {
+      expect(count(markup, text), text).toBe(1)
+    }
+  })
+
+  it('flows the body into two columns from the container width up, one below it', () => {
+    const tag = tagWith(html(card('twoColumn', blocks, style)), 'data-two-column')
+    expect(tag).not.toBe('')
+    expect(classesOf(tag)).toContain('@min-[640px]:columns-2')
+    expect(tag).toContain('column-gap:var(--slide-gap-section)')
+    expect(tag).not.toMatch(/column-count/)
+  })
+
+  it('keeps every body block whole inside its column', () => {
+    const markup = html(card('twoColumn', blocks, style))
+    // Second paragraph, third paragraph and the list.
+    expect(count(markup, 'break-inside-avoid')).toBe(3)
+  })
+
+  it('stays editable: each body block keeps its own index', () => {
+    const markup = html(card('twoColumn', blocks, style))
+    for (const index of [2, 3, 4]) expect(markup).toContain(`data-block-index="${index}"`)
+  })
+})
+
+describe.each(['structured', 'expressive'] as const)('statSplit (%s)', (style) => {
+  const blocks: ContentBlock[] = [heading, figure, listBlock]
+
+  it('draws the figure, its label and each list item once', () => {
+    const markup = html(card('statSplit', blocks, style))
+    for (const text of ['Loops and branches', '42%', 'of loops need no update', 'Find the start', 'Check the condition', 'Run the body']) {
+      expect(count(markup, text), text).toBe(1)
+    }
+  })
+
+  it('is a two-fifths and three-fifths grid from the container width up', () => {
+    const tag = tagWith(html(card('statSplit', blocks, style)), 'data-stat-split')
+    expect(tag).not.toBe('')
+    expect(classesOf(tag)).toContain('@min-[640px]:grid-cols-[2fr_3fr]')
+  })
+
+  it('draws the figure as accent text and fills nothing with the accent', () => {
+    const markup = html(card('statSplit', blocks, style))
+    expect(classesOf(tagWith(markup, 'data-stat-figure'))).toContain('text-slide-accent')
+    expect(markup).not.toContain('bg-slide-accent')
+    expect(markup).not.toContain('data-accent-owner')
+  })
+
+  it('draws the list as ruled numbered rows in a column that caps the numeral', () => {
+    const markup = html(card('statSplit', blocks, style))
+    expect(markup).toContain('<ol')
+    expect(markup).toContain('--zone-width:100cqi')
+  })
+
+  it('draws a trailing paragraph once, below the grid', () => {
+    const markup = html(card('statSplit', [...blocks, para('A closing note after the grid.')], style))
+    expect(count(markup, 'A closing note after the grid.')).toBe(1)
+    expect(markup.indexOf('A closing note after the grid.')).toBeGreaterThan(markup.indexOf('Run the body'))
+  })
+
+  it('draws a photo the picker allowed, once, after the grid', () => {
+    const markup = html(card('statSplit', [...blocks, photo], style))
+    expect(count(markup, 'src="https://example.test/s.png"')).toBe(1)
+    expect(count(markup, 'Run the body')).toBe(1)
+  })
+
+  it('stays editable: the figure and the list keep their own indices', () => {
+    const markup = html(card('statSplit', blocks, style))
+    expect(markup).toContain('data-block-index="1"')
+    expect(markup).toContain('data-block-index="2"')
+  })
+})
+
+describe.each(['structured', 'expressive'] as const)('photoList (%s)', (style) => {
+  const blocks: ContentBlock[] = [heading, listBlock, photo]
+
+  it('draws the list items and the photo once each', () => {
+    const markup = html(card('photoList', blocks, style))
+    for (const text of ['Loops and branches', 'Find the start', 'Check the condition', 'Run the body']) {
+      expect(count(markup, text), text).toBe(1)
+    }
+    expect(count(markup, 'src="https://example.test/s.png"')).toBe(1)
+  })
+
+  it('bleeds the photo on the right at an even position and on the left at an odd one', () => {
+    expect(tagWith(html(card('photoList', blocks, style, 2)), 'data-bleed')).toContain('data-bleed="right"')
+    expect(tagWith(html(card('photoList', blocks, style, 3)), 'data-bleed')).toContain('data-bleed="left"')
+  })
+
+  it('draws the list as numbered rows in a container that caps the numeral', () => {
+    const markup = html(card('photoList', blocks, style))
+    const tag = tagWith(markup, 'data-photo-list')
+    expect(tag).not.toBe('')
+    expect(classesOf(tag)).toContain('@container')
+    expect(tag).toContain('--zone-width:100cqi')
+    expect(markup).toContain('<ol')
+  })
+
+  it('draws every block once on a card the picker offers it for with no photo', () => {
+    const markup = html(card('photoList', [heading, listBlock], style))
+    expect(count(markup, 'Find the start')).toBe(1)
+    expect(markup).not.toContain('data-bleed')
+  })
+
+  it('draws every block once on a card with two lists', () => {
+    const markup = html(card('photoList', [heading, listBlock, bullets('Second list a', 'Second list b'), photo], style))
+    for (const text of ['Find the start', 'Second list a', 'Second list b']) expect(count(markup, text), text).toBe(1)
+    expect(count(markup, 'src="https://example.test/s.png"')).toBe(1)
+  })
+
+  it('draws two photos as a gallery in the body, none as the aside', () => {
+    const second: ContentBlock = { type: 'image', url: 'https://example.test/t.png', alt: 'another' }
+    const markup = html(card('photoList', [heading, listBlock, photo, second], style))
+    expect(markup).not.toContain('data-bleed')
+    expect(count(markup, 'src="https://example.test/s.png"')).toBe(1)
+    expect(count(markup, 'src="https://example.test/t.png"')).toBe(1)
+  })
+})

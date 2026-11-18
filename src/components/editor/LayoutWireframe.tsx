@@ -140,9 +140,56 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'twoColumn':
+      // The title top-left, then the prose in two columns of equal width, the second starting level with the first.
+      return (
+        <>
+          <Title x={12} y={13} w={58} />
+          {range(4).map((i) => <Line key={`a${i}`} x={12} y={30 + i * 8} w={[62, 56, 60, 40][i]} />)}
+          {range(4).map((i) => <Line key={`b${i}`} x={84} y={30 + i * 8} w={[60, 64, 52, 36][i]} />)}
+        </>
+      )
     case 'statSplit':
-    case 'steps':
+      // On the left two fifths a large accent figure over its label; on the right three fifths ruled numbered rows, a hairline between them, no box.
+      return (
+        <>
+          <Title x={12} y={13} w={58} />
+          <g data-wire-figure=""><Figure x={12} y={32} w={44} h={22} /></g>
+          <Line x={12} y={60} w={40} h={3.5} />
+          <g data-wire-rows="">
+            {range(3).map((i) => {
+              const y = 30 + i * 15
+              return (
+                <g key={i}>
+                  {i > 0 && <Rule x={68} y={y - 4} w={80} />}
+                  <Label x={68} y={y} w={7} h={4} />
+                  <Line x={82} y={y + 0.5} w={[58, 50, 62][i]} h={3.5} />
+                </g>
+              )
+            })}
+          </g>
+        </>
+      )
     case 'photoList':
+      // Text on the left half: the title, then ruled numbered rows; the picture bleeding off the other half's top, bottom and outer edge (the side alternates down the deck; the first slide's is drawn).
+      return (
+        <>
+          <Title x={12} y={13} w={58} />
+          <g data-wire-rows="">
+            {range(3).map((i) => {
+              const y = 30 + i * 15
+              return (
+                <g key={i}>
+                  {i > 0 && <Rule x={12} y={y - 4} w={62} />}
+                  <Label x={12} y={y} w={7} h={4} />
+                  <Line x={24} y={y + 0.5} w={[46, 40, 48][i]} h={3.5} />
+                </g>
+              )
+            })}
+          </g>
+          <BleedPicture x={84} w={76} />
+        </>
+      )
+    case 'steps':
     case 'beforeAfter':
       // Stand-ins: drawn as the standard wireframe until each gets its own.
     case 'standard':
@@ -435,9 +482,54 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'twoColumn':
+      // As the structured one with a larger title and a little more air between the lines, the columns still level.
+      return (
+        <>
+          <Title x={12} y={14} w={64} />
+          {range(4).map((i) => <Line key={`a${i}`} x={12} y={32 + i * 9} w={[62, 56, 60, 40][i]} />)}
+          {range(4).map((i) => <Line key={`b${i}`} x={84} y={32 + i * 9} w={[60, 64, 52, 36][i]} />)}
+        </>
+      )
     case 'statSplit':
-    case 'steps':
+      // A heavier, larger accent figure on the left; the rows on the right separated by space alone, no hairlines.
+      return (
+        <>
+          <Title x={12} y={14} w={64} />
+          <g data-wire-figure=""><Figure x={12} y={30} w={50} h={26} /></g>
+          <Line x={12} y={62} w={42} h={3.5} />
+          <g data-wire-rows="">
+            {range(3).map((i) => {
+              const y = 31 + i * 15
+              return (
+                <g key={i}>
+                  <Label x={68} y={y} w={8} h={5} />
+                  <Line x={84} y={y + 1} w={[56, 48, 60][i]} h={3.5} />
+                </g>
+              )
+            })}
+          </g>
+        </>
+      )
     case 'photoList':
+      // As the structured one with a larger title, the rows separated by space alone, the picture bleeding off the other half.
+      return (
+        <>
+          <Title x={12} y={14} w={60} />
+          <g data-wire-rows="">
+            {range(3).map((i) => {
+              const y = 31 + i * 15
+              return (
+                <g key={i}>
+                  <Label x={12} y={y} w={8} h={5} />
+                  <Line x={26} y={y + 1} w={[44, 38, 46][i]} h={3.5} />
+                </g>
+              )
+            })}
+          </g>
+          <BleedPicture x={84} w={76} />
+        </>
+      )
+    case 'steps':
     case 'beforeAfter':
       // Stand-ins: drawn as the standard wireframe until each gets its own.
     case 'standard':

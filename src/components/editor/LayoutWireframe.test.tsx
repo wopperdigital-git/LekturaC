@@ -61,7 +61,7 @@ describe('LayoutWireframe bled photos', () => {
   }
 
   it.each<VisualStyle>(['structured', 'expressive'])('reaches the top and bottom, and the outer edge on its side (%s)', (style) => {
-    for (const [layout, side] of [['imageFocus', 'left'], ['standardSplit', 'right']] as const) {
+    for (const [layout, side] of [['imageFocus', 'left'], ['standardSplit', 'right'], ['photoList', 'right']] as const) {
       const rect = photoRect(draw(layout, style))
       expect(rect.tag, layout).not.toBe('')
       expect(rect.y, layout).toBe(0)
@@ -72,7 +72,7 @@ describe('LayoutWireframe bled photos', () => {
   })
 
   it.each<VisualStyle>(['structured', 'expressive'])('draws no frame or rounded corners on the photo (%s)', (style) => {
-    for (const layout of ['imageFocus', 'standardSplit'] as const) {
+    for (const layout of ['imageFocus', 'standardSplit', 'photoList'] as const) {
       const html = draw(layout, style)
       expect(photoRect(html).tag).not.toContain('rx=')
       expect(html).not.toContain('stroke')
@@ -212,5 +212,42 @@ describe('LayoutWireframe hero and quote', () => {
     expect(html).toContain('data-wire-ground="tint"')
     // Quote lines and the attribution start on the left edge, never centred.
     expect(html).not.toMatch(/<rect x="(30|38|50|66)"/)
+  })
+})
+
+/** Two columns, a stat split and a photo list each have a drawing of their own, not the standard stand-in. */
+describe('LayoutWireframe two columns, stat split and photo list', () => {
+  const standard = (style: VisualStyle) => draw('standard', style)
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws none of them as the standard stand-in (%s)', (style) => {
+    for (const layout of ['twoColumn', 'statSplit', 'photoList'] as const) {
+      expect(draw(layout, style), layout).not.toBe(standard(style))
+    }
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws two columns of text bars under the title, starting level (%s)', (style) => {
+    const html = draw('twoColumn', style)
+    const xs = new Set([...html.matchAll(/<rect x="([\d.]+)" y="(?:2\d|3\d|4\d)[\d.]*" width="[\d.]+" height="3"/g)].map((m) => m[1]))
+    expect(xs.size).toBe(2)
+    expect(html).not.toContain('data-wire-ground')
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws a stat split as an accent figure on the left and ruled rows on the right, nothing filled (%s)', (style) => {
+    const html = draw('statSplit', style)
+    expect(html).toContain('data-wire-figure')
+    expect(html).not.toContain('data-wire-ground')
+    expect(html).not.toContain('opacity="0.07"')
+    expect(html).not.toContain('<circle')
+    const figureX = Number(html.match(/data-wire-figure=""><rect x="([\d.]+)"/)?.[1])
+    expect(figureX).toBeLessThan(40)
+    // The rows start in the right three fifths.
+    expect(html).toContain('data-wire-rows')
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws a photo list with the numbered rows beside a bled photo (%s)', (style) => {
+    const html = draw('photoList', style)
+    expect(html).toContain('data-wire-photo')
+    expect(html).toContain('data-wire-rows')
+    expect(html).not.toContain('data-wire-ground')
   })
 })

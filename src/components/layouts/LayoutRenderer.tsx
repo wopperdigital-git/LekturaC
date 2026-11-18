@@ -11,6 +11,9 @@ import { TextFocusLayout } from './TextFocusLayout'
 import { ImageFocusLayout } from './ImageFocusLayout'
 import { SectionLayout } from './SectionLayout'
 import { StatementLayout } from './StatementLayout'
+import { TwoColumnLayout } from './TwoColumnLayout'
+import { StatSplitLayout } from './StatSplitLayout'
+import { PhotoListLayout } from './PhotoListLayout'
 
 /*
   The layouts now drawn by `FlowLayout` rather than a component of their own.
@@ -59,10 +62,9 @@ const LAYOUT_COMPONENTS: Record<
   textFocus: TextFocusLayout,
   section: SectionLayout,
   statement: StatementLayout,
-  // Stand-ins: the three frames below are drawn as the standard frame until their own components land.
-  twoColumn: StandardLayout,
-  statSplit: StandardLayout,
-  photoList: StandardLayout,
+  twoColumn: TwoColumnLayout,
+  statSplit: StatSplitLayout,
+  photoList: PhotoListLayout,
 }
 
 /**
