@@ -37,3 +37,33 @@ export function withKickerAt(blocks: ContentBlock[], blockIndex: number, text: s
 export function canAddKicker(block: ContentBlock | undefined): boolean {
   return block?.type === 'heading' && !block.kicker
 }
+
+/** Whether a stored kicker says nothing (empty or whitespace only), which the app treats as no kicker. */
+export function isBlankKicker(kicker: string | undefined): boolean {
+  return kicker !== undefined && kicker.trim() === ''
+}
+
+/**
+ * The read boundary's repair: a stored kicker that trims empty is absent. The editor holds
+ * `kicker: ""` only while its run is open (it is removed when editing ends), but a debounced
+ * save can land first, or the tab can close; either way a deck never reads back with an
+ * empty one. The marks held under a removed kicker's address go with it. Nothing changes
+ * (the same arrays come back) when no heading has a blank kicker.
+ */
+export function withoutBlankKickers<I extends Record<string, unknown> | undefined>(
+  blocks: ContentBlock[],
+  inline: I,
+): { blocks: ContentBlock[]; inline: I } {
+  if (!blocks.some((b) => b.type === 'heading' && isBlankKicker(b.kicker))) return { blocks, inline }
+  let nextInline: Record<string, unknown> | undefined = inline
+  const next = blocks.map((b, i) => {
+    if (b.type !== 'heading' || !isBlankKicker(b.kicker)) return b
+    if (nextInline && `${i}:kicker` in nextInline) {
+      const { [`${i}:kicker`]: _dropped, ...rest } = nextInline
+      void _dropped
+      nextInline = rest
+    }
+    return withKicker(b, null)
+  })
+  return { blocks: next, inline: nextInline as I }
+}

@@ -30,7 +30,7 @@ import type { PipelineResult } from '@/generation/pipeline'
 import { deleteDeckWithVideo, supabasePorts } from '@/video/storage'
 import { inOrder, withCardAfter, withDuplicate, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
-import { withKickerAt } from '@/engine/kicker'
+import { withKickerAt, withoutBlankKickers } from '@/engine/kicker'
 import { imageBlock, withBlockAdded, withBlockAppended, withImageReplaced, type ContentType } from '@/engine/newContent'
 import type { Photo } from '@/images/types'
 import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
@@ -192,8 +192,12 @@ interface PresentationState {
    * One undo step, written immediately. Every block keeps its index, so no nudge or mark
    * moves; removing it also drops the marks that were typed into it. Does nothing when that
    * block is not a heading.
+   *
+   * `amend` folds the change into the undo step already taken for the typing that led to it
+   * (no history entry of its own): the end-of-edit removal of an emptied kicker, so one undo
+   * restores the kicker the heading had before the edit began.
    */
-  setHeadingKicker: (cardId: string, blockIndex: number, text: string | null) => void
+  setHeadingKicker: (cardId: string, blockIndex: number, text: string | null, options?: { amend?: boolean }) => void
   /**
    * Removes one element from a card outright. Every later element's formatting
    * and nudges are renumbered to follow it. Returns false when there was nothing
@@ -553,14 +557,16 @@ function cardFromRow(row: CardRow): Card {
     row.blocks as ContentBlock[],
     (row.inline as Card['inline']) ?? undefined,
   )
+  // A stored kicker that says nothing is no kicker (see `withoutBlankKickers`).
+  const read = withoutBlankKickers(converted.blocks, converted.inline)
   return {
     id: row.id as string,
     orderIndex: row.order_index as number,
-    blocks: converted.blocks,
+    blocks: read.blocks,
     layout: row.layout as LayoutType,
     visualStyle: (row.visual_style as VisualStyle | null) ?? 'structured',
     textStyle: parseTextStyle(row.text_style),
-    inline: converted.inline,
+    inline: read.inline,
     adjusts: parseAdjusts(row.adjusts),
     narration: parseNarration(row.narration),
     overlay: parseOverlay(row.overlay),
@@ -765,14 +771,15 @@ function commitKicker(
   cardId: string,
   blockIndex: number,
   text: string | null,
-  historyKey?: string,
+  /** `'amend'`: no history entry of its own. */
+  history?: 'amend',
 ) {
   const card = get().cards.find((c) => c.id === cardId)
   if (!card) return
   const blocks = withKickerAt(card.blocks, blockIndex, text)
   if (!blocks) return
 
-  pushHistory(set, get, historyKey)
+  if (history !== 'amend') pushHistory(set, get)
   const ref = `${blockIndex}:kicker`
   let inline = card.inline
   if (inline?.[ref] && (text === null || text.trim() === '')) {
@@ -1212,12 +1219,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     // single edit rather than character by character.
     pushHistory(set, get, `blockText:${cardId}:${ref}`)
 
-    // A kicker edited to nothing is taken off the heading, never stored as an empty string.
-    // The same history key as the typing before it, so the whole edit is one undo step.
-    if (parsed.field === 'kicker' && parsed.itemIndex === undefined && nextText.trim() === '') {
-      commitKicker(set, get, cardId, parsed.blockIndex, null, `blockText:${cardId}:${ref}`)
-      return
-    }
+    // A kicker emptied while its run is open stays `""` until editing ends: the page then
+    // removes it (`setHeadingKicker` with `amend`), and the read boundary treats `""` as absent.
 
     const blocks = setBlockFieldText(card.blocks, parsed, nextText)
 
@@ -1322,8 +1325,8 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     commitBlocks(set, get, cardId, blocks)
   },
 
-  setHeadingKicker(cardId, blockIndex, text) {
-    commitKicker(set, get, cardId, blockIndex, text)
+  setHeadingKicker(cardId, blockIndex, text, options) {
+    commitKicker(set, get, cardId, blockIndex, text, options?.amend ? 'amend' : undefined)
   },
 
   removeBlock(cardId, blockIndex) {

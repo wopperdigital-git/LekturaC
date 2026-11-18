@@ -40,7 +40,7 @@ import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
 import { elementLabel, firstEditableField, type ContentType } from '@/engine/newContent'
-import { KICKER_PLACEHOLDER, canAddKicker } from '@/engine/kicker'
+import { KICKER_PLACEHOLDER, canAddKicker, isBlankKicker } from '@/engine/kicker'
 import {
   selectionAfterCardPress,
   selectionAfterElementPress,
@@ -945,7 +945,7 @@ export function EditorPage() {
     selected element (the kicker is part of it), so its box now wraps both.
   */
   function addKicker() {
-    if (!selectedCard || selectedBlockIndex === null) return
+    if (!selectedCard || selectedBlockIndex === null || !canAddKicker(selectedBlock)) return
     store.setHeadingKicker(selectedCard.id, selectedBlockIndex, KICKER_PLACEHOLDER)
     setActiveTextRef(textRef(selectedBlockIndex, 'kicker'))
     setTextRange(null)
@@ -968,10 +968,10 @@ export function EditorPage() {
       setActiveTextRef(null)
       setTextRange(null)
     }
-    // A kicker edited to nothing is removed from its heading, so the run being typed into is gone.
+    // Undo can take the kicker away while its run is open: the run being typed into is gone.
     if (activeTextRef?.endsWith(':kicker') && editedIndex !== null) {
       const edited = blocks[editedIndex]
-      if (edited?.type !== 'heading' || !edited.kicker) {
+      if (edited?.type !== 'heading' || edited.kicker === undefined) {
         setActiveTextRef(null)
         setTextRange(null)
       }
@@ -979,6 +979,27 @@ export function EditorPage() {
     // `apply` only sets state; the inputs below are everything this reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCard, selectedBlockIndex, activeTextRef])
+
+  /*
+    A kicker emptied while its run was open is removed when editing of that run ends: blur,
+    Escape, selecting elsewhere or another card. Until then the store holds `""` (the run
+    keeps its caret box); the removal amends the typing's undo step instead of adding one, so
+    a single undo brings back the kicker the heading had before the edit.
+  */
+  const editedKicker = useRef<{ ref: string; cardId: string } | null>(null)
+  useEffect(() => {
+    const now = activeTextRef?.endsWith(':kicker') && selectedCardId ? { ref: activeTextRef, cardId: selectedCardId } : null
+    const before = editedKicker.current
+    editedKicker.current = now
+    if (!before || (now && now.ref === before.ref && now.cardId === before.cardId)) return
+    const index = blockIndexOf(before.ref)
+    const block = usePresentationStore.getState().cards.find((c) => c.id === before.cardId)?.blocks[index ?? -1]
+    if (index !== null && block?.type === 'heading' && isBlankKicker(block.kicker)) {
+      store.setHeadingKicker(before.cardId, index, null, { amend: true })
+    }
+    // `store` is the hook's snapshot; the action it reads is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTextRef, selectedCardId])
 
   function addCardOfKind(kind: CreatableKind, photo?: Photo) {
     // After the card the user is looking at — the selected one if there is one,

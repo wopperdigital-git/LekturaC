@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { FIXTURE_PHOTO } from '@/engine/fixtures/galleryDeck'
 import { LayoutRenderer } from './LayoutRenderer'
+import { TextEditingContext, type TextEditing } from './textEditingContext'
 
 /*
   The kicker is part of its heading element: drawn before the title inside the heading's own
@@ -104,5 +105,57 @@ describe('Kicker', () => {
     for (const text of [TITLE, 'Branches choose which lines run.', 'alpha', 'beta']) {
       expect(html.split(text)).toHaveLength(2)
     }
+  })
+
+  /*
+    The editor holds `""` while the kicker's run is open (the page removes it when editing
+    ends). Only that run keeps the group, so it has a caret box; everywhere else a kicker that
+    says nothing draws nothing.
+  */
+  describe('a kicker that says nothing', () => {
+    const editing = (activeRef: string | null): TextEditing => ({
+      activeRef,
+      inline: undefined,
+      onSelectText: () => {},
+      onChangeText: () => {},
+      onSelectionChange: () => {},
+      onToggleMark: () => {},
+    })
+    const inEditor = (c: Card, activeRef: string | null, first = false) =>
+      renderToStaticMarkup(
+        <TextEditingContext.Provider value={editing(activeRef)}>
+          <LayoutRenderer card={c} context={{ isFirstCard: first }} />
+        </TextEditingContext.Provider>,
+      )
+    const blank = (kicker: string): ContentBlock[] => [
+      { type: 'heading', text: TITLE, kicker },
+      { type: 'paragraph', text: 'Branches choose which lines run.' },
+    ]
+
+    it.each([[''], ['   ']])('draws nothing read-only for %j, exactly as if there were none', (kicker) => {
+      for (const [, layout, first, extra] of LAYOUTS) {
+        const html = render(card(layout, [...blank(kicker), ...extra]), first)
+        expect(html, layout).not.toContain('data-kicker')
+        expect(html, layout).toBe(render(card(layout, withoutKicker(extra)), first))
+      }
+    })
+
+    it('draws nothing in the editor while another run is being edited', () => {
+      expect(inEditor(card('standard', blank('')), null)).not.toContain('data-kicker')
+      expect(inEditor(card('standard', blank('')), '0:text')).not.toContain('data-kicker')
+      expect(inEditor(card('standard', blank('')), '1:text')).not.toContain('data-kicker')
+    })
+
+    it.each([[''], ['  ']])('keeps the group, with its run live, while that run is being edited (%j)', (kicker) => {
+      for (const [, layout, first, extra] of LAYOUTS) {
+        const html = inEditor(card(layout, [...blank(kicker), ...extra]), '0:kicker', first)
+        expect(html, layout).toContain('data-kicker-group')
+        expect(html, layout).toMatch(/data-kicker=""[^>]*>\s*<span[^>]*contenteditable/i)
+      }
+    })
+
+    it('leaves a kicker with words drawn however the editor is', () => {
+      expect(inEditor(card('standard', blank('Part two')), null)).toContain('data-kicker-group')
+    })
   })
 })

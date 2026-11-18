@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from './contentBlocks'
-import { KICKER_PLACEHOLDER, canAddKicker, withKicker, withKickerAt } from './kicker'
+import { KICKER_PLACEHOLDER, canAddKicker, isBlankKicker, withKicker, withKickerAt, withoutBlankKickers } from './kicker'
 import { isPlaceholderText } from './newContent'
 
 const heading: ContentBlock = { type: 'heading', text: 'Loops', size: 'h2' }
@@ -64,5 +64,26 @@ describe('canAddKicker', () => {
     expect(canAddKicker({ type: 'paragraph', text: 'x' })).toBe(false)
     expect(canAddKicker({ type: 'quote', text: 'x' })).toBe(false)
     expect(canAddKicker(undefined)).toBe(false)
+  })
+})
+
+describe('withoutBlankKickers (the read boundary)', () => {
+  it.each([[''], ['   ']])('treats a stored %j kicker as absent and drops its marks', (kicker) => {
+    const blocks: ContentBlock[] = [{ ...heading, kicker }, { type: 'paragraph', text: 'Body' }]
+    const inline = { '0:kicker': { marks: [] }, '1:text': { marks: [] } }
+    const out = withoutBlankKickers(blocks, inline)
+    expect('kicker' in out.blocks[0]).toBe(false)
+    expect(out.blocks[1]).toBe(blocks[1])
+    expect(out.inline).toEqual({ '1:text': { marks: [] } })
+    expect(inline['0:kicker']).toBeDefined()
+  })
+
+  it('returns the very same arrays when no kicker is blank', () => {
+    const blocks: ContentBlock[] = [{ ...heading, kicker: 'Part one' }, { ...heading, text: 'Other' }]
+    const inline = { '0:kicker': { marks: [] } }
+    const out = withoutBlankKickers(blocks, inline)
+    expect(out.blocks).toBe(blocks)
+    expect(out.inline).toBe(inline)
+    expect(isBlankKicker(undefined)).toBe(false)
   })
 })

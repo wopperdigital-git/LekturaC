@@ -63,7 +63,7 @@ export function SectionLayout({
                 fontSize: expressive ? EXPRESSIVE_TITLE_SIZE : TITLE_SIZE,
                 lineHeight: 1.05,
                 // With a kicker the group carries the cap, so the title does not take 80% of 80%.
-                maxWidth: heading.block.kicker ? undefined : '80%',
+                maxWidth: heading.block.kicker?.trim() ? undefined : '80%',
               }}
             >
               <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
