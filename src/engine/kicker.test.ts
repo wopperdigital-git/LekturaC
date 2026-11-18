@@ -65,6 +65,19 @@ describe('canAddKicker', () => {
     expect(canAddKicker({ type: 'quote', text: 'x' })).toBe(false)
     expect(canAddKicker(undefined)).toBe(false)
   })
+
+  // The editor holds `kicker: ""` while its run is open and emptied; the action must not pop in then.
+  it('is off for a heading whose kicker field is present, even emptied', () => {
+    expect(canAddKicker({ ...heading, kicker: '' })).toBe(false)
+    expect(canAddKicker({ ...heading, kicker: '  ' })).toBe(false)
+  })
+
+  it('is off while that heading\'s kicker run is the active edit', () => {
+    expect(canAddKicker(heading, '2:kicker', 2)).toBe(false)
+    expect(canAddKicker(heading, '2:text', 2)).toBe(true)
+    expect(canAddKicker(heading, '3:kicker', 2)).toBe(true)
+    expect(canAddKicker(heading, null, 2)).toBe(true)
+  })
 })
 
 describe('withoutBlankKickers (the read boundary)', () => {

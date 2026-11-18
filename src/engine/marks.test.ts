@@ -5,6 +5,7 @@ import {
   applyMark,
   applyValueMark,
   clampRunScale,
+  hasMarkableSelection,
   markedInline,
   refusesMarks,
   valueMarkedInline,
@@ -280,6 +281,16 @@ describe('the code field takes no marks', () => {
     for (const ref of ['2:text', '2:label', '2:caption', '2:items:1', '0:kicker', 'junk']) {
       expect(refusesMarks(ref), ref).toBe(false)
     }
+  })
+
+  // One decision for every route (the toolbar's B/I/U and font/size/colour, the preview): characters
+  // selected in a code run are not a mark scope, and nothing falls back to the element for bold.
+  it('counts characters as a mark scope only in a run that takes marks', () => {
+    expect(hasMarkableSelection('1:text', { start: 0, end: 3 })).toBe(true)
+    expect(hasMarkableSelection('1:code', { start: 0, end: 3 })).toBe(false)
+    expect(hasMarkableSelection('1:text', { start: 2, end: 2 })).toBe(false)
+    expect(hasMarkableSelection('1:text', null)).toBe(false)
+    expect(hasMarkableSelection(null, { start: 0, end: 3 })).toBe(false)
   })
 
   it('refuses bold on a code ref and writes it on a text ref', () => {

@@ -90,6 +90,19 @@ describe('ToolsPanel', () => {
     expect(html).toContain(`>${escaped}</p>`)
   })
 
+  // Characters selected in a code run are not a mark scope (the page passes hasTextSelection=false):
+  // B, I and U are off, like ⌘B, and never fall back to bolding the whole element.
+  it('turns Bold, Italic and Underline off at character level without a markable selection, and on with one', () => {
+    const buttons = (html: string) =>
+      ['Bold', 'Italic', 'Underline'].map((label) => html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? '')
+    for (const tag of buttons(render(3, {}, { hasTextSelection: false }))) {
+      expect(tag).toContain('disabled=""')
+    }
+    for (const tag of buttons(render(3, {}, { hasTextSelection: true }))) {
+      expect(tag).not.toContain('disabled=""')
+    }
+  })
+
   it('keeps the Fill bar enabled, with no reason, otherwise', () => {
     const html = render(2)
     const trigger = html.match(/<button[^>]*aria-label="Fill colour[^"]*"[^>]*>/)?.[0] ?? ''

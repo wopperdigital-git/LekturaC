@@ -450,6 +450,18 @@ body {
   font-weight: 700;
 }
 
+/*
+  A heading with a kicker is one element drawn as a group (`data-kicker-group`, the one child of the
+  heading's `Adjustable`), so an element's Bold lands on the group as an inline weight, and the
+  title's and the kicker's own weight classes would beat the inherited value. This hands it down.
+  Only when a weight was set (`Adjustable` writes none otherwise, and the style attribute then
+  holds no `font-weight`). Italic, underline, font and size already reach them: no class sets
+  those, and the font and size are custom properties each reads at its own use site.
+*/
+[data-kicker-group][style*='font-weight'] > :is(h1, h2, h3, [data-kicker]) {
+  font-weight: inherit;
+}
+
 [data-deck-italic='true'] :is(h1, h2, h3, h4, p, li, span, blockquote, figcaption) {
   font-style: italic;
 }

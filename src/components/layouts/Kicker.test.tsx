@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
@@ -98,6 +99,38 @@ describe('Kicker', () => {
     for (const layout of ['standard', 'hero', 'section', 'statement'] as const) {
       expect(render(card(layout, removed), layout === 'hero')).toBe(render(card(layout, never), layout === 'hero'))
     }
+  })
+
+  /*
+    `Adjustable` writes an element's own weight on the group, the holder's one child. The title's own
+    weight class would beat an inherited weight, so the stylesheet hands it back (a font or size pick
+    already reaches the title, being custom properties it reads at its own use site).
+  */
+  describe('an element weight pick on a heading with a kicker', () => {
+    const css = readFileSync(new URL('../../index.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+
+    it('is handed on to the title and the kicker by an unlayered rule', () => {
+      const rule = css.split('}').find((r) => r.trimStart().startsWith("[data-kicker-group][style*='font-weight']")) ?? ''
+      expect(rule).not.toBe('')
+      for (const tag of ['h1', 'h2', 'h3', '[data-kicker]']) expect(rule).toContain(tag)
+      expect(rule).toContain('> :is(')
+      expect(rule).toContain('font-weight: inherit')
+    })
+
+    it.each(LAYOUTS.filter(([, , , extra]) => !extra.some((b) => b.type === 'image')))(
+      '%s: the title is the group\'s direct child and keeps its own weight class',
+      (_name, layout, first, extra) => {
+        const html = render(card(layout, withKicker(extra)), first)
+        const group = html.indexOf('data-kicker-group')
+        expect(group).toBeGreaterThan(-1)
+        const title = html.slice(group).match(/<(h[123])[^>]*class="([^"]*)"/)
+        expect(title).not.toBeNull()
+        expect(title![2]).toMatch(/\bfont-(semibold|bold|extrabold)\b/)
+        // The kicker is the group's first child, the title the second: nothing sits between them.
+        const between = html.slice(group, group + html.slice(group).indexOf(`<${title![1]}`))
+        expect(between.match(/<(div|section)\b/g)).toBeNull()
+      },
+    )
   })
 
   it('draws every other block once beside it', () => {

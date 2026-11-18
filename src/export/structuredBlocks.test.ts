@@ -458,14 +458,36 @@ describe('on a placed photo (hero)', () => {
     { orderIndex: 0, layout: 'hero' },
   )
 
-  it('keeps the callout and code in their own inks while the heading goes white', () => {
+  // On screen a hero stays on the deep ground under its photo, so the code panel is the light one there.
+  it('keeps the callout in its own inks and draws the code as the screen does (the light panel) while the heading goes white', () => {
     const slide = renderOn(card, DEFAULT_THEME, new Map([[URL_A, JPEG]]))
     expect(textOf(slide, 'Welcome').options.color).toBe('ffffff')
     expect(textOf(slide, 'The idea').options.color).toBe(hex(c.accentForeground))
     expect(textOf(slide, 'KEY').options.color).toBe(hex(c.accentForeground))
+    expect(fillOf(slide.shapes.filter((s) => s.shape === 'roundRect')[1])).toBe(hex(c.deepForeground))
+    expect(textOf(slide, 'x = 1').options.color).toBe(hex(c.deep))
+    expect(textOf(slide, 'main.cpp').options.color).toBe(hex(codeLightMuted(c)))
+    expect(textOf(slide, 'Tiny').options.color).toBe(hex(codeLightMuted(c)))
+  })
+
+  it('does the same on a nudged hero with its photo as the ground', () => {
+    const nudged = { ...card, adjusts: NUDGE }
+    const slide = renderOn(nudged, DEFAULT_THEME, new Map([[URL_A, JPEG]]))
+    expect(textOf(slide, 'x = 1').options.color).toBe(hex(c.deep))
+  })
+
+  it('leaves a quote over a photo with the dark panel, as the screen (a tint slide) does', () => {
+    const quote = cardOf(
+      [
+        HEADING,
+        { type: 'quote', text: 'Said it' },
+        { type: 'code', code: 'x = 1' },
+        { type: 'image', url: URL_A, alt: 'A lake' },
+      ],
+      { layout: 'quote' },
+    )
+    const slide = renderOn(quote, DEFAULT_THEME, new Map([[URL_A, JPEG]]))
     expect(textOf(slide, 'x = 1').options.color).toBe(hex(c.deepForeground))
-    expect(textOf(slide, 'main.cpp').options.color).toBe(hex(deepMuted(c)))
-    expect(textOf(slide, 'Tiny').options.color).toBe(hex(deepMuted(c)))
   })
 })
 

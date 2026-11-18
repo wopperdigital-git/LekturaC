@@ -314,6 +314,15 @@ export function refusesMarks(ref: string): boolean {
   return parts.length === 2 && parts[1] === 'code' && Number.isInteger(Number(parts[0]))
 }
 
+/**
+ * Whether the selected characters are a scope for marks: a non-empty range in a run that takes
+ * them. The toolbar's B/I/U (disabled without it, never falling back to the element, like ⌘B) and
+ * its font, size and colour (which then write to the element) share this one answer.
+ */
+export function hasMarkableSelection(ref: string | null, range: TextRange | null): boolean {
+  return Boolean(ref && range && range.end > range.start && !refusesMarks(ref))
+}
+
 type Inline = Card['inline']
 
 /**

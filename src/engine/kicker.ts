@@ -33,9 +33,18 @@ export function withKickerAt(blocks: ContentBlock[], blockIndex: number, text: s
   return blocks.map((b, i) => (i === blockIndex ? withKicker(b, text) : b))
 }
 
-/** Whether "Add small heading" is on offer: a heading that has no kicker yet. */
-export function canAddKicker(block: ContentBlock | undefined): boolean {
-  return block?.type === 'heading' && !block.kicker
+/**
+ * Whether "Add small heading" is on offer: a heading that has no kicker field. A kicker emptied
+ * while its run is open is still the field (`""`, removed when editing ends), so it does not count
+ * as none, and neither does a heading whose kicker run (`blockIndex:kicker`) is the active edit.
+ */
+export function canAddKicker(
+  block: ContentBlock | undefined,
+  activeTextRef?: string | null,
+  blockIndex?: number | null,
+): boolean {
+  if (block?.type !== 'heading' || block.kicker !== undefined) return false
+  return !(blockIndex !== undefined && blockIndex !== null && activeTextRef === `${blockIndex}:kicker`)
 }
 
 /** Whether a stored kicker says nothing (empty or whitespace only), which the app treats as no kicker. */

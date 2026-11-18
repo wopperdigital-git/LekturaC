@@ -30,6 +30,7 @@ import {
   kickerLayout,
   kickerOf,
   kickerText,
+  inksFor,
   makeEnv,
   calloutBlock,
   codeBlock,
@@ -263,7 +264,7 @@ const TITLE_SUBTITLE_GAP = 0.25
 const TITLE_SUBTITLE_INSET = 1.6
 
 const renderTitle: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
-  const env = makeEnv(card, theme, style, measure, groundOnSlide(card, context))
+  const env = withScreenCodeInk(makeEnv(card, theme, style, measure, groundOnSlide(card, context)), card, context)
   const kicker = kickerLayout(env, 0, CONTENT_W)
   const kickerH = kicker ? kicker.heightIn : 0
   const bottom = addExtras(slide, env, TOP)
@@ -1705,13 +1706,17 @@ const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure, conte
   const target = onGround ? whiteText(slide) : slide
   const { boxes, height } = cardBoxes(card, theme.typography.scale)
   const fit = fitCard(height)
-  const env = makeEnv(
+  const env = withScreenCodeInk(
+    makeEnv(
+      card,
+      theme,
+      style,
+      measure,
+      groundOnSlide(card, context),
+      fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
+    ),
     card,
-    theme,
-    style,
-    measure,
-    groundOnSlide(card, context),
-    fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
+    context,
   )
   card.blocks.forEach((_, index) => {
     if (onGround && index === onGround.index) return
@@ -1786,6 +1791,17 @@ const onPhotoGround =
   slide under its scrim with white text, exactly as before, and a background colour
   or the ground's inks would only be hidden by it (or, for the accent rule, show on it).
 */
+/**
+ * The code panel's inks, which follow the screen's ground and not the export's: a hero keeps its
+ * deep ground under a placed photo on screen (so its code is the light panel), while the export
+ * calls that slide plain. A quote over a photo is a tint on screen, and plain here, and both draw
+ * the dark panel, so only the hero differs. Everything else on the card keeps `groundOnSlide`'s inks.
+ */
+function withScreenCodeInk(env: Env, card: Card, context: RenderContext): Env {
+  if (context.layout !== 'hero' || groundOnSlide(card, context) !== 'plain' || card.blocks.length === 0) return env
+  return { ...env, inks: { ...env.inks, code: inksFor(env.theme, 'deep').code } }
+}
+
 function groundOnSlide(card: Card, context: RenderContext): Ground {
   if (!context.layout || card.blocks.length === 0) return 'plain'
   if (context.layout === 'hero' || context.layout === 'quote') {
