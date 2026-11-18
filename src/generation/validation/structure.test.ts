@@ -350,6 +350,19 @@ describe('structureFlags', () => {
       expect(flags[0].slideIndex).toBe(2)
     })
 
+    it('counts a list beside a photo, which resolves to a photo list, as a list slide', () => {
+      const photoListCard = (n: number) =>
+        card({
+          blocks: [
+            { type: 'heading', text: `Photo list ${n}` },
+            { type: 'bulletList', items: ['first', 'second', 'third'] },
+            { type: 'image', url: 'https://example.com/a.jpg', alt: 'a photo' },
+          ],
+        })
+      const d = deck([proseCard(1), photoListCard(2), photoListCard(3), statCard(4), timelineCard(5), proseCard(6)])
+      expect(listFlags(d).map((f) => f.slideIndex)).toEqual([2])
+    })
+
     it('never flags the first list slide of an adjacent pair', () => {
       const d = deck([listCard(1), listCard(2), statCard(3), timelineCard(4), proseCard(5)])
       expect(listFlags(d).map((f) => f.slideIndex)).toEqual([1])

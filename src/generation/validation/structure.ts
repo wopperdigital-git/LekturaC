@@ -227,7 +227,7 @@ const MAX_LIST_SHARE = 0.4
 /** `true` when the card is drawn as a list of items — what a viewer sees, not what the model planned. */
 function isListLed(card: GeneratedDeck['cards'][number], index: number): boolean {
   const layout = resolveLayout('auto', card.blocks, { isFirstCard: index === 0 })
-  return layout === 'iconGrid' || layout === 'numberedList'
+  return layout === 'iconGrid' || layout === 'numberedList' || layout === 'photoList'
 }
 
 /**
