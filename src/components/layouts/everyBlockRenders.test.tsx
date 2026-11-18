@@ -262,15 +262,15 @@ describe('an image-free card draws every block once, composed or not', () => {
   // Self-contained (it renders for itself, so it passes or fails alone, as with `-t`): the zoned path is
   // really exercised, because some layout and treatment lands this card in a side head.
   it('at least one of those layouts is a side head, so the zoned path is exercised', () => {
-    const kinds = new Set<string>()
-    for (const layout of LAYOUTS) {
-      for (const variant of VARIANTS) {
-        const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
-        const kind = html.match(/data-composition="(\w+)"/)?.[1]
-        if (kind) kinds.add(kind)
-      }
-    }
-    expect(kinds.has('sideHead')).toBe(true)
+    // Stops at the first side head: rendering all of them is slow under a full-suite load.
+    const sideHead = LAYOUTS.some((layout) =>
+      VARIANTS.some((variant) =>
+        renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />).includes(
+          'data-composition="sideHead"',
+        ),
+      ),
+    )
+    expect(sideHead).toBe(true)
   })
 })
 
