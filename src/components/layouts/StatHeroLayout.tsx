@@ -88,7 +88,7 @@ export function StatHeroLayout({
           style={{ gap: SLIDE_GAP.group }}
         >
           {headings.map(({ block, index }) => (
-            <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} variant="expressive" />
+            <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} kicker={block.kicker} variant="expressive" />
           ))}
           {paragraphs.map(({ block, index }) => (
             <Adjustable key={index} index={index}>
@@ -109,7 +109,7 @@ export function StatHeroLayout({
       style={{ gap: SLIDE_GAP.group, paddingBlock: SLIDE_GAP.group }}
     >
       {headings.map(({ block, index }) => (
-        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} />
+        <Heading key={index} text={block.text} textRef={textRef(index, 'text')} size={block.size} kicker={block.kicker} />
       ))}
       {stat && (
         <StatBlockView

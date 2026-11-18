@@ -23,6 +23,7 @@ import { LayoutRenderer } from './LayoutRenderer'
 function visibleText(block: ContentBlock): string[] {
   switch (block.type) {
     case 'heading':
+      return block.kicker ? [block.kicker, block.text] : [block.text]
     case 'paragraph':
       return [block.text]
     case 'bulletList':
@@ -50,7 +51,8 @@ function visibleText(block: ContentBlock): string[] {
 
 /** One of every block type, with markers that cannot collide with markup. */
 const KITCHEN_SINK: ContentBlock[] = [
-  { type: 'heading', text: 'MARKHEADING' },
+  // The kicker is drawn once with its heading, by every layout that draws a heading.
+  { type: 'heading', text: 'MARKHEADING', kicker: 'MARKKICKER' },
   { type: 'paragraph', text: 'MARKPARA' },
   { type: 'bulletList', items: ['MARKLISTA', 'MARKLISTB'] },
   { type: 'stat', value: 'MARKSTATVALA', label: 'MARKSTATLABA' },

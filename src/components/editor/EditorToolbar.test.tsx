@@ -21,18 +21,20 @@ function render(
     withPen: boolean
     withShapes: boolean
     slide: ComponentProps<typeof EditorToolbar>['slide']
+    heading: ComponentProps<typeof EditorToolbar>['heading']
     grid: EditorGrid
     canUndo: boolean
     canRedo: boolean
   }> = {},
 ) {
-  const { tool = 'select', withPen = true, withShapes = true, slide, grid = DEFAULT_GRID, canUndo = true, canRedo = true } = overrides
+  const { tool = 'select', withPen = true, withShapes = true, slide, heading, grid = DEFAULT_GRID, canUndo = true, canRedo = true } = overrides
   const noop = () => {}
   return renderToStaticMarkup(
     <EditorToolbar
       history={{ canUndo, canRedo, onUndo: noop, onRedo: noop }}
       tool={tool}
       slide={slide}
+      heading={heading}
       onToolChange={noop}
       grid={grid}
       onGridChange={noop}
@@ -201,6 +203,24 @@ describe('EditorToolbar', () => {
       for (const text of ['Heading 1', 'Heading 2', 'Heading 3', 'Body text']) {
         expect(at(text)).toBeLessThan(at('Bullet list'))
       }
+    })
+  })
+
+  // Only the page knows a heading without a kicker is picked (`canAddKicker`); the toolbar draws
+  // the action when it is given one, and never otherwise.
+  describe('Add small heading', () => {
+    it('is offered when the page gives it, after Move and before the drawing tools', () => {
+      const html = render({ heading: { onAddKicker: () => {} } })
+      expect(() => button(html, 'Add small heading')).not.toThrow()
+      expect(html).toMatch(/role="tooltip"[^>]*>Add small heading</)
+      expect(button(html, 'Add small heading')).not.toMatch(/title="[^"]+"/)
+      expect(html.indexOf('aria-label="Move"')).toBeLessThan(html.indexOf('aria-label="Add small heading"'))
+      expect(html.indexOf('aria-label="Add small heading"')).toBeLessThan(html.indexOf('aria-label="Pen"'))
+    })
+
+    it('is absent otherwise, on a slide or on any other element', () => {
+      expect(() => button(render(), 'Add small heading')).toThrow()
+      expect(() => button(render({ slide: { onAddContent: () => {} } }), 'Add small heading')).toThrow()
     })
   })
 

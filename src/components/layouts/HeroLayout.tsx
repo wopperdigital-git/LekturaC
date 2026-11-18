@@ -5,6 +5,7 @@ import { Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { WithKicker } from './Kicker'
 import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 import { BackgroundPhoto, PhotoStage } from './BackgroundPhoto'
 
@@ -57,13 +58,19 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         <div className="flex flex-col items-start gap-6 py-6 text-left">
           {heading && (
             <Adjustable index={heading.index}>
-              <h1
-                data-hero-title=""
-                className="font-extrabold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
-                style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
+              <WithKicker
+                kicker={heading.block.kicker}
+                kickerRef={textRef(heading.index, 'kicker')}
+                variant={variant}
               >
-                <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
-              </h1>
+                <h1
+                  data-hero-title=""
+                  className="font-extrabold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
+                  style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
+                >
+                  <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
+                </h1>
+              </WithKicker>
             </Adjustable>
           )}
           {paragraph && (
@@ -85,13 +92,19 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         <span className="h-1.5 w-14 rounded-full bg-gradient-to-r from-slide-accent to-slide-accent-soft" />
         {heading && (
           <Adjustable index={heading.index}>
-            <h1
-              data-hero-title=""
-              className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
-              style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
+            <WithKicker
+              kicker={heading.block.kicker}
+              kickerRef={textRef(heading.index, 'kicker')}
+              variant={variant}
             >
-              <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
-            </h1>
+              <h1
+                data-hero-title=""
+                className="font-bold tracking-[var(--slide-letter-spacing)] text-slide-foreground"
+                style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: 'var(--slide-size-h1)', lineHeight: 1.05 }}
+              >
+                <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
+              </h1>
+            </WithKicker>
           </Adjustable>
         )}
         {paragraph && (
@@ -130,17 +143,23 @@ export function HeroLayout({ blocks, variant }: { blocks: ContentBlock[]; varian
         />
         {heading && (
           <Adjustable index={heading.index}>
-            <h1
-              data-hero-title=""
-              className={`${expressive ? 'font-extrabold' : 'font-bold'} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
-              style={{
-                fontFamily: SLIDE_HEADING_FONT,
-                fontSize: expressive ? EXPRESSIVE_TITLE_SIZE : TITLE_SIZE,
-                lineHeight: 1,
-              }}
+            <WithKicker
+              kicker={heading.block.kicker}
+              kickerRef={textRef(heading.index, 'kicker')}
+              variant={variant}
             >
-              <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
-            </h1>
+              <h1
+                data-hero-title=""
+                className={`${expressive ? 'font-extrabold' : 'font-bold'} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
+                style={{
+                  fontFamily: SLIDE_HEADING_FONT,
+                  fontSize: expressive ? EXPRESSIVE_TITLE_SIZE : TITLE_SIZE,
+                  lineHeight: 1,
+                }}
+              >
+                <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
+              </h1>
+            </WithKicker>
           </Adjustable>
         )}
         {paragraph && (

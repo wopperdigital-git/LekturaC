@@ -149,6 +149,7 @@ export function SlideFrame({
           textRef={textRef(slots.claim, 'text')}
           size={claim.size}
           variant={variant}
+          kicker={claim.kicker}
         />
         {slots.lead !== null && lead && (
           <BlockRenderer block={lead} index={slots.lead} lead />

@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
 import { elementLabel, firstEditableField, type ContentType } from '@/engine/newContent'
+import { KICKER_PLACEHOLDER, canAddKicker } from '@/engine/kicker'
 import {
   selectionAfterCardPress,
   selectionAfterElementPress,
@@ -939,6 +940,18 @@ export function EditorPage() {
   }
 
   /*
+    "Add small heading" on a picked heading: gives it a kicker and opens that run for typing,
+    with the placeholder selected so the first keystroke replaces it. The heading stays the
+    selected element (the kicker is part of it), so its box now wraps both.
+  */
+  function addKicker() {
+    if (!selectedCard || selectedBlockIndex === null) return
+    store.setHeadingKicker(selectedCard.id, selectedBlockIndex, KICKER_PLACEHOLDER)
+    setActiveTextRef(textRef(selectedBlockIndex, 'kicker'))
+    setTextRange(null)
+  }
+
+  /*
     Undo and redo can remove the very thing that is selected — undoing an "Add
     content" takes the new element back out — and the selection is held by index,
     so it would be left pointing past the end of the card, or at a different
@@ -954,6 +967,14 @@ export function EditorPage() {
     if (editedIndex !== null && editedIndex >= blocks.length) {
       setActiveTextRef(null)
       setTextRange(null)
+    }
+    // A kicker edited to nothing is removed from its heading, so the run being typed into is gone.
+    if (activeTextRef?.endsWith(':kicker') && editedIndex !== null) {
+      const edited = blocks[editedIndex]
+      if (edited?.type !== 'heading' || !edited.kicker) {
+        setActiveTextRef(null)
+        setTextRange(null)
+      }
     }
     // `apply` only sets state; the inputs below are everything this reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1305,6 +1326,11 @@ export function EditorPage() {
                     layout: selectedCard ? layoutToolsFor(selectedCard, selectedIndex) : undefined,
                     onAddContent: selectedCard ? addContent : undefined,
                   }
+                : undefined
+            }
+            heading={
+              selectedItemIndex === null && activeShape === null && canAddKicker(selectedBlock)
+                ? { onAddKicker: addKicker }
                 : undefined
             }
             tool={tool}

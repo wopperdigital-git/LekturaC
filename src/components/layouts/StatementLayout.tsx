@@ -4,6 +4,7 @@ import { Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { WithKicker } from './Kicker'
 import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 
 const HEADING_SIZE = 'var(--slide-size-h1)'
@@ -31,17 +32,23 @@ export function StatementLayout({ blocks, variant }: { blocks: ContentBlock[]; v
     >
       {heading && (
         <Adjustable index={heading.index}>
-          <h1
-            data-statement-title=""
-            className={`${expressive ? 'font-extrabold' : 'font-bold'} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
-            style={{
-              fontFamily: SLIDE_HEADING_FONT,
-              fontSize: expressive ? EXPRESSIVE_HEADING_SIZE : HEADING_SIZE,
-              lineHeight: 1.08,
-            }}
+          <WithKicker
+            kicker={heading.block.kicker}
+            kickerRef={textRef(heading.index, 'kicker')}
+            variant={variant}
           >
-            <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
-          </h1>
+            <h1
+              data-statement-title=""
+              className={`${expressive ? 'font-extrabold' : 'font-bold'} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
+              style={{
+                fontFamily: SLIDE_HEADING_FONT,
+                fontSize: expressive ? EXPRESSIVE_HEADING_SIZE : HEADING_SIZE,
+                lineHeight: 1.08,
+              }}
+            >
+              <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
+            </h1>
+          </WithKicker>
         </Adjustable>
       )}
       {paragraph && (

@@ -38,6 +38,7 @@ const EXPECTED: Array<[string, string]> = [
   ['g-photolist', 'photoList'],
   ['g-steps', 'steps'],
   ['g-beforeafter', 'beforeAfter'],
+  ['g-kicker', 'standard'],
 ]
 
 describe('GALLERY_DECK', () => {
@@ -63,6 +64,11 @@ describe('GALLERY_DECK', () => {
       expect(card.blocks[0]?.type).toBe('heading')
       expect(card.visualStyle).toBe('structured')
     }
+  })
+
+  it('shows a kicker on a heading in g-kicker', () => {
+    const block = GALLERY_DECK.find((c) => c.id === 'g-kicker')?.blocks[0]
+    expect(block).toMatchObject({ type: 'heading', kicker: 'Part two' })
   })
 
   it('carries its photo inline, so no slide needs the network', () => {

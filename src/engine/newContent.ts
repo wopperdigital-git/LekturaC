@@ -1,6 +1,7 @@
 import type { ContentBlock, ImageBlock } from './contentBlocks'
 import type { Photo } from '@/images/types'
 import { NEW_ITEM_TEXT } from './listItems'
+import { KICKER_PLACEHOLDER } from './kicker'
 
 /*
   Adding one new piece of content to a card by hand.
@@ -112,6 +113,7 @@ const PLACEHOLDERS: ReadonlySet<string> = new Set([
   NEW_STEP_LABEL,
   NEW_STEP_TEXT,
   NEW_GROUP_HEADING,
+  KICKER_PLACEHOLDER,
 ])
 
 /** True while a run still holds text this module put there, so it can be selected for replacement. */

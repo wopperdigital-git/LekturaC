@@ -380,7 +380,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'hero', 'g-sidehead': 'numberedList',
     'g-sidehead-stats': 'statGrid', 'g-splitbody': 'iconGrid', 'g-section': 'section', 'g-statement': 'statement',
     'g-twocol': 'twoColumn', 'g-statsplit': 'statSplit', 'g-photolist': 'photoList',
-    'g-steps': 'steps', 'g-beforeafter': 'beforeAfter',
+    'g-steps': 'steps', 'g-beforeafter': 'beforeAfter', 'g-kicker': 'standard',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
@@ -394,7 +394,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'statGrid', 'g-sidehead': 'numberedList',
     'g-sidehead-stats': 'statGrid', 'g-splitbody': 'comparison', 'g-section': 'standard', 'g-statement': 'standard',
     'g-twocol': 'textFocus', 'g-statsplit': 'statHero', 'g-photolist': 'numberedList',
-    'g-steps': 'timeline', 'g-beforeafter': 'comparison',
+    'g-steps': 'timeline', 'g-beforeafter': 'comparison', 'g-kicker': 'standard',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }

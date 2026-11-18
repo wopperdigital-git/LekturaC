@@ -22,7 +22,8 @@ import type { EditorGrid } from './gridContext'
  *   come Layout and Insert (headings, body text and every other element), only
  *   while a slide is actually selected — with nothing selected there is no slide
  *   to act on.
- * - **Element** (an element picked on the slide): nothing more.
+ * - **Element** (an element picked on the slide): nothing more, except a heading with no
+ *   kicker, which adds "Add small heading" after Move.
  *
  * App chrome, not part of the deck. It lives outside the scrolling canvas, so it
  * neither scrolls away nor counts as "the empty canvas" a press deselects on.
@@ -33,6 +34,7 @@ export function EditorToolbar({
   tool,
   onToolChange,
   slide,
+  heading,
   grid,
   onGridChange,
   pen,
@@ -49,6 +51,13 @@ export function EditorToolbar({
   slide?: {
     layout?: LayoutTools
     onAddContent?: (type: ContentType) => void
+  }
+  /**
+   * Present while a heading with no kicker is the picked element: offers "Add small heading"
+   * (the kicker over it). Absent for everything else.
+   */
+  heading?: {
+    onAddKicker: () => void
   }
   /** The grid's view settings: shown or not, and whether drops snap to it. */
   grid: EditorGrid
@@ -125,6 +134,14 @@ export function EditorToolbar({
               </Tip>
             )}
           </>
+        )}
+
+        {heading && (
+          <Tip name="Add small heading">
+            <ToolButton label="Add small heading" onClick={heading.onAddKicker}>
+              <KickerIcon />
+            </ToolButton>
+          </Tip>
         )}
 
         {pen && (
@@ -295,6 +312,15 @@ function ContentIcon() {
       <rect x="11" y="3" width="6" height="6" rx="1" />
       <rect x="3" y="11" width="6" height="6" rx="1" />
       <path d="M14 11v6M11 14h6" />
+    </svg>
+  )
+}
+
+function KickerIcon() {
+  return (
+    <svg {...strokeProps}>
+      <path d="M4 5.5h6" />
+      <path d="M4 10.5h12M4 14.5h8" />
     </svg>
   )
 }

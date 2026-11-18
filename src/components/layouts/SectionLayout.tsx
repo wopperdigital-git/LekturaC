@@ -4,6 +4,7 @@ import { Leftovers } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
+import { WithKicker } from './Kicker'
 import { SLIDE_GAP, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
 
 const NUMERAL_SIZE = 'calc(var(--slide-size-h1) * 2)'
@@ -48,18 +49,26 @@ export function SectionLayout({
       />
       {heading && (
         <Adjustable index={heading.index}>
-          <h1
-            data-section-title=""
-            className={`${expressive ? 'font-extrabold' : 'font-bold'} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
-            style={{
-              fontFamily: SLIDE_HEADING_FONT,
-              fontSize: expressive ? EXPRESSIVE_TITLE_SIZE : TITLE_SIZE,
-              lineHeight: 1.05,
-              maxWidth: '80%',
-            }}
+          <WithKicker
+            kicker={heading.block.kicker}
+            kickerRef={textRef(heading.index, 'kicker')}
+            variant={variant}
+            style={{ maxWidth: '80%' }}
           >
-            <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
-          </h1>
+            <h1
+              data-section-title=""
+              className={`${expressive ? 'font-extrabold' : 'font-bold'} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
+              style={{
+                fontFamily: SLIDE_HEADING_FONT,
+                fontSize: expressive ? EXPRESSIVE_TITLE_SIZE : TITLE_SIZE,
+                lineHeight: 1.05,
+                // With a kicker the group carries the cap, so the title does not take 80% of 80%.
+                maxWidth: heading.block.kicker ? undefined : '80%',
+              }}
+            >
+              <EditableText textRef={textRef(heading.index, 'text')} value={heading.block.text} />
+            </h1>
+          </WithKicker>
         </Adjustable>
       )}
       {blocks.length > consumed.length && (

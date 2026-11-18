@@ -30,6 +30,7 @@ import type { PipelineResult } from '@/generation/pipeline'
 import { deleteDeckWithVideo, supabasePorts } from '@/video/storage'
 import { inOrder, withCardAfter, withDuplicate, withoutCard } from './cardMutations'
 import { withItemAdded } from '@/engine/listItems'
+import { withKickerAt } from '@/engine/kicker'
 import { imageBlock, withBlockAdded, withBlockAppended, withImageReplaced, type ContentType } from '@/engine/newContent'
 import type { Photo } from '@/images/types'
 import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
@@ -185,6 +186,14 @@ interface PresentationState {
    * step, written immediately. Does nothing when that block is not an image.
    */
   replaceImage: (cardId: string, blockIndex: number, photo: Photo) => void
+  /**
+   * Gives the heading at `blockIndex` a kicker (the small heading over it), or takes it off:
+   * `null`, empty and whitespace-only text remove the field, which is never stored as `""`.
+   * One undo step, written immediately. Every block keeps its index, so no nudge or mark
+   * moves; removing it also drops the marks that were typed into it. Does nothing when that
+   * block is not a heading.
+   */
+  setHeadingKicker: (cardId: string, blockIndex: number, text: string | null) => void
   /**
    * Removes one element from a card outright. Every later element's formatting
    * and nudges are renumbered to follow it. Returns false when there was nothing
@@ -745,6 +754,41 @@ function commitBlocks(set: StatusSetter, get: Getter, cardId: string, blocks: Co
   void runSave(set, () => persistCardPatch(cardId, { blocks, inline: card?.inline ?? {} }))
 }
 
+/*
+  Sets or removes a heading's kicker as one undo step, written immediately with the card's
+  pending text saves dropped first (each captured `blocks` without this change). Removing it
+  also drops the marks held under its address, which pointed into text that is gone.
+*/
+function commitKicker(
+  set: StatusSetter,
+  get: Getter,
+  cardId: string,
+  blockIndex: number,
+  text: string | null,
+  historyKey?: string,
+) {
+  const card = get().cards.find((c) => c.id === cardId)
+  if (!card) return
+  const blocks = withKickerAt(card.blocks, blockIndex, text)
+  if (!blocks) return
+
+  pushHistory(set, get, historyKey)
+  const ref = `${blockIndex}:kicker`
+  let inline = card.inline
+  if (inline?.[ref] && (text === null || text.trim() === '')) {
+    const { [ref]: _dropped, ...rest } = inline
+    void _dropped
+    inline = rest
+  }
+  set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, blocks, inline } : c)) })
+
+  const id = get().presentationId
+  if (!id) return
+  clearScheduledSave(`blockText:${cardId}`)
+  clearScheduledSave(`inline:${cardId}`)
+  void runSave(set, () => persistCardPatch(cardId, { blocks, inline: inline ?? {} }))
+}
+
 function pushHistory(set: StatusSetter, get: Getter, coalesceKey?: string) {
   if (coalesceKey && lastPush && lastPush.key === coalesceKey) {
     if (Date.now() - lastPush.at < COALESCE_WINDOW_MS) {
@@ -1168,6 +1212,13 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     // single edit rather than character by character.
     pushHistory(set, get, `blockText:${cardId}:${ref}`)
 
+    // A kicker edited to nothing is taken off the heading, never stored as an empty string.
+    // The same history key as the typing before it, so the whole edit is one undo step.
+    if (parsed.field === 'kicker' && parsed.itemIndex === undefined && nextText.trim() === '') {
+      commitKicker(set, get, cardId, parsed.blockIndex, null, `blockText:${cardId}:${ref}`)
+      return
+    }
+
     const blocks = setBlockFieldText(card.blocks, parsed, nextText)
 
     /*
@@ -1269,6 +1320,10 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     const blocks = withImageReplaced(card.blocks, blockIndex, photo)
     if (!blocks) return
     commitBlocks(set, get, cardId, blocks)
+  },
+
+  setHeadingKicker(cardId, blockIndex, text) {
+    commitKicker(set, get, cardId, blockIndex, text)
   },
 
   removeBlock(cardId, blockIndex) {

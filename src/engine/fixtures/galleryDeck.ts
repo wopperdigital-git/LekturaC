@@ -395,6 +395,14 @@ const SPECS: Spec[] = [
       group('After', 'Counter set in the header', 'Condition read at the top', 'Exit by the condition'),
     ],
   ],
+  [
+    'g-kicker',
+    'standard',
+    [
+      { type: 'heading', text: 'Choosing a loop', kicker: 'Part two' },
+      paragraph('Pick the form that matches what you know about the count.'),
+    ],
+  ],
 ]
 
 /**

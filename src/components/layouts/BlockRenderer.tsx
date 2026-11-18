@@ -5,6 +5,7 @@ import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
+import { WithKicker } from './Kicker'
 import { blockIndexOf, useItemProps } from './adjustContext'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 
@@ -125,6 +126,7 @@ function BlockBody({
           textRef={textRef(index, 'text')}
           size={block.size}
           variant={variant}
+          kicker={block.kicker}
         />
       )
     case 'paragraph':
@@ -321,25 +323,35 @@ export function Heading({
   textRef: ref,
   size = 'h2',
   variant,
+  kicker,
 }: {
   text: string
   textRef: string
   size?: 'h1' | 'h2' | 'h3'
   /** Expressive sets the heading heavier. Never a fill: importance is contrast. */
   variant?: VisualStyle
+  /** The small heading over it, drawn inside the heading's own holder (see `WithKicker`). */
+  kicker?: string
 }) {
+  const index = blockIndexOf(ref)
   const sizeVar = `var(--slide-size-${size})`
   const weight = variant === 'expressive' ? 'font-extrabold' : 'font-semibold'
   // h1 and h2 are tight; the smaller h3 keeps a little more air.
   const lineHeight = size === 'h3' ? 1.15 : 1.08
   return (
     <MaybeAdjustable forRef={ref}>
-      <h2
-        className={`${weight} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
-        style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: sizeVar, lineHeight }}
+      <WithKicker
+        kicker={index === null ? undefined : kicker}
+        kickerRef={index === null ? '' : textRef(index, 'kicker')}
+        variant={variant}
       >
-        <EditableText textRef={ref} value={text} />
-      </h2>
+        <h2
+          className={`${weight} tracking-[var(--slide-letter-spacing)] text-slide-foreground`}
+          style={{ fontFamily: SLIDE_HEADING_FONT, fontSize: sizeVar, lineHeight }}
+        >
+          <EditableText textRef={ref} value={text} />
+        </h2>
+      </WithKicker>
     </MaybeAdjustable>
   )
 }
