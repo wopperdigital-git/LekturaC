@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from './contentBlocks'
-import { accentOwner, fillNode, groundOf, groundOfLayout, itemStep, slotsOf } from './composition'
+import {
+  SIDE_HEAD_MAX_CLAIM,
+  SIDE_HEAD_MAX_LEAD,
+  accentOwner,
+  compositionOf,
+  fillNode,
+  groundOf,
+  groundOfLayout,
+  itemStep,
+  slotsOf,
+} from './composition'
 import { CPP_DECK } from './fixtures/cppDeck'
 import { GALLERY_DECK } from './fixtures/galleryDeck'
 import { inferGroups } from './groups'
@@ -130,5 +140,76 @@ describe('fillNode', () => {
 
   it('is null when a leaf other than the lone photo sits beside the group', () => {
     expect(fillOf([h, list, p])).toBeNull()
+  })
+})
+
+describe('compositionOf', () => {
+  const heading = (text: string): ContentBlock => ({ type: 'heading', text })
+  const para = (text = 'P'): ContentBlock => ({ type: 'paragraph', text })
+  const bullets: ContentBlock = { type: 'bulletList', items: ['a', 'b'] }
+  const quote: ContentBlock = { type: 'quote', text: 'Q' }
+  const long = (n: number) => 'x'.repeat(n)
+
+  it('starts the thresholds at 60 and 140 characters', () => {
+    expect(SIDE_HEAD_MAX_CLAIM).toBe(60)
+    expect(SIDE_HEAD_MAX_LEAD).toBe(140)
+  })
+
+  it('is a stack when the body is one unit', () => {
+    expect(compositionOf([heading('Loops'), para(), bullets], [[2]], 'standard')).toBe('stack')
+  })
+
+  it('puts a short claim and lead beside two units', () => {
+    const blocks = [heading('Loops'), para(), bullets, para()]
+    expect(compositionOf(blocks, [[2], [3]], 'numberedList')).toBe('sideHead')
+  })
+
+  it('still puts a claim of exactly 60 characters beside the body', () => {
+    const blocks = [heading(long(60)), para(), bullets, para()]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('sideHead')
+  })
+
+  it('splits two units under a 61-character claim', () => {
+    const blocks = [heading(long(61)), para(), bullets, para()]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('splitBody')
+  })
+
+  it('stacks three units under a 61-character claim', () => {
+    const blocks = [heading(long(61)), para(), bullets, para(), quote]
+    expect(compositionOf(blocks, [[2], [3], [4]], 'standard')).toBe('stack')
+  })
+
+  it('splits two units under a 141-character lead', () => {
+    const blocks = [heading('Loops'), para(long(141)), bullets, para()]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('splitBody')
+  })
+
+  it('accepts a lead of exactly 140 characters beside the body', () => {
+    const blocks = [heading('Loops'), para(long(140)), bullets, para()]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('sideHead')
+  })
+
+  it('stacks a body of only paragraphs', () => {
+    const blocks = [heading('Loops'), para(), para(), para()]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('stack')
+  })
+
+  it('stacks whenever a photo is anywhere on the card', () => {
+    const blocks = [heading('Loops'), para(), bullets, para(), img]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('stack')
+  })
+
+  it('stacks a gallery and a horizontal timeline row', () => {
+    const blocks = [heading('Loops'), para(), bullets, para()]
+    expect(compositionOf(blocks, [[2], [3]], 'gallery')).toBe('stack')
+    expect(compositionOf(blocks, [[2], [3]], 'timelineRow')).toBe('stack')
+  })
+
+  it('stacks a card with no heading', () => {
+    expect(compositionOf([para(), bullets, para()], [[0], [1], [2]], 'standard')).toBe('stack')
+  })
+
+  it('stacks a card with no blocks', () => {
+    expect(compositionOf([], [], 'standard')).toBe('stack')
   })
 })

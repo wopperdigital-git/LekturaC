@@ -121,3 +121,45 @@ export function fillNode(nodes: RenderNode[], bodyIndices: number[], photoIndex:
   if (drawn.length !== 1 || drawn[0].kind !== 'group') return null
   return nodeKey(drawn[0])
 }
+
+/**
+ * How a slide's body is arranged in zones: `stack` (claim, lead, then the body below,
+ * the default), `sideHead` (the claim and lead in a left column, the body units in a
+ * right column) or `splitBody` (the head across the top, two body units side by side).
+ */
+export type Composition = 'stack' | 'sideHead' | 'splitBody'
+
+/** Longest claim (characters) that still fits a narrow side column. */
+export const SIDE_HEAD_MAX_CLAIM = 60
+/** Longest lead (characters) that still fits a narrow side column. */
+export const SIDE_HEAD_MAX_LEAD = 140
+
+/**
+ * Which composition a slide uses, read off its blocks and never stored. `units` is the
+ * body's drawn units in order, each the block indices it holds (a leaf is `[i]`, a group
+ * its items' indices); it only decides, it never moves or renumbers a block. First match:
+ * 1. `stack` for a gallery or a timeline row (a horizontal row needs the full width), any
+ *    card holding a photo, a card with no claim, fewer than two units, or a body of only
+ *    single paragraphs (prose gains nothing from zones);
+ * 2. `sideHead` when the claim is at most `SIDE_HEAD_MAX_CLAIM` characters and the lead
+ *    (if any) at most `SIDE_HEAD_MAX_LEAD`;
+ * 3. `splitBody` for exactly two units;
+ * 4. otherwise `stack`.
+ */
+export function compositionOf(
+  blocks: ContentBlock[],
+  units: number[][],
+  layout: Exclude<LayoutType, 'auto'>,
+): Composition {
+  const { claim, lead } = slotsOf(blocks)
+  if (layout === 'gallery' || layout === 'timelineRow') return 'stack'
+  if (blocks.some((block) => block.type === 'image')) return 'stack'
+  if (claim === null || units.length < 2) return 'stack'
+  if (units.every((unit) => unit.length === 1 && blocks[unit[0]]?.type === 'paragraph')) return 'stack'
+  const textOf = (index: number | null): number => {
+    const block = index === null ? undefined : blocks[index]
+    return block && 'text' in block ? block.text.length : 0
+  }
+  if (textOf(claim) <= SIDE_HEAD_MAX_CLAIM && textOf(lead) <= SIDE_HEAD_MAX_LEAD) return 'sideHead'
+  return units.length === 2 ? 'splitBody' : 'stack'
+}
