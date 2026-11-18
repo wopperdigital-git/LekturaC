@@ -204,6 +204,13 @@ describe('compositionOf', () => {
     expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('stack')
   })
 
+  it('stacks a body holding a heading, so a subheading stays with what it labels', () => {
+    const blocks = [heading('Loops'), para(), bullets, heading('Why'), para()]
+    expect(compositionOf(blocks, [[2], [3], [4]], 'standard')).toBe('stack')
+    // Without the subheading the same card is zoned.
+    expect(compositionOf([heading('Loops'), para(), bullets, para()], [[2], [3]], 'standard')).toBe('sideHead')
+  })
+
   it('stacks whenever a photo is anywhere on the card', () => {
     const blocks = [heading('Loops'), para(), bullets, para(), img]
     expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('stack')

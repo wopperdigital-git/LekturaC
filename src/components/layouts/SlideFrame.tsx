@@ -18,9 +18,14 @@ export function frameBody(blocks: ContentBlock[], asideIndex: number | null = nu
 /**
  * The zone panel: a tinted, rounded box one zone of a composed slide is drawn on. It is a
  * container of its own so the arrangements inside lay out for the panel's width, and the
- * index.css rule on `[data-zone-panel]` swaps a comparison's featured panel to the surface.
+ * index.css rule on `[data-zone-panel]` swaps a comparison's featured panel to the page colour.
+ * `--zone-width: 100cqi` is the panel's width for the arrangements that cap a size by it
+ * (numerals): an unregistered custom property is substituted as tokens and resolved where it
+ * is used, so `100cqi` there is the nearest container, the panel. Off a panel it is unset.
  */
+const ZONE_WIDTH = { '--zone-width': '100cqi' } as CSSProperties
 const PANEL_STYLE: CSSProperties = {
+  ...ZONE_WIDTH,
   backgroundColor: 'var(--slide-ground-tint)',
   padding: SLIDE_GAP.group,
   gap: SLIDE_GAP.group,
@@ -55,7 +60,7 @@ export function BodyUnits({
         </div>
         <div
           className="@container flex min-w-0 flex-col"
-          style={{ padding: SLIDE_GAP.group, gap: SLIDE_GAP.group }}
+          style={{ ...ZONE_WIDTH, padding: SLIDE_GAP.group, gap: SLIDE_GAP.group }}
         >
           {units[1]}
         </div>
@@ -146,7 +151,7 @@ export function SlideFrame({
     slots.claim !== null && claim?.type === 'heading' ? (
       <div
         data-slot="head"
-        className={`flex flex-col${sideHead ? ' min-w-0 @min-[640px]:self-start' : ''}`}
+        className={`flex flex-col${sideHead ? ' min-w-0' : ''}`}
         style={{ gap: SLIDE_GAP.tight }}
       >
         <Heading

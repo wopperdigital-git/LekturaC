@@ -194,7 +194,11 @@ describe('every block on a card reaches the screen', () => {
   this is the one that can resolve to a composed slide (side head or split body). Every block
   is still drawn exactly once whichever composition the card lands in.
 */
-const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter((block) => block.type !== 'image').map((block) =>
+const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter(
+  // A heading in the body keeps a slide a stack (the sized headings are drawn, in a stack, by
+  // the kitchen sink above), so they are left out here to let the card be zoned.
+  (block) => block.type !== 'image' && !(block.type === 'heading' && block.size),
+).map((block) =>
   // Short enough for a side head, so the zoned path is really exercised.
   block.type === 'heading' && block.text === 'MARKHEADING' ? { ...block, text: 'MARKHEAD' } : block,
 )

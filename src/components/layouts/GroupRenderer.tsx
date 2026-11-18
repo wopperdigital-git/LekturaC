@@ -252,10 +252,10 @@ function NumeralColumns({
     : expressive
       ? 'calc(var(--slide-size-h1) * 1.25)'
       : 'var(--slide-size-h1)'
-  // Capped by the width of the box the list sits in (`cqi` of the nearest container: the slide's
-  // content area, or a zone panel), so two digits always fit their column. On a full-width slide
-  // the cap is above the step and changes nothing; in a narrow zone panel it keeps "03" inside.
-  const numeralSize = `min(${step}, calc(100cqi / ${columns} * ${NUMERAL_COLUMN_SHARE}))`
+  // Capped by the width of the zone panel the list sits in, so two digits fit their column in a
+  // narrow panel. `--zone-width` is set (to `100cqi`) only by a zone panel, so outside one the
+  // fallback is huge and the step wins: a full-width slide is drawn as it always was.
+  const numeralSize = `min(${step}, calc(var(--zone-width, 9999px) / ${columns} * ${NUMERAL_COLUMN_SHARE}))`
   return (
     <Adjustable index={list.index}>
       <ol
@@ -323,8 +323,16 @@ function RuledRows({
   const mark = (i: number) => {
     if (kind === 'numbered') {
       const size = long ? 'var(--slide-size-h3)' : expressive ? 'var(--slide-size-h1)' : 'var(--slide-size-h2)'
-      // Capped at a quarter of the container (the slide or a zone panel) so the text keeps the room.
-      return <Numeral i={i} size={size} expressive={expressive} width="min(3.5em, 25cqi)" />
+      // Inside a zone panel, capped at a quarter of its width so the text keeps the room (see
+      // NumeralColumns: off a panel `--zone-width` is unset and the 3.5em column stands).
+      return (
+        <Numeral
+          i={i}
+          size={size}
+          expressive={expressive}
+          width="min(3.5em, calc(var(--zone-width, 9999px) * 0.25))"
+        />
+      )
     }
     if (kind === 'split') {
       if (expressive) return <Numeral i={i} size="var(--slide-size-h3)" expressive width="2.5em" />

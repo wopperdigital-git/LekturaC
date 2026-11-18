@@ -1,5 +1,6 @@
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { compositionOf } from '@/engine/composition'
+import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BlockRenderer } from './BlockRenderer'
 import { BodyUnits, SlideFrame, frameBody } from './SlideFrame'
 
@@ -18,8 +19,14 @@ export function TextFocusLayout({ blocks, variant }: { blocks: ContentBlock[]; v
         const units = indices.map((index) => (
           <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />
         ))
-        const drawn = <BodyUnits composition={composition} units={units} />
-        return composition === 'stack' ? <div className="max-w-prose">{drawn}</div> : drawn
+        // A stack is held to a readable measure; a zoned slide's panels are as wide as the zone.
+        return composition === 'stack' ? (
+          <div className="flex max-w-prose flex-col" style={{ gap: SLIDE_GAP.group }}>
+            {units}
+          </div>
+        ) : (
+          <BodyUnits composition={composition} units={units} />
+        )
       }}
     </SlideFrame>
   )

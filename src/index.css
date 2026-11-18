@@ -532,11 +532,13 @@ body {
 /*
   A composed slide's zone panel (side head, split body) is itself drawn on the tint, so a
   comparison's featured panel inside it, whose own fallback is the same tint, would vanish
-  into it. Inside a zone panel it takes the surface, as inside a ground. Unlayered, like the
+  into it. Inside a zone panel it takes the page colour (`--slide-background`), which the
+  tint is defined against, so it reads on every theme; the surface would not, since it is
+  nearly the tint on Deep Space, Solar Flare, Chalkboard and Blueprint. Unlayered, like the
   rule above.
 */
 [data-zone-panel] [data-accent-panel] {
-  --slide-panel-bg: var(--slide-surface);
+  --slide-panel-bg: var(--slide-background);
 }
 
 /*

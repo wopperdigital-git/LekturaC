@@ -38,6 +38,8 @@ const LEAD = 'calc(var(--slide-size-body) * 1.2)'
 const EYEBROW = 'calc(var(--slide-size-body) * 0.65)'
 const BODY = 'var(--slide-size-body)'
 const TIGHT = 'var(--slide-gap-tight)'
+/** The numbered mark's column: 3.5em, capped at a quarter of a zone panel (huge fallback off one). */
+const NUMBERED_WIDTH = 'width:min(3.5em, calc(var(--zone-width, 9999px) * 0.25))'
 
 const listCard = (layout: LayoutType, items: string[], style: VisualStyle): Card => ({
   id: 'x',
@@ -82,9 +84,15 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
       )
     })
 
-    it('caps the numeral by its column width, so two digits fit a narrow zone panel', () => {
-      expect(numeralTags(html(find('g-icons3')))[0]).toContain('calc(100cqi / 3 * 0.6))')
-      expect(numeralTags(html(find('g-icons6')))[0]).toContain('calc(100cqi / 3 * 0.6))')
+    it('caps the numeral by its column width inside a zone panel, so two digits fit a narrow one', () => {
+      expect(numeralTags(html(find('g-icons3')))[0]).toContain('calc(var(--zone-width, 9999px) / 3 * 0.6))')
+      expect(numeralTags(html(find('g-icons6')))[0]).toContain('calc(var(--zone-width, 9999px) / 3 * 0.6))')
+    })
+
+    it('leaves a full-width numeral to its step: the cap reads the huge fallback, never a bare cqi', () => {
+      const tag = numeralTags(html(find('g-icons3')))[0]
+      expect(tag).toContain('var(--zone-width, 9999px)')
+      expect(tag).not.toContain('cqi')
     })
 
     it('sets the text at the foot of a single-row column and directly under the numeral in two rows', () => {
@@ -119,7 +127,7 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
       expect(out).not.toContain('repeat(3, minmax(0, 1fr))')
       expect(out).not.toContain('repeat(7, minmax(0, 1fr))')
       // The numbered drawing: the fixed numeral column and the two-column flow.
-      expect(out).toContain('width:min(3.5em, 25cqi)')
+      expect(out).toContain(NUMBERED_WIDTH)
       expect(out).toContain('@min-[640px]:grid-flow-col')
       expect(numerals(out)).toEqual(['01', '02', '03', '04', '05', '06', '07'])
       for (const text of texts) expect(out.split(text).length - 1).toBe(1)
@@ -127,12 +135,12 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
   })
 
   describe('numbered', () => {
-    it('sets the numeral at h2 (structured) or h1 (expressive) in a 3.5em column, capped at 25cqi', () => {
+    it('sets the numeral at h2 (structured) or h1 (expressive) in a 3.5em column, capped at a quarter of a zone panel', () => {
       const tags = numeralTags(html(find('g-numbered')))
       expect(tags.length).toBe(5)
       for (const tag of tags) {
         expect(tag).toContain(`font-size:var(--slide-size-${expressive ? 'h1' : 'h2'})`)
-        expect(tag).toContain('width:min(3.5em, 25cqi)')
+        expect(tag).toContain(NUMBERED_WIDTH)
         expect(tag).toContain('text-slide-accent')
       }
     })
@@ -140,7 +148,7 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
     it('steps the numeral down to h3 past six items', () => {
       for (const tag of numeralTags(html(find('g-numbered10')))) {
         expect(tag).toContain('font-size:var(--slide-size-h3)')
-        expect(tag).toContain('width:min(3.5em, 25cqi)')
+        expect(tag).toContain(NUMBERED_WIDTH)
       }
     })
 

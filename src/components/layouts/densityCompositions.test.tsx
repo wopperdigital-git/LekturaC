@@ -55,6 +55,41 @@ describe('compositions', () => {
         expect(between).not.toContain('data-zone-panel')
       })
 
+      it('a long claim with two units draws every block of the card exactly once', () => {
+        const html = render(
+          [
+            { type: 'heading', text: `SPLITHEAD ${'L'.repeat(61)}` },
+            { type: 'paragraph', text: 'SPLITLEAD' },
+            { type: 'bulletList', items: ['SPLITA1', 'SPLITA2'] },
+            { type: 'paragraph', text: 'SPLITB' },
+          ],
+          variant,
+        )
+        expect(html).toContain('data-composition="splitBody"')
+        for (const text of ['SPLITHEAD', 'SPLITLEAD', 'SPLITA1', 'SPLITA2', 'SPLITB']) {
+          expect(count(html, text), text).toBe(1)
+        }
+      })
+
+      it('every zone panel and the split body second cell carry the panel width for the numeral caps', () => {
+        const side = render([{ type: 'heading', text: 'Loops' }, LEAD, LIST, TAIL], variant)
+        expect(count(side, '--zone-width:100cqi')).toBe(1)
+        const split = render([{ type: 'heading', text: 'L'.repeat(61) }, LEAD, LIST, TAIL], variant)
+        expect(count(split, '--zone-width:100cqi')).toBe(2)
+        // Not drawn on a stack: nothing there is a panel.
+        const stack = render([{ type: 'heading', text: 'Loops' }, LEAD, LIST], variant)
+        expect(stack).not.toContain('--zone-width:')
+      })
+
+      it('a text focus slide keeps its reading measure in a stack and drops it when zoned', () => {
+        const stack = render([{ type: 'heading', text: 'Loops' }, LEAD, TAIL], variant, 'textFocus')
+        expect(stack).toContain('data-composition="stack"')
+        expect(stack).toContain('class="flex max-w-prose flex-col"')
+        const zoned = render([{ type: 'heading', text: 'Loops' }, LEAD, LIST, TAIL], variant, 'textFocus')
+        expect(zoned).toContain('data-composition="sideHead"')
+        expect(zoned).not.toContain('class="flex max-w-prose flex-col"')
+      })
+
       it('a lead and one list is a stack: no zone panel', () => {
         const html = render([{ type: 'heading', text: 'Loops' }, LEAD, LIST], variant)
         expect(html).toContain('data-composition="stack"')
@@ -99,10 +134,10 @@ describe('compositions', () => {
     expect(html).toContain(`data-composition="${composition}"`)
   })
 
-  it('the stylesheet swaps a featured panel to the surface inside a zone panel', () => {
+  it('the stylesheet swaps a featured panel to the page colour inside a zone panel', () => {
     const css = readFileSync(new URL('../../index.css', import.meta.url), 'utf8')
     const rule = css.match(/\[data-zone-panel\] \[data-accent-panel\]\s*\{([^}]*)\}/)
     expect(rule, 'index.css should hold a [data-zone-panel] [data-accent-panel] rule').not.toBeNull()
-    expect(rule![1]).toMatch(/--slide-panel-bg:\s*var\(--slide-surface\)/)
+    expect(rule![1]).toMatch(/--slide-panel-bg:\s*var\(--slide-background\)/)
   })
 })

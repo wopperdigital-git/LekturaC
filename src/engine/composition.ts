@@ -139,8 +139,10 @@ export const SIDE_HEAD_MAX_LEAD = 140
  * body's drawn units in order, each the block indices it holds (a leaf is `[i]`, a group
  * its items' indices); it only decides, it never moves or renumbers a block. First match:
  * 1. `stack` for a gallery or a timeline row (a horizontal row needs the full width), any
- *    card holding a photo, a card with no claim, fewer than two units, or a body of only
- *    single paragraphs (prose gains nothing from zones);
+ *    card holding a photo, a card with no claim, fewer than two units, a body of only
+ *    single paragraphs (prose gains nothing from zones), or a body holding a heading (a
+ *    subheading labels what follows it, zoning would split the two, and Insert -> Heading
+ *    would flip the slide);
  * 2. `sideHead` when the claim is at most `SIDE_HEAD_MAX_CLAIM` characters and the lead
  *    (if any) at most `SIDE_HEAD_MAX_LEAD`;
  * 3. `splitBody` for exactly two units;
@@ -156,6 +158,7 @@ export function compositionOf(
   if (blocks.some((block) => block.type === 'image')) return 'stack'
   if (claim === null || units.length < 2) return 'stack'
   if (units.every((unit) => unit.length === 1 && blocks[unit[0]]?.type === 'paragraph')) return 'stack'
+  if (units.some((unit) => unit.some((index) => blocks[index]?.type === 'heading'))) return 'stack'
   const textOf = (index: number | null): number => {
     const block = index === null ? undefined : blocks[index]
     return block && 'text' in block ? block.text.length : 0
