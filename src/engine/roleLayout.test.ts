@@ -94,6 +94,13 @@ describe('structuralLayout and generatedLayout: section and statement named at i
     expect(structuralLayout([])).toBeNull()
   })
 
+  it('never names a card the photo stage appended a photo to', () => {
+    const photo: ContentBlock = { type: 'image', url: 'https://example.com/a.jpg', alt: 'a' }
+    expect(structuralLayout([heading, photo])).toBeNull()
+    expect(structuralLayout([heading, paragraph, photo])).toBeNull()
+    expect(generatedLayout(2, undefined, [heading, paragraph, photo])).toBe('auto')
+  })
+
   it('never names card 0, which stays hero', () => {
     expect(generatedLayout(0, undefined, [heading])).toBe('hero')
     expect(generatedLayout(0, undefined, [heading, paragraph])).toBe('hero')
