@@ -152,6 +152,27 @@ describe.each(['structured', 'expressive'] as const)('twoColumn (%s)', (style) =
     expect(count(markup, 'break-inside-avoid')).toBe(3)
   })
 
+  it('makes each block a container that caps a list numeral by its column', () => {
+    const short = bullets('One', 'Two', 'Three', 'Four')
+    const markup = html(card('twoColumn', [heading, lead, para('Body paragraph.'), short], style))
+    const wrappers = markup.match(/<div[^>]*break-inside-avoid[^>]*>/g) ?? []
+    expect(wrappers.length).toBe(2)
+    for (const tag of wrappers) {
+      expect(classesOf(tag)).toContain('@container')
+      expect(tag).toContain('--zone-width:100cqi')
+    }
+    // The chips arrangement sizes its numerals by the zone width.
+    expect(markup).toContain('var(--zone-width')
+  })
+
+  it('leaves no space above the first block or after the last: a top margin on all but the first', () => {
+    const markup = html(card('twoColumn', blocks, style))
+    const wrappers = markup.match(/<div[^>]*break-inside-avoid[^>]*>/g) ?? []
+    expect(wrappers[0]).not.toContain('margin')
+    for (const tag of wrappers.slice(1)) expect(tag).toContain('margin-top:var(--slide-gap-group)')
+    expect(markup).not.toContain('margin-bottom:var(--slide-gap-group)')
+  })
+
   it('stays editable: each body block keeps its own index', () => {
     const markup = html(card('twoColumn', blocks, style))
     for (const index of [2, 3, 4]) expect(markup).toContain(`data-block-index="${index}"`)
@@ -185,6 +206,36 @@ describe.each(['structured', 'expressive'] as const)('statSplit (%s)', (style) =
     const markup = html(card('statSplit', blocks, style))
     expect(markup).toContain('<ol')
     expect(markup).toContain('--zone-width:100cqi')
+  })
+
+  it('makes both cells containers that set the zone width', () => {
+    const markup = html(card('statSplit', blocks, style))
+    for (const attr of ['data-stat-cell', 'data-list-cell']) {
+      const tag = tagWith(markup, attr)
+      expect(classesOf(tag), attr).toContain('@container')
+      expect(tag, attr).toContain('--zone-width:100cqi')
+    }
+  })
+
+  it('caps the figure by its column so a four-character value fits', () => {
+    const tag = tagWith(html(card('statSplit', blocks, style)), 'data-stat-figure')
+    expect(tag).toContain('min(calc(var(--slide-size-h1) *')
+    expect(tag).toContain('calc(var(--zone-width, 9999px) / 2.6))')
+  })
+
+  it('draws one column, with no empty cell, when the card has no list', () => {
+    const markup = html(card('statSplit', [heading, figure], style))
+    expect(count(markup, '42%')).toBe(1)
+    expect(count(markup, 'of loops need no update')).toBe(1)
+    expect(markup).not.toContain('grid-cols-[2fr_3fr]')
+    expect(markup).not.toContain('data-list-cell')
+  })
+
+  it('draws one column, with no empty cell, when the card has no figure', () => {
+    const markup = html(card('statSplit', [heading, listBlock], style))
+    for (const text of ['Find the start', 'Check the condition', 'Run the body']) expect(count(markup, text), text).toBe(1)
+    expect(markup).not.toContain('grid-cols-[2fr_3fr]')
+    expect(markup).not.toContain('data-stat-cell')
   })
 
   it('draws a trailing paragraph once, below the grid', () => {
@@ -229,6 +280,10 @@ describe.each(['structured', 'expressive'] as const)('photoList (%s)', (style) =
     expect(classesOf(tag)).toContain('@container')
     expect(tag).toContain('--zone-width:100cqi')
     expect(markup).toContain('<ol')
+  })
+
+  it('lets a lone list fill the text column', () => {
+    expect(html(card('photoList', blocks, style))).toContain('data-fill')
   })
 
   it('draws every block once on a card the picker offers it for with no photo', () => {

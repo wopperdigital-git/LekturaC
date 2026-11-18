@@ -2,7 +2,7 @@ import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { inferGroups, nodeKey } from '@/engine/groups'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BodyNode } from './BodyNode'
-import { SlideFrame } from './SlideFrame'
+import { SlideFrame, ZONE_WIDTH } from './SlideFrame'
 
 /**
  * Prose on two columns: the claim and lead head the slide on the frame, and the body flows
@@ -10,7 +10,10 @@ import { SlideFrame } from './SlideFrame'
  * container width up; one column below it). Reading order is the author's order, down then
  * across, and each block is `break-inside-avoid` so a paragraph or a list is never split
  * between the columns. Every body node is drawn once, whatever it is, under its own index.
- * Columns have no flex gap, so the space between blocks is a bottom margin from the scale.
+ * Columns have no flex gap, so the space between blocks is a top margin from the scale on
+ * every block but the first (margins at a column break are truncated, so a column starts flush
+ * and ends without trailing space). Each block is a container of its own with `--zone-width`
+ * set, so a list's numerals cap by the column and not by the slide.
  */
 export function TwoColumnLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const nodes = inferGroups(blocks, 'twoColumn')
@@ -26,8 +29,12 @@ export function TwoColumnLayout({ blocks, variant }: { blocks: ContentBlock[]; v
           >
             {nodes
               .filter((node) => inBody.has(nodeKey(node)))
-              .map((node) => (
-                <div key={nodeKey(node)} className="break-inside-avoid" style={{ marginBottom: SLIDE_GAP.group }}>
+              .map((node, i) => (
+                <div
+                  key={nodeKey(node)}
+                  className="@container break-inside-avoid"
+                  style={{ ...ZONE_WIDTH, ...(i > 0 ? { marginTop: SLIDE_GAP.group } : {}) }}
+                >
                   <BodyNode node={node} variant={variant} />
                 </div>
               ))}

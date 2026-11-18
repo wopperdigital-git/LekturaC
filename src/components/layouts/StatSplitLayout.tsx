@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import type { ContentBlock, StatBlock, VisualStyle } from '@/engine/contentBlocks'
 import { inferGroups, nodeKey, type RenderNode } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
@@ -6,14 +5,17 @@ import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/li
 import { Adjustable } from './Adjustable'
 import { BodyNode } from './BodyNode'
 import { EditableText } from './EditableText'
-import { SlideFrame } from './SlideFrame'
+import { SlideFrame, ZONE_WIDTH } from './SlideFrame'
 import { figureSize } from './figureSize'
-
-/** The grid's right column is the list's own container: the numeral column caps by its width. */
-const ZONE = { '--zone-width': '100cqi' } as CSSProperties
 
 /** A figure of up to this many characters is drawn at full size; a longer one steps down. */
 const FULL_CHARS = 4
+
+/**
+ * The figure never takes more than this share of its column (the cell is a container with
+ * `--zone-width`): four characters at about 0.6em each fit when the size is the width over 2.6.
+ */
+const FIGURE_WIDTH_DIVISOR = 2.6
 
 /**
  * One figure beside the list that backs it: the stat's value as large accent text with its
@@ -36,21 +38,24 @@ export function StatSplitLayout({ blocks, variant }: { blocks: ContentBlock[]; v
         const isList = (node: RenderNode) => node.kind === 'group' && node.items[0].block.type === 'bulletList'
         const figure = drawn.find(isFigure)
         const listNode = drawn.find(isList)
+        // With only one of the two there is nothing to split: one column, no empty cell.
+        const both = Boolean(figure && listNode)
         const rest = drawn.filter((node) => node !== figure && node !== listNode)
         return (
           <div className="flex flex-col" style={{ gap: SLIDE_GAP.section }}>
+            {(figure || listNode) && (
             <div
               data-stat-split=""
-              className="grid grid-cols-1 items-start @min-[640px]:grid-cols-[2fr_3fr]"
+              className={`grid grid-cols-1 items-start${both ? ' @min-[640px]:grid-cols-[2fr_3fr]' : ''}`}
               style={{ columnGap: SLIDE_GAP.section, rowGap: SLIDE_GAP.group }}
             >
-              <div className="min-w-0">
-                {figure && figure.kind === 'leaf' && figure.block.type === 'stat' && (
+              {figure && figure.kind === 'leaf' && figure.block.type === 'stat' && (
+                <div data-stat-cell="" className="@container min-w-0" style={ZONE_WIDTH}>
                   <Figure stat={figure.block} index={figure.index} expressive={expressive} />
-                )}
-              </div>
-              <div className="@container min-w-0" style={ZONE}>
-                {listNode && listNode.kind === 'group' && listNode.items[0].block.type === 'bulletList' && (
+                </div>
+              )}
+              {listNode && listNode.kind === 'group' && listNode.items[0].block.type === 'bulletList' && (
+                <div data-list-cell="" className="@container min-w-0" style={ZONE_WIDTH}>
                   <BodyNode
                     // The list is always the ruled numbered rows beside a figure, whatever its length.
                     node={{
@@ -60,9 +65,10 @@ export function StatSplitLayout({ blocks, variant }: { blocks: ContentBlock[]; v
                     }}
                     variant={variant}
                   />
-                )}
-              </div>
+                </div>
+              )}
             </div>
+            )}
             {rest.length > 0 && (
               <div className="flex flex-col" style={{ gap: SLIDE_GAP.group }}>
                 {rest.map((node) => (
@@ -87,7 +93,7 @@ function Figure({ stat, index, expressive }: { stat: StatBlock; index: number; e
           className="min-w-0 text-slide-accent"
           style={{
             fontFamily: SLIDE_HEADING_FONT,
-            fontSize: figureSize('h1', expressive ? 2.4 : 2.1, stat.value, FULL_CHARS),
+            fontSize: `min(${figureSize('h1', expressive ? 2.4 : 2.1, stat.value, FULL_CHARS)}, calc(var(--zone-width, 9999px) / ${FIGURE_WIDTH_DIVISOR}))`,
             fontWeight: expressive ? 800 : 600,
             lineHeight: 1,
           }}

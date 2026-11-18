@@ -23,7 +23,7 @@ export function frameBody(blocks: ContentBlock[], asideIndex: number | null = nu
  * (numerals): an unregistered custom property is substituted as tokens and resolved where it
  * is used, so `100cqi` there is the nearest container, the panel. Off a panel it is unset.
  */
-const ZONE_WIDTH = { '--zone-width': '100cqi' } as CSSProperties
+export const ZONE_WIDTH = { '--zone-width': '100cqi' } as CSSProperties
 const PANEL_STYLE: CSSProperties = {
   ...ZONE_WIDTH,
   backgroundColor: 'var(--slide-ground-tint)',

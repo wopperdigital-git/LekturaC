@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { singlePhoto } from '@/engine/blockPartition'
 import { fillNode } from '@/engine/composition'
@@ -6,9 +5,7 @@ import { inferGroups, nodeKey } from '@/engine/groups'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BlockRenderer } from './BlockRenderer'
 import { BodyNode } from './BodyNode'
-import { SlideFrame, frameBody } from './SlideFrame'
-
-const ZONE = { '--zone-width': '100cqi' } as CSSProperties
+import { SlideFrame, ZONE_WIDTH, frameBody } from './SlideFrame'
 
 /**
  * A list beside the card's photo: the photo is the frame's aside, bleeding to the slide's
@@ -58,7 +55,7 @@ export function PhotoListLayout({
           <div
             data-photo-list=""
             className="@container flex flex-1 flex-col"
-            style={{ ...ZONE, gap: SLIDE_GAP.group }}
+            style={{ ...ZONE_WIDTH, gap: SLIDE_GAP.group }}
           >
             {nodes
               .filter((node) => inBody.has(nodeKey(node)))
