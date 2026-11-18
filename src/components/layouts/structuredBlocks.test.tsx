@@ -6,7 +6,7 @@ import { CPP_DECK } from '@/engine/fixtures/cppDeck'
 import { EMPTY_TEXT_STYLE } from '@/engine/textStyle'
 import { PresentSlide } from '@/components/present/PresentSlide'
 import { CODE_FONT, CODE_SIZE, SLIDE_GAP, SLIDE_SIZE } from '@/lib/theme-tokens'
-import { BlockAdjustContext, BlockDataContext, type BlockAdjusting } from './adjustContext'
+import { BlockAdjustContext, BlockDataContext, ignoresPickedColour, type BlockAdjusting } from './adjustContext'
 import { LayoutRenderer } from './LayoutRenderer'
 
 /**
@@ -72,10 +72,28 @@ describe.each(['structured', 'expressive'] as const)('callout (%s)', (style) => 
     expect(count(bare, 'Just the point.')).toBe(1)
   })
 
-  it('leaves the second callout unmarked: still one owner per slide', () => {
-    const two = html(card('standard', [heading, callout, { type: 'callout', text: 'A second idea.' }], style))
+  it('fills only the owner: a second callout is drawn on the tint with no accent fill', () => {
+    const two = html(
+      card('standard', [heading, callout, { type: 'callout', label: 'Aside', text: 'A second idea.' }], style),
+    )
     expect(count(two, 'data-callout=')).toBe(2)
     expect(owners(two)).toBe(1)
+    expect(count(two, 'bg-slide-accent')).toBe(1)
+    const quiet = tagWith(two, 'data-callout-quiet')
+    expect(quiet).toContain('data-callout=')
+    expect(classesOf(quiet)).not.toContain('bg-slide-accent')
+    expect(classesOf(quiet)).toContain('text-slide-foreground')
+    expect(styleOf(quiet)).toContain('background:var(--slide-panel-bg, var(--slide-ground-tint))')
+    // Its label is accent text (drawn in the small accent ink by the stylesheet), never the panel's ink.
+    const quietPart = two.slice(two.indexOf('data-callout-quiet'))
+    expect(classesOf(tagWith(quietPart, 'data-callout-label'))).toContain('text-slide-accent')
+    expect(count(two, 'A second idea.')).toBe(1)
+  })
+
+  it('marks the owner filled, so a picked colour is ignored on it', () => {
+    const out = html(card('standard', [heading, callout, callout], style))
+    expect(tagWith(out, 'data-callout=')).toContain('data-callout-filled')
+    expect(count(out, 'data-callout-filled')).toBe(1)
   })
 
   it('takes the accent from the stat on a stat hero: the figure is accent text with no panel', () => {
@@ -165,15 +183,44 @@ describe.each(['structured', 'expressive'] as const)('code (%s)', (style) => {
     expect(plain).not.toContain('bg-slide-accent')
   })
 
-  it('keeps the surface width: the panel and its text may shrink, and a long line scrolls or clips', () => {
-    const long = { type: 'code', code: `${'x'.repeat(120)}\n${'y'.repeat(10)}` } as ContentBlock
-    const out = html(card('standard', [heading, long], style))
-    const longPanel = classesOf(tagWith(out, 'data-code='))
-    expect(longPanel).toContain('min-w-0')
-    expect(longPanel).toContain('max-w-full')
-    // Read-only surfaces (presenter, thumbnails, video) clip it.
-    expect(classesOf(preTag(out))).toContain('overflow-hidden')
-    expect(classesOf(preTag(out))).not.toContain('overflow-x-auto')
+  it.each(['standard', 'hero', 'section', 'statHero', 'statement', 'quote', 'comparison', 'textFocus'] as const)(
+    'keeps the surface width in the %s frame: the panel and its text may shrink, and a long line clips',
+    (layout) => {
+      const long = { type: 'code', code: `${'x'.repeat(120)}\n${'y'.repeat(10)}` } as ContentBlock
+      const blocks: ContentBlock[] =
+        layout === 'statHero'
+          ? [heading, { type: 'stat', value: '72%', label: 'of bugs' }, long]
+          : layout === 'quote'
+            ? [{ type: 'quote', text: 'A short quote.' }, long]
+            : layout === 'comparison'
+              ? [
+                  heading,
+                  { type: 'comparisonGroup', heading: 'A', items: ['a'] },
+                  { type: 'comparisonGroup', heading: 'B', items: ['b'] },
+                  long,
+                ]
+              : [heading, long]
+      const out = html(card(layout, blocks, style, layout === 'hero' ? 0 : 3), layout === 'hero')
+      const longPanel = classesOf(tagWith(out, 'data-code='))
+      expect(longPanel, layout).toContain('min-w-0')
+      expect(longPanel, layout).toContain('max-w-full')
+      // Read-only surfaces (presenter, thumbnails, video) clip it.
+      expect(classesOf(preTag(out)), layout).toContain('overflow-hidden')
+      expect(classesOf(preTag(out)), layout).toContain('min-w-0')
+      expect(classesOf(preTag(out)), layout).toContain('max-w-full')
+      expect(classesOf(preTag(out)), layout).not.toContain('overflow-x-auto')
+    },
+  )
+
+  it('draws a photo hero code leftover inside the light panel of the deep slide, under the photo stage', () => {
+    const photo: ContentBlock = { type: 'image', url: 'https://example.test/hero.png', alt: 'a' }
+    const out = draw(card('hero', [heading, photo, code], style, 0), true)
+    expect(out).toContain('data-on-photo')
+    expect(out.indexOf('data-on-photo')).toBeLessThan(out.indexOf('data-code='))
+    expect(out).toContain('data-ground="deep"')
+    // The deep slide draws it light: the panel carries no ground of its own, so the stylesheet light panel applies.
+    expect(tagWith(out, 'data-code=')).not.toContain('data-ground')
+    expect(count(out, 'for (int i = 0; i &lt; n; i++) {')).toBe(1)
   })
 
   it('scrolls a long line inside the panel on the live editor', () => {
@@ -230,6 +277,29 @@ describe('the stylesheet and the video draw code the same way', () => {
     expect(rule).toMatch(/--slide-muted: color-mix\(in srgb, var\(--slide-ground-deep\) 80%, var\(--slide-ground-deep-foreground\)\)/)
   })
 
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  const ruleFor = (start: string) => stripped.split('}').find((rule) => rule.trimStart().startsWith(start)) ?? ''
+
+  it('keeps the white-on-a-photo and the deep-ink rules off the code panel, whose ink is its own', () => {
+    const onPhoto = ruleFor('[data-on-photo] :is(')
+    expect(onPhoto).toContain('color: #fff !important')
+    expect(onPhoto).toContain(':not([data-code]):not([data-code] *)')
+    const deepMarks = ruleFor("[data-ground='deep'] :is(")
+    expect(deepMarks).toContain('var(--slide-ground-deep-foreground) !important')
+    expect(deepMarks).toContain(':not([data-code]):not([data-code] *)')
+  })
+
+  it('forces a character colour inside the code panel to the panel ink, light or dark', () => {
+    const own = ruleFor('[data-code] :is(p, span, div)')
+    expect(own).toContain("[style^='color:']")
+    expect(own).toContain('color: var(--slide-foreground) !important')
+  })
+
+  it('swaps a quiet callout tint like the featured comparison panel', () => {
+    expect(stripped).toMatch(/\[data-ground\] \[data-callout-quiet\] \{\s*--slide-panel-bg: var\(--slide-surface\);\s*\}/)
+    expect(stripped).toMatch(/\[data-zone-panel\] \[data-callout-quiet\] \{\s*--slide-panel-bg: var\(--slide-background\);\s*\}/)
+  })
+
   it('keeps every deck, card and character colour off the code run', () => {
     // A pick rides on `[data-deck-color]` (excluded under a deep ground, which the panel carries or sits in)
     // and on inline colours (a character mark, refused). Neither selector may reach the `pre`.
@@ -254,5 +324,23 @@ describe('the gallery cards', () => {
     const deepCode = draw(byId('g-code-deep'))
     expect(deepCode).toContain('data-ground="deep"')
     expect(tagWith(deepCode, 'data-code=')).not.toContain('data-ground')
+  })
+})
+
+describe('which elements ignore a picked colour', () => {
+  const node = (over: { onPhoto?: boolean; deep?: boolean; filled?: boolean }) =>
+    ({
+      closest: (selector: string) =>
+        (selector.includes('data-on-photo') && over.onPhoto) || (selector.includes('data-ground') && over.deep)
+          ? {}
+          : null,
+      hasAttribute: (name: string) => name === 'data-callout-filled' && Boolean(over.filled),
+    }) as unknown as Element
+
+  it('ignores it on a photo, on a deep ground and on the filled callout, and nowhere else', () => {
+    expect(ignoresPickedColour(node({ onPhoto: true }))).toBe(true)
+    expect(ignoresPickedColour(node({ deep: true }))).toBe(true)
+    expect(ignoresPickedColour(node({ filled: true }))).toBe(true)
+    expect(ignoresPickedColour(node({}))).toBe(false)
   })
 })

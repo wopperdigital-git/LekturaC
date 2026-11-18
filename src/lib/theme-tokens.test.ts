@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   applyTheme,
@@ -18,6 +19,8 @@ import {
   SLIDE_FONT_VARS,
   SLIDE_HEADING_FONT,
   SLIDE_SIZE,
+  SMALL_ACCENT_WEIGHT,
+  smallAccentInk,
 } from './theme-tokens'
 
 describe('darken', () => {
@@ -441,9 +444,20 @@ describe('callout and code panel colours', () => {
     }
   })
 
-  it('keeps the light panel visibly apart from the deep slide it sits on', () => {
+  /*
+    The panel has to read as a panel against its slide. On a plain or tint slide it is the deep ground on the
+    page or the tint (the same floor as a title slide's deep ground against its page: 1.3:1, and Deep Space and
+    Solar Flare are the recorded exceptions, see KNOWN_CLOSE above); on a deep slide it is the light panel on
+    the deep ground, which is 7:1 or better.
+  */
+  it('keeps the code panel apart from the slide it sits on', () => {
+    const KNOWN_CLOSE_PANEL = ['midnight', 'bold']
     for (const { id, colors } of BUILTIN_THEMES) {
-      expect(contrastRatio(colors.deepForeground, colors.deep), id).toBeGreaterThanOrEqual(3)
+      if (!KNOWN_CLOSE_PANEL.includes(id)) {
+        expect(contrastRatio(colors.deep, colors.background), `${id} panel on the page`).toBeGreaterThanOrEqual(1.3)
+        expect(contrastRatio(colors.deep, colors.tint), `${id} panel on the tint`).toBeGreaterThanOrEqual(1.3)
+      }
+      expect(contrastRatio(colors.deepForeground, colors.deep), `${id} light panel on the deep slide`).toBeGreaterThanOrEqual(7)
     }
   })
 
@@ -453,26 +467,39 @@ describe('callout and code panel colours', () => {
   })
 
   /*
-    The kicker is accent text at 0.65 of the body size, so it wants 4.5:1. Four themes are short of it
-    on the tint (Minimal, Editorial and Sage on the plain page too, since the accent is the same
-    colour): recorded here, not exempted silently, until their accents are reworked. Every theme is at
-    3:1 or better. Fixing one means removing its id.
+    Small accent text (the kicker; the label of a callout that is not the accent owner) is drawn in the accent
+    pulled toward the foreground, exactly as the stylesheet's `color-mix` does, so it reaches 4.5:1 on the
+    page and on the tint in every theme. A quiet callout's panel is the tint, the page colour inside a zone
+    panel, or the surface inside a deep ground, where accent and foreground are the same colour.
   */
-  const KICKER_SHORT_ON_TINT = ['minimal', 'editorial', 'sage', 'pop']
-
-  it('reads a kicker (accent text at the eyebrow size) on the tint at 4.5:1, bar the recorded themes, and at 3:1 everywhere', () => {
+  it('reads small accent text at 4.5:1 on the page and on the tint, in every theme', () => {
     for (const { id, colors } of BUILTIN_THEMES) {
-      const ratio = contrastRatio(colors.accent, colors.tint)
-      expect(ratio, `${id} kicker on tint at 3:1`).toBeGreaterThanOrEqual(3)
-      if (!KICKER_SHORT_ON_TINT.includes(id)) expect(ratio, `${id} kicker on tint`).toBeGreaterThanOrEqual(4.5)
+      const ink = smallAccentInk(colors)
+      expect(contrastRatio(ink, colors.background), `${id} on the page`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(ink, colors.tint), `${id} on the tint`).toBeGreaterThanOrEqual(4.5)
     }
   })
 
-  it('keeps the kicker list honest: each id is still short of 4.5:1 on the tint', () => {
-    for (const id of KICKER_SHORT_ON_TINT) {
-      const colors = BUILTIN_THEMES.find((t) => t.id === id)!.colors
-      expect(contrastRatio(colors.accent, colors.tint), id).toBeLessThan(4.5)
+  it('reads small accent text and the quiet callout text on a deep ground: the ink on its surface', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      // In a deep ground the accent and the foreground are both the deep ink, so the mix is the ink.
+      const surface = mixHex(colors.deepForeground, colors.deep, 0.08)
+      expect(contrastRatio(smallAccentInk({ accent: colors.deepForeground, foreground: colors.deepForeground }), surface), `${id} label`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.deepForeground, surface), `${id} text`).toBeGreaterThanOrEqual(4.5)
     }
+  })
+
+  it('reads the quiet callout text on the tint and on the page colour of a zone panel', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      expect(contrastRatio(colors.foreground, colors.tint), `${id} on the tint`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.foreground, colors.background), `${id} in a zone panel`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('writes the same mix in the stylesheet', () => {
+    const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+    const rule = css.match(/\[data-kicker\],\s*\[data-callout-quiet\] \[data-callout-label\] \{[^}]*\}/)?.[0] ?? ''
+    expect(rule).toContain(`color-mix(in srgb, var(--slide-accent) ${SMALL_ACCENT_WEIGHT * 100}%, var(--slide-foreground))`)
   })
 
   it('names the code face with JetBrains Mono first and a size of 0.85 of the body', () => {

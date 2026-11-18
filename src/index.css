@@ -489,7 +489,7 @@ body {
   The stage lets presses through (the photo behind it is a selectable element), and
   takes them back only on the elements themselves.
 */
-[data-on-photo] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *) {
+[data-on-photo] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-code]):not([data-code] *) {
   color: #fff !important;
 }
 
@@ -546,6 +546,15 @@ body {
 }
 
 /*
+  The same swap for a callout that is not the accent owner (`data-callout-quiet`): it is drawn on the tint
+  like a featured comparison panel, so inside a deep ground it takes the surface and inside a zone panel the
+  page colour. Kept as rules of their own so the comparison panel's rules stay as they are.
+*/
+[data-ground] [data-callout-quiet] {
+  --slide-panel-bg: var(--slide-surface);
+}
+
+/*
   A composed slide's zone panel (side head, split body) is itself drawn on the tint, so a
   comparison's featured panel inside it, whose own fallback is the same tint, would vanish
   into it. Inside a zone panel it takes the page colour (`--slide-background`), which the
@@ -555,6 +564,22 @@ body {
 */
 [data-zone-panel] [data-accent-panel] {
   --slide-panel-bg: var(--slide-background);
+}
+
+[data-zone-panel] [data-callout-quiet] {
+  --slide-panel-bg: var(--slide-background);
+}
+
+/*
+  Small accent text: the kicker, and the label of a callout that is not the accent owner. At the eyebrow
+  size the bare accent is under 4.5:1 on the page or the tint in several themes, so it is drawn as the accent
+  pulled toward the foreground (70%, `SMALL_ACCENT_WEIGHT`), which every theme reaches 4.5:1 with on both. On
+  a deep ground the accent and the foreground are the same colour, so the mix is that colour. Unlayered, so it
+  beats the elements' `text-slide-accent`; a picked colour still beats it (`[data-deck-color]` is more specific).
+*/
+[data-kicker],
+[data-callout-quiet] [data-callout-label] {
+  color: color-mix(in srgb, var(--slide-accent) 70%, var(--slide-foreground));
 }
 
 /*
@@ -570,8 +595,18 @@ body {
   white (the photo rule wins there) and text on an accent fill keeps its accent-foreground ink,
   like the rules above.
 */
-[data-ground='deep'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):is([style^='color:'], [style*=';color:'], [style*='; color:']):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-on-photo] *) {
+[data-ground='deep'] :is(h1, h2, h3, h4, p, li, span, div, blockquote, figcaption, footer):is([style^='color:'], [style*=';color:'], [style*='; color:']):not([class*='accent-foreground']):not([class*='accent-foreground'] *):not([data-on-photo] *):not([data-code]):not([data-code] *) {
   color: var(--slide-ground-deep-foreground) !important;
+}
+
+/*
+  A code panel is excluded from the two forced-ink rules above (the white on a photo and the deep ink on a deep
+  ground): on a deep slide it is a light panel, so either would put light text on it. Its own ink is the
+  panel's `--slide-foreground`, which is the dark ink on a light panel and the light ink on its own deep ground,
+  so a character colour on its label or caption (the code field takes none) is forced to that instead.
+*/
+[data-code] :is(p, span, div):is([style^='color:'], [style*=';color:'], [style*='; color:']) {
+  color: var(--slide-foreground) !important;
 }
 
 [data-on-photo] {

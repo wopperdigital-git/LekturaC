@@ -10,10 +10,9 @@ import {
   BlockDataContext,
   CardBoxContext,
   FIXED_ELEMENT_ATTR,
-  GROUND_ATTR,
-  ON_PHOTO_ATTR,
   blockStyleKey,
   canGrab,
+  ignoresPickedColour,
   inFlexColumn,
   measurableNode,
 } from './adjustContext'
@@ -105,8 +104,7 @@ export function Adjustable({
     node.style.flex = flexForHeight(geometry.height !== undefined, inFlexColumn(node))
 
     // Text on a photo and text on a deep ground ignore a picked colour (see the rules in index.css).
-    const colourIgnored =
-      node.closest(`[${ON_PHOTO_ATTR}]`) !== null || node.closest(`[${GROUND_ATTR}="deep"]`) !== null
+    const colourIgnored = ignoresPickedColour(node)
     applyTextStyle(node, style, theme, colourIgnored)
     // The move cursor over the whole element while it can be grabbed (see `index.css`).
     if (grabbable) node.setAttribute('data-element-grabbable', '')

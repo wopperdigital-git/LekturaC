@@ -304,3 +304,20 @@ export const ON_PHOTO_ATTR = 'data-on-photo'
  * checked against the plain ground.
  */
 export const GROUND_ATTR = 'data-ground'
+
+/** Stamped on the accent owner callout: its fill makes it an element whose text colour a pick must not touch. */
+export const CALLOUT_FILLED_ATTR = 'data-callout-filled'
+
+/**
+ * Whether a picked text colour must be ignored on the element `node` stands for: text on a photo, text on a deep
+ * ground (the node itself may carry the ground, as a code panel does), and the filled accent callout, whose ink is
+ * `accent-foreground` against its fill (a pick was only checked against the plain page, so it could vanish there).
+ * Takes the two DOM methods it needs, so it is testable without a DOM.
+ */
+export function ignoresPickedColour(node: Pick<Element, 'closest' | 'hasAttribute'>): boolean {
+  return (
+    node.closest(`[${ON_PHOTO_ATTR}]`) !== null ||
+    node.closest(`[${GROUND_ATTR}="deep"]`) !== null ||
+    node.hasAttribute(CALLOUT_FILLED_ATTR)
+  )
+}

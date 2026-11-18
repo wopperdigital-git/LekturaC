@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import { useMemo, type ComponentType } from 'react'
 import { accentOwner, groundOfLayout } from '@/engine/composition'
 import { resolveLayout, type LayoutContext } from '@/engine/layoutEngine'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
@@ -88,10 +88,13 @@ export function LayoutRenderer({ card, context }: { card: Card; context?: Layout
     to click. A floor of height keeps it slide-shaped on every surface that draws
     a card: the canvas, the presenter, the thumbnails and the dashboard cover.
   */
-  if (card.blocks.length === 0) return <div aria-hidden="true" className="my-auto min-h-64" />
-  const resolved = resolveLayout(card.layout, card.blocks, context)
-  // What the blocks drawn inside the frames need to know about their slide (see `slideFacts.ts`).
-  const facts = { accentOwner: accentOwner(card.blocks, resolved), ground: groundOfLayout(resolved) }
+  const resolved = card.blocks.length === 0 ? null : resolveLayout(card.layout, card.blocks, context)
+  // What the blocks drawn inside the frames need to know about their slide (see `slideFacts.ts`), held
+  // by value so the context's consumers do not re-render with every render of the parent.
+  const owner = resolved === null ? null : accentOwner(card.blocks, resolved)
+  const ground = resolved === null ? 'plain' : groundOfLayout(resolved)
+  const facts = useMemo(() => ({ accentOwner: owner, ground }), [owner, ground])
+  if (resolved === null) return <div aria-hidden="true" className="my-auto min-h-64" />
   if (rendersAsFlow(resolved)) {
     return (
       <SlideFactsContext.Provider value={facts}>

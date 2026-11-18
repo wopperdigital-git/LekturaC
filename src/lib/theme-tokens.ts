@@ -196,6 +196,19 @@ export function codeLightMuted(colors: Pick<ThemeTokens['colors'], 'deep' | 'dee
 }
 
 /**
+ * How much of the accent small accent-coloured text keeps (the rest is the foreground): the kicker and the
+ * label of a callout that is not the accent owner. Accent text at the eyebrow size is under 4.5:1 on the page
+ * or the tint in several themes (Sage worst, 3.35); at 70% every theme reaches 4.73 or better. The stylesheet
+ * writes the same mix with `color-mix` (`[data-kicker]`); `theme-tokens.test.ts` computes it for every theme.
+ */
+export const SMALL_ACCENT_WEIGHT = 0.7
+
+/** The colour small accent text is drawn in, for a theme's own page colours. */
+export function smallAccentInk(colors: Pick<ThemeTokens['colors'], 'accent' | 'foreground'>): string {
+  return mixHex(colors.accent, colors.foreground, SMALL_ACCENT_WEIGHT)
+}
+
+/**
  * Writes a ThemeTokens object onto `root` as --slide-* CSS custom properties,
  * scoped to that element (never document.documentElement) so it only affects
  * descendants — the slide content rendered inside a ThemeProvider wrapper.
