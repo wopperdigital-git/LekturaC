@@ -38,7 +38,7 @@ import { ImagePicker } from '@/components/images/ImagePicker'
 import type { Photo } from '@/images/types'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
-import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
+import { hasMarkThroughout, markValueAt, refusesMarks, textRef, type TextRange } from '@/engine/marks'
 import { elementLabel, firstEditableField, newBlock, type ContentType } from '@/engine/newContent'
 import { pointRun } from '@/engine/insertBlock'
 import { KICKER_PLACEHOLDER, canAddKicker, isBlankKicker } from '@/engine/kicker'
@@ -816,7 +816,11 @@ export function EditorPage() {
     return body instanceof HTMLElement ? body : null
   }, selectedBlockIndex)
   const level: 1 | 2 | 3 = activeTextRef ? 3 : selectedCard ? 2 : 1
-  const hasTextSelection = Boolean(textRange && textRange.end > textRange.start)
+  // Characters of a code run are not a scope: that field takes no marks, so the controls fall back to
+  // the element (where size applies and font and colour never reach the code).
+  const hasTextSelection = Boolean(
+    textRange && textRange.end > textRange.start && !(activeTextRef && refusesMarks(activeTextRef)),
+  )
   // The scope the text tools are writing to, in words — narrowest first, the same
   // order `typographyScope` and the character-range routing use.
   const selectedBlock = selectedBlockIndex !== null ? selectedCard?.blocks[selectedBlockIndex] : undefined

@@ -1,5 +1,5 @@
 import { useContext, useLayoutEffect, useRef, type CSSProperties } from 'react'
-import { textSegments, type FlagMarkType, type Mark, type TextSegment } from '@/engine/marks'
+import { refusesMarks, textSegments, type FlagMarkType, type Mark, type TextSegment } from '@/engine/marks'
 import { isPlaceholderText } from '@/engine/newContent'
 import { parseTextRef } from '@/engine/blockText'
 import { useTextEditing } from './textEditingContext'
@@ -46,7 +46,8 @@ export function EditableText({
     everywhere. It is the same `card.inline` either way, so nothing is lost
     mid-edit.
   */
-  const marks = data?.inline?.[textRef]?.marks
+  // A code run is plain text: whatever marks a stored card holds for it are never drawn (`refusesMarks`).
+  const marks = refusesMarks(textRef) ? undefined : data?.inline?.[textRef]?.marks
 
   /*
     Whether this run's element already has a selection box around it.

@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   applyTheme,
   BUILTIN_THEMES,
+  CODE_FONT,
+  CODE_LIGHT_MUTED_WEIGHT,
+  CODE_SIZE,
+  codeLightMuted,
   contrastRatio,
   darken,
   deepMuted,
@@ -405,5 +409,74 @@ describe('contrast and the stage colour', () => {
     const { element, props } = fakeElement()
     applyTheme(DEFAULT_THEME, element)
     expect(props.get('--slide-canvas-background')).toBe(stageColor(DEFAULT_THEME))
+  })
+})
+
+describe('callout and code panel colours', () => {
+  /*
+    The pairs the stylesheet draws, computed from the theme the way the CSS re-points them. A callout
+    is an accent fill with accent-foreground ink; on a deep slide the accent is the deep ink and the
+    accent-foreground the deep ground (`[data-ground='deep']`). A code panel is the local deep ground
+    (deep ground, deep ink, deep muted) on a plain or tint slide, and on a deep slide a light panel
+    (the deep ink as the fill, the deep ground as the ink) whose muted is the ground mixed toward it.
+  */
+  it('reads a callout at 4.5:1 or better on a plain, a tint and a deep slide, in every theme', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      expect(contrastRatio(colors.accentForeground, colors.accent), `${id} callout on plain or tint`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.deep, colors.deepForeground), `${id} callout on deep`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('reads the code panel on a plain or tint slide: ink and muted on the deep ground', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      expect(contrastRatio(colors.deepForeground, colors.deep), `${id} code ink`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(deepMuted(colors), colors.deep), `${id} code caption`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('reads the light code panel on a deep slide: dark ink and muted on the deep ink', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      expect(contrastRatio(colors.deep, colors.deepForeground), `${id} deep-slide code ink`).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(codeLightMuted(colors), colors.deepForeground), `${id} deep-slide code caption`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('keeps the light panel visibly apart from the deep slide it sits on', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      expect(contrastRatio(colors.deepForeground, colors.deep), id).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('mixes the light panel muted toward the panel, the way the stylesheet does', () => {
+    const colors = DEFAULT_THEME.colors
+    expect(codeLightMuted(colors)).toBe(mixHex(colors.deep, colors.deepForeground, CODE_LIGHT_MUTED_WEIGHT))
+  })
+
+  /*
+    The kicker is accent text at 0.65 of the body size, so it wants 4.5:1. Four themes are short of it
+    on the tint (Minimal, Editorial and Sage on the plain page too, since the accent is the same
+    colour): recorded here, not exempted silently, until their accents are reworked. Every theme is at
+    3:1 or better. Fixing one means removing its id.
+  */
+  const KICKER_SHORT_ON_TINT = ['minimal', 'editorial', 'sage', 'pop']
+
+  it('reads a kicker (accent text at the eyebrow size) on the tint at 4.5:1, bar the recorded themes, and at 3:1 everywhere', () => {
+    for (const { id, colors } of BUILTIN_THEMES) {
+      const ratio = contrastRatio(colors.accent, colors.tint)
+      expect(ratio, `${id} kicker on tint at 3:1`).toBeGreaterThanOrEqual(3)
+      if (!KICKER_SHORT_ON_TINT.includes(id)) expect(ratio, `${id} kicker on tint`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('keeps the kicker list honest: each id is still short of 4.5:1 on the tint', () => {
+    for (const id of KICKER_SHORT_ON_TINT) {
+      const colors = BUILTIN_THEMES.find((t) => t.id === id)!.colors
+      expect(contrastRatio(colors.accent, colors.tint), id).toBeLessThan(4.5)
+    }
+  })
+
+  it('names the code face with JetBrains Mono first and a size of 0.85 of the body', () => {
+    expect(CODE_FONT).toBe("'JetBrains Mono', 'JetBrains Mono Variable', ui-monospace, monospace")
+    expect(CODE_SIZE).toBe('calc(var(--slide-size-body) * 0.85)')
   })
 })

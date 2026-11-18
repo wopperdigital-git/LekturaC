@@ -54,6 +54,23 @@ describe('accentOwner', () => {
     expect(accentOwner([h, stat, stat], 'statGrid')).toBeNull()
     expect(accentOwner([h, list], 'iconGrid')).toBeNull()
   })
+
+  const callout: ContentBlock = { type: 'callout', text: 'Key idea' }
+  const code: ContentBlock = { type: 'code', code: 'int x;' }
+
+  it('gives the accent to the first callout in every layout, ahead of the stat and the featured group', () => {
+    expect(accentOwner([h, stat, callout], 'statHero')).toBe(2)
+    expect(accentOwner([h, group, callout, group], 'comparison')).toBe(2)
+    expect(accentOwner([h, callout, group, group], 'comparisonTable')).toBe(1)
+    for (const layout of ['standard', 'iconGrid', 'statGrid', 'section', 'statement', 'twoColumn', 'beforeAfter', 'hero'] as const) {
+      expect(accentOwner([h, p, callout, callout], layout), layout).toBe(2)
+    }
+  })
+
+  it('leaves a code block no accent: its panel is a ground, not a fill', () => {
+    expect(accentOwner([h, code], 'standard')).toBeNull()
+    expect(accentOwner([h, stat, code], 'statHero')).toBe(1)
+  })
 })
 
 describe('groundOf', () => {
@@ -176,6 +193,16 @@ describe('compositionOf', () => {
   it('splits two units under a 61-character claim', () => {
     const blocks = [heading(long(61)), para(), bullets, para()]
     expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('splitBody')
+  })
+
+  it('keeps a body holding a code block a stack: the panel needs the width', () => {
+    const code: ContentBlock = { type: 'code', code: 'for (;;) {}' }
+    const blocks = [heading('Loops'), para(), bullets, code]
+    expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('stack')
+    expect(compositionOf([heading(long(61)), para(), bullets, code], [[2], [3]], 'standard')).toBe('stack')
+    // A callout is one unit like any other, so it zones.
+    const callout: ContentBlock = { type: 'callout', text: 'Key idea' }
+    expect(compositionOf([heading('Loops'), para(), bullets, callout], [[2], [3]], 'standard')).toBe('sideHead')
   })
 
   it('stacks three units under a 61-character claim', () => {

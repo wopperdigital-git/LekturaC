@@ -100,6 +100,21 @@ describe('previewFont', () => {
     expect(result.cards[0].inline?.['1']?.style).toEqual({ fontFamily: FONT })
   })
 
+  it('writes no mark over the characters of a code run: the preview falls to the element', () => {
+    const result = previewFont(
+      [card('a', { blocks: [{ type: 'heading', text: 'Title' }, { type: 'code', code: 'int x = 1;' }] })],
+      {},
+      target({
+        scope: { kind: 'element', cardId: 'a', blockIndex: 1 },
+        typographyRef: '1',
+        run: { cardId: 'a', ref: '1:code', range: { start: 0, end: 3 } },
+      }),
+      FONT,
+    )
+    expect(result.cards[0].inline?.['1:code']).toBeUndefined()
+    expect(result.cards[0].inline?.['1']?.style).toEqual({ fontFamily: FONT })
+  })
+
   it('previews the theme font (null) by clearing the override', () => {
     const cards = [card('a', { textStyle: { fontFamily: FONT, bold: true } })]
     const result = previewFont(cards, {}, target({ scope: { kind: 'card', cardId: 'a' } }), null)

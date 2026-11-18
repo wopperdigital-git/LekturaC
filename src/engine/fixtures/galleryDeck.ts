@@ -416,6 +416,37 @@ const SPECS: Spec[] = [
       point('Body', 'The statements that repeat.'),
     ],
   ],
+  [
+    'g-callout',
+    'standard',
+    [
+      heading('When a loop ends'),
+      paragraph('The condition is checked before every pass.'),
+      { type: 'callout', label: 'Key idea', text: 'A loop stops the first time its condition is false.' },
+    ],
+  ],
+  [
+    'g-code',
+    'standard',
+    [
+      heading('A counting loop'),
+      paragraph('Read it one line at a time.'),
+      {
+        type: 'code',
+        label: 'main.cpp',
+        code: 'int total = 0;\nfor (int i = 1; i <= 10; i++) {\n    total += i;\n}\nstd::cout << "The sum of one to ten is " << total << " and the loop ran exactly ten times" << std::endl;',
+        caption: 'Prints 55.',
+      },
+    ],
+  ],
+  [
+    'g-code-deep',
+    'section',
+    [
+      heading('Part three: loops'),
+      { type: 'code', label: 'Preview', code: 'for (int i = 0; i < n; i++) {\n    body();\n}', caption: 'The shape of every loop.' },
+    ],
+  ],
 ]
 
 /**

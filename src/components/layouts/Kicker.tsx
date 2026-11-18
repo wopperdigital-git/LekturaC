@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { VisualStyle } from '@/engine/contentBlocks'
-import { SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 import { EditableText } from './EditableText'
+import { SMALL_CAPS_STYLE, smallCapsWeight } from './smallCaps'
 import { useTextEditing } from './textEditingContext'
 
 /**
@@ -24,14 +24,8 @@ export function Kicker({
   return (
     <p
       data-kicker=""
-      className={`${variant === 'expressive' ? 'font-bold' : 'font-semibold'} uppercase text-slide-accent`}
-      style={{
-        fontFamily: SLIDE_HEADING_FONT,
-        fontSize: SLIDE_SIZE.eyebrow,
-        letterSpacing: '0.12em',
-        lineHeight: 1.2,
-        marginBottom: SLIDE_GAP.tight,
-      }}
+      className={`${smallCapsWeight(variant)} uppercase text-slide-accent`}
+      style={SMALL_CAPS_STYLE}
     >
       <EditableText textRef={textRef} value={text} />
     </p>

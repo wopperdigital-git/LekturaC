@@ -1,5 +1,5 @@
 import type { Card } from './contentBlocks'
-import { applyValueMark, type TextRange } from './marks'
+import { applyValueMark, refusesMarks, type TextRange } from './marks'
 import type { TypographyScope } from './textScope'
 import { applyTextStylePatch, type TextStyle } from './textStyle'
 import { clearDeckOverrides, clearStyleOverrides, patchKeys } from './styleOverrides'
@@ -45,7 +45,8 @@ export function previewFont(
 ): PreviewedDeck {
   const patch = { fontFamily }
 
-  if (target.run && target.run.range.end > target.run.range.start) {
+  // A code run takes no marks (`refusesMarks`), so a font previewed over its characters lands where a click would: the element.
+  if (target.run && target.run.range.end > target.run.range.start && !refusesMarks(target.run.ref)) {
     const { cardId, ref, range } = target.run
     return {
       textStyle: deckTextStyle,

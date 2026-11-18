@@ -68,7 +68,7 @@ const KITCHEN_SINK: ContentBlock[] = [
   // size; every layout still has to draw each of them, once.
   { type: 'heading', text: 'MARKSIZEH1', size: 'h1' },
   { type: 'heading', text: 'MARKSIZEH3', size: 'h3' },
-  // The structured blocks (drawn by stand-ins for now; Task 5 replaces the drawings).
+  // The structured blocks.
   // A run of two points: the rows arrangement draws each once, and a layout that draws blocks one by one draws each as a row.
   { type: 'point', label: 'MARKPOINTLABA', text: 'MARKPOINTTEXTA' },
   { type: 'point', label: 'MARKPOINTLABB', text: 'MARKPOINTTEXTB' },
@@ -212,14 +212,14 @@ describe('every block on a card reaches the screen', () => {
 })
 
 /*
-  The same kitchen sink without its photos: a card holding photos is always a stack, so
-  this is the one that can resolve to a composed slide (side head or split body). Every block
-  is still drawn exactly once whichever composition the card lands in.
+  The same kitchen sink without its photos and its code block: a card holding photos or code is
+  always a stack, so this is the one that can resolve to a composed slide (side head or split
+  body). Every block is still drawn exactly once whichever composition the card lands in.
 */
 const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter(
   // A heading in the body keeps a slide a stack (the sized headings are drawn, in a stack, by
   // the kitchen sink above), so they are left out here to let the card be zoned.
-  (block) => block.type !== 'image' && !(block.type === 'heading' && block.size),
+  (block) => block.type !== 'image' && block.type !== 'code' && !(block.type === 'heading' && block.size),
 ).map((block) =>
   // Short enough for a side head, so the zoned path is really exercised.
   block.type === 'heading' && block.text === 'MARKHEADING' ? { ...block, text: 'MARKHEAD' } : block,

@@ -66,6 +66,42 @@ describe('accent is a budget: one filled panel per slide', () => {
     expect(owners(out)).toBe(1)
   })
 
+  it.each(['structured', 'expressive'] as const)(
+    'gives a callout the accent in every layout, still one owner (%s)',
+    (style) => {
+      const blocks = [
+        { type: 'heading', text: 'Mixed' },
+        { type: 'stat', value: '72%', label: 'of bugs' },
+        { type: 'comparisonGroup', heading: 'A', items: ['a1'] },
+        { type: 'comparisonGroup', heading: 'B', items: ['b1'] },
+        { type: 'callout', label: 'Key idea', text: 'Say it once.' },
+      ] as Card['blocks']
+      for (const layout of [
+        'auto',
+        'standard',
+        'statHero',
+        'statGrid',
+        'statList',
+        'comparison',
+        'comparisonTable',
+        'beforeAfter',
+        'iconGrid',
+        'textFocus',
+        'section',
+        'statement',
+        'hero',
+      ] as const) {
+        const out = renderToStaticMarkup(
+          <LayoutRenderer card={{ ...CPP_DECK[4], layout, visualStyle: style, blocks }} context={{ isFirstCard: false }} />,
+        )
+        expect(owners(out), layout).toBe(1)
+        expect(out.match(/<[a-z0-9]+[^>]*data-accent-owner[^>]*>/)?.[0], layout).toContain('data-callout')
+        // A callout takes the featured comparison panel's place too.
+        expect(out, layout).not.toContain('data-accent-panel')
+      }
+    },
+  )
+
   it('gives a stat row no accent fill in the expressive ledger', () => {
     const card = { ...withStyle(CPP_DECK, 'expressive')[2], layout: 'statList' as const }
     const out = renderToStaticMarkup(<LayoutRenderer card={card} />)

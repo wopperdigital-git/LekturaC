@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { Card } from './contentBlocks'
 
 /*
   Character-level formatting for one run of text.
@@ -296,4 +297,47 @@ export function textSegments(text: string, marks: Mark[] | undefined): TextSegme
 */
 export function textRef(blockIndex: number, field: string, itemIndex?: number): string {
   return itemIndex === undefined ? `${blockIndex}:${field}` : `${blockIndex}:${field}:${itemIndex}`
+}
+
+/*
+  The one field that takes no marks.
+
+  A code block's `code` is plain text (`white-space: pre`, always the monospace face, always the
+  panel's ink), so a bold, an italic, a colour, a font or a size mark on it would break what makes it
+  a code panel. The refusal is here, in the pure writers the store calls, so no caller (the toolbar,
+  ⌘B, a preview) has to remember it, and `EditableText` never draws a stored mark on it either.
+*/
+
+/** Whether the run at `ref` is plain text that takes no mark: a code block's `code` field. */
+export function refusesMarks(ref: string): boolean {
+  const parts = ref.split(':')
+  return parts.length === 2 && parts[1] === 'code' && Number.isInteger(Number(parts[0]))
+}
+
+type Inline = Card['inline']
+
+/**
+ * The card's `inline` record with `type` toggled across `range` of the run at `ref`, or `null` when
+ * nothing may be written: an empty range, or a run that refuses marks. A fully marked range clears;
+ * a partly marked one fills in (`hasMarkThroughout`).
+ */
+export function markedInline(inline: Inline, ref: string, range: TextRange, type: FlagMarkType): Inline | null {
+  if (isEmpty(range) || refusesMarks(ref)) return null
+  const entry = inline?.[ref] ?? {}
+  const marks: Mark[] = entry.marks ?? []
+  const on = !hasMarkThroughout(marks, range, type)
+  return { ...inline, [ref]: { ...entry, marks: applyMark(marks, range, type, on) } }
+}
+
+/** The card's `inline` record with a value mark set (or cleared with `null`) over `range`; `null` when refused. */
+export function valueMarkedInline(
+  inline: Inline,
+  ref: string,
+  range: TextRange,
+  type: ValueMarkType,
+  value: MarkValue | null,
+): Inline | null {
+  if (isEmpty(range) || refusesMarks(ref)) return null
+  const entry = inline?.[ref] ?? {}
+  return { ...inline, [ref]: { ...entry, marks: applyValueMark(entry.marks ?? [], range, type, value) } }
 }

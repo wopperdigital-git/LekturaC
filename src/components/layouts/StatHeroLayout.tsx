@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { singlePhoto } from '@/engine/blockPartition'
+import { accentOwner } from '@/engine/composition'
 import { BlockRenderer, Heading, Leftovers, StatBlockView } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
@@ -24,6 +25,9 @@ const STAT_PANEL_BESIDE_PHOTO =
   'min-w-0 max-w-full shrink-0 rounded-slide-sm bg-slide-accent text-center text-slide-accent-foreground'
 const PANEL_PADDING = { paddingInline: SLIDE_GAP.section, paddingBlock: SLIDE_GAP.group }
 const PANEL_PADDING_BESIDE_PHOTO = { padding: SLIDE_GAP.group }
+// The figure's box without its panel (a callout took the slide's accent): same size and alignment, no fill.
+const STAT_BOX = 'min-w-0 max-w-full shrink-0 text-center @min-[640px]:max-w-[55%]'
+const STAT_BOX_BESIDE_PHOTO = 'min-w-0 max-w-full shrink-0 text-center'
 
 /**
  * The figure and its words on one side, one photo on the other (the side alternates
@@ -42,6 +46,8 @@ export function StatHeroLayout({
   const stat = blocksOfTypeIndexed(blocks, 'stat')[0]
   const paragraphs = blocksOfTypeIndexed(blocks, 'paragraph')
   const photo = singlePhoto(blocks)
+  // The figure is the slide's accent panel unless a callout owns the accent (`accentOwner`); then it is accent text.
+  const panelled = stat !== undefined && accentOwner(blocks, 'statHero') === stat.index
   // Only the FIRST stat is drawn here, so a second one is a leftover rather
   // than content that vanishes.
   const consumed = [...headings, ...paragraphs, ...(stat ? [stat] : []), ...(photo ? [photo] : [])].map(
@@ -78,7 +84,8 @@ export function StatHeroLayout({
             labelSize={SLIDE_SIZE.lead}
             lineHeight={FIGURE_LINE_HEIGHT}
             gap={SLIDE_GAP.tight}
-            panel={photo ? STAT_PANEL_BESIDE_PHOTO : STAT_PANEL}
+            panel={panelled ? (photo ? STAT_PANEL_BESIDE_PHOTO : STAT_PANEL) : undefined}
+            boxClass={photo ? STAT_BOX_BESIDE_PHOTO : STAT_BOX}
             panelStyle={photo ? PANEL_PADDING_BESIDE_PHOTO : PANEL_PADDING}
             accentOwner
           />

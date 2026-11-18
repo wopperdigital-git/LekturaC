@@ -5,12 +5,10 @@ import { EMPTY_TEXT_STYLE, applyTextStylePatch, parseTextStyle, type TextStyle }
 import { clearDeckOverrides, clearStyleOverrides, patchKeys } from '@/engine/styleOverrides'
 import { dropUnreadableColors } from '@/engine/readableColor'
 import {
-  applyMark,
-  applyValueMark,
-  hasMarkThroughout,
+  markedInline,
   shiftMarks,
+  valueMarkedInline,
   type FlagMarkType,
-  type Mark,
   type MarkValue,
   type TextRange,
   type ValueMarkType,
@@ -1374,15 +1372,14 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
   toggleTextMark(cardId, ref, range, type) {
     const card = get().cards.find((c) => c.id === cardId)
-    if (!card || range.end <= range.start) return
+    if (!card) return
+    // Fully-marked selections clear; partially-marked ones fill in, which is
+    // what every editor does and avoids inverting run by run. Nothing is written
+    // (and no undo step made) for an empty range or a run that refuses marks.
+    const inline = markedInline(card.inline, ref, range, type)
+    if (!inline) return
 
     pushHistory(set, get)
-    const entry = card.inline?.[ref] ?? {}
-    const marks: Mark[] = entry.marks ?? []
-    // Fully-marked selections clear; partially-marked ones fill in, which is
-    // what every editor does and avoids inverting run by run.
-    const on = !hasMarkThroughout(marks, range, type)
-    const inline = { ...card.inline, [ref]: { ...entry, marks: applyMark(marks, range, type, on) } }
 
     set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, inline } : c)) })
 
@@ -1407,13 +1404,13 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
   setTextMarkValue(cardId, ref, range, type, value) {
     const card = get().cards.find((c) => c.id === cardId)
-    if (!card || range.end <= range.start) return
+    if (!card) return
+    const inline = valueMarkedInline(card.inline, ref, range, type, value)
+    if (!inline) return
 
     // Coalesced: the colour input reports on every drag of its picker, and that
     // is one intent, so it undoes as one step.
     pushHistory(set, get, `markValue:${cardId}:${ref}:${type}`)
-    const entry = card.inline?.[ref] ?? {}
-    const inline = { ...card.inline, [ref]: { ...entry, marks: applyValueMark(entry.marks ?? [], range, type, value) } }
 
     set({ cards: get().cards.map((c) => (c.id === cardId ? { ...c, inline } : c)) })
 

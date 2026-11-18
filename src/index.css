@@ -519,6 +519,22 @@ body {
 }
 
 /*
+  A code panel (`data-code`) is its own deep ground on a plain or tint slide (it carries `data-ground='deep'`
+  itself, so the rules above re-point its colours and it needs nothing here). On a deep slide it carries none and
+  would vanish into the slide, so it is drawn as a light panel with dark ink: the deep ground's own two colours
+  swapped, which are raw theme colours the deep re-pointing above never touches. The text inside reads
+  `--slide-foreground` and `--slide-muted`, so they are re-pointed here to the dark ink and to the ground
+  pulled toward the panel (`codeLightMuted` in `lib/theme-tokens.ts` is the same mix; both are pinned at 4.5:1
+  in every theme). Unlayered, like the rules above, so it beats the panel's own `bg-slide-background`.
+*/
+[data-ground='deep'] [data-code] {
+  background: var(--slide-ground-deep-foreground);
+  color: var(--slide-ground-deep);
+  --slide-foreground: var(--slide-ground-deep);
+  --slide-muted: color-mix(in srgb, var(--slide-ground-deep) 80%, var(--slide-ground-deep-foreground));
+}
+
+/*
   The accent owner's panel (a comparison's featured column) is drawn on the tint, which is
   the slide's own colour on a tinted slide and has no relation to the deep ground's colours, so
   inside either ground it would not read as a panel. There it takes the surface instead: the

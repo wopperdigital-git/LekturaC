@@ -5,6 +5,9 @@ import {
   applyMark,
   applyValueMark,
   clampRunScale,
+  markedInline,
+  refusesMarks,
+  valueMarkedInline,
   markSchema,
   markValueAt,
   hasMarkThroughout,
@@ -268,5 +271,44 @@ describe('value marks', () => {
     expect(clampRunScale(9)).toBe(MAX_RUN_SCALE)
     expect(clampRunScale(0)).toBe(MIN_RUN_SCALE)
     expect(clampRunScale(1.2 + 0.1)).toBe(1.3)
+  })
+})
+
+describe('the code field takes no marks', () => {
+  it('names the code field of a block, and no other, as plain text', () => {
+    expect(refusesMarks('2:code')).toBe(true)
+    for (const ref of ['2:text', '2:label', '2:caption', '2:items:1', '0:kicker', 'junk']) {
+      expect(refusesMarks(ref), ref).toBe(false)
+    }
+  })
+
+  it('refuses bold on a code ref and writes it on a text ref', () => {
+    expect(markedInline({}, '1:code', { start: 0, end: 3 }, 'bold')).toBeNull()
+    const written = markedInline({}, '1:text', { start: 0, end: 3 }, 'bold')
+    expect(written?.['1:text']?.marks).toEqual([bold(0, 3)])
+  })
+
+  it('refuses every value mark on a code ref', () => {
+    for (const [type, value] of [
+      ['color', '#ef4444'],
+      ['fontFamily', 'Georgia'],
+      ['fontScale', 1.4],
+    ] as const) {
+      expect(valueMarkedInline({}, '1:code', { start: 0, end: 3 }, type, value), type).toBeNull()
+    }
+    const written = valueMarkedInline({}, '1:label', { start: 0, end: 3 }, 'color', '#ef4444')
+    expect(written?.['1:label']?.marks).toEqual([{ type: 'color', start: 0, end: 3, value: '#ef4444' }])
+  })
+
+  it('refuses a mark over an empty range, like the store did before', () => {
+    expect(markedInline({}, '1:text', { start: 2, end: 2 }, 'bold')).toBeNull()
+    expect(valueMarkedInline({}, '1:text', { start: 2, end: 2 }, 'color', '#ef4444')).toBeNull()
+  })
+
+  it('keeps the other entries of the record and toggles a fully marked range off', () => {
+    const inline = { '0:text': { marks: [bold(0, 5)] }, '1:text': { marks: [bold(0, 3)] } }
+    const next = markedInline(inline, '1:text', { start: 0, end: 3 }, 'bold')
+    expect(next?.['0:text']).toBe(inline['0:text'])
+    expect(next?.['1:text']?.marks).toEqual([])
   })
 })

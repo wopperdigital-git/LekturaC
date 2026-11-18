@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { accentOwner, groundOfLayout } from '@/engine/composition'
 import { resolveLayout, type LayoutContext } from '@/engine/layoutEngine'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { FlowLayout } from './FlowLayout'
@@ -14,6 +15,7 @@ import { StatementLayout } from './StatementLayout'
 import { TwoColumnLayout } from './TwoColumnLayout'
 import { StatSplitLayout } from './StatSplitLayout'
 import { PhotoListLayout } from './PhotoListLayout'
+import { SlideFactsContext } from './slideFacts'
 
 /*
   The layouts now drawn by `FlowLayout` rather than a component of their own.
@@ -88,10 +90,20 @@ export function LayoutRenderer({ card, context }: { card: Card; context?: Layout
   */
   if (card.blocks.length === 0) return <div aria-hidden="true" className="my-auto min-h-64" />
   const resolved = resolveLayout(card.layout, card.blocks, context)
+  // What the blocks drawn inside the frames need to know about their slide (see `slideFacts.ts`).
+  const facts = { accentOwner: accentOwner(card.blocks, resolved), ground: groundOfLayout(resolved) }
   if (rendersAsFlow(resolved)) {
-    return <FlowLayout blocks={card.blocks} variant={card.visualStyle} hint={card.layout} layout={resolved} />
+    return (
+      <SlideFactsContext.Provider value={facts}>
+        <FlowLayout blocks={card.blocks} variant={card.visualStyle} hint={card.layout} layout={resolved} />
+      </SlideFactsContext.Provider>
+    )
   }
   const Component = LAYOUT_COMPONENTS[resolved]
   // `position` is where the card sits in the deck: a split alternates its photo's side by it.
-  return <Component blocks={card.blocks} variant={card.visualStyle} position={card.orderIndex} />
+  return (
+    <SlideFactsContext.Provider value={facts}>
+      <Component blocks={card.blocks} variant={card.visualStyle} position={card.orderIndex} />
+    </SlideFactsContext.Provider>
+  )
 }

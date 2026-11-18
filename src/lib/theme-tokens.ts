@@ -176,6 +176,26 @@ export function deepMuted(colors: Pick<ThemeTokens['colors'], 'deep' | 'deepFore
 }
 
 /**
+ * The code panel's face: JetBrains Mono (Blueprint's face, already imported by `main.tsx`), then its
+ * Fontsource alias, then the system's. The PPTX export and the video's font probe name the first family.
+ * Set on the `pre` itself, never through `--slide-font-*`, so no font pick reaches code.
+ */
+export const CODE_FONT = "'JetBrains Mono', 'JetBrains Mono Variable', ui-monospace, monospace"
+/** The code text's size: a step below the body, resolved where it is used so an element's own size pick carries. */
+export const CODE_SIZE = 'calc(var(--slide-size-body) * 0.85)'
+
+/** How much of the deep ground survives in muted text on the light code panel a deep slide draws. */
+export const CODE_LIGHT_MUTED_WEIGHT = 0.8
+
+/**
+ * Muted text on the light code panel of a deep slide: the deep ground pulled toward the panel (the deep
+ * ink). The stylesheet writes the same mix with `color-mix`; `theme-tokens.test.ts` pins both to 4.5:1.
+ */
+export function codeLightMuted(colors: Pick<ThemeTokens['colors'], 'deep' | 'deepForeground'>): string {
+  return mixHex(colors.deep, colors.deepForeground, CODE_LIGHT_MUTED_WEIGHT)
+}
+
+/**
  * Writes a ThemeTokens object onto `root` as --slide-* CSS custom properties,
  * scoped to that element (never document.documentElement) so it only affects
  * descendants — the slide content rendered inside a ThemeProvider wrapper.

@@ -7,7 +7,10 @@ import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
 import { WithKicker } from './Kicker'
+import { CalloutBlock } from './CalloutBlock'
+import { CodeBlock } from './CodeBlock'
 import { TermRow, TermRows } from './TermRow'
+import { useSlideFacts } from './slideFacts'
 import { termTextSize } from './termRowSize'
 import { blockIndexOf, useItemProps } from './adjustContext'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
@@ -148,6 +151,7 @@ function BlockBody({
   lead?: boolean
 }) {
   const itemProps = useItemProps()
+  const facts = useSlideFacts()
   switch (block.type) {
     case 'heading':
       return (
@@ -253,46 +257,18 @@ function BlockBody({
           last
         />
       )
-    /*
-      Stand-ins until the accent callout and the code panel are drawn: every field
-      is drawn once under its own address, so nothing on the card is hidden and
-      every nudge, mark and selection already works on it.
-    */
     case 'callout':
       return (
-        <p
-          className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"
-          style={{ fontFamily: SLIDE_BODY_FONT }}
-        >
-          {block.label && (
-            <>
-              <span className="font-semibold">
-                <EditableText textRef={textRef(index, 'label')} value={block.label} />
-              </span>
-              {' — '}
-            </>
-          )}
-          <EditableText textRef={textRef(index, 'text')} value={block.text} />
-        </p>
+        <CalloutBlock
+          index={index}
+          label={block.label}
+          text={block.text}
+          owner={facts.accentOwner === index}
+          variant={variant}
+        />
       )
     case 'code':
-      return (
-        <div style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}>
-          {block.label && (
-            <p className="text-slide-muted">
-              <EditableText textRef={textRef(index, 'label')} value={block.label} />
-            </p>
-          )}
-          <pre className="whitespace-pre text-slide-foreground" style={{ fontFamily: 'ui-monospace, monospace' }}>
-            <EditableText textRef={textRef(index, 'code')} value={block.code} />
-          </pre>
-          {block.caption && (
-            <p className="text-slide-muted">
-              <EditableText textRef={textRef(index, 'caption')} value={block.caption} />
-            </p>
-          )}
-        </div>
-      )
+      return <CodeBlock index={index} label={block.label} code={block.code} caption={block.caption} />
   }
 }
 
@@ -408,6 +384,7 @@ export function StatBlockView({
   lineHeight = 1,
   gap,
   panel,
+  boxClass,
   panelStyle,
   accentOwner = false,
 }: {
@@ -430,6 +407,8 @@ export function StatBlockView({
    * accent-foreground. The panel being the adjusted node, a nudge moves both.
    */
   panel?: string
+  /** Classes for the figure's box when there is no `panel` (a callout owns the accent): sizing and alignment, no fill. */
+  boxClass?: string
   /** Inline style for the panel's own box (its padding), merged over the font settings. */
   panelStyle?: CSSProperties
   /**
@@ -444,7 +423,7 @@ export function StatBlockView({
       {/* The label inherits this; the value below overrides it with the heading
           font, the way the two read on screen. */}
       <div
-        className={panel}
+        className={panel ?? boxClass}
         data-accent-owner={panel && accentOwner ? '' : undefined}
         style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)', ...panelStyle }}
       >

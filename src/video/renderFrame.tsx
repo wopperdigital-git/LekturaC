@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import type { Card } from '@/engine/contentBlocks'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { groundOf } from '@/engine/composition'
-import type { ThemeTokens } from '@/lib/theme-tokens'
+import { CODE_FONT, type ThemeTokens } from '@/lib/theme-tokens'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { SlideStage } from '@/components/theme/SlideStage'
 import { SlideSurface } from '@/components/theme/SlideSurface'
@@ -41,7 +41,8 @@ import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
     theme's two fonts rather than from the first slide, because the library keeps only the families
     the node uses and a title slide with no body text would drop the body font for the whole video.
     The toolbar's own fonts are system fonts, which need no embedding; a web font added there must
-    join the probe.
+    join the probe. The code panel's face (`CODE_FONT`, JetBrains Mono) is one: it joins the probe when a
+    slide holds a code block.
 */
 
 /** Lets layout settle after the synchronous render, and any late resize callback run, before the capture. */
@@ -155,7 +156,14 @@ export async function createSlideRenderer(o: {
   document.body.appendChild(host)
   const root = createRoot(host)
 
-  const themeFonts = [o.theme.typography.headingFont, o.theme.typography.bodyFont]
+  // A code panel always draws in the code face, whatever the theme's fonts are, so the probe holds it too
+  // (only when a slide has one: it is one more font to fetch and embed).
+  const hasCode = o.cards.some((card) => card.blocks.some((block) => block.type === 'code'))
+  const themeFonts = [
+    o.theme.typography.headingFont,
+    o.theme.typography.bodyFont,
+    ...(hasCode ? [CODE_FONT] : []),
+  ]
 
   // Once per video: scanning every stylesheet and fetching every font file is the slow part. A
   // failure costs fidelity (fallback fonts), never the video, so it settles to no extra CSS.

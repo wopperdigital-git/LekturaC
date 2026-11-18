@@ -40,14 +40,18 @@ export function slotsOf(blocks: ContentBlock[]): Slots {
 
 /**
  * The one block that carries the slide's accent colour, or null when the layout
- * gives it to no single block: a lone stat on a stat hero, the first group of a
- * comparison. Every other arrangement stays neutral.
+ * gives it to no single block: the first callout in any layout (ahead of everything
+ * below), else a lone stat on a stat hero, else the first group of a comparison. Every
+ * other arrangement stays neutral. The code panel is a ground, not an accent fill, so
+ * it never owns it.
  */
 export function accentOwner(blocks: ContentBlock[], layout: Exclude<LayoutType, 'auto'>): number | null {
   const firstOf = (type: ContentBlock['type']): number | null => {
     const index = blocks.findIndex((block) => block.type === type)
     return index === -1 ? null : index
   }
+  const callout = firstOf('callout')
+  if (callout !== null) return callout
   switch (layout) {
     case 'statHero':
       return firstOf('stat')
@@ -151,7 +155,7 @@ const SELF_ARRANGED: ReadonlySet<LayoutType> = new Set([
  * body's drawn units in order, each the block indices it holds (a leaf is `[i]`, a group
  * its items' indices); it only decides, it never moves or renumbers a block. First match:
  * 1. `stack` for a gallery or a timeline row (a horizontal row needs the full width), any
- *    card holding a photo, a card with no claim, fewer than two units, a body of only
+ *    card holding a photo or a code block, a card with no claim, fewer than two units, a body of only
  *    single paragraphs (prose gains nothing from zones), or a body holding a heading (a
  *    subheading labels what follows it, zoning would split the two, and Insert -> Heading
  *    would flip the slide);
@@ -170,6 +174,8 @@ export function compositionOf(
   // The seven newer frames arrange their own width, so none takes a zone composition.
   if (SELF_ARRANGED.has(layout)) return 'stack'
   if (blocks.some((block) => block.type === 'image')) return 'stack'
+  // A code panel needs the slide's width (its lines are long and never wrap), so a card holding one is a stack.
+  if (blocks.some((block) => block.type === 'code')) return 'stack'
   if (claim === null || units.length < 2) return 'stack'
   if (units.every((unit) => unit.length === 1 && blocks[unit[0]]?.type === 'paragraph')) return 'stack'
   if (units.some((unit) => unit.some((index) => blocks[index]?.type === 'heading'))) return 'stack'
