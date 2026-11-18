@@ -10,8 +10,7 @@ import { PhotoCredit } from './PhotoCredit'
 import { EditableText } from './EditableText'
 import { GROUND_ATTR, useItemProps } from './adjustContext'
 import { figureSize } from './figureSize'
-import { TermRow } from './TermRow'
-import { termTextSize } from './termRowSize'
+import { TermRows } from './TermRow'
 
 const BODY_SIZE = 'var(--slide-size-body)'
 
@@ -192,37 +191,6 @@ export function GroupRenderer({
       return unreachable
     }
   }
-}
-
-/** The point blocks of a `rows` group, each with its own block index. */
-type PointItems = Extract<GroupNode, { arrangement: 'rows' }>['items']
-
-/**
- * A run of points as a table of ruled rows (`TermRow`): each point is its own element under its own
- * index, a hairline above every row and one below the last, never a box or a fill. The meanings are
- * at one size for the whole run (the lead size for a few short ones, else the body size). No row is
- * the slide's accent owner: the term is accent text, which is free. When it fills the body the rows
- * share the height, their words centred in them.
- */
-function TermRows({ items, expressive, fill }: { items: PointItems; expressive: boolean; fill: boolean }) {
-  const textSize = termTextSize(items.map(({ block }) => block.text))
-  return (
-    <div data-term-rows="" {...(fill ? { 'data-fill': '' } : {})} className={`flex flex-col${fill ? ' flex-1' : ''}`}>
-      {items.map(({ block, index }, i) => (
-        <Adjustable key={index} index={index}>
-          <TermRow
-            index={index}
-            label={block.label}
-            text={block.text}
-            textSize={textSize}
-            expressive={expressive}
-            last={i === items.length - 1}
-            fill={fill}
-          />
-        </Adjustable>
-      ))}
-    </div>
-  )
 }
 
 /** The item props a layout spreads per item: `useItemProps()`'s return value. */

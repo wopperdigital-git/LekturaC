@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BulletListBlock, ContentBlock, LayoutType } from './contentBlocks'
 import { chooseLayout, MAX_CHIP_ITEMS, SHORT_ITEM_MAX_CHARS } from './layoutEngine'
-import { flattenNodes, inferGroups, listArrangement, MIN_RUN, nodeKey, type RenderNode } from './groups'
+import { flattenNodes, inferGroups, listArrangement, MIN_RUN, nodeKey, pointRuns, type RenderNode } from './groups'
 
 const heading: ContentBlock = { type: 'heading', text: 'h' }
 const para: ContentBlock = { type: 'paragraph', text: 'p' }
@@ -74,6 +74,48 @@ describe('the invariant', () => {
       const keys = inferGroups(blocks).map(nodeKey)
       expect(new Set(keys).size).toBe(keys.length)
     }
+  })
+})
+
+describe('pointRuns', () => {
+  /** Every subset of the indices 0..n-1, ascending: a frame's body is the card's indices minus its head and aside. */
+  function subsets(n: number): number[][] {
+    return Array.from({ length: 2 ** n }, (_, mask) => Array.from({ length: n }, (_, i) => i).filter((i) => mask & (1 << i)))
+  }
+  const sequences = allSequences([heading, para, stat, point], 4)
+
+  it('never reorders, drops or duplicates an index, and only ever joins consecutive points', () => {
+    for (const blocks of sequences) {
+      for (const indices of subsets(blocks.length)) {
+        const units = pointRuns(blocks, indices)
+        expect(units.flat()).toEqual(indices)
+        for (const unit of units) {
+          if (unit.length === 1) continue
+          // A multi-index unit is points only, each the next index of the card.
+          unit.forEach((index, k) => {
+            expect(blocks[index].type).toBe('point')
+            if (k > 0) expect(index).toBe(unit[k - 1] + 1)
+          })
+        }
+        // Maximal: two adjacent units are never both a point unit that touches the other.
+        units.slice(1).forEach((unit, k) => {
+          const prev = units[k]
+          const touching = prev[prev.length - 1] + 1 === unit[0]
+          const bothPoints = blocks[prev[prev.length - 1]].type === 'point' && blocks[unit[0]].type === 'point'
+          expect(touching && bothPoints).toBe(false)
+        })
+      }
+    }
+  })
+
+  it('folds a run of points into one unit and keeps every other index as its own', () => {
+    expect(pointRuns([heading, point, point, point, para], [1, 2, 3, 4])).toEqual([[1, 2, 3], [4]])
+    expect(pointRuns([heading, point, para, point, point], [1, 2, 3, 4])).toEqual([[1], [2], [3, 4]])
+    expect(pointRuns([heading, point], [1])).toEqual([[1]])
+  })
+
+  it('does not join points the head sits between, since their indices are not consecutive', () => {
+    expect(pointRuns([point, heading, point], [0, 2])).toEqual([[0], [2]])
   })
 })
 

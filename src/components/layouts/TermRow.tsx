@@ -1,9 +1,19 @@
+import type { Indexed } from '@/engine/groups'
+import type { PointBlock } from '@/engine/contentBlocks'
 import { textRef } from '@/engine/marks'
 import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT } from '@/lib/theme-tokens'
+import { Adjustable } from './Adjustable'
 import { EditableText } from './EditableText'
+import { termTextSize } from './termRowSize'
 
 /** A row's fixed classes: the grid (one column, two from 640px of slide width), its hairline above and nothing else. */
 const ROW_CLASS = 'grid min-w-0 grid-cols-1 border-t border-slide-border @min-[640px]:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]'
+
+/**
+ * A row's classes when it shares a run's height (`fill`): stacked below 640px the pair stays together
+ * at the top of the row, from 640px up the single row is stretched and the words centred in it.
+ */
+const FILL_CLASS = 'flex-1 content-start items-start @min-[640px]:content-normal @min-[640px]:items-center'
 
 /**
  * One term and its meaning as a row of a two-column grid: the term (the heading font, accent
@@ -39,7 +49,7 @@ export function TermRow({
   return (
     <div
       data-term-row=""
-      className={`${ROW_CLASS}${last ? ' border-b' : ''}${fill ? ' flex-1 items-center' : ' items-baseline'}`}
+      className={`${ROW_CLASS}${last ? ' border-b' : ''}${fill ? ` ${FILL_CLASS}` : ' items-baseline'}`}
       style={{
         columnGap: SLIDE_GAP.group,
         rowGap: SLIDE_GAP.tight,
@@ -63,6 +73,43 @@ export function TermRow({
       <div data-term-text="" className="min-w-0 text-slide-foreground/90" style={{ fontSize: textSize }}>
         <EditableText textRef={textRef(index, 'text')} value={text} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * A run of points as a table of ruled rows: each point is its own element under its own
+ * index (one `Adjustable` per row), a hairline above every row and one below the last, never a box
+ * or a fill. The meanings are at one size for the whole run (the lead size for a few short ones,
+ * else the body size). No row is the slide's accent owner: the term is accent text, which is
+ * free. When it fills the body the rows share the height, their words centred in them. Drawn by
+ * `GroupRenderer` for a `rows` group and by the block-by-block frames for a folded point unit.
+ */
+export function TermRows({
+  items,
+  expressive,
+  fill = false,
+}: {
+  items: Indexed<PointBlock>[]
+  expressive: boolean
+  fill?: boolean
+}) {
+  const textSize = termTextSize(items.map(({ block }) => block.text))
+  return (
+    <div data-term-rows="" {...(fill ? { 'data-fill': '' } : {})} className={`flex flex-col${fill ? ' flex-1' : ''}`}>
+      {items.map(({ block, index }, i) => (
+        <Adjustable key={index} index={index}>
+          <TermRow
+            index={index}
+            label={block.label}
+            text={block.text}
+            textSize={textSize}
+            expressive={expressive}
+            last={i === items.length - 1}
+            fill={fill}
+          />
+        </Adjustable>
+      ))}
     </div>
   )
 }

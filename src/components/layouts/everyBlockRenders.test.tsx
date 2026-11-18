@@ -226,26 +226,21 @@ const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter(
 )
 
 describe('an image-free card draws every block once, composed or not', () => {
-  for (const layout of LAYOUTS) {
-    for (const variant of VARIANTS) {
-      it(`${layout} (${variant}) draws every block of an image-free kitchen-sink card`, () => {
-        const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
-        expectEveryBlockDrawn(html, IMAGE_FREE_SINK)
-      })
-    }
-  }
+  const composedAs = new Set<string>()
 
+  describe.each(LAYOUTS)('%s', (layout) => {
+    it.each(VARIANTS)('(%s) draws every block of an image-free kitchen-sink card', (variant) => {
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
+      expectEveryBlockDrawn(html, IMAGE_FREE_SINK)
+      const kind = html.match(/data-composition="(\w+)"/)?.[1]
+      if (kind) composedAs.add(kind)
+    })
+  })
+
+  // Runs after the renders above (tests in a file run in order), so the zoned path is known to be exercised.
   it('at least one of those runs is a side head, so the zoned path is exercised', () => {
-    const drawnAs = new Set<string>()
-    for (const layout of LAYOUTS) {
-      for (const variant of VARIANTS) {
-        const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
-        const kind = html.match(/data-composition="(\w+)"/)?.[1]
-        if (kind) drawnAs.add(kind)
-      }
-    }
-    expect(drawnAs.has('sideHead')).toBe(true)
-}, 30_000)
+    expect(composedAs.has('sideHead')).toBe(true)
+  })
 })
 
 /*

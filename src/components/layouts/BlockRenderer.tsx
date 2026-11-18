@@ -1,12 +1,13 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { leftoverBlocks } from '@/engine/blockPartition'
+import { pointRuns } from '@/engine/groups'
 import { textRef } from '@/engine/marks'
 import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
 import { WithKicker } from './Kicker'
-import { TermRow } from './TermRow'
+import { TermRow, TermRows } from './TermRow'
 import { termTextSize } from './termRowSize'
 import { blockIndexOf, useItemProps } from './adjustContext'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
@@ -61,6 +62,30 @@ export function BlockRenderer({
 }
 
 /**
+ * One unit of a frame's body (`pointRuns`): a run of two or more points is one `TermRows` table
+ * (one table, one closing rule, each row its own element), anything else is the block drawn by
+ * `BlockRenderer` under its own index. Every index of the unit is drawn once.
+ */
+export function BlockUnit({
+  blocks,
+  unit,
+  variant,
+}: {
+  blocks: ContentBlock[]
+  unit: number[]
+  variant?: VisualStyle
+}) {
+  const points = unit.flatMap((index) => {
+    const block = blocks[index]
+    return block?.type === 'point' ? [{ block, index }] : []
+  })
+  if (unit.length > 1 && points.length === unit.length) {
+    return <TermRows items={points} expressive={variant === 'expressive'} />
+  }
+  return unit.map((index) => <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />)
+}
+
+/**
  * Whatever a layout did not draw itself, stacked below what it did.
  *
  * Three frame layouts (`HeroLayout`, `StatHeroLayout`, `QuoteLayout`) pick out the
@@ -89,8 +114,11 @@ export function Leftovers({
   if (rest.length === 0) return null
   return (
     <div className="flex flex-col gap-4">
-      {rest.map(({ block, index }) => (
-        <BlockRenderer key={index} block={block} index={index} />
+      {pointRuns(
+        blocks,
+        rest.map(({ index }) => index),
+      ).map((unit) => (
+        <BlockUnit key={unit[0]} blocks={blocks} unit={unit} />
       ))}
     </div>
   )

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
 import { GALLERY_DECK, FIXTURE_PHOTO } from '@/engine/fixtures/galleryDeck'
+import { componentsForKind } from '@/engine/layoutEngine'
 import { LayoutRenderer } from './LayoutRenderer'
 
 /**
@@ -106,12 +107,12 @@ describe.each(['structured', 'expressive'] as const)('term rows (%s)', (style) =
   })
 
   it('draws a lone point as one row of the same table, closed by a hairline below', () => {
-    const lone = html(card([heading, point('MARKSOLO', 'MARKSOLOTEXT')], style))
+    const lone = html(card([heading, point('MARKSOLOTERM', 'MARKSOLOMEANING')], style))
     const rows = tagsWith(lone, 'data-term-row=""')
     expect(rows).toHaveLength(1)
     expect(classesOf(rows[0]!)).toEqual(expect.arrayContaining(['border-t', 'border-b', 'border-slide-border']))
-    expect(count(lone, 'MARKSOLO')).toBe(2) // the term, and the first letters of the meaning
-    expect(count(lone, 'MARKSOLOTEXT')).toBe(1)
+    expect(count(lone, 'MARKSOLOTERM')).toBe(1)
+    expect(count(lone, 'MARKSOLOMEANING')).toBe(1)
     expect(lone).not.toContain('data-term-rows')
     expect(lone).not.toContain('data-accent-owner')
   })
@@ -157,5 +158,92 @@ describe('a run of points beside other body units', () => {
     expect(markup).toContain('data-composition="sideHead"')
     expect(count(markup, 'MARKTERMA')).toBe(1)
     expect(tagsWith(markup, 'data-term-row=""')).toHaveLength(3)
+  })
+})
+
+/*
+  A run of points is one table wherever it is drawn. The frames that draw their body block by
+  block (standard, text focus, the two photo frames) and the leftovers of the self-composing
+  frames fold a run into one `TermRows` (one `data-term-rows`, one closing rule), instead of one
+  closed one-row table per point with the group gap between them.
+*/
+describe.each(['structured', 'expressive'] as const)('a run of points in the block-by-block frames (%s)', (style) => {
+  const photo: ContentBlock = { type: 'image', url: FIXTURE_PHOTO, alt: 'MARKFRAMEPHOTO' }
+  const TERMS = ['MARKTERMA', 'MARKTERMB', 'MARKTERMC']
+  const expectOneTable = (markup: string, label: string) => {
+    expect(tagsWith(markup, 'data-term-rows')).toHaveLength(1)
+    const rows = tagsWith(markup, 'data-term-row=""')
+    expect(rows, label).toHaveLength(3)
+    expect(rows.filter((row) => classesOf(row).includes('border-b')), `${label}: one closing rule`).toHaveLength(1)
+    expect(classesOf(rows[rows.length - 1]!), `${label}: the last row closes it`).toContain('border-b')
+    for (const term of TERMS) expect(count(markup, term), `${label}: ${term}`).toBe(1)
+  }
+
+  it.each([
+    ['standard', [heading, ...RUN]],
+    ['textFocus', [heading, ...RUN]],
+    ['standardSplit', [heading, ...RUN, photo]],
+    ['imageFocus', [heading, ...RUN, photo]],
+  ] as const)('%s draws the run as one table', (layout, blocks) => {
+    expectOneTable(html(card([...blocks], style, layout)), layout)
+  })
+
+  it('draws a run beside a paragraph in the body as one table too', () => {
+    const markup = html(card([heading, ...RUN, { type: 'paragraph', text: 'MARKAFTER' }], style, 'standard'))
+    expectOneTable(markup, 'standard with a paragraph after')
+    expect(count(markup, 'MARKAFTER')).toBe(1)
+  })
+
+  it('draws the run in the leftovers of a self-composing frame as one table', () => {
+    for (const layout of ['hero', 'statHero', 'quote', 'section', 'statement'] as const) {
+      const blocks: ContentBlock[] = [heading, ...(layout === 'quote' ? [{ type: 'quote', text: 'MARKQ' } as const] : []), ...RUN]
+      expectOneTable(html(card(blocks, style, layout)), layout)
+    }
+  })
+
+  it('draws the opening card [heading, point, point] (which is not awarded term rows) as one table', () => {
+    const markup = renderToStaticMarkup(
+      <LayoutRenderer
+        card={card([heading, point('MARKTERMA', 'MARKMEANA'), point('MARKTERMB', 'MARKMEANB')], style, 'auto', 0)}
+        context={{ isFirstCard: true }}
+      />,
+    )
+    expect(tagsWith(markup, 'data-term-rows')).toHaveLength(1)
+    expect(tagsWith(markup, 'data-term-row=""')).toHaveLength(2)
+    expect(tagsWith(markup, 'data-term-row=""').filter((row) => classesOf(row).includes('border-b'))).toHaveLength(1)
+  })
+
+  it('counts a run as one unit when a slide is composed, so it never splits into zones', () => {
+    // Short claim, a run and nothing else in the body: one unit, so a stack with no zone panel.
+    const markup = html(card([{ type: 'heading', text: 'Short' }, ...RUN], style, 'standard'))
+    expect(markup).toContain('data-composition="stack"')
+    expect(markup).not.toContain('data-zone-panel')
+  })
+
+  it('still draws a lone point between other blocks as its own closed row', () => {
+    const markup = html(card([heading, lead, point('MARKSOLOTERM', 'MARKSOLOMEANING'), { type: 'paragraph', text: 'MARKAFTER' }], style, 'standard'))
+    expect(tagsWith(markup, 'data-term-row=""')).toHaveLength(1)
+    expect(tagsWith(markup, 'data-term-rows')).toHaveLength(0)
+  })
+})
+
+describe('the layouts the picker offers for points beside a list', () => {
+  it('draws every block once under each offered layout, term rows included', () => {
+    const blocks: ContentBlock[] = [
+      heading,
+      { type: 'bulletList', items: ['MARKLISTA', 'MARKLISTB'] },
+      point('MARKTERMA', 'MARKMEANA'),
+      point('MARKTERMB', 'MARKMEANB'),
+    ]
+    const offered = componentsForKind('list', blocks)
+    expect(offered).toContain('termRows')
+    for (const style of ['structured', 'expressive'] as const) {
+      for (const layout of offered) {
+        const markup = html(card(blocks, style, layout))
+        for (const word of ['MARKTITLE', 'MARKLISTA', 'MARKLISTB', 'MARKTERMA', 'MARKMEANA', 'MARKTERMB', 'MARKMEANB']) {
+          expect(count(markup, word), `${layout} (${style}): ${word}`).toBe(1)
+        }
+      }
+    }
   })
 })

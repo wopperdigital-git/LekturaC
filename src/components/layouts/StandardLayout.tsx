@@ -1,6 +1,7 @@
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
 import { compositionOf } from '@/engine/composition'
-import { BlockRenderer } from './BlockRenderer'
+import { pointRuns } from '@/engine/groups'
+import { BlockUnit } from './BlockRenderer'
 import { BodyUnits, SlideFrame } from './SlideFrame'
 import { frameBody } from './slideFrameParts'
 
@@ -11,12 +12,12 @@ import { frameBody } from './slideFrameParts'
  */
 export function StandardLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
   const body = frameBody(blocks)
-  const composition = compositionOf(blocks, body.map((index) => [index]), 'standard')
+  const composition = compositionOf(blocks, pointRuns(blocks, body), 'standard')
   return (
     <SlideFrame blocks={blocks} variant={variant} composition={composition}>
       {(indices) => {
-        const units = indices.map((index) => (
-          <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />
+        const units = pointRuns(blocks, indices).map((unit) => (
+          <BlockUnit key={unit[0]} blocks={blocks} unit={unit} variant={variant} />
         ))
         return <BodyUnits composition={composition} units={units} />
       }}

@@ -283,19 +283,26 @@ describe('LayoutWireframe term rows', () => {
     expect(draw('termRows', style)).not.toBe(draw('standard', style))
   })
 
-  it.each<VisualStyle>(['structured', 'expressive'])('draws four rows, each a term then its meaning, ruled above and below the last (%s)', (style) => {
+  /** The row groups' own content: split on the row marker, so no attribute order of a shape matters. */
+  const rowChunks = (html: string) => html.split('data-wire-term-row=""').slice(1)
+  const shapes = (chunk: string) => chunk.split('<rect').length - 1
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws four rows of a rule, a term and a meaning, then a closing rule (%s)', (style) => {
     const html = draw('termRows', style)
-    expect((html.match(/data-wire-term-row=""/g) ?? []).length).toBe(4)
-    // A rule per row plus the closing rule.
-    const rules = html.match(/<rect x="12" y="[\d.]+" width="136" height="0.75"/g) ?? []
-    expect(rules.length).toBe(5)
+    const rows = rowChunks(html)
+    expect(rows).toHaveLength(4)
+    // The last chunk also holds the closing rule, which is outside its row group.
+    rows.slice(0, 3).forEach((row) => expect(shapes(row)).toBe(3))
+    expect(shapes(rows[3]!)).toBe(3 + 1)
     expect(html).not.toContain('data-wire-ground')
     expect(html).not.toContain('data-wire-photo')
   })
 
   it('draws the expressive term heavier than the structured one', () => {
-    const termHeight = (style: VisualStyle) =>
-      Number(draw('termRows', style).match(/<g data-wire-term-row=""><rect[^>]*><\/rect><rect x="12" y="[\d.]+" width="[\d.]+" height="([\d.]+)"/)?.[1])
+    const termHeight = (style: VisualStyle) => {
+      const term = rowChunks(draw('termRows', style))[0]!.split('<rect')[2]!
+      return Number(term.match(/height="([\d.]+)"/)?.[1])
+    }
     expect(termHeight('expressive')).toBeGreaterThan(termHeight('structured'))
   })
 })

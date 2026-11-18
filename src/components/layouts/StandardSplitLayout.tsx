@@ -1,6 +1,7 @@
 import { blocksOfTypeIndexed, type ContentBlock, type VisualStyle } from '@/engine/contentBlocks'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
-import { BlockRenderer } from './BlockRenderer'
+import { pointRuns } from '@/engine/groups'
+import { BlockRenderer, BlockUnit } from './BlockRenderer'
 import { SlideFrame } from './SlideFrame'
 
 /**
@@ -47,8 +48,8 @@ export function StandardSplitLayout({
     >
       {(body) => (
         <div className="flex flex-col" style={{ gap: SLIDE_GAP.group }}>
-          {body.map((index) => (
-            <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />
+          {pointRuns(blocks, body).map((unit) => (
+            <BlockUnit key={unit[0]} blocks={blocks} unit={unit} variant={variant} />
           ))}
         </div>
       )}

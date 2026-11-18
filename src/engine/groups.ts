@@ -188,6 +188,35 @@ export function inferGroups(blocks: ContentBlock[], hint: LayoutType = 'auto'): 
 }
 
 /**
+ * The body of a frame that draws block by block, as units: `indices` (ascending, the card's
+ * indices minus its head and aside) with every run of two or more consecutive points folded into
+ * one unit, and every other index its own. The block-by-block frames (`standard`, `textFocus`,
+ * the two photo frames) and `Leftovers` draw a multi-point unit as one `rows` table, and
+ * `compositionOf` counts it as one unit. Two points are one run only when their indices are
+ * consecutive in the card, so a heading (or any block) between them splits them. It only
+ * folds: every index appears once, in order, never reordered, dropped or duplicated.
+ */
+export function pointRuns(blocks: ContentBlock[], indices: number[]): number[][] {
+  const units: number[][] = []
+  for (const index of indices) {
+    const last = units[units.length - 1]
+    const prev = last?.[last.length - 1]
+    if (
+      last &&
+      prev !== undefined &&
+      index === prev + 1 &&
+      blocks[index]?.type === 'point' &&
+      blocks[prev]?.type === 'point'
+    ) {
+      last.push(index)
+    } else {
+      units.push([index])
+    }
+  }
+  return units
+}
+
+/**
  * Every block the nodes hold, in order, with its index. The inverse of
  * `inferGroups` — `flattenNodes(inferGroups(b))` is `b` indexed — which is the
  * invariant the tests pin. Also how `GroupRenderer` draws an arrangement it
