@@ -34,6 +34,15 @@ function quote(text = 'A quote', attribution?: string): ContentBlock {
 function timelineStep(label = 'Step', text = 'Detail'): ContentBlock {
   return { type: 'timelineStep', label, text }
 }
+function point(label = 'Term', text = 'Meaning'): ContentBlock {
+  return { type: 'point', label, text }
+}
+function callout(text = 'Key idea'): ContentBlock {
+  return { type: 'callout', text }
+}
+function code(src = 'int x = 0;'): ContentBlock {
+  return { type: 'code', code: src }
+}
 function comparisonGroup(heading = 'Option', items: string[] = ['a']): ContentBlock {
   return { type: 'comparisonGroup', heading, items }
 }
@@ -380,7 +389,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'hero', 'g-sidehead': 'numberedList',
     'g-sidehead-stats': 'statGrid', 'g-splitbody': 'iconGrid', 'g-section': 'section', 'g-statement': 'statement',
     'g-twocol': 'twoColumn', 'g-statsplit': 'statSplit', 'g-photolist': 'photoList',
-    'g-steps': 'steps', 'g-beforeafter': 'beforeAfter', 'g-kicker': 'standard',
+    'g-steps': 'steps', 'g-beforeafter': 'beforeAfter', 'g-kicker': 'standard', 'g-termrows': 'termRows',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
@@ -394,7 +403,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-list-photo': 'iconGrid', 'g-hero-extra': 'statGrid', 'g-sidehead': 'numberedList',
     'g-sidehead-stats': 'statGrid', 'g-splitbody': 'comparison', 'g-section': 'standard', 'g-statement': 'standard',
     'g-twocol': 'textFocus', 'g-statsplit': 'statHero', 'g-photolist': 'numberedList',
-    'g-steps': 'timeline', 'g-beforeafter': 'comparison', 'g-kicker': 'standard',
+    'g-steps': 'timeline', 'g-beforeafter': 'comparison', 'g-kicker': 'standard', 'g-termrows': 'standard',
     'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
     'cpp-6': 'quote', 'cpp-7': 'standardSplit',
   }
@@ -403,6 +412,7 @@ describe('classifier stability over the fixture decks', () => {
     'g-list-photo': ['iconGrid', 'photoList'],
     'g-statsplit': ['statHero', 'statSplit'],
     'g-photolist': ['numberedList', 'photoList'],
+    'g-termrows': ['standard', 'termRows'],
   }
 
   const cards = [...GALLERY_DECK, ...CPP_DECK]
@@ -421,5 +431,82 @@ describe('classifier stability over the fixture decks', () => {
       if (now !== BASELINE_AUTO[card.id]) moved[card.id] = [BASELINE_AUTO[card.id], now]
     }
     expect(moved).toEqual(MOVED_AUTO)
+  })
+})
+
+describe('termRows', () => {
+  it('is awarded to one run of two or more points with only headings and paragraphs round it', () => {
+    expect(chooseLayout([heading(), point(), point()])).toBe('termRows')
+    expect(chooseLayout([heading(), paragraph(), point(), point(), point()])).toBe('termRows')
+    expect(chooseLayout([heading(), point(), point(), paragraph()])).toBe('termRows')
+    expect(chooseLayout([heading(), paragraph(), point(), point(), paragraph()], { isFirstCard: false })).toBe('termRows')
+  })
+
+  it('is not awarded to a lone point, or to points a block separates', () => {
+    expect(chooseLayout([heading(), point()])).toBe('standard')
+    expect(chooseLayout([heading(), point(), paragraph(), point()])).toBe('standard')
+    // A second, separate point beside a run is not one run either.
+    expect(chooseLayout([heading(), point(), point(), paragraph(), point()])).not.toBe('termRows')
+  })
+
+  it('is not awarded on the first card, which keeps the rules it had', () => {
+    expect(chooseLayout([heading(), point(), point()], { isFirstCard: true })).toBe('standard')
+    expect(chooseLayout([heading(), point()], { isFirstCard: true })).toBe('hero')
+  })
+
+  it('is not awarded when any other block type is on the card', () => {
+    expect(chooseLayout([heading(), point(), point(), stat()])).toBe('statHero')
+    expect(chooseLayout([heading(), point(), point(), bulletList(['a', 'b'])])).not.toBe('termRows')
+    expect(chooseLayout([heading(), point(), point(), quote()])).not.toBe('termRows')
+    expect(chooseLayout([heading(), point(), point(), timelineStep()])).not.toBe('termRows')
+    expect(chooseLayout([heading(), point(), point(), comparisonGroup()])).not.toBe('termRows')
+    expect(chooseLayout([heading(), point(), point(), callout()])).not.toBe('termRows')
+    expect(chooseLayout([heading(), point(), point(), code()])).not.toBe('termRows')
+  })
+
+  it('takes the photo path for points beside a lone photo, drawing the run as rows', () => {
+    expect(chooseLayout([heading(), point(), point(), image()])).toBe('termRows')
+    expect(chooseLayout([heading(), image(), paragraph(), point(), point()])).toBe('termRows')
+    // On the first card the photo path finds no rows and keeps its split.
+    expect(chooseLayout([heading(), point(), point(), image()], { isFirstCard: true })).toBe('imageFocus')
+    // Two photos are a gallery, not set aside.
+    expect(chooseLayout([heading(), point(), point(), image(), image()])).not.toBe('termRows')
+  })
+
+  it('is an explicit layout only when stored, and resolves as itself', () => {
+    expect(resolveLayout('termRows', [heading(), point()])).toBe('termRows')
+  })
+})
+
+describe('termRows and the card kind', () => {
+  it('calls a card whose typed content is only points a list', () => {
+    expect(cardKind([heading(), point(), point()])).toBe('list')
+    expect(cardKind([heading(), paragraph(), point(), point()])).toBe('list')
+    expect(cardKind([heading(), point(), point(), image()])).toBe('list')
+  })
+
+  it('does not let points count toward the kind of a mixed card', () => {
+    expect(cardKind([heading(), point(), point(), stat()])).toBe('stats')
+    expect(cardKind([heading(), point(), point(), quote()])).toBe('quote')
+    expect(cardKind([heading(), point(), point(), callout()])).toBe('text')
+    expect(cardKind([heading(), point(), point(), code()])).toBe('text')
+    expect(cardKind([heading(), point(), point(), bulletList(['a', 'b'])])).toBe('list')
+  })
+
+  it('keeps the first-card title rule', () => {
+    expect(cardKind([heading(), point()], { isFirstCard: true })).toBe('title')
+  })
+
+  it('reports a card that names termRows as a list', () => {
+    expect(cardKindOf({ layout: 'termRows', blocks: [heading(), point(), point()] })).toBe('list')
+  })
+
+  it('offers termRows in the list kind only when the card has a run of points', () => {
+    const withRun = componentsForKind('list', [heading(), point(), point()])
+    expect(withRun).toContain('termRows')
+    expect(withRun).toEqual(expect.arrayContaining(['iconGrid', 'numberedList', 'checklist', 'splitList']))
+    expect(componentsForKind('list', [heading(), bulletList(['a'])])).not.toContain('termRows')
+    expect(componentsForKind('list', [heading(), point()])).not.toContain('termRows')
+    expect(componentsForKind('list', [heading(), point(), paragraph(), point()])).not.toContain('termRows')
   })
 })

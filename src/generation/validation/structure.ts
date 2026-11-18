@@ -76,6 +76,7 @@ const LAYOUT_FAMILY: Record<ReturnType<typeof resolveLayout>, string> = {
   steps: 'timeline',
   photoList: 'list',
   beforeAfter: 'comparison',
+  termRows: 'list',
 }
 
 function slideLabel(index: number): string {

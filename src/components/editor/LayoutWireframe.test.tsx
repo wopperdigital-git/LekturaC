@@ -276,3 +276,26 @@ describe('LayoutWireframe steps and before-and-after', () => {
     expect(html).not.toContain('data-wire-ground')
   })
 })
+
+/** Term rows draw their own picture: ruled rows with the term on the left, not the standard stand-in. */
+describe('LayoutWireframe term rows', () => {
+  it.each<VisualStyle>(['structured', 'expressive'])('is not the standard stand-in (%s)', (style) => {
+    expect(draw('termRows', style)).not.toBe(draw('standard', style))
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws four rows, each a term then its meaning, ruled above and below the last (%s)', (style) => {
+    const html = draw('termRows', style)
+    expect((html.match(/data-wire-term-row=""/g) ?? []).length).toBe(4)
+    // A rule per row plus the closing rule.
+    const rules = html.match(/<rect x="12" y="[\d.]+" width="136" height="0.75"/g) ?? []
+    expect(rules.length).toBe(5)
+    expect(html).not.toContain('data-wire-ground')
+    expect(html).not.toContain('data-wire-photo')
+  })
+
+  it('draws the expressive term heavier than the structured one', () => {
+    const termHeight = (style: VisualStyle) =>
+      Number(draw('termRows', style).match(/<g data-wire-term-row=""><rect[^>]*><\/rect><rect x="12" y="[\d.]+" width="[\d.]+" height="([\d.]+)"/)?.[1])
+    expect(termHeight('expressive')).toBeGreaterThan(termHeight('structured'))
+  })
+})

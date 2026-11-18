@@ -41,6 +41,7 @@ const FLOW_LAYOUTS = [
   'gallery',
   'steps',
   'beforeAfter',
+  'termRows',
 ] as const
 
 type FlowLayoutName = (typeof FLOW_LAYOUTS)[number]

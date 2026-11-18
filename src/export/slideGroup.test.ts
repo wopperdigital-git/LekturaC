@@ -83,7 +83,7 @@ describe('slideGroup', () => {
     }
   })
 
-  it('maps the seven newer layouts as the rulings say', () => {
+  it('maps the newer layouts as the rulings say', () => {
     const expected = {
       section: 'title',
       statement: 'title',
@@ -92,6 +92,7 @@ describe('slideGroup', () => {
       photoList: 'body',
       statSplit: 'stat',
       beforeAfter: 'twoCol',
+      termRows: 'body',
     } as const
     for (const [layout, group] of Object.entries(expected)) {
       expect(slideGroup(card([HEADING], layout as Card['layout']), false), layout).toBe(group)

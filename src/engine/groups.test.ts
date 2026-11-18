@@ -10,6 +10,7 @@ const stat: ContentBlock = { type: 'stat', value: '1', label: 'l' }
 const step: ContentBlock = { type: 'timelineStep', label: 'l', text: 't' }
 const side: ContentBlock = { type: 'comparisonGroup', heading: 'c', items: ['i'] }
 const image: ContentBlock = { type: 'image', url: 'https://example.test/i.png' }
+const point: ContentBlock = { type: 'point', label: 'term', text: 'meaning' }
 const shortList: BulletListBlock = { type: 'bulletList', items: ['a', 'b'] }
 
 /** The hints that change behaviour; every other layout behaves as `'auto'`. */
@@ -25,6 +26,7 @@ const HINTS: LayoutType[] = [
   'steps',
   'beforeAfter',
   'photoList',
+  'termRows',
 ]
 
 /** Every sequence of up to `maxLength` blocks drawn from `alphabet`. */
@@ -52,7 +54,7 @@ function repeat(value: string, count: number): string[] {
 }
 
 describe('the invariant', () => {
-  const sequences = allSequences([heading, para, quote, stat, step, side, image, shortList], 4)
+  const sequences = allSequences([heading, para, quote, stat, step, side, image, shortList, point], 4)
 
   it('never reorders, drops or duplicates a block, and keeps every index', () => {
     // Exhaustive over every card of up to four blocks drawn from every type —
@@ -100,6 +102,23 @@ describe('runs', () => {
     expect(shape(inferGroups([step, step]))).toEqual(['timeline×2'])
     expect(shape(inferGroups([side, side, side]))).toEqual(['columns×3'])
     expect(shape(inferGroups([image, image]))).toEqual(['gallery×2'])
+    expect(shape(inferGroups([point, point]))).toEqual(['rows×2'])
+  })
+
+  it('groups two or more consecutive points as rows, under any hint', () => {
+    for (const hint of HINTS) {
+      expect(shape(inferGroups([heading, point, point, point], hint)), hint).toEqual(['heading', 'rows×3'])
+    }
+  })
+
+  it('leaves a lone point as a leaf and never pulls apart points a block separates', () => {
+    expect(shape(inferGroups([heading, point, para]))).toEqual(['heading', 'point', 'paragraph'])
+    expect(shape(inferGroups([point, para, point, point]))).toEqual(['point', 'paragraph', 'rows×2'])
+  })
+
+  it('keeps every point of a run under its own index', () => {
+    const [node] = inferGroups([heading, point, point, point]).slice(1)
+    expect(node.kind === 'group' && node.items.map((item) => item.index)).toEqual([1, 2, 3])
   })
 
   it('lets an explicit layout choose the arrangement of a run', () => {
@@ -117,7 +136,7 @@ describe('runs', () => {
 
   it('keeps a run shorter than MIN_RUN as leaves, for every run type', () => {
     expect(MIN_RUN).toBe(2)
-    for (const block of [stat, step, side, image]) {
+    for (const block of [stat, step, side, image, point]) {
       expect(shape(inferGroups([block]))).toEqual([block.type])
     }
   })

@@ -6,6 +6,8 @@ import { EditableText } from './EditableText'
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
 import { WithKicker } from './Kicker'
+import { TermRow } from './TermRow'
+import { termTextSize } from './termRowSize'
 import { blockIndexOf, useItemProps } from './adjustContext'
 import { SLIDE_BODY_FONT, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/lib/theme-tokens'
 
@@ -211,25 +213,23 @@ function BlockBody({
           </ul>
         </div>
       )
-    /*
-      Stand-ins until the structured drawings land (rows, the accent callout and
-      the code panel): every field is drawn once under its own address, so
-      nothing on the card is hidden and every nudge, mark and selection already
-      works on it.
-    */
     case 'point':
+      // A lone point (a run of two or more is the `rows` arrangement): one row of the same table, closed by a hairline below.
       return (
-        <p
-          className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"
-          style={{ fontFamily: SLIDE_BODY_FONT }}
-        >
-          <span className="font-semibold text-slide-accent">
-            <EditableText textRef={textRef(index, 'label')} value={block.label} />
-          </span>
-          {' — '}
-          <EditableText textRef={textRef(index, 'text')} value={block.text} />
-        </p>
+        <TermRow
+          index={index}
+          label={block.label}
+          text={block.text}
+          textSize={termTextSize([block.text])}
+          expressive={variant === 'expressive'}
+          last
+        />
       )
+    /*
+      Stand-ins until the accent callout and the code panel are drawn: every field
+      is drawn once under its own address, so nothing on the card is hidden and
+      every nudge, mark and selection already works on it.
+    */
     case 'callout':
       return (
         <p

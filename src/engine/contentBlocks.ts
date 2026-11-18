@@ -151,6 +151,7 @@ export const layoutTypeSchema = z.enum([
   'steps',
   'photoList',
   'beforeAfter',
+  'termRows',
 ])
 
 export type LayoutType = z.infer<typeof layoutTypeSchema>

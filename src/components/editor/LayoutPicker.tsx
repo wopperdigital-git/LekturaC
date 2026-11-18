@@ -37,6 +37,7 @@ const LAYOUT_LABELS: Record<Exclude<LayoutType, 'auto'>, string> = {
   steps: 'Steps',
   photoList: 'Photo with list',
   beforeAfter: 'Before and after',
+  termRows: 'Term rows',
 }
 
 /** What the layout picker needs, present only while a slide is selected. */

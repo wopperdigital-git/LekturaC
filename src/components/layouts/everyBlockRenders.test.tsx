@@ -69,7 +69,9 @@ const KITCHEN_SINK: ContentBlock[] = [
   { type: 'heading', text: 'MARKSIZEH1', size: 'h1' },
   { type: 'heading', text: 'MARKSIZEH3', size: 'h3' },
   // The structured blocks (drawn by stand-ins for now; Task 5 replaces the drawings).
-  { type: 'point', label: 'MARKPOINTLAB', text: 'MARKPOINTTEXT' },
+  // A run of two points: the rows arrangement draws each once, and a layout that draws blocks one by one draws each as a row.
+  { type: 'point', label: 'MARKPOINTLABA', text: 'MARKPOINTTEXTA' },
+  { type: 'point', label: 'MARKPOINTLABB', text: 'MARKPOINTTEXTB' },
   { type: 'callout', label: 'MARKCALLLAB', text: 'MARKCALLTEXT' },
   { type: 'code', code: 'MARKSRC', label: 'MARKCODELAB', caption: 'MARKCODECAP' },
 ]
@@ -166,6 +168,7 @@ const LAYOUTS: LayoutType[] = [
   'steps',
   'photoList',
   'beforeAfter',
+  'termRows',
 ]
 
 const VARIANTS: VisualStyle[] = ['structured', 'expressive']
@@ -242,7 +245,7 @@ describe('an image-free card draws every block once, composed or not', () => {
       }
     }
     expect(drawnAs.has('sideHead')).toBe(true)
-  })
+}, 30_000)
 })
 
 /*

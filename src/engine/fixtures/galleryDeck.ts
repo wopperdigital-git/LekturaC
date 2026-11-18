@@ -28,6 +28,7 @@ const group = (name: string, ...items: string[]): ContentBlock => ({
   heading: name,
   items,
 })
+const point = (label: string, text: string): ContentBlock => ({ type: 'point', label, text })
 const photo = (alt: string): ContentBlock => ({ type: 'image', url: FIXTURE_PHOTO, alt })
 
 type Spec = [id: string, layout: LayoutType, blocks: ContentBlock[]]
@@ -401,6 +402,18 @@ const SPECS: Spec[] = [
     [
       { type: 'heading', text: 'Choosing a loop', kicker: 'Part two' },
       paragraph('Pick the form that matches what you know about the count.'),
+    ],
+  ],
+  [
+    'g-termrows',
+    'termRows',
+    [
+      heading('The parts of a for loop'),
+      paragraph('Four words you will meet in every loop.'),
+      point('Initialiser', 'Runs once, before the first check.'),
+      point('Condition', 'Checked before every pass; false ends the loop.'),
+      point('Update', 'Runs after each pass and moves the counter.'),
+      point('Body', 'The statements that repeat.'),
     ],
   ],
 ]

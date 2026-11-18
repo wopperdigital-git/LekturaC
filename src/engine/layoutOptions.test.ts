@@ -29,6 +29,19 @@ describe('layoutVarieties', () => {
     expect(layoutsIn([heading, paragraph], 'title')).toEqual(['hero', 'section'])
   })
 
+  it('adds term rows to a list kind only when the card holds a run of points', () => {
+    const point = (label: string): ContentBlock => ({ type: 'point', label, text: 'meaning' })
+    expect(layoutsIn([heading, point('a'), point('b')], 'list')).toEqual([
+      'iconGrid',
+      'numberedList',
+      'checklist',
+      'splitList',
+      'termRows',
+    ])
+    expect(cardKind([heading, point('a'), point('b')])).toBe('list')
+    expect(layoutsIn([heading, point('a')], 'list')).not.toContain('termRows')
+  })
+
   it('offers both treatments of every component in the family', () => {
     // Four components x two treatments is what gives a list card eight varieties.
     const list = layoutVarieties([heading, bullets], 'list')

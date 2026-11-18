@@ -30,6 +30,24 @@ function setAsidePhoto(blocks: ContentBlock[]): ContentBlock[] | null {
   return images.length === 1 ? blocks.filter((b) => b.type !== 'image') : null
 }
 
+/**
+ * True when the card's points are one unbroken run of two or more: every `point` block sits
+ * in the same consecutive run. The run is what `inferGroups` draws as `rows`; a lone point,
+ * or points a block separates, are not a table.
+ */
+export function hasPointRun(blocks: ContentBlock[]): boolean {
+  const first = blocks.findIndex((b) => b.type === 'point')
+  if (first === -1) return false
+  let end = first
+  while (end < blocks.length && blocks[end].type === 'point') end += 1
+  return end - first >= 2 && blocks.slice(end).every((b) => b.type !== 'point')
+}
+
+/** Headings, paragraphs and points, and nothing else. */
+function isTermRowsCore(blocks: ContentBlock[]): boolean {
+  return blocks.every((b) => b.type === 'heading' || b.type === 'paragraph' || b.type === 'point')
+}
+
 export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}): LayoutType {
   const core = setAsidePhoto(blocks)
   if (core) {
@@ -69,6 +87,10 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
   ) {
     return 'hero'
   }
+
+  // A run of terms and their meanings, with only headings and paragraphs round it. The signature
+  // excludes every other block type, so it competes with no other rule; the opener stays a hero.
+  if (!context.isFirstCard && hasPointRun(blocks) && isTermRowsCore(blocks)) return 'termRows'
 
   // `section` and `statement` are never awarded here: a live card re-resolves on
   // every keystroke, so a length rule would swap the whole slide while typing.
@@ -237,6 +259,9 @@ export function cardKind(blocks: ContentBlock[], context: LayoutContext = {}): C
   if (context.isFirstCard && headings.length >= 1 && blocks.length <= 2) return 'title'
   // A lone heading is a title card wherever it sits: the picker offers hero and section.
   if (headings.length === 1 && blocks.length === 1) return 'title'
+  // Terms and meanings are a list of a kind, but only when the card holds nothing else typed:
+  // in a mixed card points do not count toward the kind.
+  if (blocks.some((b) => b.type === 'point') && isTermRowsCore(blocks)) return 'list'
   return 'text'
 }
 
@@ -276,6 +301,7 @@ const KIND_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, CardKind> = {
   steps: 'timeline',
   photoList: 'list',
   beforeAfter: 'comparison',
+  termRows: 'list',
 }
 
 /** The card's type: its named layout if it has one, otherwise what its blocks say. */
@@ -323,10 +349,15 @@ export function componentsForKind(kind: CardKind, blocks: ContentBlock[]): Exclu
       return ['timeline', 'timelineRow', 'steps']
     case 'quote':
       return ['quote']
-    case 'list':
-      return blocksOfType(blocks, 'image').length === 1
-        ? ['iconGrid', 'numberedList', 'checklist', 'splitList', 'photoList']
-        : ['iconGrid', 'numberedList', 'checklist', 'splitList']
+    case 'list': {
+      const own: Exclude<LayoutType, 'auto'>[] =
+        blocksOfType(blocks, 'image').length === 1
+          ? ['iconGrid', 'numberedList', 'checklist', 'splitList', 'photoList']
+          : ['iconGrid', 'numberedList', 'checklist', 'splitList']
+      // Term rows need a run of points to draw.
+      if (hasPointRun(blocks)) own.push('termRows')
+      return own
+    }
     case 'gallery':
       return ['gallery']
     case 'image':

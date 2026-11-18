@@ -39,6 +39,7 @@ const EXPECTED: Array<[string, string]> = [
   ['g-steps', 'steps'],
   ['g-beforeafter', 'beforeAfter'],
   ['g-kicker', 'standard'],
+  ['g-termrows', 'termRows'],
 ]
 
 describe('GALLERY_DECK', () => {

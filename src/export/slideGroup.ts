@@ -51,6 +51,7 @@ const GROUP_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, PptxGroup> = {
   photoList: 'body',
   statSplit: 'stat',
   beforeAfter: 'twoCol',
+  termRows: 'body',
 }
 
 /**

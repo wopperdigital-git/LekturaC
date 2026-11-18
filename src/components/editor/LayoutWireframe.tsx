@@ -160,6 +160,28 @@ function BeforeAfterDrawing({ expressive: loud }: { expressive: boolean }) {
   )
 }
 
+/** Rows of a term (accent, left third) and its meaning (right two thirds), a hairline above each and one below the last. */
+function TermRowsDrawing({ expressive: loud }: { expressive: boolean }) {
+  return (
+    <>
+      <Title x={12} y={loud ? 11 : 13} w={58} />
+      <g data-wire-term-rows="">
+        {range(4).map((i) => {
+          const y = 28 + i * 15
+          return (
+            <g key={i} data-wire-term-row="">
+              <Rule x={12} y={y} w={136} />
+              <Label x={12} y={y + 4} w={[24, 20, 26, 18][i]} h={loud ? 5 : 4} />
+              <Line x={56} y={y + 4.5} w={[84, 72, 88, 60][i]} h={3.5} />
+            </g>
+          )
+        })}
+        <Rule x={12} y={88} w={136} />
+      </g>
+    </>
+  )
+}
+
 /** A row of numbered steps with a chevron between neighbours, a hairline above each step when structured. */
 function StepsDrawing({ expressive: loud }: { expressive: boolean }) {
   return (
@@ -260,6 +282,9 @@ function structured(layout: LayoutType): ReactNode {
           <BleedPicture x={84} w={76} />
         </>
       )
+    case 'termRows':
+      // Ruled rows: the term in accent on the left third, its meaning on the right, a hairline above each row and below the last.
+      return <TermRowsDrawing expressive={false} />
     case 'steps':
       // A row of numbered steps across the slide, each under a hairline, a chevron between neighbours.
       return <StepsDrawing expressive={false} />
@@ -603,6 +628,9 @@ function expressive(layout: LayoutType): ReactNode {
           <BleedPicture x={84} w={76} />
         </>
       )
+    case 'termRows':
+      // The same rows with a larger, heavier term.
+      return <TermRowsDrawing expressive={true} />
     case 'steps':
       // The same row, bare and heavier, a chevron between neighbours.
       return <StepsDrawing expressive={true} />

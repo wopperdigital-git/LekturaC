@@ -4,6 +4,7 @@ import type {
   ContentBlock,
   ImageBlock,
   LayoutType,
+  PointBlock,
   StatBlock,
   TimelineStepBlock,
 } from './contentBlocks'
@@ -55,6 +56,7 @@ export type GroupNode =
   | { kind: 'group'; arrangement: 'timeline' | 'timelineRow' | 'steps'; items: Indexed<TimelineStepBlock>[] }
   | { kind: 'group'; arrangement: 'columns' | 'table' | 'beforeAfter'; items: Indexed<ComparisonGroupBlock>[] }
   | { kind: 'group'; arrangement: 'gallery'; items: Indexed<ImageBlock>[] }
+  | { kind: 'group'; arrangement: 'rows'; items: Indexed<PointBlock>[] }
   | { kind: 'group'; arrangement: ListArrangement; items: [Indexed<BulletListBlock>] }
 
 export type RenderNode = LeafNode | GroupNode
@@ -75,6 +77,7 @@ const RUN_TYPES: ReadonlySet<ContentBlock['type']> = new Set([
   'timelineStep',
   'comparisonGroup',
   'image',
+  'point',
 ])
 
 /** Every way a single bullet list can be drawn. */
@@ -133,6 +136,8 @@ function runGroup(run: Indexed[], hint: LayoutType): GroupNode | null {
       }
     case 'image':
       return { kind: 'group', arrangement: 'gallery', items: run as Indexed<ImageBlock>[] }
+    case 'point':
+      return { kind: 'group', arrangement: 'rows', items: run as Indexed<PointBlock>[] }
     default:
       return null
   }
