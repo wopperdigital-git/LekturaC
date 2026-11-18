@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card, ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
+import { GALLERY_DECK } from '@/engine/fixtures/galleryDeck'
 import { LayoutRenderer } from './LayoutRenderer'
 
 /**
@@ -87,6 +88,16 @@ describe('compositions', () => {
       })
     })
   }
+
+  it.each([
+    ['g-sidehead', 'sideHead'],
+    ['g-sidehead-stats', 'sideHead'],
+    ['g-splitbody', 'splitBody'],
+  ])('the gallery card %s is drawn as %s', (id, composition) => {
+    const galleryCard = GALLERY_DECK.find((c) => c.id === id)!
+    const html = renderToStaticMarkup(<LayoutRenderer card={galleryCard} />)
+    expect(html).toContain(`data-composition="${composition}"`)
+  })
 
   it('the stylesheet swaps a featured panel to the surface inside a zone panel', () => {
     const css = readFileSync(new URL('../../index.css', import.meta.url), 'utf8')

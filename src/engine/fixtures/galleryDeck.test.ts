@@ -28,6 +28,9 @@ const EXPECTED: Array<[string, string]> = [
   ['g-image', 'imageFocus'],
   ['g-list-photo', 'iconGrid'],
   ['g-hero-extra', 'hero'],
+  ['g-sidehead', 'numberedList'],
+  ['g-sidehead-stats', 'statGrid'],
+  ['g-splitbody', 'iconGrid'],
 ]
 
 describe('GALLERY_DECK', () => {

@@ -189,6 +189,16 @@ describe('compositionOf', () => {
     expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('sideHead')
   })
 
+  it('puts a short claim and lead beside three units: side head is not capped at two', () => {
+    const blocks = [heading('Loops'), para(), bullets, para(), quote]
+    expect(compositionOf(blocks, [[2], [3], [4]], 'standard')).toBe('sideHead')
+  })
+
+  it('puts a short claim with no lead beside two units', () => {
+    const blocks = [heading('Loops'), bullets, para()]
+    expect(compositionOf(blocks, [[1], [2]], 'standard')).toBe('sideHead')
+  })
+
   it('stacks a body of only paragraphs', () => {
     const blocks = [heading('Loops'), para(), para(), para()]
     expect(compositionOf(blocks, [[2], [3]], 'standard')).toBe('stack')

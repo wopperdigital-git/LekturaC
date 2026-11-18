@@ -294,6 +294,44 @@ const SPECS: Spec[] = [
       stat('2', 'branch forms'),
     ],
   ],
+  [
+    'g-sidehead',
+    'numberedList',
+    [
+      heading('Reading a loop'),
+      paragraph('Trace one pass at a time.'),
+      list(
+        'Find the starting value of the counter.',
+        'Check the condition before the body runs.',
+        'Run the body once with the current value.',
+        'Apply the update expression to the counter.',
+      ),
+      paragraph('Repeat until the check fails, then the loop is done.'),
+    ],
+  ],
+  [
+    'g-sidehead-stats',
+    'statGrid',
+    [
+      heading('Loops in numbers'),
+      paragraph('Three facts that hold for every loop you write.'),
+      stat('3', 'loop forms'),
+      stat('1', 'condition per loop'),
+      stat('0', 'tolerance for infinite loops'),
+      paragraph('Count them before you write the body.'),
+    ],
+  ],
+  [
+    'g-splitbody',
+    'iconGrid',
+    [
+      heading('Why a loop that never ends is the most common mistake beginners make'),
+      paragraph('The cause is almost always a counter that nothing updates.'),
+      list('Forgot the update', 'Wrong comparison', 'Counter changed inside'),
+      group('Easy to spot', 'The program hangs', 'The fan spins up'),
+      group('Easy to fix', 'Add the update line', 'Check the condition'),
+    ],
+  ],
 ]
 
 /**
