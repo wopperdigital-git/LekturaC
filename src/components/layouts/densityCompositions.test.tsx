@@ -47,8 +47,11 @@ describe('compositions', () => {
         expect(html.indexOf(long)).toBeLessThan(panel)
         expect(html.indexOf('MARKITEMA')).toBeGreaterThan(panel)
         expect(html.indexOf('MARKITEMC')).toBeGreaterThan(panel)
-        // The second unit is outside the panel, after the first.
-        expect(html.indexOf('MARKTAIL')).toBeGreaterThan(html.indexOf('MARKITEMC'))
+        // The second unit is outside the panel: after the list the panel's box closes and a
+        // sibling cell (not marked as a panel) opens before the trailing paragraph.
+        const between = html.slice(html.indexOf('MARKITEMC'), html.indexOf('MARKTAIL'))
+        expect(between).toMatch(/<\/div><\/div><div class="@container[^"]*"/)
+        expect(between).not.toContain('data-zone-panel')
       })
 
       it('a lead and one list is a stack: no zone panel', () => {

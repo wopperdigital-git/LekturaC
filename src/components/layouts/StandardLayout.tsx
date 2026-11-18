@@ -17,8 +17,7 @@ export function StandardLayout({ blocks, variant }: { blocks: ContentBlock[]; va
         const units = indices.map((index) => (
           <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />
         ))
-        const drawn = <BodyUnits composition={composition} units={units} />
-        return drawn
+        return <BodyUnits composition={composition} units={units} />
       }}
     </SlideFrame>
   )

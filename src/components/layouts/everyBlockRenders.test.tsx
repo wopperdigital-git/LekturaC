@@ -200,20 +200,25 @@ const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter((block) => block.typ
 )
 
 describe('an image-free card draws every block once, composed or not', () => {
-  const compositions = new Set<string>()
   for (const layout of LAYOUTS) {
     for (const variant of VARIANTS) {
       it(`${layout} (${variant}) draws every block of an image-free kitchen-sink card`, () => {
         const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
         expectEveryBlockDrawn(html, IMAGE_FREE_SINK)
-        const kind = html.match(/data-composition="(\w+)"/)?.[1]
-        if (kind) compositions.add(kind)
       })
     }
   }
 
   it('at least one of those runs is a side head, so the zoned path is exercised', () => {
-    expect(compositions.has('sideHead')).toBe(true)
+    const drawnAs = new Set<string>()
+    for (const layout of LAYOUTS) {
+      for (const variant of VARIANTS) {
+        const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
+        const kind = html.match(/data-composition="(\w+)"/)?.[1]
+        if (kind) drawnAs.add(kind)
+      }
+    }
+    expect(drawnAs.has('sideHead')).toBe(true)
   })
 })
 

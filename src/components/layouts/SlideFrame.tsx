@@ -6,31 +6,8 @@ import { BlockRenderer, Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
 
 /**
- * The frame an ordinary slide is drawn in: a head zone at the top-left holding the
- * claim (the first heading) and the lead (the paragraph right after it), then a body
- * zone below it holding every other block. The slide no longer centres its content;
- * the claim sits in the same place on every slide, and a slide with more content than
- * the 16:9 floor simply grows (no fixed height or clipping anywhere in here).
- *
- * Which block plays which part comes from `slotsOf`, which returns indices only. Each
- * block is drawn once, under its own original index (the claim and lead through
- * `Heading` and `BlockRenderer`, which wrap themselves in `Adjustable`), so nudges,
- * marks and selection address it exactly as before. Zone wrappers sit outside those
- * holders and are not elements of their own.
- *
- * The head zone is always the full width of the text column (no width cap on the
- * wrapper), so a centred or right-aligned heading aligns against the column's edges
- * and not against some narrower box. A card with no heading has no head element at all. `aside` draws a photo beside
- * the text column from the slide's 640px width up (stacked below it); without it the
- * photo's index stays in the body list, so the caller draws it where it sits. A card
- * with a second photo keeps that one in the body, drawn where it sits.
- */
-/**
- * The block indices the frame hands its child as `body`: everything but the claim and the
- * lead, ascending, with the card's photo taken out only when the caller draws one as the
- * aside (`asideIndex`: the block it drew, or null for none). Callers that need the body
- * before the frame renders (to pick a composition) read it here, so the frame and its
- * callers cannot disagree.
+ * The body indices the frame hands its child (everything but the claim and lead, ascending,
+ * minus the drawn aside), for callers that must know them before the frame renders.
  */
 export function frameBody(blocks: ContentBlock[], asideIndex: number | null = null): number[] {
   const slots = slotsOf(blocks)
@@ -92,6 +69,28 @@ export function BodyUnits({
   )
 }
 
+/**
+ * The frame an ordinary slide is drawn in: a head zone at the top-left holding the
+ * claim (the first heading) and the lead (the paragraph right after it), then a body
+ * zone below it holding every other block. The slide no longer centres its content;
+ * the claim sits in the same place on every slide, and a slide with more content than
+ * the 16:9 floor simply grows (no fixed height or clipping anywhere in here).
+ *
+ * Which block plays which part comes from `slotsOf`, which returns indices only. Each
+ * block is drawn once, under its own original index (the claim and lead through
+ * `Heading` and `BlockRenderer`, which wrap themselves in `Adjustable`), so nudges,
+ * marks and selection address it exactly as before. Zone wrappers sit outside those
+ * holders and are not elements of their own.
+ *
+ * In a stack the head zone is the full width of the text column (no width cap on the
+ * wrapper), so a centred or right-aligned heading aligns against the column's edges
+ * and not against some narrower box; in a side head (`composition`) it is the left
+ * column, and the heading aligns against that column's edges. A card with no heading
+ * has no head element at all. `aside` draws a photo beside
+ * the text column from the slide's 640px width up (stacked below it); without it the
+ * photo's index stays in the body list, so the caller draws it where it sits. A card
+ * with a second photo keeps that one in the body, drawn where it sits.
+ */
 export function SlideFrame({
   blocks,
   variant,
@@ -147,7 +146,7 @@ export function SlideFrame({
     slots.claim !== null && claim?.type === 'heading' ? (
       <div
         data-slot="head"
-        className={`flex flex-col${sideHead ? ' @min-[640px]:self-start' : ''}`}
+        className={`flex flex-col${sideHead ? ' min-w-0 @min-[640px]:self-start' : ''}`}
         style={{ gap: SLIDE_GAP.tight }}
       >
         <Heading
