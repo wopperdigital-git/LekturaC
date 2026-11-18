@@ -449,6 +449,24 @@ function flattenBlocks(card: Card, skip?: number): BulletLine[] {
         // is worse than no bullet.
         if (block.alt) lines.push({ text: block.alt, bullet: true, indent: 0, ref: null })
         break
+      // Stand-ins until the structured drawings are exported (a table of rows, an accent
+      // panel, a code panel): the words, in order, as plain lines.
+      case 'point':
+        lines.push({ text: `${block.label} — ${block.text}`, bullet: false, indent: 0, ref: null })
+        break
+      case 'callout':
+        lines.push({
+          text: block.label ? `${block.label} — ${block.text}` : block.text,
+          bullet: false,
+          indent: 0,
+          ref: block.label ? null : textRef(i, 'text'),
+        })
+        break
+      case 'code':
+        if (block.label) lines.push({ text: block.label, bullet: false, indent: 0, ref: null })
+        for (const line of block.code.split('\n')) lines.push({ text: line, bullet: false, indent: 0, ref: null })
+        if (block.caption) lines.push({ text: block.caption, bullet: false, indent: 0, ref: null })
+        break
     }
   })
 
@@ -1221,6 +1239,49 @@ function renderAdjustedBlock(
         theme.typography.lineHeight,
       )
       text(markedRuns(block.text, marksFor(card, ref)), {
+        fontFace: face,
+        fontSize: sizePt,
+        color: hex(own.color ?? theme.colors.foreground),
+        bold: own.bold,
+        italic: own.italic,
+        underline: own.underline,
+        align: own.align ?? 'left',
+        lineSpacing: spacingPt(sizePt, spacing),
+      })
+      return
+    }
+
+    /*
+      Stand-in for the structured blocks until they are exported as drawn: one body
+      text box holding the same words (a term row as `label — text`, code as its own
+      lines in a monospace face), so a nudged card never loses them.
+    */
+    case 'point':
+    case 'callout':
+    case 'code': {
+      const isCode = block.type === 'code'
+      const content =
+        block.type === 'point'
+          ? `${block.label} — ${block.text}`
+          : block.type === 'callout'
+            ? block.label
+              ? `${block.label} — ${block.text}`
+              : block.text
+            : [block.label, block.code, block.caption].filter((part): part is string => !!part).join('\n')
+      const ref = block.type === 'callout' && !block.label ? textRef(index, 'text') : null
+      const own = ref ? runStyle(ref) : style
+      const face = isCode ? 'Courier New' : bodyFace(theme, own)
+      const preferredPt = fittedPointSize(theme.typography.scale[BODY], own.fontScale, fit)
+      const { sizePt, spacing } = fitSize(
+        [{ text: content, bold: ref ? markBold(card, ref) : undefined, scale: ref ? markScale(card, ref) : undefined }],
+        box,
+        preferredPt,
+        face,
+        own.bold,
+        own.italic,
+        theme.typography.lineHeight,
+      )
+      text(ref ? markedRuns(content, marksFor(card, ref)) : content, {
         fontFace: face,
         fontSize: sizePt,
         color: hex(own.color ?? theme.colors.foreground),

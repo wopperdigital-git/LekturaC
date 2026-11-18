@@ -146,10 +146,17 @@ export function contentLines(blocks: ContentBlock[]): string[] {
   const lines: string[] = []
 
   blocks.forEach((block, i) => {
-    if (i === 0 && block.type === 'heading') return
+    // The opening heading is the slide's title, sent separately; its kicker is still words.
+    if (i === 0 && block.type === 'heading') {
+      if (block.kicker) lines.push(block.kicker)
+      return
+    }
 
     switch (block.type) {
       case 'heading':
+        if (block.kicker) lines.push(block.kicker)
+        lines.push(block.text)
+        break
       case 'paragraph':
         lines.push(block.text)
         break
@@ -169,6 +176,17 @@ export function contentLines(blocks: ContentBlock[]): string[] {
         break
       case 'comparisonGroup':
         lines.push(block.heading, ...block.items)
+        break
+      case 'point':
+        lines.push(`${block.label}: ${block.text}`)
+        break
+      case 'callout':
+        lines.push(block.label ? `${block.label}: ${block.text}` : block.text)
+        break
+      case 'code':
+        if (block.label) lines.push(block.label)
+        lines.push(...block.code.split('\n'))
+        if (block.caption) lines.push(block.caption)
         break
       case 'image':
         // An image cannot become text. Its alt describes the picture (a stock photo's is a

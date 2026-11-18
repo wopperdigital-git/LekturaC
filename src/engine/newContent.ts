@@ -50,7 +50,10 @@ export const CONTENT_OPTIONS: readonly { type: ContentType; label: string; descr
   { type: 'image', label: 'Image', description: 'A photo you search for or paste a link to' },
 ]
 
-const CONTENT_TYPE_OF: Record<Exclude<ContentBlock['type'], 'heading' | 'image'>, ContentType> = {
+const CONTENT_TYPE_OF: Record<
+  Exclude<ContentBlock['type'], 'heading' | 'image' | 'point' | 'callout' | 'code'>,
+  ContentType
+> = {
   paragraph: 'body',
   bulletList: 'list',
   stat: 'stat',
@@ -70,6 +73,10 @@ export function elementLabel(block: ContentBlock, itemIndex: number | null = nul
     return block.type === 'bulletList' ? 'List item' : 'Group item'
   }
   if (block.type === 'image') return 'Image'
+  // Not in the Insert menu yet, so they name themselves.
+  if (block.type === 'point') return 'Term row'
+  if (block.type === 'callout') return 'Callout'
+  if (block.type === 'code') return 'Code'
   const type = block.type === 'heading' ? block.size : CONTENT_TYPE_OF[block.type]
   if (!type) return 'Heading'
   return CONTENT_OPTIONS.find((option) => option.type === type)?.label ?? 'Element'
@@ -191,6 +198,12 @@ export function firstEditableField(block: ContentBlock): { field: string; item?:
       return { field: 'label' }
     case 'comparisonGroup':
       return { field: 'heading' }
+    case 'point':
+      return { field: 'label' }
+    case 'callout':
+      return { field: 'text' }
+    case 'code':
+      return { field: 'code' }
     case 'image':
       // Never opened for typing (a photo has no text run); named only so the switch stays exhaustive.
       return { field: 'text' }

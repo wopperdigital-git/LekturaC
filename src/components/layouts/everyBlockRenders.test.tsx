@@ -39,6 +39,12 @@ function visibleText(block: ContentBlock): string[] {
       return [block.label, block.text]
     case 'comparisonGroup':
       return [block.heading, ...block.items]
+    case 'point':
+      return [block.label, block.text]
+    case 'callout':
+      return block.label ? [block.label, block.text] : [block.text]
+    case 'code':
+      return [block.code, ...(block.label ? [block.label] : []), ...(block.caption ? [block.caption] : [])]
   }
 }
 
@@ -60,6 +66,10 @@ const KITCHEN_SINK: ContentBlock[] = [
   // size; every layout still has to draw each of them, once.
   { type: 'heading', text: 'MARKSIZEH1', size: 'h1' },
   { type: 'heading', text: 'MARKSIZEH3', size: 'h3' },
+  // The structured blocks (drawn by stand-ins for now; Task 5 replaces the drawings).
+  { type: 'point', label: 'MARKPOINTLAB', text: 'MARKPOINTTEXT' },
+  { type: 'callout', label: 'MARKCALLLAB', text: 'MARKCALLTEXT' },
+  { type: 'code', code: 'MARKSRC', label: 'MARKCODELAB', caption: 'MARKCODECAP' },
 ]
 
 /**

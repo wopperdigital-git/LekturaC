@@ -234,3 +234,41 @@ describe('stray delimiters', () => {
     expect(textOf(blocks)).toBe('*The Stranger')
   })
 })
+
+describe('applyEmphasis on structured blocks', () => {
+  // A code block is source text, not prose: `*p` and `&x` must come through untouched, and no
+  // mark may be invented for it.
+  it('leaves a code block and its asterisks alone', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'heading', text: 'Pointers' },
+      { type: 'code', code: 'int *p = &x;\n*p = *q * 2;' },
+    ]
+    const result = applyEmphasis(blocks)
+    expect(result.blocks[1]).toEqual(blocks[1])
+    expect(result.inline).toBeUndefined()
+  })
+
+  it('still converts emphasis in a code block label and caption', () => {
+    const result = applyEmphasis([
+      { type: 'code', code: 'a *b* c', label: '*main*.cpp', caption: 'the **entry** point' },
+    ])
+    expect(result.blocks[0]).toEqual({ type: 'code', code: 'a *b* c', label: 'main.cpp', caption: 'the entry point' })
+    expect(result.inline?.['0:label']?.marks).toEqual([{ start: 0, end: 4, type: 'bold' }])
+    expect(result.inline?.['0:caption']?.marks).toEqual([{ start: 4, end: 9, type: 'bold' }])
+    expect(result.inline?.['0:code']).toBeUndefined()
+  })
+
+  it('converts emphasis in a point, a callout and a kicker', () => {
+    const result = applyEmphasis([
+      { type: 'heading', text: 'Title', kicker: 'Part *one*' },
+      { type: 'point', label: '*Term*', text: 'a **meaning**' },
+      { type: 'callout', label: 'Idea', text: 'be *careful*' },
+    ])
+    expect(result.blocks).toEqual([
+      { type: 'heading', text: 'Title', kicker: 'Part one' },
+      { type: 'point', label: 'Term', text: 'a meaning' },
+      { type: 'callout', label: 'Idea', text: 'be careful' },
+    ])
+    expect(Object.keys(result.inline ?? {}).sort()).toEqual(['0:kicker', '1:label', '1:text', '2:text'])
+  })
+})

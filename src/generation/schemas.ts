@@ -1,5 +1,15 @@
 import { z } from 'zod'
-import { contentBlockSchema, visualStyleSchema } from '@/engine/contentBlocks'
+import {
+  bulletListBlockSchema,
+  comparisonGroupBlockSchema,
+  headingBlockSchema,
+  imageBlockSchema,
+  paragraphBlockSchema,
+  quoteBlockSchema,
+  statBlockSchema,
+  timelineStepBlockSchema,
+  visualStyleSchema,
+} from '@/engine/contentBlocks'
 
 /*
   The v2 generated deck: every slide carries its plan beside its copy.
@@ -83,6 +93,26 @@ export const deckBriefSchema = z.object({
 })
 export type DeckBrief = z.infer<typeof deckBriefSchema>
 
+/*
+  The blocks a model may write: the original eight and nothing else. `point`,
+  `callout`, `code` and a heading's `kicker` exist in the content model but are
+  made by hand until the AI is taught them, so a reply holding one fails the shape
+  check like any unknown type (and gets the one retry with the exact errors). The
+  heading drops `kicker` so a stray one is stripped, not stored.
+*/
+export const generatedBlockSchema = z.discriminatedUnion('type', [
+  headingBlockSchema.omit({ kicker: true }),
+  paragraphBlockSchema,
+  bulletListBlockSchema,
+  statBlockSchema,
+  imageBlockSchema,
+  quoteBlockSchema,
+  timelineStepBlockSchema,
+  comparisonGroupBlockSchema,
+])
+
+export type GeneratedBlock = z.infer<typeof generatedBlockSchema>
+
 export const generatedCardSchema = z
   .object({
     plan: slidePlanSchema,
@@ -95,7 +125,7 @@ export const generatedCardSchema = z
      * fatal. Not stored on the card.
      */
     imageQuery: z.string().trim().min(2).max(80).optional().catch(undefined),
-    blocks: z.array(contentBlockSchema).min(1),
+    blocks: z.array(generatedBlockSchema).min(1),
     visualStyle: visualStyleSchema,
     speakerNotes: z.string(),
     claims: z.array(generatedClaimSchema).default([]),

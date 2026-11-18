@@ -112,6 +112,22 @@ function naturalHeight(block: ContentBlock, step: Steps): number {
       return 0.062 * step.body
     case 'comparisonGroup':
       return (0.047 + block.items.length * 0.027) * step.body
+    case 'point':
+      // A term beside its meaning: as tall as the meaning's lines.
+      return lines(block.text, CHARS_PER_LINE / step.body) * BODY_LINE_H * step.body + 0.012
+    case 'callout':
+      return (
+        lines(block.text, CHARS_PER_LINE / step.body) * BODY_LINE_H * step.body +
+        (block.label ? 0.02 * step.body : 0) +
+        0.03
+      )
+    case 'code':
+      return (
+        block.code.split('\n').length * 0.025 * step.body +
+        (block.label ? 0.02 * step.body : 0) +
+        (block.caption ? 0.025 * step.body : 0) +
+        0.03
+      )
   }
 }
 

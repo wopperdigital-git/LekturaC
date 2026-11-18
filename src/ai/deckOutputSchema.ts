@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { contentBlockSchema, visualStyleSchema } from '@/engine/contentBlocks'
+import { visualStyleSchema } from '@/engine/contentBlocks'
 import {
   CLAIM_TYPES,
+  generatedBlockSchema,
   LAYOUT_FAMILIES,
   PRESENTATION_TYPES,
   SLIDE_PURPOSES,
@@ -84,7 +85,7 @@ export const generatedCardOutputSchema = z.object({
   // and a failure there throws (kind `response`, no failover), so a short or
   // long query would cost the deck. The real schema's `.catch(undefined)` drops it.
   imageQuery: z.string().optional(),
-  blocks: z.array(contentBlockSchema).min(1),
+  blocks: z.array(generatedBlockSchema).min(1),
   visualStyle: visualStyleSchema,
   speakerNotes: z.string(),
   claims: z.array(generatedClaimOutputSchema).default([]),

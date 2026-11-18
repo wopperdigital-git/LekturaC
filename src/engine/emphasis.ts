@@ -32,7 +32,7 @@ import { shiftMarks, textRef, type Mark } from './marks'
  * and a URL is exactly the kind of string that can carry a stray asterisk.
  */
 const TEXT_FIELDS: Record<ContentBlock['type'], readonly string[]> = {
-  heading: ['text'],
+  heading: ['text', 'kicker'],
   paragraph: ['text'],
   bulletList: ['items'],
   stat: ['value', 'label'],
@@ -40,6 +40,11 @@ const TEXT_FIELDS: Record<ContentBlock['type'], readonly string[]> = {
   quote: ['text', 'attribution'],
   timelineStep: ['label', 'text'],
   comparisonGroup: ['heading', 'items'],
+  point: ['label', 'text'],
+  callout: ['label', 'text'],
+  // Never `code`: it is source text, where `*p` and `a * b` are the program. Its label and caption
+  // are ordinary runs.
+  code: ['label', 'caption'],
 }
 
 /*

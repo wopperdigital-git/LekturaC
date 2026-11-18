@@ -209,6 +209,60 @@ function BlockBody({
           </ul>
         </div>
       )
+    /*
+      Stand-ins until the structured drawings land (rows, the accent callout and
+      the code panel): every field is drawn once under its own address, so
+      nothing on the card is hidden and every nudge, mark and selection already
+      works on it.
+    */
+    case 'point':
+      return (
+        <p
+          className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"
+          style={{ fontFamily: SLIDE_BODY_FONT }}
+        >
+          <span className="font-semibold text-slide-accent">
+            <EditableText textRef={textRef(index, 'label')} value={block.label} />
+          </span>
+          {' — '}
+          <EditableText textRef={textRef(index, 'text')} value={block.text} />
+        </p>
+      )
+    case 'callout':
+      return (
+        <p
+          className="max-w-prose text-[length:var(--slide-size-body)] leading-[var(--slide-line-height)] text-slide-foreground/90"
+          style={{ fontFamily: SLIDE_BODY_FONT }}
+        >
+          {block.label && (
+            <>
+              <span className="font-semibold">
+                <EditableText textRef={textRef(index, 'label')} value={block.label} />
+              </span>
+              {' — '}
+            </>
+          )}
+          <EditableText textRef={textRef(index, 'text')} value={block.text} />
+        </p>
+      )
+    case 'code':
+      return (
+        <div style={{ fontFamily: SLIDE_BODY_FONT, fontSize: 'var(--slide-size-body)' }}>
+          {block.label && (
+            <p className="text-slide-muted">
+              <EditableText textRef={textRef(index, 'label')} value={block.label} />
+            </p>
+          )}
+          <pre className="whitespace-pre text-slide-foreground" style={{ fontFamily: 'ui-monospace, monospace' }}>
+            <EditableText textRef={textRef(index, 'code')} value={block.code} />
+          </pre>
+          {block.caption && (
+            <p className="text-slide-muted">
+              <EditableText textRef={textRef(index, 'caption')} value={block.caption} />
+            </p>
+          )}
+        </div>
+      )
   }
 }
 

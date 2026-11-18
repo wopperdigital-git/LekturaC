@@ -93,6 +93,7 @@ describe('starterBlocks', () => {
 })
 
 const HEADING: ContentBlock = { type: 'heading', text: 'The heading' }
+const BODY: ContentBlock = { type: 'paragraph', text: 'Prose' }
 
 describe('contentLines', () => {
   it('skips the heading and keeps everything else in reading order', () => {
@@ -128,5 +129,35 @@ describe('contentLines', () => {
         },
       ]),
     ).toEqual([])
+  })
+
+  it('writes a point as "label: text", and a callout with or without a label', () => {
+    expect(
+      contentLines([
+        HEADING,
+        { type: 'point', label: 'Pointer', text: 'Holds an address' },
+        { type: 'callout', label: 'Key idea', text: 'Initialise it' },
+        { type: 'callout', text: 'Plain callout' },
+      ]),
+    ).toEqual(['Pointer: Holds an address', 'Key idea: Initialise it', 'Plain callout'])
+  })
+
+  it('writes each non-empty line of code, with its label and caption as their own lines', () => {
+    expect(
+      contentLines([
+        HEADING,
+        { type: 'code', code: 'int x = 0;\n\n  x++;\n', label: 'main.cpp', caption: 'Counts up' },
+      ]),
+    ).toEqual(['main.cpp', 'int x = 0;', '  x++;', 'Counts up'])
+  })
+
+  it('puts a kicker before its heading, including the opening heading the list otherwise skips', () => {
+    expect(contentLines([{ type: 'heading', text: 'The heading', kicker: 'Chapter 1' }, BODY])).toEqual([
+      'Chapter 1',
+      'Prose',
+    ])
+    expect(
+      contentLines([HEADING, { type: 'heading', text: 'Later', kicker: 'Aside' }]),
+    ).toEqual(['Aside', 'Later'])
   })
 })

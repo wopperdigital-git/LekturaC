@@ -20,6 +20,13 @@ export const headingBlockSchema = z.object({
   type: z.literal('heading'),
   text: z.string().min(1),
   size: headingSizeSchema.optional(),
+  /*
+    The eyebrow over the heading (small capitals, accent colour). Optional and
+    absent on every existing row and on everything the AI writes; a heading gains
+    one only by hand, and an edit that empties it removes the field rather than
+    storing `""`. Addressed as the `kicker` field of the heading's `textRef`.
+  */
+  kicker: z.string().optional(),
 })
 
 export const paragraphBlockSchema = z.object({
@@ -64,6 +71,32 @@ export const comparisonGroupBlockSchema = z.object({
   items: z.array(z.string().min(1)).min(1),
 })
 
+/** A term and its meaning. A consecutive run of these is one table of ruled rows. */
+export const pointBlockSchema = z.object({
+  type: z.literal('point'),
+  label: z.string().min(1),
+  text: z.string().min(1),
+})
+
+/** A key idea: the slide's accent owner. */
+export const calloutBlockSchema = z.object({
+  type: z.literal('callout'),
+  label: z.string().optional(),
+  text: z.string().min(1),
+})
+
+/**
+ * A monospace panel. `code` is plain text: no marks are ever applied to it and
+ * `applyEmphasis` never reads it, so its asterisks stay asterisks. `label` and
+ * `caption` are ordinary runs.
+ */
+export const codeBlockSchema = z.object({
+  type: z.literal('code'),
+  code: z.string().min(1),
+  label: z.string().optional(),
+  caption: z.string().optional(),
+})
+
 export const contentBlockSchema = z.discriminatedUnion('type', [
   headingBlockSchema,
   paragraphBlockSchema,
@@ -73,6 +106,9 @@ export const contentBlockSchema = z.discriminatedUnion('type', [
   quoteBlockSchema,
   timelineStepBlockSchema,
   comparisonGroupBlockSchema,
+  pointBlockSchema,
+  calloutBlockSchema,
+  codeBlockSchema,
 ])
 
 export type ContentBlock = z.infer<typeof contentBlockSchema>
@@ -84,6 +120,9 @@ export type ImageBlock = z.infer<typeof imageBlockSchema>
 export type QuoteBlock = z.infer<typeof quoteBlockSchema>
 export type TimelineStepBlock = z.infer<typeof timelineStepBlockSchema>
 export type ComparisonGroupBlock = z.infer<typeof comparisonGroupBlockSchema>
+export type PointBlock = z.infer<typeof pointBlockSchema>
+export type CalloutBlock = z.infer<typeof calloutBlockSchema>
+export type CodeBlock = z.infer<typeof codeBlockSchema>
 
 export const layoutTypeSchema = z.enum([
   'auto',

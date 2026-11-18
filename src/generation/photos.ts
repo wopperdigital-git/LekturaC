@@ -1,6 +1,5 @@
-import type { ContentBlock } from '@/engine/contentBlocks'
 import type { Photo } from '@/images/types'
-import type { GeneratedCard, GeneratedDeck } from './schemas'
+import type { GeneratedBlock, GeneratedCard, GeneratedDeck } from './schemas'
 
 /** The search the stage runs for each card; the deck job injects `searchPhotos`. */
 export type PhotoSearch = (query: string, signal?: AbortSignal) => Promise<Photo[]>
@@ -80,7 +79,7 @@ export async function addPhotos(
     }
     if (!hasInvented && !pick) return card
 
-    const blocks: ContentBlock[] = card.blocks.filter((block) => block.type !== 'image')
+    const blocks: GeneratedBlock[] = card.blocks.filter((block) => block.type !== 'image')
     if (pick && query !== undefined) {
       blocks.push({ type: 'image', url: pick.url, alt: pick.alt, prompt: query, credit: pick.credit })
     }

@@ -57,6 +57,30 @@ describe('quizSlides', () => {
   })
 })
 
+describe('quizSlides on structured blocks', () => {
+  it('sends the words of a term row, a callout and code', () => {
+    const c = {
+      id: 'c1',
+      orderIndex: 0,
+      layout: 'auto',
+      visualStyle: 'structured',
+      blocks: [
+        { type: 'heading', text: 'Pointers', kicker: 'Chapter 3' },
+        { type: 'point', label: 'Pointer', text: 'Holds an address' },
+        { type: 'callout', label: 'Key idea', text: 'Initialise it' },
+        { type: 'code', code: 'int *p = &x;' },
+      ],
+    } as Card
+    expect(quizSlides([c])[0].lines).toEqual([
+      'Chapter 3',
+      'Pointer: Holds an address',
+      'Key idea: Initialise it',
+      'int *p = &x;',
+    ])
+    expect(hasQuizContent([c])).toBe(true)
+  })
+})
+
 describe('hasQuizContent', () => {
   it('needs at least one card with body text beyond its heading', () => {
     expect(hasQuizContent([])).toBe(false)

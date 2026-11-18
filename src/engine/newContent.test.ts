@@ -159,3 +159,18 @@ describe('withImageReplaced', () => {
     expect(withImageReplaced([HEADING, OLD], 5, PHOTO)).toBeNull()
   })
 })
+
+describe('structured blocks', () => {
+  // The Insert menu does not offer them yet; the panel and the caret still have to name them.
+  it('names each by its own words', () => {
+    expect(elementLabel({ type: 'point', label: 'A', text: 'B' })).toBe('Term row')
+    expect(elementLabel({ type: 'callout', text: 'B' })).toBe('Callout')
+    expect(elementLabel({ type: 'code', code: 'x' })).toBe('Code')
+  })
+
+  it('opens the caret on the first run of each', () => {
+    expect(firstEditableField({ type: 'point', label: 'A', text: 'B' })).toEqual({ field: 'label' })
+    expect(firstEditableField({ type: 'callout', text: 'B' })).toEqual({ field: 'text' })
+    expect(firstEditableField({ type: 'code', code: 'x' })).toEqual({ field: 'code' })
+  })
+})

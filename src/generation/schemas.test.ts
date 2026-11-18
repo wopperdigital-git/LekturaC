@@ -120,6 +120,31 @@ describe('generatedDeckSchema (v2)', () => {
     }
   })
 
+  // Structured blocks are written by hand only in this part: a model reply holding one
+  // is rejected like any unknown type, so the one retry (with the exact errors) fires.
+  it.each([
+    { type: 'point', label: 'Pointer', text: 'Holds an address' },
+    { type: 'callout', text: 'Key idea' },
+    { type: 'code', code: 'int x = 0;' },
+  ])('rejects a card holding a $type block', (block) => {
+    const deck = fullDeck()
+    const card = deck.cards[0] as Record<string, unknown>
+    const heading = { type: 'heading', text: 'EVs are going mainstream' }
+    const result = generatedDeckSchema.safeParse({ ...deck, cards: [{ ...card, blocks: [heading, block] }] })
+    expect(result.success).toBe(false)
+  })
+
+  it('ignores a kicker the model wrote on a heading', () => {
+    const deck = fullDeck()
+    const card = deck.cards[0] as Record<string, unknown>
+    const blocks = [{ type: 'heading', text: 'EVs are going mainstream', kicker: 'Chapter 1' }]
+    const result = generatedDeckSchema.safeParse({ ...deck, cards: [{ ...card, blocks }] })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.cards[0].blocks[0]).toEqual({ type: 'heading', text: 'EVs are going mainstream' })
+    }
+  })
+
   it('rejects an unknown blueprint id', () => {
     const result = generatedDeckSchema.safeParse(fullDeck({ blueprint: 'informative' }))
     expect(result.success).toBe(false)

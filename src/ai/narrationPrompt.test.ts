@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { narrationMaxTokens } from './narrationPrompt'
+import type { Card } from '@/engine/contentBlocks'
+import { narrationMaxTokens, narrationSlides } from './narrationPrompt'
 
 describe('narrationMaxTokens', () => {
   /*
@@ -27,5 +28,24 @@ describe('narrationMaxTokens', () => {
 
   it('grows with slide count between the bounds', () => {
     expect(narrationMaxTokens(20)).toBeGreaterThan(narrationMaxTokens(8))
+  })
+})
+
+describe('narrationSlides on structured blocks', () => {
+  it('reads the words of a term row, a callout and code', () => {
+    const card = {
+      id: 'c1',
+      orderIndex: 0,
+      layout: 'auto',
+      visualStyle: 'structured',
+      blocks: [
+        { type: 'heading', text: 'Pointers' },
+        { type: 'point', label: 'Pointer', text: 'Holds an address' },
+        { type: 'callout', text: 'Initialise it' },
+        { type: 'code', code: 'int *p = &x;', caption: 'p points at x' },
+      ],
+    } as Card
+    const [slide] = narrationSlides([card], new Set([0]))
+    expect(slide.lines).toEqual(['Pointer: Holds an address', 'Initialise it', 'int *p = &x;', 'p points at x'])
   })
 })
