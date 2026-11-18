@@ -13,6 +13,9 @@ import { describe, expect, it } from 'vitest'
 
 const SCREEN_BREAKPOINT = /(?<![\w@[-])(?:sm|md|lg|xl|2xl):[a-z]/
 
+/** A class token with an arbitrary value (`...-[...]` or `[...]:...]`) glued to a `${`. */
+const GLUED_CLASS = /className=.*[a-z0-9-]\[[^\s`'"]*\]\$\{/
+
 function layoutSources(): { file: string; source: string }[] {
   const sources = import.meta.glob('./**/*.tsx', { query: '?raw', import: 'default', eager: true }) as Record<
     string,
@@ -40,5 +43,26 @@ describe('slide layouts', () => {
     expect(SCREEN_BREAKPOINT.test('className="md:items-center"')).toBe(true)
     expect(SCREEN_BREAKPOINT.test('className="grid @min-[640px]:grid-cols-3"')).toBe(false)
     expect(SCREEN_BREAKPOINT.test('className="@container"')).toBe(false)
+  })
+
+  // Tailwind reads class names out of the source as text. A token that ends in `]` and runs
+  // straight into a `${` is read together with the expression, so its rule is never generated
+  // (the two halves of a before and after stacked at every width). Keep a space before `${`.
+  it('never runs an arbitrary-value class straight into a template expression', () => {
+    const offenders = layoutSources().flatMap(({ file, source }) =>
+      source
+        .split('\n')
+        .filter((line) => GLUED_CLASS.test(line))
+        .map((line) => `${file}: ${line.trim()}`),
+    )
+    expect(offenders).toEqual([])
+  })
+
+  it('tells a glued class from a spaced one', () => {
+    expect(GLUED_CLASS.test("className={`grid @min-[640px]:[grid-template-columns:var(--c)]${fill ? ' flex-1' : ''}`}")).toBe(true)
+    expect(GLUED_CLASS.test("className={`grid @min-[640px]:grid-cols-[1fr_auto_1fr]${fill ? ' flex-1' : ''}`}")).toBe(true)
+    expect(GLUED_CLASS.test("className={`grid @min-[640px]:[grid-template-columns:var(--c)] ${fill ? 'flex-1' : ''}`}")).toBe(false)
+    expect(GLUED_CLASS.test("className={`grid${fill ? ' flex-1' : ''}`}")).toBe(false)
+    expect(GLUED_CLASS.test('const cell = rows[0]${x}')).toBe(false)
   })
 })

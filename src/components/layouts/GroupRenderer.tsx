@@ -476,7 +476,7 @@ function ComparisonColumns({
   return (
     <div
       {...(fill ? { 'data-fill': '' } : {})}
-      className={`grid @min-[640px]:[grid-template-columns:var(--cmp-cols)]${fill ? ' flex-1' : ''}`}
+      className={`grid @min-[640px]:[grid-template-columns:var(--cmp-cols)] ${fill ? 'flex-1' : ''}`}
       style={
         {
           '--cmp-cols': `repeat(${items.length}, minmax(0, 1fr))`,
@@ -610,8 +610,8 @@ function BeforeAfter({
     <div
       {...(fill ? { 'data-fill': '' } : {})}
       data-before-after=""
-      className={`grid grid-cols-1 items-stretch @min-[640px]:[grid-template-columns:var(--ba-cols)]${fill ? ' flex-1' : ''}`}
-      style={{ '--ba-cols': 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: SLIDE_GAP.tight } as CSSProperties}
+      className={`grid grid-cols-1 items-stretch @min-[640px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] ${fill ? 'flex-1' : ''}`}
+      style={{ gap: SLIDE_GAP.tight }}
     >
       {half(before, false)}
       <span
@@ -1103,7 +1103,7 @@ function StepsRow({ items, expressive, fill }: { items: StepItems; expressive: b
               role="presentation"
               aria-hidden="true"
               data-step-chevron=""
-              className="flex items-start justify-center text-slide-accent"
+              className={`flex items-start justify-center text-slide-accent ${expressive ? '' : 'border-t border-transparent'}`}
               style={{ paddingTop: SLIDE_GAP.tight }}
             >
               <svg

@@ -354,6 +354,29 @@ describe.each(['structured', 'expressive'] as const)('steps (%s)', (style) => {
     }
   })
 
+  it('draws one step with no chevron and no row of its own', () => {
+    const markup = html(card('steps', stepsOf(1), style))
+    expect(tagsWith(markup, 'data-step-chevron').length).toBe(0)
+    expect(count(markup, 'StepLabel0x')).toBe(1)
+    expect(count(markup, 'StepText0x')).toBe(1)
+  })
+
+  it('draws twelve steps in two rows of six, ten chevrons', () => {
+    const markup = html(card('steps', stepsOf(12), style))
+    expect(tagWith(markup, 'data-steps')).toContain('grid-template-rows:repeat(2,')
+    expect(tagsWith(markup, 'data-step-chevron').length).toBe(10)
+    for (const [label, text] of stepWords(12)) {
+      expect(count(markup, label), label).toBe(1)
+      expect(count(markup, text), text).toBe(1)
+    }
+  })
+
+  it('keeps a chevron level with the numeral: both cells carry the step rule when structured', () => {
+    const tag = tagsWith(html(card('steps', stepsOf(3), style)), 'data-step-chevron')[0] ?? ''
+    expect(classesOf(tag).includes('border-t')).toBe(style === 'structured')
+    if (style === 'structured') expect(classesOf(tag)).toContain('border-transparent')
+  })
+
   it('draws six steps in two rows of three', () => {
     const markup = html(card('steps', stepsOf(6), style))
     expect(tagWith(markup, 'data-steps')).toContain('grid-template-rows:repeat(2,')
@@ -414,7 +437,7 @@ describe.each(['structured', 'expressive'] as const)('beforeAfter (%s)', (style)
     const root = tagWith(html(card('beforeAfter', blocks, style)), 'data-before-after=')
     expect(root).not.toBe('')
     expect(classesOf(root)).toContain('grid-cols-1')
-    expect(classesOf(root).some((c) => c.startsWith('@min-[640px]:[grid-template-columns:'))).toBe(true)
+    expect(classesOf(root).some((c) => c.startsWith('@min-[640px]:grid-cols-['))).toBe(true)
   })
 
   it('puts the deep ground on the second half only', () => {
@@ -453,6 +476,17 @@ describe.each(['structured', 'expressive'] as const)('beforeAfter (%s)', (style)
     const markup = html(card('beforeAfter', blocks, style))
     expect(markup).toContain('data-block-index="1"')
     expect(markup).toContain('data-block-index="2"')
+  })
+
+  it('lets a lone before and after fill the body', () => {
+    const root = tagWith(html(card('beforeAfter', blocks, style)), 'data-before-after=')
+    expect(root).toContain('data-fill')
+    expect(classesOf(root)).toContain('flex-1')
+  })
+
+  it('sets its two halves side by side with a class Tailwind can read from the source', () => {
+    const root = tagWith(html(card('beforeAfter', blocks, style)), 'data-before-after=')
+    expect(classesOf(root)).toContain('@min-[640px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')
   })
 
   it('draws three groups as columns, not a before and after', () => {
