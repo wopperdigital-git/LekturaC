@@ -306,3 +306,158 @@ describe.each(['structured', 'expressive'] as const)('photoList (%s)', (style) =
     expect(count(markup, 'src="https://example.test/t.png"')).toBe(1)
   })
 })
+
+const stepBlock = (label: string, text: string): ContentBlock => ({ type: 'timelineStep', label, text })
+const groupBlock = (name: string, ...items: string[]): ContentBlock => ({ type: 'comparisonGroup', heading: name, items })
+const stepWords = (n: number) => Array.from({ length: n }, (_, i) => [`StepLabel${i}x`, `StepText${i}x`] as const)
+const stepsOf = (n: number): ContentBlock[] => [heading, ...stepWords(n).map(([label, text]) => stepBlock(label, text))]
+const tagsWith = (markup: string, attr: string) => markup.match(new RegExp(`<[a-z0-9]+[^>]*${attr}[^>]*>`, 'g')) ?? []
+
+describe.each(['structured', 'expressive'] as const)('steps (%s)', (style) => {
+  it('draws every step label and text once', () => {
+    const markup = html(card('steps', stepsOf(4), style))
+    for (const [label, text] of stepWords(4)) {
+      expect(count(markup, label), label).toBe(1)
+      expect(count(markup, text), text).toBe(1)
+    }
+    expect(count(markup, 'Loops and branches')).toBe(1)
+  })
+
+  it('draws a chevron between steps: one fewer than the steps in a row', () => {
+    expect(tagsWith(html(card('steps', stepsOf(4), style)), 'data-step-chevron').length).toBe(3)
+    expect(tagsWith(html(card('steps', stepsOf(5), style)), 'data-step-chevron').length).toBe(4)
+  })
+
+  it('draws chevrons as aria-hidden stroke-only accent SVGs', () => {
+    const markup = html(card('steps', stepsOf(3), style))
+    for (const tag of tagsWith(markup, 'data-step-chevron')) expect(tag).toContain('aria-hidden="true"')
+    const svg = markup.match(/<svg[^>]*>/g) ?? []
+    expect(svg.length).toBe(2)
+    for (const tag of svg) {
+      expect(tag).toContain('fill="none"')
+      expect(tag).toContain('stroke="currentColor"')
+      expect(tag).toContain('aria-hidden="true"')
+    }
+    expect(classesOf(tagsWith(markup, 'data-step-chevron')[0] ?? '')).toContain('text-slide-accent')
+  })
+
+  it('wraps seven steps into two rows of four, dropping the chevron at the end of a row', () => {
+    const markup = html(card('steps', stepsOf(7), style))
+    const root = tagWith(markup, 'data-steps')
+    expect(root).toContain('grid-template-rows:repeat(2,')
+    // Four columns and the three gaps between them.
+    expect(root).toContain('grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr)')
+    expect(tagsWith(markup, 'data-step-chevron').length).toBe(5)
+    for (const [label, text] of stepWords(7)) {
+      expect(count(markup, label), label).toBe(1)
+      expect(count(markup, text), text).toBe(1)
+    }
+  })
+
+  it('draws six steps in two rows of three', () => {
+    const markup = html(card('steps', stepsOf(6), style))
+    expect(tagWith(markup, 'data-steps')).toContain('grid-template-rows:repeat(2,')
+    expect(tagsWith(markup, 'data-step-chevron').length).toBe(4)
+  })
+
+  it('draws the number as an aria-hidden accent h3 numeral, never a disc', () => {
+    const markup = html(card('steps', stepsOf(4), style))
+    const tags = tagsWith(markup, 'data-step-number')
+    expect(tags.length).toBe(4)
+    for (const tag of tags) {
+      expect(tag).toContain('aria-hidden="true"')
+      expect(classesOf(tag)).toContain('text-slide-accent')
+      expect(classesOf(tag)).not.toContain('rounded-full')
+      expect(tag).toContain('font-size:var(--slide-size-h3)')
+    }
+    expect(markup).toMatch(/data-step-number[^>]*>01</)
+  })
+
+  it('fills nothing with the accent and draws no box', () => {
+    const markup = html(card('steps', stepsOf(4), style))
+    expect(markup).not.toContain('data-accent-owner')
+    expect(markup).not.toContain('bg-slide-accent')
+    expect(markup).not.toContain('bg-slide-surface')
+    expect(markup).not.toContain('divide-')
+  })
+
+  it('lets a lone group fill the body, the rows sharing the height', () => {
+    const root = tagWith(html(card('steps', stepsOf(4), style)), 'data-steps')
+    expect(root).toContain('data-fill')
+    expect(classesOf(root)).toContain('flex-1')
+    expect(root).toContain('minmax(min-content, 1fr)')
+  })
+
+  it('keeps each step under its own block index and draws no screen breakpoint', () => {
+    const markup = html(card('steps', stepsOf(4), style))
+    for (const index of [1, 2, 3, 4]) expect(markup).toContain(`data-block-index="${index}"`)
+    expect(markup).not.toMatch(/class="[^"]*\b(sm|md|lg):/)
+  })
+})
+
+describe.each(['structured', 'expressive'] as const)('beforeAfter (%s)', (style) => {
+  const blocks: ContentBlock[] = [
+    heading,
+    groupBlock('BeforeHead', 'BeforeOne', 'BeforeTwo', 'BeforeThree'),
+    groupBlock('AfterHead', 'AfterOne', 'AfterTwo', 'AfterThree'),
+  ]
+
+  it('draws both group headings and every item once', () => {
+    const markup = html(card('beforeAfter', blocks, style))
+    for (const text of ['BeforeHead', 'BeforeOne', 'BeforeTwo', 'BeforeThree', 'AfterHead', 'AfterOne', 'AfterTwo', 'AfterThree']) {
+      expect(count(markup, text), text).toBe(1)
+    }
+    expect(tagsWith(markup, 'data-group-heading').length).toBe(2)
+  })
+
+  it('is two halves side by side from the container width up, stacked below', () => {
+    const root = tagWith(html(card('beforeAfter', blocks, style)), 'data-before-after=')
+    expect(root).not.toBe('')
+    expect(classesOf(root)).toContain('grid-cols-1')
+    expect(classesOf(root).some((c) => c.startsWith('@min-[640px]:[grid-template-columns:'))).toBe(true)
+  })
+
+  it('puts the deep ground on the second half only', () => {
+    const markup = html(card('beforeAfter', blocks, style))
+    const halves = tagsWith(markup, 'data-half')
+    expect(halves.length).toBe(2)
+    expect(halves[0]).not.toContain('data-ground')
+    expect(halves[1]).toContain('data-ground="deep"')
+    expect(halves[1]).toContain('background:var(--slide-background)')
+    expect(classesOf(halves[1])).toContain('rounded-slide')
+    expect(count(markup, 'data-ground="deep"')).toBe(1)
+    for (const tag of halves) expect(tag).toContain('padding:var(--slide-gap-group)')
+  })
+
+  it('draws an aria-hidden arrow between them, pointing down when stacked', () => {
+    const markup = html(card('beforeAfter', blocks, style))
+    const arrow = tagWith(markup, 'data-before-after-arrow')
+    expect(arrow).toContain('aria-hidden="true"')
+    expect(classesOf(arrow)).toContain('rotate-90')
+    expect(classesOf(arrow)).toContain('@min-[640px]:rotate-0')
+    expect(markup.indexOf('data-before-after-arrow')).toBeGreaterThan(markup.indexOf('BeforeThree'))
+    expect(markup.indexOf('data-before-after-arrow')).toBeLessThan(markup.indexOf('AfterHead'))
+    expect(markup).toMatch(/data-before-after-arrow[^>]*><svg[^>]*stroke="currentColor"/)
+  })
+
+  it('draws the items as ruled rows and owns no accent', () => {
+    const markup = html(card('beforeAfter', blocks, style))
+    expect(markup).not.toContain('data-accent-owner')
+    expect(markup).not.toContain('data-accent-panel')
+    expect(markup).not.toContain('divide-')
+    expect(markup).not.toContain('bg-slide-surface')
+    if (style === 'structured') expect(count(markup, 'border-t border-slide-border')).toBe(6)
+  })
+
+  it('stays editable: each half keeps its own block index', () => {
+    const markup = html(card('beforeAfter', blocks, style))
+    expect(markup).toContain('data-block-index="1"')
+    expect(markup).toContain('data-block-index="2"')
+  })
+
+  it('draws three groups as columns, not a before and after', () => {
+    const markup = html(card('beforeAfter', [...blocks, groupBlock('ThirdHead', 'ThirdOne')], style))
+    expect(markup).not.toContain('data-before-after')
+    expect(count(markup, 'ThirdHead')).toBe(1)
+  })
+})

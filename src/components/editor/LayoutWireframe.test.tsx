@@ -251,3 +251,28 @@ describe('LayoutWireframe two columns, stat split and photo list', () => {
     expect(html).not.toContain('data-wire-ground')
   })
 })
+
+/** Steps and before-and-after each have a drawing of their own, not the standard stand-in. */
+describe('LayoutWireframe steps and before-and-after', () => {
+  it.each<VisualStyle>(['structured', 'expressive'])('draws neither as the standard stand-in (%s)', (style) => {
+    for (const layout of ['steps', 'beforeAfter'] as const) {
+      expect(draw(layout, style), layout).not.toBe(draw('standard', style))
+    }
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws steps as four columns with a chevron between neighbours (%s)', (style) => {
+    const html = draw('steps', style)
+    expect((html.match(/data-wire-step=""/g) ?? []).length).toBe(4)
+    expect((html.match(/data-wire-chevron=""/g) ?? []).length).toBe(3)
+    expect(html).not.toContain('data-wire-ground')
+    expect(html).not.toContain('data-wire-track')
+  })
+
+  it.each<VisualStyle>(['structured', 'expressive'])('draws before-and-after as a plain half, an arrow and a deep half (%s)', (style) => {
+    const html = draw('beforeAfter', style)
+    expect(html).toContain('data-wire-arrow')
+    expect((html.match(/data-wire-after=""/g) ?? []).length).toBe(1)
+    // The deep half is a filled block; the whole tile is not on a ground.
+    expect(html).not.toContain('data-wire-ground')
+  })
+})

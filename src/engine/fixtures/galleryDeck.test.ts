@@ -36,6 +36,8 @@ const EXPECTED: Array<[string, string]> = [
   ['g-twocol', 'twoColumn'],
   ['g-statsplit', 'statSplit'],
   ['g-photolist', 'photoList'],
+  ['g-steps', 'steps'],
+  ['g-beforeafter', 'beforeAfter'],
 ]
 
 describe('GALLERY_DECK', () => {

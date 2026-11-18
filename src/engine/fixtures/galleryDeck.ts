@@ -375,6 +375,26 @@ const SPECS: Spec[] = [
       photo('A notebook with a loop traced in pencil'),
     ],
   ],
+  [
+    'g-steps',
+    'steps',
+    [
+      heading('Fixing a loop that never ends'),
+      step('Reproduce', 'Run the program and watch it hang.'),
+      step('Locate', 'Find the loop that keeps running.'),
+      step('Inspect', 'Print the counter on every pass.'),
+      step('Fix', 'Change the update so the check can fail.'),
+    ],
+  ],
+  [
+    'g-beforeafter',
+    'beforeAfter',
+    [
+      heading('Rewriting a loop'),
+      group('Before', 'Counter set in three places', 'Condition buried in the body', 'Exit by break only'),
+      group('After', 'Counter set in the header', 'Condition read at the top', 'Exit by the condition'),
+    ],
+  ],
 ]
 
 /**

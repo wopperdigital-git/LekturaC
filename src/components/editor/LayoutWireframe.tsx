@@ -111,6 +111,77 @@ function FigurePanel({ x, y, w, h, labelW = 0.55 }: { x: number; y: number; w: n
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i)
 
+/** A stroke-only chevron or arrow in accent, for the steps and the before and after. */
+function Chevron({ x, y, name }: { x: number; y: number; name: string }) {
+  return (
+    <path
+      {...{ [name]: '' }}
+      d={`M${x} ${y}l3 3-3 3`}
+      fill="none"
+      stroke={ACCENT}
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  )
+}
+
+/**
+ * Two halves and an arrow between them: the first half plain, the second on a filled deep block
+ * (`data-wire-after`) whose bars are drawn in the page colour, as `LayoutWireframe` does for a deep
+ * ground. Each half is a heading bar over three item rows, a hairline above each when structured, a
+ * small accent square before each when expressive.
+ */
+function BeforeAfterDrawing({ expressive: loud }: { expressive: boolean }) {
+  const half = (x: number) => (
+    <g>
+      <Title x={x + 6} y={33} w={26} h={3.5} />
+      {range(3).map((j) => {
+        const y = 42 + j * 11
+        return (
+          <g key={j}>
+            {loud ? <rect x={x + 6} y={y + 0.5} width={2.4} height={2.4} fill={ACCENT} /> : <Rule x={x + 6} y={y - 2.5} w={44} />}
+            <Line x={x + (loud ? 12 : 6)} y={y} w={(loud ? 34 : 38) - j * 6} h={3.5} />
+          </g>
+        )
+      })}
+    </g>
+  )
+  return (
+    <>
+      <Title x={12} y={loud ? 11 : 13} w={58} />
+      {half(12)}
+      <path data-wire-arrow="" d="M72 50h10M79 46l4 4-4 4" fill="none" stroke={ACCENT} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+      <rect data-wire-after="" x={90} y={26} width={58} height={54} rx={3} fill={INK} opacity={0.88} />
+      <g style={{ '--app-foreground': 'var(--app-background)', '--app-accent': 'var(--app-background)' } as CSSProperties}>
+        {half(90)}
+      </g>
+    </>
+  )
+}
+
+/** A row of numbered steps with a chevron between neighbours, a hairline above each step when structured. */
+function StepsDrawing({ expressive: loud }: { expressive: boolean }) {
+  return (
+    <>
+      <Title x={12} y={loud ? 11 : 13} />
+      {range(4).map((i) => {
+        const x = 12 + i * 35
+        return (
+          <g key={i} data-wire-step="">
+            {!loud && <Rule x={x} y={30} w={29} />}
+            <Figure x={x} y={34} w={loud ? 9 : 8} h={4} />
+            <Title x={x} y={43} w={22} h={3.5} />
+            <Line x={x} y={51} w={28} />
+            <Line x={x} y={57} w={20} />
+            {i < 3 && <Chevron x={x + 30.5} y={34} name="data-wire-chevron" />}
+          </g>
+        )
+      })}
+    </>
+  )
+}
+
 function structured(layout: LayoutType): ReactNode {
   switch (layout) {
     case 'hero':
@@ -190,8 +261,11 @@ function structured(layout: LayoutType): ReactNode {
         </>
       )
     case 'steps':
+      // A row of numbered steps across the slide, each under a hairline, a chevron between neighbours.
+      return <StepsDrawing expressive={false} />
     case 'beforeAfter':
-      // Stand-ins: drawn as the standard wireframe until each gets its own.
+      // A plain half, an arrow, then a half on a filled deep block.
+      return <BeforeAfterDrawing expressive={false} />
     case 'standard':
       // The heading, then the content below it, no border or fill.
       return (
@@ -530,8 +604,11 @@ function expressive(layout: LayoutType): ReactNode {
         </>
       )
     case 'steps':
+      // The same row, bare and heavier, a chevron between neighbours.
+      return <StepsDrawing expressive={true} />
     case 'beforeAfter':
-      // Stand-ins: drawn as the standard wireframe until each gets its own.
+      // The same two halves with an accent square before each item and no rules.
+      return <BeforeAfterDrawing expressive={true} />
     case 'standard':
       // The lead heading, then the content below it.
       return (

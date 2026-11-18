@@ -8,7 +8,7 @@ import { SLIDE_BODY_FONT, SLIDE_GAP, SLIDE_HEADING_FONT, SLIDE_SIZE } from '@/li
 import { Adjustable } from './Adjustable'
 import { PhotoCredit } from './PhotoCredit'
 import { EditableText } from './EditableText'
-import { useItemProps } from './adjustContext'
+import { GROUND_ATTR, useItemProps } from './adjustContext'
 import { figureSize } from './figureSize'
 
 const BODY_SIZE = 'var(--slide-size-body)'
@@ -64,10 +64,12 @@ export function GroupRenderer({
       return <TimelineColumn items={node.items} expressive={expressive} fill={fill} />
 
     case 'columns':
-    case 'beforeAfter':
-      // (`beforeAfter` is drawn as the columns until its own arrangement lands.)
       // Groups side by side in equal columns, the accent owner's on the tint.
       return <ComparisonColumns items={node.items} expressive={expressive} fill={fill} accentIndex={accentIndex} itemProps={itemProps} />
+
+    case 'beforeAfter':
+      // Two groups: a plain half, an arrow, and a half on a local deep ground. No accent owner.
+      return <BeforeAfter items={node.items} expressive={expressive} fill={fill} itemProps={itemProps} />
 
     case 'chips': {
       // From IconGridLayout. Up to six items are columns of a big numeral over the item's
@@ -105,10 +107,12 @@ export function GroupRenderer({
       return <StatLedger items={node.items} expressive={expressive} fill={fill} />
 
     case 'timelineRow':
-    case 'steps':
-      // (`steps` is drawn as the horizontal timeline until its own arrangement lands.)
       // Steps side by side on one track per row: up to five in a row, six or more in two rows.
       return <TimelineRow items={node.items} expressive={expressive} fill={fill} />
+
+    case 'steps':
+      // A row of numbered steps with a chevron between neighbours: no track, no box.
+      return <StepsRow items={node.items} expressive={expressive} fill={fill} />
 
     case 'table':
       // One column per group on a shared grid, so the nth item of every group lines up.
@@ -501,38 +505,133 @@ function ComparisonColumns({
               <div data-group-heading="" className={groupHeadingClass(featured)} style={GROUP_HEADING_FONT}>
                 <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
               </div>
-              <ul
-                className={`flex flex-col${fill ? ' flex-1' : ''}`}
-                style={{ marginTop: SLIDE_GAP.tight, ...(expressive ? { gap: SLIDE_GAP.tight } : {}) }}
-              >
-                {group.block.items.map((item, j) => (
-                  <li
-                    key={j}
-                    {...itemProps(group.index, j)}
-                    className={`flex min-w-0 ${fill ? 'flex-1 items-center' : 'items-start'}${expressive ? '' : ' border-t border-slide-border'}`}
-                    style={expressive ? { gap: SLIDE_GAP.tight } : { paddingBlock: SLIDE_GAP.tight }}
-                  >
-                    {expressive && (
-                      <span
-                        aria-hidden="true"
-                        className="shrink-0 bg-slide-accent"
-                        style={{ width: '0.45em', height: '0.45em', fontSize: textSize, marginTop: '0.55em' }}
-                      />
-                    )}
-                    <span
-                      data-item-text=""
-                      className="min-w-0 text-slide-foreground/90"
-                      style={{ fontSize: textSize, ...(expressive ? { fontWeight: 600 } : {}) }}
-                    >
-                      <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <GroupRows group={group} textSize={textSize} expressive={expressive} fill={fill} itemProps={itemProps} />
             </div>
           </Adjustable>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * One comparison group's items as rows: a hairline above each when structured, spaced rows led by
+ * a small accent square when expressive, all at the size the caller chose. Shared by the columns and
+ * the before and after, so the two read as one family. When it fills, the rows share the height.
+ */
+function GroupRows({
+  group,
+  textSize,
+  expressive,
+  fill,
+  itemProps,
+}: {
+  group: ComparisonItems[number]
+  textSize: string
+  expressive: boolean
+  fill: boolean
+  itemProps: ItemProps
+}) {
+  return (
+    <ul
+      className={`flex flex-col${fill ? ' flex-1' : ''}`}
+      style={{ marginTop: SLIDE_GAP.tight, ...(expressive ? { gap: SLIDE_GAP.tight } : {}) }}
+    >
+      {group.block.items.map((item, j) => (
+        <li
+          key={j}
+          {...itemProps(group.index, j)}
+          className={`flex min-w-0 ${fill ? 'flex-1 items-center' : 'items-start'}${expressive ? '' : ' border-t border-slide-border'}`}
+          style={expressive ? { gap: SLIDE_GAP.tight } : { paddingBlock: SLIDE_GAP.tight }}
+        >
+          {expressive && (
+            <span
+              aria-hidden="true"
+              className="shrink-0 bg-slide-accent"
+              style={{ width: '0.45em', height: '0.45em', fontSize: textSize, marginTop: '0.55em' }}
+            />
+          )}
+          <span
+            data-item-text=""
+            className="min-w-0 text-slide-foreground/90"
+            style={{ fontSize: textSize, ...(expressive ? { fontWeight: 600 } : {}) }}
+          >
+            <EditableText textRef={textRef(group.index, 'items', j)} value={item} />
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Exactly two groups, a before and an after: two halves side by side from 640px of slide width up
+ * (stacked below it) with an arrow between them, pointing right and turning down when stacked. The
+ * first half sits on the slide's own ground; the second is a local deep ground (`data-ground`), so
+ * `index.css` re-points the colours inside it and the slide's `bg-slide-background` there is the deep
+ * colour. Picked text colours do not show inside it, as on any deep ground. Each half is a group
+ * heading over ruled rows, with the same padding so the headings line up. The arrangement owns no accent
+ * fill: the deep half is the contrast. When it fills the body the halves stretch to its height.
+ */
+function BeforeAfter({
+  items,
+  expressive,
+  fill,
+  itemProps,
+}: {
+  items: ComparisonItems
+  expressive: boolean
+  fill: boolean
+  itemProps: ItemProps
+}) {
+  const textSize = itemTextSize(items.flatMap(({ block }) => block.items))
+  const [before, after] = items
+  const half = (group: ComparisonItems[number], deep: boolean) => (
+    <Adjustable index={group.index}>
+      <div
+        data-half={deep ? 'after' : 'before'}
+        {...(deep ? { [GROUND_ATTR]: 'deep' } : {})}
+        className={`flex min-w-0 flex-col${deep ? ' rounded-slide' : ''}`}
+        style={{
+          fontFamily: SLIDE_BODY_FONT,
+          fontSize: BODY_SIZE,
+          padding: SLIDE_GAP.group,
+          ...(deep ? { background: 'var(--slide-background)' } : {}),
+        }}
+      >
+        <div data-group-heading="" className="font-semibold text-slide-foreground" style={GROUP_HEADING_FONT}>
+          <EditableText textRef={textRef(group.index, 'heading')} value={group.block.heading} />
+        </div>
+        <GroupRows group={group} textSize={textSize} expressive={expressive} fill={fill} itemProps={itemProps} />
+      </div>
+    </Adjustable>
+  )
+  return (
+    <div
+      {...(fill ? { 'data-fill': '' } : {})}
+      data-before-after=""
+      className={`grid grid-cols-1 items-stretch @min-[640px]:[grid-template-columns:var(--ba-cols)]${fill ? ' flex-1' : ''}`}
+      style={{ '--ba-cols': 'minmax(0, 1fr) auto minmax(0, 1fr)', gap: SLIDE_GAP.tight } as CSSProperties}
+    >
+      {half(before, false)}
+      <span
+        aria-hidden="true"
+        data-before-after-arrow=""
+        className="flex justify-self-center text-slide-accent rotate-90 @min-[640px]:rotate-0 @min-[640px]:self-center"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ width: 'var(--slide-size-h2)', height: 'var(--slide-size-h2)' }}
+        >
+          <path d="M4 12h16M14 6l6 6-6 6" />
+        </svg>
+      </span>
+      {half(after, true)}
     </div>
   )
 }
@@ -927,6 +1026,100 @@ function TimelineRow({ items, expressive, fill }: { items: StepItems; expressive
               <StepWords step={step} textSize={textSize} />
             </li>
           </Adjustable>
+        </Fragment>
+      ))}
+    </ol>
+  )
+}
+
+/**
+ * Steps as a row of columns, each an accent numeral at h3 over its label (h3 weight, foreground) and
+ * its text, with a chevron between neighbours. The chevron is a grid cell of its own between two step
+ * columns, so a row of `c` steps is `2c - 1` columns and a row's last step has none. Six or more steps
+ * wrap into two rows of `ceil(n / 2)`. Structured steps sit under a hairline; expressive ones are
+ * bare and heavier. No track, no box, no fill. When it fills the body the step rows share the height,
+ * content at the top.
+ */
+function StepsRow({ items, expressive, fill }: { items: StepItems; expressive: boolean; fill: boolean }) {
+  const textSize = stepTextSize(items)
+  const columns = items.length <= MAX_ROW_STEPS ? items.length : Math.ceil(items.length / 2)
+  const rowCount = Math.ceil(items.length / columns)
+  const template = Array.from({ length: columns }, () => 'minmax(0, 1fr)').join(' auto ')
+  const chevronBox = `calc(var(--slide-size-h3) * ${STEP_LABEL_LINE})`
+  return (
+    <ol
+      {...(fill ? { 'data-fill': '' } : {})}
+      data-steps=""
+      className={`grid${fill ? ' flex-1' : ''}`}
+      style={{
+        fontFamily: SLIDE_BODY_FONT,
+        fontSize: BODY_SIZE,
+        gridTemplateColumns: template,
+        gridTemplateRows: `repeat(${rowCount}, ${fill ? 'minmax(min-content, 1fr)' : 'auto'})`,
+        columnGap: SLIDE_GAP.tight,
+        rowGap: SLIDE_GAP.section,
+        ...(fill ? { alignContent: 'start' } : {}),
+      }}
+    >
+      {items.map((step, i) => (
+        <Fragment key={step.index}>
+          <Adjustable index={step.index}>
+            <li
+              className={`flex min-w-0 flex-col${expressive ? '' : ' border-t border-slide-border'}`}
+              style={{ gap: SLIDE_GAP.tight, paddingTop: SLIDE_GAP.tight, fontFamily: SLIDE_BODY_FONT, fontSize: BODY_SIZE }}
+            >
+              <span
+                aria-hidden="true"
+                data-step-number=""
+                className="block text-slide-accent"
+                style={{
+                  fontFamily: SLIDE_HEADING_FONT,
+                  fontSize: 'var(--slide-size-h3)',
+                  fontWeight: expressive ? 800 : 600,
+                  lineHeight: STEP_LABEL_LINE,
+                }}
+              >
+                {numeralText(i)}
+              </span>
+              <div
+                data-step-label=""
+                className="text-slide-foreground"
+                style={{
+                  fontFamily: SLIDE_HEADING_FONT,
+                  fontSize: 'var(--slide-size-h3)',
+                  fontWeight: expressive ? 700 : 600,
+                  lineHeight: STEP_LABEL_LINE,
+                }}
+              >
+                <EditableText textRef={textRef(step.index, 'label')} value={step.block.label} />
+              </div>
+              <div data-step-text="" className="text-slide-foreground/90" style={{ fontFamily: SLIDE_BODY_FONT, fontSize: textSize }}>
+                <EditableText textRef={textRef(step.index, 'text')} value={step.block.text} />
+              </div>
+            </li>
+          </Adjustable>
+          {i % columns !== columns - 1 && i < items.length - 1 && (
+            <li
+              role="presentation"
+              aria-hidden="true"
+              data-step-chevron=""
+              className="flex items-start justify-center text-slide-accent"
+              style={{ paddingTop: SLIDE_GAP.tight }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ width: chevronBox, height: chevronBox }}
+              >
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </li>
+          )}
         </Fragment>
       ))}
     </ol>
