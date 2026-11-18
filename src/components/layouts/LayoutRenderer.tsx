@@ -34,6 +34,8 @@ const FLOW_LAYOUTS = [
   'timelineRow',
   'comparisonTable',
   'gallery',
+  'steps',
+  'beforeAfter',
 ] as const
 
 type FlowLayoutName = (typeof FLOW_LAYOUTS)[number]
@@ -53,6 +55,12 @@ const LAYOUT_COMPONENTS: Record<
   statHero: StatHeroLayout,
   quote: QuoteLayout,
   textFocus: TextFocusLayout,
+  // Stand-ins: the five frames below are drawn as the standard frame until their own components land.
+  section: StandardLayout,
+  statement: StandardLayout,
+  twoColumn: StandardLayout,
+  statSplit: StandardLayout,
+  photoList: StandardLayout,
 }
 
 /**

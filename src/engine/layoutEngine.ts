@@ -5,6 +5,9 @@ export const SHORT_ITEM_MAX_CHARS = 40
 /** The most items a bullet list can hold and still be drawn as chips. */
 export const MAX_CHIP_ITEMS = 6
 
+/** The longest paragraph (characters) a heading may carry and still be a `statement` slide. */
+export const STATEMENT_MAX_LEAD = 140
+
 /**
  * Rule-based classifier: inspects what a card's content actually is and
  * picks the layout that best presents it. Mirrors Gamma's "AI picks a
@@ -32,11 +35,17 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
   if (core) {
     const layout = chooseLayout(core, context)
     // Plain prose beside a photo splits the slide; a bare heading (or nothing)
-    // beside it is an image slide. Every other arrangement (hero, quote, stat,
-    // list, timeline, comparison) keeps its own and draws the photo itself.
-    if (layout === 'standard' || layout === 'textFocus') {
+    // beside it is an image slide. `section` and `statement` are the same plain
+    // prose read by their own rules, so the photo turns them the same way.
+    if (layout === 'standard' || layout === 'textFocus' || layout === 'section' || layout === 'statement') {
       return blocksOfType(core, 'paragraph').length >= 1 ? 'standardSplit' : 'imageFocus'
     }
+    // A list beside a photo, with nothing else but headings and paragraphs, is a photo list.
+    if ((layout === 'iconGrid' || layout === 'numberedList') && isListWithProse(core)) return 'photoList'
+    // A stat split has no place for a photo, so a card holding one stays a stat hero.
+    if (layout === 'statSplit') return 'statHero'
+    // Every other arrangement (hero, quote, stat, list, timeline, comparison)
+    // keeps its own and draws the photo itself.
     return layout
   }
 
@@ -60,6 +69,31 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
     images.length === 0
   ) {
     return 'hero'
+  }
+
+  // A heading on its own is a section divider, but only past the opening card.
+  if (!context.isFirstCard && blocks.length === 1 && headings.length === 1) {
+    return 'section'
+  }
+
+  // One heading and one short paragraph: a statement, a claim set large. Never the opener.
+  if (
+    !context.isFirstCard &&
+    blocks.length === 2 &&
+    blocks[0].type === 'heading' &&
+    blocks[1].type === 'paragraph' &&
+    blocks[1].text.length <= STATEMENT_MAX_LEAD
+  ) {
+    return 'statement'
+  }
+
+  // One figure beside one list, with only headings and paragraphs round them.
+  if (
+    stats.length === 1 &&
+    bulletLists.length === 1 &&
+    blocks.every((b) => b.type === 'heading' || b.type === 'paragraph' || b.type === 'stat' || b.type === 'bulletList')
+  ) {
+    return 'statSplit'
   }
 
   if (stats.length === 1 && comparisonGroups.length === 0 && timelineSteps.length === 0) {
@@ -125,6 +159,14 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
   return 'standard'
 }
 
+/** Exactly one bullet list, and nothing else but headings and paragraphs. */
+function isListWithProse(blocks: ContentBlock[]): boolean {
+  return (
+    blocksOfType(blocks, 'bulletList').length === 1 &&
+    blocks.every((b) => b.type === 'bulletList' || b.type === 'heading' || b.type === 'paragraph')
+  )
+}
+
 /** Resolves a card's effective layout: an explicit override wins, 'auto' defers to the classifier. */
 export function resolveLayout(
   layout: LayoutType,
@@ -187,7 +229,8 @@ export function cardKind(blocks: ContentBlock[], context: LayoutContext = {}): C
   const core = setAsidePhoto(blocks)
   if (core) {
     const kind = cardKind(core, context)
-    return kind === 'text' ? 'image' : kind
+    // A bare heading is a title card, but beside a photo it is an image card (the opener stays a title).
+    return kind === 'text' || (kind === 'title' && !context.isFirstCard) ? 'image' : kind
   }
 
   const stats = blocksOfType(blocks, 'stat')
@@ -205,6 +248,8 @@ export function cardKind(blocks: ContentBlock[], context: LayoutContext = {}): C
   if (images.length >= 2) return 'gallery'
   if (bulletLists.length >= 1) return 'list'
   if (context.isFirstCard && headings.length >= 1 && blocks.length <= 2) return 'title'
+  // A lone heading is a title card wherever it sits: the picker offers hero and section.
+  if (headings.length === 1 && blocks.length === 1) return 'title'
   return 'text'
 }
 
@@ -237,6 +282,13 @@ const KIND_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, CardKind> = {
   timelineRow: 'timeline',
   comparisonTable: 'comparison',
   gallery: 'gallery',
+  section: 'title',
+  statement: 'text',
+  twoColumn: 'text',
+  statSplit: 'stats',
+  steps: 'timeline',
+  photoList: 'list',
+  beforeAfter: 'comparison',
 }
 
 /** The card's type: its named layout if it has one, otherwise what its blocks say. */
@@ -269,27 +321,39 @@ const TREATMENTS: VisualStyle[] = ['structured', 'expressive']
 export function componentsForKind(kind: CardKind, blocks: ContentBlock[]): Exclude<LayoutType, 'auto'>[] {
   switch (kind) {
     case 'title':
-      return ['hero']
-    case 'stats':
-      return blocksOfType(blocks, 'stat').length >= 2 ? ['statHero', 'statGrid', 'statList'] : ['statHero']
+      return ['hero', 'section']
+    case 'stats': {
+      const stats = blocksOfType(blocks, 'stat').length
+      if (stats >= 2) return ['statHero', 'statGrid', 'statList']
+      // One figure beside a list can be split: the figure on one side, the list on the other.
+      return stats === 1 && blocksOfType(blocks, 'bulletList').length === 1 ? ['statHero', 'statSplit'] : ['statHero']
+    }
     case 'comparison':
-      return ['comparison', 'comparisonTable']
+      return blocksOfType(blocks, 'comparisonGroup').length === 2
+        ? ['comparison', 'comparisonTable', 'beforeAfter']
+        : ['comparison', 'comparisonTable']
     case 'timeline':
-      return ['timeline', 'timelineRow']
+      return ['timeline', 'timelineRow', 'steps']
     case 'quote':
       return ['quote']
     case 'list':
-      return ['iconGrid', 'numberedList', 'checklist', 'splitList']
+      return blocksOfType(blocks, 'image').length === 1
+        ? ['iconGrid', 'numberedList', 'checklist', 'splitList', 'photoList']
+        : ['iconGrid', 'numberedList', 'checklist', 'splitList']
     case 'gallery':
       return ['gallery']
     case 'image':
       return ['imageFocus', 'standardSplit']
-    case 'text':
-      // A split needs a picture to sit beside the prose; without one it renders
+    case 'text': {
+      // A split needs a picture beside the prose; without one it renders
       // an empty half.
-      return blocksOfType(blocks, 'image').length >= 1
-        ? ['textFocus', 'standardSplit', 'standard']
-        : ['textFocus', 'standard']
+      const own: Exclude<LayoutType, 'auto'>[] =
+        blocksOfType(blocks, 'image').length >= 1 ? ['textFocus', 'standardSplit', 'standard'] : ['textFocus', 'standard']
+      // A statement is a heading and one paragraph; two columns need prose to split.
+      if (blocks.length === 2 && blocks[0].type === 'heading' && blocks[1].type === 'paragraph') own.push('statement')
+      if (blocksOfType(blocks, 'paragraph').length >= 2) own.push('twoColumn')
+      return own
+    }
   }
 }
 

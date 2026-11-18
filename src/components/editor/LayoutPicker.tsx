@@ -30,6 +30,13 @@ const LAYOUT_LABELS: Record<Exclude<LayoutType, 'auto'>, string> = {
   standardSplit: 'Split',
   imageFocus: 'Image',
   standard: 'Standard',
+  section: 'Section',
+  statement: 'Statement',
+  twoColumn: 'Two columns',
+  statSplit: 'Stat with list',
+  steps: 'Steps',
+  photoList: 'Photo with list',
+  beforeAfter: 'Before and after',
 }
 
 /** What the layout picker needs, present only while a slide is selected. */

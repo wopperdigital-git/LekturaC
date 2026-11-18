@@ -83,6 +83,21 @@ describe('slideGroup', () => {
     }
   })
 
+  it('maps the seven newer layouts as the rulings say', () => {
+    const expected = {
+      section: 'title',
+      statement: 'title',
+      twoColumn: 'body',
+      steps: 'body',
+      photoList: 'body',
+      statSplit: 'stat',
+      beforeAfter: 'twoCol',
+    } as const
+    for (const [layout, group] of Object.entries(expected)) {
+      expect(slideGroup(card([HEADING], layout as Card['layout']), false), layout).toBe(group)
+    }
+  })
+
   // The load-bearing case: 'auto' must be resolved by the classifier first,
   // not treated as a layout in its own right.
   it('resolves auto through the classifier instead of falling through', () => {

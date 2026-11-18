@@ -139,7 +139,7 @@ describe('colour and underline in the exported file', () => {
 
   it('writes a per-word underline as an underlined run', () => {
     const card = {
-      ...cardOf(blocks),
+      ...cardOf(blocks, 'standard'),
       inline: { '1:text': { marks: [{ type: 'underline' as const, start: 4, end: 8 }] } },
     }
     const runs = textOf(render(card), 'body').runs
@@ -152,14 +152,14 @@ describe('colour and underline in the exported file', () => {
     colour set on one selected element showed on screen and vanished from the file.
   */
   it('colours a heading with the colour picked for that element', () => {
-    const card = { ...cardOf(blocks), inline: { '0': { style: { color: '#ef4444', underline: true } } } }
+    const card = { ...cardOf(blocks, 'standard'), inline: { '0': { style: { color: '#ef4444', underline: true } } } }
     const box = textOf(render(card), 'heading')
     expect(box.options.color).toBe('ef4444')
     expect(box.options.underline).toBe(true)
   })
 
   it('carries a paragraph’s own colour and underline on its runs inside the merged body box', () => {
-    const card = { ...cardOf(blocks), inline: { '1': { style: { color: '#ef4444', underline: true } } } }
+    const card = { ...cardOf(blocks, 'standard'), inline: { '1': { style: { color: '#ef4444', underline: true } } } }
     const runs = textOf(render(card), 'body').runs
     expect(runs.every((r) => r.options.color === 'ef4444' && r.options.underline === true)).toBe(true)
   })
@@ -175,7 +175,7 @@ describe('colour and underline in the exported file', () => {
 
   it('lets a run override its element, and an element override its card', () => {
     const card = {
-      ...cardOf(blocks),
+      ...cardOf(blocks, 'standard'),
       inline: { '0': { style: { color: '#222222' } } },
     }
     expect(textOf(render(card, false, { color: '#111111' }), 'heading').options.color).toBe('222222')
@@ -184,13 +184,13 @@ describe('colour and underline in the exported file', () => {
   })
 
   it('applies a card- or deck-level colour to every text box on the card', () => {
-    const slide = render(cardOf(blocks), false, { color: '#8b5cf6' })
+    const slide = render(cardOf(blocks, 'standard'), false, { color: '#8b5cf6' })
     expect(textOf(slide, 'heading').options.color).toBe('8b5cf6')
     expect(textOf(slide, 'body').options.color).toBe('8b5cf6')
   })
 
   it('leaves the theme colour alone when none was picked', () => {
-    const box = textOf(render(cardOf(blocks)), 'body')
+    const box = textOf(render(cardOf(blocks, 'standard')), 'body')
     expect(box.options.color).toBeTypeOf('string')
     expect(box.options.color).not.toBe('ef4444')
   })

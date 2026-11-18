@@ -22,6 +22,9 @@ const HINTS: LayoutType[] = [
   'statList',
   'timelineRow',
   'comparisonTable',
+  'steps',
+  'beforeAfter',
+  'photoList',
 ]
 
 /** Every sequence of up to `maxLength` blocks drawn from `alphabet`. */

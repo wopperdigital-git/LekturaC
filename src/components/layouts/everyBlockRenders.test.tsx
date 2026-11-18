@@ -147,6 +147,13 @@ const LAYOUTS: LayoutType[] = [
   'textFocus',
   'gallery',
   'imageFocus',
+  'section',
+  'statement',
+  'twoColumn',
+  'statSplit',
+  'steps',
+  'photoList',
+  'beforeAfter',
 ]
 
 const VARIANTS: VisualStyle[] = ['structured', 'expressive']
@@ -382,7 +389,8 @@ describe('a card with one photo', () => {
 
     it('a list gets the photo as a band between the claim and its content', () => {
       const blocks: ContentBlock[] = [{ type: 'heading', text: 'MARKHEAD' }, { type: 'bulletList', items: ['MARKI1'] }, PHOTO]
-      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'auto', 'structured')} />)
+      // Named, because an automatic list with one photo is a photo list now, a frame with its own photo place.
+      const html = renderToStaticMarkup(<LayoutRenderer card={card(blocks, 'iconGrid', 'structured')} />)
       // The claim is the frame's head; the band opens the body zone, ahead of the list.
       expect(html.indexOf('MARKHEAD')).toBeLessThan(html.indexOf(`src="`))
       expect(html.indexOf(`src="`)).toBeLessThan(html.indexOf('MARKI1'))

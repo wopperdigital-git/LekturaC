@@ -43,6 +43,14 @@ const GROUP_BY_LAYOUT: Record<Exclude<LayoutType, 'auto'>, PptxGroup> = {
   comparison: 'twoCol',
   comparisonTable: 'twoCol',
   quote: 'quote',
+  // The newer frames have no renderer of their own in the export: each takes the arrangement closest to it.
+  section: 'title',
+  statement: 'title',
+  twoColumn: 'body',
+  steps: 'body',
+  photoList: 'body',
+  statSplit: 'stat',
+  beforeAfter: 'twoCol',
 }
 
 /**

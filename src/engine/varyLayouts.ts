@@ -14,6 +14,7 @@ const SUCCESSOR: Partial<Record<LayoutType, Exclude<LayoutType, 'auto'>>> = {
   statGrid: 'statList',
   timeline: 'timelineRow',
   comparison: 'comparisonTable',
+  textFocus: 'twoColumn',
 }
 
 /**

@@ -105,6 +105,13 @@ export const layoutTypeSchema = z.enum([
   'quote',
   'textFocus',
   'gallery',
+  'section',
+  'statement',
+  'twoColumn',
+  'statSplit',
+  'steps',
+  'photoList',
+  'beforeAfter',
 ])
 
 export type LayoutType = z.infer<typeof layoutTypeSchema>

@@ -69,6 +69,13 @@ const LAYOUT_FAMILY: Record<ReturnType<typeof resolveLayout>, string> = {
   standardSplit: 'text',
   imageFocus: 'visual',
   gallery: 'visual',
+  section: 'hero',
+  statement: 'text',
+  twoColumn: 'text',
+  statSplit: 'data',
+  steps: 'timeline',
+  photoList: 'list',
+  beforeAfter: 'comparison',
 }
 
 function slideLabel(index: number): string {

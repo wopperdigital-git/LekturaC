@@ -23,10 +23,10 @@ describe('layoutVarieties', () => {
   it('never offers a layout belonging to another card type', () => {
     expect(layoutsIn([heading, bullets], 'list')).toEqual(['iconGrid', 'numberedList', 'checklist', 'splitList'])
     expect(layoutsIn([heading, quote], 'quote')).toEqual(['quote'])
-    expect(layoutsIn([heading, step('a'), step('b')], 'timeline')).toEqual(['timeline', 'timelineRow'])
-    expect(layoutsIn([heading, group('a'), group('b')], 'comparison')).toEqual(['comparison', 'comparisonTable'])
+    expect(layoutsIn([heading, step('a'), step('b')], 'timeline')).toEqual(['timeline', 'timelineRow', 'steps'])
+    expect(layoutsIn([heading, group('a'), group('b')], 'comparison')).toEqual(['comparison', 'comparisonTable', 'beforeAfter'])
     expect(layoutsIn([heading, image('a'), image('b')], 'gallery')).toEqual(['gallery'])
-    expect(layoutsIn([heading, paragraph], 'title')).toEqual(['hero'])
+    expect(layoutsIn([heading, paragraph], 'title')).toEqual(['hero', 'section'])
   })
 
   it('offers both treatments of every component in the family', () => {
@@ -40,9 +40,9 @@ describe('layoutVarieties', () => {
   })
 
   it('gives a single-component type one variety per treatment', () => {
-    expect(layoutVarieties([heading, paragraph], 'title')).toEqual([
-      { layout: 'hero', visualStyle: 'structured' },
-      { layout: 'hero', visualStyle: 'expressive' },
+    expect(layoutVarieties([heading, paragraph], 'quote')).toEqual([
+      { layout: 'quote', visualStyle: 'structured' },
+      { layout: 'quote', visualStyle: 'expressive' },
     ])
   })
 

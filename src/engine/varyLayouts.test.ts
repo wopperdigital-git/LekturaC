@@ -82,9 +82,9 @@ describe('varyLayouts', () => {
     const titleCard = { blocks: [heading], layout: 'auto' as LayoutType }
     const plain = { blocks: [heading], layout: 'auto' as LayoutType }
     expect(chooseLayout(titleCard.blocks, { isFirstCard: true })).toBe('hero')
-    expect(chooseLayout(plain.blocks, { isFirstCard: false })).toBe('standard')
-    // hero then standard differ, so nothing changes; were isFirstCard ignored
-    // both would read 'standard' and the second would be varied.
+    expect(chooseLayout(plain.blocks, { isFirstCard: false })).toBe('section')
+    // hero then section differ, so nothing changes; were isFirstCard ignored
+    // both would read 'section' and a repeat would be a candidate for varying.
     expect(varyLayouts([titleCard, plain])).toEqual(['auto', 'auto'])
   })
 
@@ -111,9 +111,18 @@ describe('varyLayouts', () => {
     })
   })
 
-  it('still varies two consecutive list cards that each carry a photo', () => {
+  it('leaves two consecutive photo-list cards alone: photoList has no successor', () => {
     const photo: ContentBlock = { type: 'image', url: 'https://example.com/a.jpg' }
     const withPhoto = { blocks: [heading, shortList, photo], layout: 'auto' as LayoutType }
-    expect(varyLayouts([timelineCard, withPhoto, withPhoto])).toEqual(['auto', 'auto', 'checklist'])
+    expect(chooseLayout(withPhoto.blocks)).toBe('photoList')
+    expect(varyLayouts([timelineCard, withPhoto, withPhoto])).toEqual(['auto', 'auto', 'auto'])
+  })
+
+  it('gives the second of two consecutive text-focus cards a twoColumn', () => {
+    const para = (text: string): ContentBlock => ({ type: 'paragraph', text })
+    const prose = { blocks: [heading, para('One'), para('Two')], layout: 'auto' as LayoutType }
+    expect(chooseLayout(prose.blocks)).toBe('textFocus')
+    expect(varyLayouts([prose, prose])).toEqual(['auto', 'twoColumn'])
+    expect(varyLayouts([prose, prose, prose])).toEqual(['auto', 'twoColumn', 'auto'])
   })
 })

@@ -62,13 +62,15 @@ export function accentOwner(blocks: ContentBlock[], layout: Exclude<LayoutType, 
 /** The ground a slide is drawn on: the page colour, a tint of it, or the theme's deep colour. */
 export type Ground = 'plain' | 'tint' | 'deep'
 
-/** The ground a resolved layout asks for: the title slide is deep, a quote and a stat hero are tinted, the rest are plain. */
+/** The ground a resolved layout asks for: the title slide and a section are deep, a quote, a stat hero and a statement are tinted, the rest are plain. */
 export function groundOfLayout(layout: Exclude<LayoutType, 'auto'>): Ground {
   switch (layout) {
     case 'hero':
+    case 'section':
       return 'deep'
     case 'quote':
     case 'statHero':
+    case 'statement':
       return 'tint'
     default:
       return 'plain'
@@ -134,6 +136,16 @@ export const SIDE_HEAD_MAX_CLAIM = 60
 /** Longest lead (characters) that still fits a narrow side column. */
 export const SIDE_HEAD_MAX_LEAD = 140
 
+const SELF_ARRANGED: ReadonlySet<LayoutType> = new Set([
+  'section',
+  'statement',
+  'twoColumn',
+  'statSplit',
+  'steps',
+  'photoList',
+  'beforeAfter',
+])
+
 /**
  * Which composition a slide uses, read off its blocks and never stored. `units` is the
  * body's drawn units in order, each the block indices it holds (a leaf is `[i]`, a group
@@ -155,6 +167,8 @@ export function compositionOf(
 ): Composition {
   const { claim, lead } = slotsOf(blocks)
   if (layout === 'gallery' || layout === 'timelineRow') return 'stack'
+  // The seven newer frames arrange their own width, so none takes a zone composition.
+  if (SELF_ARRANGED.has(layout)) return 'stack'
   if (blocks.some((block) => block.type === 'image')) return 'stack'
   if (claim === null || units.length < 2) return 'stack'
   if (units.every((unit) => unit.length === 1 && blocks[unit[0]]?.type === 'paragraph')) return 'stack'

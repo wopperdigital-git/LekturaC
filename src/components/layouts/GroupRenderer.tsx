@@ -64,6 +64,8 @@ export function GroupRenderer({
       return <TimelineColumn items={node.items} expressive={expressive} fill={fill} />
 
     case 'columns':
+    case 'beforeAfter':
+      // (`beforeAfter` is drawn as the columns until its own arrangement lands.)
       // Groups side by side in equal columns, the accent owner's on the tint.
       return <ComparisonColumns items={node.items} expressive={expressive} fill={fill} accentIndex={accentIndex} itemProps={itemProps} />
 
@@ -103,6 +105,8 @@ export function GroupRenderer({
       return <StatLedger items={node.items} expressive={expressive} fill={fill} />
 
     case 'timelineRow':
+    case 'steps':
+      // (`steps` is drawn as the horizontal timeline until its own arrangement lands.)
       // Steps side by side on one track per row: up to five in a row, six or more in two rows.
       return <TimelineRow items={node.items} expressive={expressive} fill={fill} />
 
@@ -429,7 +433,7 @@ function CheckMark({ ring, size }: { ring: boolean; size: string }) {
 }
 
 /** The groups of a `columns` or `table` comparison, each with its own block index. */
-type ComparisonItems = Extract<GroupNode, { arrangement: 'columns' | 'table' }>['items']
+type ComparisonItems = Extract<GroupNode, { arrangement: 'columns' | 'table' | 'beforeAfter' }>['items']
 
 /**
  * The accent owner's panel: the tint, or the surface on a slide whose ground is already a tint or
@@ -750,7 +754,7 @@ function StatLedger({ items, expressive, fill }: { items: StatItems; expressive:
 }
 
 /** The steps of a `timeline` or `timelineRow` group, each with its own block index. */
-type StepItems = Extract<GroupNode, { arrangement: 'timeline' | 'timelineRow' }>['items']
+type StepItems = Extract<GroupNode, { arrangement: 'timeline' | 'timelineRow' | 'steps' }>['items']
 
 /** The step label's line height, shared by the label and the node beside it so the node sits on the label's first line. */
 const STEP_LABEL_LINE = 1.3

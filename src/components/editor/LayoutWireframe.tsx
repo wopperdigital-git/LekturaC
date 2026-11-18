@@ -122,6 +122,14 @@ function structured(layout: LayoutType): ReactNode {
           <Line x={16} y={71} w={72} h={3.5} />
         </>
       )
+    case 'section':
+    case 'statement':
+    case 'twoColumn':
+    case 'statSplit':
+    case 'steps':
+    case 'photoList':
+    case 'beforeAfter':
+      // Stand-ins: drawn as the standard wireframe until each gets its own.
     case 'standard':
       // The heading, then the content below it, no border or fill.
       return (
@@ -394,6 +402,14 @@ function expressive(layout: LayoutType): ReactNode {
           <Line x={16} y={71} w={72} h={3.5} />
         </>
       )
+    case 'section':
+    case 'statement':
+    case 'twoColumn':
+    case 'statSplit':
+    case 'steps':
+    case 'photoList':
+    case 'beforeAfter':
+      // Stand-ins: drawn as the standard wireframe until each gets its own.
     case 'standard':
       // The lead heading, then the content below it.
       return (

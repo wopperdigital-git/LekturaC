@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { chooseLayout, resolveLayout } from './layoutEngine'
-import type { ContentBlock } from './contentBlocks'
+import {
+  STATEMENT_MAX_LEAD,
+  cardKind,
+  cardKindOf,
+  chooseLayout,
+  componentsForKind,
+  resolveLayout,
+} from './layoutEngine'
+import type { ContentBlock, LayoutType } from './contentBlocks'
+import { accentOwner, compositionOf, groundOfLayout } from './composition'
+import { inferGroups } from './groups'
+import { CPP_DECK } from './fixtures/cppDeck'
+import { GALLERY_DECK } from './fixtures/galleryDeck'
 
 function heading(text = 'Title'): ContentBlock {
   return { type: 'heading', text }
@@ -32,8 +43,8 @@ describe('chooseLayout', () => {
     expect(chooseLayout([heading()], { isFirstCard: true })).toBe('hero')
   })
 
-  it('does not pick hero for a lone heading on a non-first card', () => {
-    expect(chooseLayout([heading()], { isFirstCard: false })).toBe('standard')
+  it('does not pick hero for a lone heading on a non-first card: it is a section', () => {
+    expect(chooseLayout([heading()], { isFirstCard: false })).toBe('section')
   })
 
   it('does not pick hero when the first card has more than a heading + one other block', () => {
@@ -92,7 +103,8 @@ describe('chooseLayout', () => {
   })
 
   it('falls back to standard when nothing else matches', () => {
-    expect(chooseLayout([heading()])).toBe('standard')
+    expect(chooseLayout([heading(), heading()])).toBe('standard')
+    expect(chooseLayout([paragraph()])).toBe('standard')
   })
 })
 
@@ -120,8 +132,8 @@ describe('chooseLayout with a single photo set aside', () => {
     expect(chooseLayout([heading(), stat(), image()])).toBe('statHero')
   })
 
-  it('keeps a short list an iconGrid', () => {
-    expect(chooseLayout([heading(), bulletList(['a', 'b', 'c']), image()])).toBe('iconGrid')
+  it('makes a short list beside a photo a photoList', () => {
+    expect(chooseLayout([heading(), bulletList(['a', 'b', 'c']), image()])).toBe('photoList')
   })
 
   it('keeps heading + paragraph + photo a standardSplit', () => {
@@ -142,5 +154,288 @@ describe('chooseLayout with a single photo set aside', () => {
 
   it('keeps two photos with no paragraph a gallery', () => {
     expect(chooseLayout([heading(), image(), image()])).toBe('gallery')
+  })
+})
+
+describe('the seven new layouts: classifier awards', () => {
+  const long = (n: number) => 'x'.repeat(n)
+
+  it('names the statement limit 140', () => {
+    expect(STATEMENT_MAX_LEAD).toBe(140)
+  })
+
+  describe('section', () => {
+    it('is a lone heading that is not the first card', () => {
+      expect(chooseLayout([heading()], { isFirstCard: false })).toBe('section')
+      expect(chooseLayout([heading()])).toBe('section')
+    })
+    it('never goes to the first card, which stays hero', () => {
+      expect(chooseLayout([heading()], { isFirstCard: true })).toBe('hero')
+    })
+    it('needs the heading alone', () => {
+      expect(chooseLayout([heading(), heading()])).not.toBe('section')
+      expect(chooseLayout([paragraph()])).not.toBe('section')
+    })
+    it('leaves a heading beside a photo an image slide', () => {
+      expect(chooseLayout([heading(), image()])).toBe('imageFocus')
+    })
+  })
+
+  describe('statement', () => {
+    it('is one heading then one paragraph of at most 140 characters', () => {
+      expect(chooseLayout([heading(), paragraph(long(STATEMENT_MAX_LEAD))])).toBe('statement')
+      expect(chooseLayout([heading(), paragraph('Short.')])).toBe('statement')
+    })
+    it('stops at 141 characters', () => {
+      expect(chooseLayout([heading(), paragraph(long(STATEMENT_MAX_LEAD + 1))])).toBe('standard')
+    })
+    it('takes nothing more: a quote beside them is a quote slide', () => {
+      expect(chooseLayout([heading(), paragraph(), quote()])).not.toBe('statement')
+    })
+    it('needs the heading first and no second paragraph', () => {
+      expect(chooseLayout([paragraph(), heading()])).not.toBe('statement')
+      expect(chooseLayout([heading(), paragraph(), paragraph()])).toBe('textFocus')
+    })
+    it('never goes to the first card, which stays hero', () => {
+      expect(chooseLayout([heading(), paragraph()], { isFirstCard: true })).toBe('hero')
+    })
+    it('leaves a photo with them a split', () => {
+      expect(chooseLayout([heading(), paragraph(), image()])).toBe('standardSplit')
+    })
+  })
+
+  describe('statSplit', () => {
+    it('is one stat and one list, plus headings and paragraphs', () => {
+      expect(chooseLayout([heading(), stat(), bulletList(['a', 'b'])])).toBe('statSplit')
+      expect(chooseLayout([heading(), paragraph(), stat(), bulletList(['a', 'b'])])).toBe('statSplit')
+    })
+    it('does not take a quote, a second stat, steps or groups', () => {
+      expect(chooseLayout([heading(), stat(), bulletList(['a']), quote()])).not.toBe('statSplit')
+      expect(chooseLayout([heading(), stat(), stat(), bulletList(['a'])])).not.toBe('statSplit')
+      expect(chooseLayout([heading(), stat(), bulletList(['a']), timelineStep(), timelineStep()])).not.toBe(
+        'statSplit',
+      )
+      expect(chooseLayout([heading(), stat(), bulletList(['a']), comparisonGroup(), comparisonGroup()])).not.toBe(
+        'statSplit',
+      )
+    })
+    it('still leaves a stat without a list a statHero', () => {
+      expect(chooseLayout([heading(), stat()])).toBe('statHero')
+    })
+    it('keeps a photo card a statHero: the photo has no place in a stat split', () => {
+      expect(chooseLayout([heading(), stat(), bulletList(['a', 'b']), image()])).toBe('statHero')
+    })
+  })
+
+  describe('photoList', () => {
+    it('is one photo and one list, plus headings and paragraphs', () => {
+      expect(chooseLayout([heading(), bulletList(['a', 'b']), image()])).toBe('photoList')
+      expect(chooseLayout([heading(), paragraph(), bulletList(['a', 'b']), image()])).toBe('photoList')
+      expect(chooseLayout([heading(), bulletList(['a', long(60)]), image()])).toBe('photoList')
+    })
+    it('takes nothing else beside them', () => {
+      expect(chooseLayout([heading(), bulletList(['a']), stat(), image()])).not.toBe('photoList')
+      expect(chooseLayout([heading(), bulletList(['a']), quote(), image()])).not.toBe('photoList')
+    })
+    it('needs exactly one photo and exactly one list', () => {
+      expect(chooseLayout([heading(), bulletList(['a']), image(), image()])).not.toBe('photoList')
+      expect(chooseLayout([heading(), bulletList(['a']), bulletList(['b']), image()])).not.toBe('photoList')
+    })
+    it('is a list slide without the photo', () => {
+      expect(chooseLayout([heading(), bulletList(['a', 'b'])])).toBe('iconGrid')
+    })
+  })
+
+  it('never awards the picker-only ones', () => {
+    const cards: ContentBlock[][] = [
+      [heading(), paragraph(), paragraph()],
+      [heading(), timelineStep(), timelineStep()],
+      [heading(), comparisonGroup(), comparisonGroup()],
+    ]
+    for (const blocks of cards) {
+      expect(['twoColumn', 'steps', 'beforeAfter']).not.toContain(chooseLayout(blocks))
+    }
+  })
+})
+
+describe('the seven new layouts: card kinds and the picker', () => {
+  const card = (layout: LayoutType, blocks: ContentBlock[]) => ({ layout, blocks })
+
+  it('files each named layout under its kind', () => {
+    expect(cardKindOf(card('section', [heading()]))).toBe('title')
+    expect(cardKindOf(card('statement', [heading(), paragraph()]))).toBe('text')
+    expect(cardKindOf(card('twoColumn', [heading(), paragraph(), paragraph()]))).toBe('text')
+    expect(cardKindOf(card('statSplit', [heading(), stat(), bulletList(['a'])]))).toBe('stats')
+    expect(cardKindOf(card('steps', [heading(), timelineStep(), timelineStep()]))).toBe('timeline')
+    expect(cardKindOf(card('photoList', [heading(), bulletList(['a']), image()]))).toBe('list')
+    expect(cardKindOf(card('beforeAfter', [heading(), comparisonGroup(), comparisonGroup()]))).toBe('comparison')
+  })
+
+  it('calls a lone heading a title card wherever it sits', () => {
+    expect(cardKind([heading()], { isFirstCard: false })).toBe('title')
+    expect(cardKind([heading()], { isFirstCard: true })).toBe('title')
+  })
+
+  it('keeps a heading beside a photo an image card', () => {
+    expect(cardKind([heading(), image()], { isFirstCard: false })).toBe('image')
+  })
+
+  it('offers hero and section on a title', () => {
+    expect(componentsForKind('title', [heading()])).toEqual(['hero', 'section'])
+  })
+
+  it('offers statement on text only for a heading and one paragraph', () => {
+    expect(componentsForKind('text', [heading(), paragraph()])).toContain('statement')
+    expect(componentsForKind('text', [heading(), paragraph(), paragraph()])).not.toContain('statement')
+    expect(componentsForKind('text', [heading(), paragraph(), bulletList(['a'])])).not.toContain('statement')
+    expect(componentsForKind('text', [paragraph()])).not.toContain('statement')
+  })
+
+  it('offers twoColumn on text only with two or more paragraphs', () => {
+    expect(componentsForKind('text', [heading(), paragraph()])).not.toContain('twoColumn')
+    expect(componentsForKind('text', [heading(), paragraph(), paragraph()])).toContain('twoColumn')
+    expect(componentsForKind('text', [heading(), paragraph(), paragraph(), paragraph()])).toContain('twoColumn')
+  })
+
+  it('offers statSplit beside statHero for one stat and a list', () => {
+    expect(componentsForKind('stats', [heading(), stat(), bulletList(['a'])])).toEqual(['statHero', 'statSplit'])
+    expect(componentsForKind('stats', [heading(), stat()])).toEqual(['statHero'])
+    expect(componentsForKind('stats', [heading(), stat(), stat(), bulletList(['a'])])).not.toContain('statSplit')
+  })
+
+  it('offers steps on a timeline', () => {
+    expect(componentsForKind('timeline', [heading(), timelineStep(), timelineStep()])).toEqual([
+      'timeline',
+      'timelineRow',
+      'steps',
+    ])
+  })
+
+  it('offers beforeAfter on a comparison of exactly two groups', () => {
+    const two = [heading(), comparisonGroup(), comparisonGroup()]
+    expect(componentsForKind('comparison', two)).toEqual(['comparison', 'comparisonTable', 'beforeAfter'])
+    const three = [heading(), comparisonGroup(), comparisonGroup(), comparisonGroup()]
+    expect(componentsForKind('comparison', three)).toEqual(['comparison', 'comparisonTable'])
+  })
+
+  it('offers photoList on a list with exactly one photo', () => {
+    expect(componentsForKind('list', [heading(), bulletList(['a']), image()])).toContain('photoList')
+    expect(componentsForKind('list', [heading(), bulletList(['a'])])).not.toContain('photoList')
+  })
+
+  it('always lists what the classifier picked for each new award', () => {
+    const cards: ContentBlock[][] = [
+      [heading()],
+      [heading(), paragraph()],
+      [heading(), stat(), bulletList(['a', 'b'])],
+      [heading(), bulletList(['a', 'b']), image()],
+    ]
+    for (const blocks of cards) {
+      const context = { isFirstCard: false }
+      expect(componentsForKind(cardKind(blocks, context), blocks)).toContain(chooseLayout(blocks, context))
+    }
+  })
+})
+
+describe('the seven new layouts: ground, accent and composition', () => {
+  const SEVEN = ['section', 'statement', 'twoColumn', 'statSplit', 'steps', 'photoList', 'beforeAfter'] as const
+
+  it('puts section on the deep ground, statement on the tint and the rest on neither', () => {
+    expect(groundOfLayout('section')).toBe('deep')
+    expect(groundOfLayout('statement')).toBe('tint')
+    for (const layout of ['twoColumn', 'statSplit', 'steps', 'photoList', 'beforeAfter'] as const) {
+      expect(groundOfLayout(layout), layout).toBe('plain')
+    }
+  })
+
+  it('gives none of them an accent owner', () => {
+    const blocks: ContentBlock[] = [heading(), stat(), comparisonGroup(), comparisonGroup()]
+    for (const layout of SEVEN) expect(accentOwner(blocks, layout), layout).toBeNull()
+  })
+
+  it('stacks every one of them, whatever the units', () => {
+    const blocks: ContentBlock[] = [heading('Loops'), bulletList(['a']), stat()]
+    for (const layout of SEVEN) expect(compositionOf(blocks, [[1], [2]], layout), layout).toBe('stack')
+    // The same card on a layout that does zone it, so the rule above is the layouts' own.
+    expect(compositionOf(blocks, [[1], [2]], 'standard')).toBe('sideHead')
+  })
+})
+
+describe('the seven new layouts: arrangements per hint', () => {
+  const shape = (blocks: ContentBlock[], hint: LayoutType) =>
+    inferGroups(blocks, hint).map((n) => (n.kind === 'leaf' ? n.block.type : n.arrangement))
+
+  it('draws a run of timeline steps as steps under the steps hint', () => {
+    expect(shape([heading(), timelineStep(), timelineStep()], 'steps')).toEqual(['heading', 'steps'])
+    expect(shape([heading(), timelineStep(), timelineStep()], 'auto')).toEqual(['heading', 'timeline'])
+  })
+
+  it('draws exactly two comparison groups as beforeAfter under its hint', () => {
+    expect(shape([heading(), comparisonGroup(), comparisonGroup()], 'beforeAfter')).toEqual(['heading', 'beforeAfter'])
+  })
+
+  it('falls back to columns for any other count of groups', () => {
+    const three = [heading(), comparisonGroup(), comparisonGroup(), comparisonGroup()]
+    expect(shape(three, 'beforeAfter')).toEqual(['heading', 'columns'])
+  })
+
+  it('draws a photo list as numbered rows', () => {
+    expect(shape([heading(), bulletList(['a', 'b']), image()], 'photoList')).toEqual(['heading', 'numbered', 'image'])
+  })
+})
+
+/*
+  Review focus: the classifier must not move any card the rulings do not name.
+  The resolved layouts below were recorded on master before the classifier
+  changed, for every card of the two fixture decks, twice: as stored (an explicit
+  layout wins) and with the layout forced to 'auto', so the classifier itself is
+  what is measured.
+*/
+describe('classifier stability over the fixture decks', () => {
+  const BASELINE_STORED: Record<string, string> = {
+    'g-hero': 'hero', 'g-icons3': 'iconGrid', 'g-icons6': 'iconGrid', 'g-numbered': 'numberedList',
+    'g-numbered10': 'numberedList', 'g-checklist': 'checklist', 'g-split': 'splitList', 'g-stats3': 'statGrid',
+    'g-stats5': 'statGrid', 'g-statlist': 'statList', 'g-stathero': 'statHero', 'g-timeline': 'timeline',
+    'g-timelinerow': 'timelineRow', 'g-timelinerow6': 'timelineRow', 'g-compare': 'comparison',
+    'g-compare3': 'comparison', 'g-table': 'comparisonTable', 'g-quote': 'quote', 'g-text': 'textFocus',
+    'g-standard': 'standard', 'g-split-photo': 'standardSplit', 'g-image': 'imageFocus',
+    'g-list-photo': 'iconGrid', 'g-hero-extra': 'hero', 'g-sidehead': 'numberedList',
+    'g-sidehead-stats': 'statGrid', 'g-splitbody': 'iconGrid',
+    'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
+    'cpp-6': 'quote', 'cpp-7': 'standardSplit',
+  }
+  const BASELINE_AUTO: Record<string, string> = {
+    'g-hero': 'hero', 'g-icons3': 'iconGrid', 'g-icons6': 'iconGrid', 'g-numbered': 'numberedList',
+    'g-numbered10': 'numberedList', 'g-checklist': 'iconGrid', 'g-split': 'numberedList', 'g-stats3': 'statGrid',
+    'g-stats5': 'standard', 'g-statlist': 'statGrid', 'g-stathero': 'statHero', 'g-timeline': 'timeline',
+    'g-timelinerow': 'timeline', 'g-timelinerow6': 'timeline', 'g-compare': 'comparison',
+    'g-compare3': 'comparison', 'g-table': 'comparison', 'g-quote': 'quote', 'g-text': 'textFocus',
+    'g-standard': 'iconGrid', 'g-split-photo': 'standardSplit', 'g-image': 'standardSplit',
+    'g-list-photo': 'iconGrid', 'g-hero-extra': 'statGrid', 'g-sidehead': 'numberedList',
+    'g-sidehead-stats': 'statGrid', 'g-splitbody': 'comparison',
+    'cpp-1': 'hero', 'cpp-2': 'iconGrid', 'cpp-3': 'statGrid', 'cpp-4': 'timeline', 'cpp-5': 'comparison',
+    'cpp-6': 'quote', 'cpp-7': 'standardSplit',
+  }
+  /** The cards a ruling moves under the classifier, old to new. Every other card must be unchanged. */
+  const MOVED_AUTO: Record<string, [string, string]> = {
+    'g-list-photo': ['iconGrid', 'photoList'],
+  }
+
+  const cards = [...GALLERY_DECK, ...CPP_DECK]
+
+  it('moves no stored layout: every card still resolves as before', () => {
+    for (const card of cards) {
+      const resolved = resolveLayout(card.layout, card.blocks, { isFirstCard: card.orderIndex === 0 })
+      expect([card.id, resolved]).toEqual([card.id, BASELINE_STORED[card.id]])
+    }
+  })
+
+  it('moves only the cards a ruling names when the classifier decides every one', () => {
+    const moved: Record<string, [string, string]> = {}
+    for (const card of cards) {
+      const now = chooseLayout(card.blocks, { isFirstCard: card.orderIndex === 0 })
+      if (now !== BASELINE_AUTO[card.id]) moved[card.id] = [BASELINE_AUTO[card.id], now]
+    }
+    expect(moved).toEqual(MOVED_AUTO)
   })
 })

@@ -52,8 +52,8 @@ export interface LeafNode {
  */
 export type GroupNode =
   | { kind: 'group'; arrangement: 'boxes' | 'statRows'; items: Indexed<StatBlock>[] }
-  | { kind: 'group'; arrangement: 'timeline' | 'timelineRow'; items: Indexed<TimelineStepBlock>[] }
-  | { kind: 'group'; arrangement: 'columns' | 'table'; items: Indexed<ComparisonGroupBlock>[] }
+  | { kind: 'group'; arrangement: 'timeline' | 'timelineRow' | 'steps'; items: Indexed<TimelineStepBlock>[] }
+  | { kind: 'group'; arrangement: 'columns' | 'table' | 'beforeAfter'; items: Indexed<ComparisonGroupBlock>[] }
   | { kind: 'group'; arrangement: 'gallery'; items: Indexed<ImageBlock>[] }
   | { kind: 'group'; arrangement: ListArrangement; items: [Indexed<BulletListBlock>] }
 
@@ -92,7 +92,7 @@ export type ListArrangement = 'chips' | 'numbered' | 'checklist' | 'split'
  */
 export function listArrangement(list: BulletListBlock, hint: LayoutType): ListArrangement {
   if (hint === 'iconGrid') return 'chips'
-  if (hint === 'numberedList') return 'numbered'
+  if (hint === 'numberedList' || hint === 'photoList') return 'numbered'
   if (hint === 'checklist') return 'checklist'
   if (hint === 'splitList') return 'split'
   const short =
@@ -120,13 +120,15 @@ function runGroup(run: Indexed[], hint: LayoutType): GroupNode | null {
     case 'timelineStep':
       return {
         kind: 'group',
-        arrangement: hint === 'timelineRow' ? 'timelineRow' : 'timeline',
+        arrangement: hint === 'timelineRow' ? 'timelineRow' : hint === 'steps' ? 'steps' : 'timeline',
         items: run as Indexed<TimelineStepBlock>[],
       }
     case 'comparisonGroup':
       return {
         kind: 'group',
-        arrangement: hint === 'comparisonTable' ? 'table' : 'columns',
+        // Before and after is a pair: any other count of groups reads as plain columns.
+        arrangement:
+          hint === 'comparisonTable' ? 'table' : hint === 'beforeAfter' && run.length === 2 ? 'beforeAfter' : 'columns',
         items: run as Indexed<ComparisonGroupBlock>[],
       }
     case 'image':
