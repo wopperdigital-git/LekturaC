@@ -298,6 +298,15 @@ describe.each(['structured', 'expressive'] as const)('photoList (%s)', (style) =
     expect(count(markup, 'src="https://example.test/s.png"')).toBe(1)
   })
 
+  it('draws a paragraph after the list once, in the body', () => {
+    const after: ContentBlock = { type: 'paragraph', text: 'A closing line after the list.' }
+    const markup = html(card('photoList', [heading, listBlock, after, photo], style))
+    for (const text of ['Loops and branches', 'Find the start', 'Check the condition', 'Run the body', 'A closing line after the list.']) {
+      expect(count(markup, text), text).toBe(1)
+    }
+    expect(count(markup, 'src="https://example.test/s.png"')).toBe(1)
+  })
+
   it('draws two photos as a gallery in the body, none as the aside', () => {
     const second: ContentBlock = { type: 'image', url: 'https://example.test/t.png', alt: 'another' }
     const markup = html(card('photoList', [heading, listBlock, photo, second], style))
