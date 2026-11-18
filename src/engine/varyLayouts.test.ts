@@ -82,9 +82,9 @@ describe('varyLayouts', () => {
     const titleCard = { blocks: [heading], layout: 'auto' as LayoutType }
     const plain = { blocks: [heading], layout: 'auto' as LayoutType }
     expect(chooseLayout(titleCard.blocks, { isFirstCard: true })).toBe('hero')
-    expect(chooseLayout(plain.blocks, { isFirstCard: false })).toBe('section')
-    // hero then section differ, so nothing changes; were isFirstCard ignored
-    // both would read 'section' and a repeat would be a candidate for varying.
+    expect(chooseLayout(plain.blocks, { isFirstCard: false })).toBe('standard')
+    // hero then standard differ, so nothing changes; were isFirstCard ignored
+    // both would read 'hero' or both 'standard'.
     expect(varyLayouts([titleCard, plain])).toEqual(['auto', 'auto'])
   })
 

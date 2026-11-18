@@ -1,4 +1,5 @@
 import type { ContentBlock, LayoutType } from './contentBlocks'
+import { STATEMENT_MAX_LEAD } from './layoutEngine'
 
 /**
  * A blueprint role, turned into an explicit layout where the role makes the
@@ -44,7 +45,27 @@ export function isTitleShaped(blocks: ContentBlock[]): boolean {
  */
 export function generatedLayout(index: number, role: string | undefined, blocks: ContentBlock[]): LayoutType {
   if (index === 0) return 'hero'
-  return roleLayoutHint(role, blocks) ?? 'auto'
+  return roleLayoutHint(role, blocks) ?? structuralLayout(blocks) ?? 'auto'
+}
+
+/**
+ * The two plain-prose shapes a generated card is named for, outright at
+ * ingest: a lone heading is a `section` divider, a heading and one paragraph of
+ * at most `STATEMENT_MAX_LEAD` characters is a `statement`. The classifier never
+ * awards either, because a live card re-resolves on every keystroke and a
+ * length rule would swap the slide while it is typed. Never called for card 0.
+ */
+export function structuralLayout(blocks: ContentBlock[]): LayoutType | null {
+  if (blocks.length === 1 && blocks[0].type === 'heading') return 'section'
+  if (
+    blocks.length === 2 &&
+    blocks[0].type === 'heading' &&
+    blocks[1].type === 'paragraph' &&
+    blocks[1].text.length <= STATEMENT_MAX_LEAD
+  ) {
+    return 'statement'
+  }
+  return null
 }
 
 export function roleLayoutHint(role: string | undefined, blocks: ContentBlock[]): LayoutType | null {

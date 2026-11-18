@@ -26,9 +26,10 @@ describe('a slide is painted on its ground', () => {
 
   it('draws a section on the deep ground and a statement on the tint, anywhere in the deck', () => {
     const base: Card = { id: 'n', orderIndex: 4, layout: 'auto', visualStyle: 'structured', blocks: [] }
-    const section: Card = { ...base, blocks: [{ type: 'heading', text: 'Part two' }] }
+    const section: Card = { ...base, layout: 'section', blocks: [{ type: 'heading', text: 'Part two' }] }
     const statement: Card = {
       ...base,
+      layout: 'statement',
       blocks: [
         { type: 'heading', text: 'One idea' },
         { type: 'paragraph', text: 'Said in a single short line.' },

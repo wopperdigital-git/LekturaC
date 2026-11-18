@@ -5,7 +5,7 @@ export const SHORT_ITEM_MAX_CHARS = 40
 /** The most items a bullet list can hold and still be drawn as chips. */
 export const MAX_CHIP_ITEMS = 6
 
-/** The longest paragraph (characters) a heading may carry and still be a `statement` slide. */
+/** The longest paragraph (characters) a heading may carry and still be named a `statement` slide at ingest. */
 export const STATEMENT_MAX_LEAD = 140
 
 /**
@@ -35,9 +35,8 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
   if (core) {
     const layout = chooseLayout(core, context)
     // Plain prose beside a photo splits the slide; a bare heading (or nothing)
-    // beside it is an image slide. `section` and `statement` are the same plain
-    // prose read by their own rules, so the photo turns them the same way.
-    if (layout === 'standard' || layout === 'textFocus' || layout === 'section' || layout === 'statement') {
+    // beside it is an image slide.
+    if (layout === 'standard' || layout === 'textFocus') {
       return blocksOfType(core, 'paragraph').length >= 1 ? 'standardSplit' : 'imageFocus'
     }
     // A list beside a photo, with nothing else but headings and paragraphs, is a photo list.
@@ -71,21 +70,9 @@ export function chooseLayout(blocks: ContentBlock[], context: LayoutContext = {}
     return 'hero'
   }
 
-  // A heading on its own is a section divider, but only past the opening card.
-  if (!context.isFirstCard && blocks.length === 1 && headings.length === 1) {
-    return 'section'
-  }
-
-  // One heading and one short paragraph: a statement, a claim set large. Never the opener.
-  if (
-    !context.isFirstCard &&
-    blocks.length === 2 &&
-    blocks[0].type === 'heading' &&
-    blocks[1].type === 'paragraph' &&
-    blocks[1].text.length <= STATEMENT_MAX_LEAD
-  ) {
-    return 'statement'
-  }
+  // `section` and `statement` are never awarded here: a live card re-resolves on
+  // every keystroke, so a length rule would swap the whole slide while typing.
+  // Ingest names them (`structuralLayout`, `roleLayout.ts`) and the picker offers them.
 
   // One figure beside one list, with only headings and paragraphs round them.
   if (

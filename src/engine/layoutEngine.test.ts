@@ -43,8 +43,8 @@ describe('chooseLayout', () => {
     expect(chooseLayout([heading()], { isFirstCard: true })).toBe('hero')
   })
 
-  it('does not pick hero for a lone heading on a non-first card: it is a section', () => {
-    expect(chooseLayout([heading()], { isFirstCard: false })).toBe('section')
+  it('does not pick hero for a lone heading on a non-first card', () => {
+    expect(chooseLayout([heading()], { isFirstCard: false })).toBe('standard')
   })
 
   it('does not pick hero when the first card has more than a heading + one other block', () => {
@@ -157,50 +157,29 @@ describe('chooseLayout with a single photo set aside', () => {
   })
 })
 
-describe('the seven new layouts: classifier awards', () => {
+describe('the new layouts: classifier awards', () => {
   const long = (n: number) => 'x'.repeat(n)
 
   it('names the statement limit 140', () => {
     expect(STATEMENT_MAX_LEAD).toBe(140)
   })
 
-  describe('section', () => {
-    it('is a lone heading that is not the first card', () => {
-      expect(chooseLayout([heading()], { isFirstCard: false })).toBe('section')
-      expect(chooseLayout([heading()])).toBe('section')
-    })
-    it('never goes to the first card, which stays hero', () => {
-      expect(chooseLayout([heading()], { isFirstCard: true })).toBe('hero')
-    })
-    it('needs the heading alone', () => {
-      expect(chooseLayout([heading(), heading()])).not.toBe('section')
-      expect(chooseLayout([paragraph()])).not.toBe('section')
-    })
-    it('leaves a heading beside a photo an image slide', () => {
-      expect(chooseLayout([heading(), image()])).toBe('imageFocus')
-    })
-  })
-
-  describe('statement', () => {
-    it('is one heading then one paragraph of at most 140 characters', () => {
-      expect(chooseLayout([heading(), paragraph(long(STATEMENT_MAX_LEAD))])).toBe('statement')
-      expect(chooseLayout([heading(), paragraph('Short.')])).toBe('statement')
-    })
-    it('stops at 141 characters', () => {
+  describe('section and statement', () => {
+    it('are never awarded to an auto card: ingest names them, so typing never swaps the slide', () => {
+      expect(chooseLayout([heading()], { isFirstCard: false })).toBe('standard')
+      expect(chooseLayout([heading()])).toBe('standard')
+      expect(chooseLayout([heading(), paragraph('Short.')])).toBe('standard')
+      expect(chooseLayout([heading(), paragraph(long(STATEMENT_MAX_LEAD))])).toBe('standard')
       expect(chooseLayout([heading(), paragraph(long(STATEMENT_MAX_LEAD + 1))])).toBe('standard')
     })
-    it('takes nothing more: a quote beside them is a quote slide', () => {
-      expect(chooseLayout([heading(), paragraph(), quote()])).not.toBe('statement')
-    })
-    it('needs the heading first and no second paragraph', () => {
-      expect(chooseLayout([paragraph(), heading()])).not.toBe('statement')
-      expect(chooseLayout([heading(), paragraph(), paragraph()])).toBe('textFocus')
-    })
-    it('never goes to the first card, which stays hero', () => {
+    it('leave the opener a hero and a photo beside them an image slide or a split', () => {
+      expect(chooseLayout([heading()], { isFirstCard: true })).toBe('hero')
       expect(chooseLayout([heading(), paragraph()], { isFirstCard: true })).toBe('hero')
-    })
-    it('leaves a photo with them a split', () => {
+      expect(chooseLayout([heading(), image()])).toBe('imageFocus')
       expect(chooseLayout([heading(), paragraph(), image()])).toBe('standardSplit')
+    })
+    it('keep two paragraphs a text focus slide', () => {
+      expect(chooseLayout([heading(), paragraph(), paragraph()])).toBe('textFocus')
     })
   })
 
@@ -323,9 +302,8 @@ describe('the seven new layouts: card kinds and the picker', () => {
     expect(componentsForKind('list', [heading(), bulletList(['a'])])).not.toContain('photoList')
   })
 
-  it('always lists what the classifier picked for each new award', () => {
+  it('always lists what the classifier picked for the cards the new layouts touch', () => {
     const cards: ContentBlock[][] = [
-      [heading()],
       [heading(), paragraph()],
       [heading(), stat(), bulletList(['a', 'b'])],
       [heading(), bulletList(['a', 'b']), image()],
@@ -423,8 +401,6 @@ describe('classifier stability over the fixture decks', () => {
   /** The cards a ruling moves under the classifier, old to new. Every other card must be unchanged. */
   const MOVED_AUTO: Record<string, [string, string]> = {
     'g-list-photo': ['iconGrid', 'photoList'],
-    'g-section': ['standard', 'section'],
-    'g-statement': ['standard', 'statement'],
     'g-statsplit': ['statHero', 'statSplit'],
     'g-photolist': ['numberedList', 'photoList'],
   }
