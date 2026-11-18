@@ -530,6 +530,16 @@ body {
 }
 
 /*
+  A composed slide's zone panel (side head, split body) is itself drawn on the tint, so a
+  comparison's featured panel inside it, whose own fallback is the same tint, would vanish
+  into it. Inside a zone panel it takes the surface, as inside a ground. Unlayered, like the
+  rule above.
+*/
+[data-zone-panel] [data-accent-panel] {
+  --slide-panel-bg: var(--slide-surface);
+}
+
+/*
   On a deep ground a picked text colour is ignored, like on a photo, but only where one was
   picked: an element or a character span that carries an inline `color`. Character colour marks
   are inline spans (`valueStyle` in `EditableText`) that `Adjustable` never touches, so this

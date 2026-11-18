@@ -1,7 +1,7 @@
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
-import { SLIDE_GAP } from '@/lib/theme-tokens'
+import { compositionOf } from '@/engine/composition'
 import { BlockRenderer } from './BlockRenderer'
-import { SlideFrame } from './SlideFrame'
+import { BodyUnits, SlideFrame, frameBody } from './SlideFrame'
 
 /**
  * The plain stacked slide: the claim and lead in the frame's head, every other block
@@ -9,15 +9,17 @@ import { SlideFrame } from './SlideFrame'
  * the claim (the expressive heading is set heavier) through the frame.
  */
 export function StandardLayout({ blocks, variant }: { blocks: ContentBlock[]; variant: VisualStyle }) {
+  const body = frameBody(blocks)
+  const composition = compositionOf(blocks, body.map((index) => [index]), 'standard')
   return (
-    <SlideFrame blocks={blocks} variant={variant}>
-      {(body) => (
-        <div className="flex flex-col" style={{ gap: SLIDE_GAP.group }}>
-          {body.map((index) => (
-            <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />
-          ))}
-        </div>
-      )}
+    <SlideFrame blocks={blocks} variant={variant} composition={composition}>
+      {(indices) => {
+        const units = indices.map((index) => (
+          <BlockRenderer key={index} block={blocks[index]} index={index} variant={variant} />
+        ))
+        const drawn = <BodyUnits composition={composition} units={units} />
+        return drawn
+      }}
     </SlideFrame>
   )
 }

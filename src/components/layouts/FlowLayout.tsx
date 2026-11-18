@@ -1,11 +1,10 @@
 import type { ContentBlock, LayoutType, VisualStyle } from '@/engine/contentBlocks'
-import { accentOwner, fillNode } from '@/engine/composition'
+import { accentOwner, compositionOf, fillNode } from '@/engine/composition'
 import { inferGroups, nodeKey } from '@/engine/groups'
 import { singlePhoto } from '@/engine/blockPartition'
 import { BlockRenderer } from './BlockRenderer'
 import { GroupRenderer } from './GroupRenderer'
-import { SlideFrame } from './SlideFrame'
-import { SLIDE_GAP } from '@/lib/theme-tokens'
+import { BodyUnits, SlideFrame, frameBody } from './SlideFrame'
 
 /**
  * A card drawn as a sequence of leaves and groups, in the author's order.
@@ -44,40 +43,48 @@ export function FlowLayout({
   const photo = singlePhoto(blocks)
   const nodes = inferGroups(blocks, hint)
   const accentIndex = accentOwner(blocks, layout)
+  // The body's drawn nodes, each with the block indices it holds: the units the composition
+  // is chosen from (the lone photo's band is never one; a card with a photo is a stack).
+  const body = frameBody(blocks)
+  const inBody = new Set(body)
+  const drawn = nodes.filter(
+    (node) => inBody.has(nodeKey(node)) && !(node.kind === 'leaf' && node.index === photo?.index),
+  )
+  const units = drawn.map((node) => (node.kind === 'leaf' ? [node.index] : node.items.map((item) => item.index)))
+  const composition = compositionOf(blocks, units, layout)
+  const filling = fillNode(nodes, body, photo?.index ?? null)
   return (
-    <SlideFrame blocks={blocks} variant={variant}>
-      {(body) => {
-        const inBody = new Set(body)
-        const filling = fillNode(nodes, body, photo?.index ?? null)
-        return (
-          <div className="flex flex-1 flex-col" style={{ gap: SLIDE_GAP.group }}>
-            {photo && (
-              <BlockRenderer block={photo.block} index={photo.index} photoClass="aspect-[6/1]" />
-            )}
-            {nodes.map((node) => {
-              const first = node.kind === 'leaf' ? node.index : node.items[0].index
-              if (!inBody.has(first)) return null
-              if (node.kind === 'leaf') {
-                return photo && node.index === photo.index ? null : (
+    <SlideFrame blocks={blocks} variant={variant} composition={composition}>
+      {() => (
+        <BodyUnits
+          composition={composition}
+          units={[
+            ...(photo
+              ? [
                   <BlockRenderer
-                    key={nodeKey(node)}
-                    block={node.block}
-                    index={node.index}
-                    variant={variant}
-                  />
-                )
-              }
-              return <GroupRenderer
+                    key="photo-band"
+                    block={photo.block}
+                    index={photo.index}
+                    photoClass="aspect-[6/1]"
+                  />,
+                ]
+              : []),
+            ...drawn.map((node) =>
+              node.kind === 'leaf' ? (
+                <BlockRenderer key={nodeKey(node)} block={node.block} index={node.index} variant={variant} />
+              ) : (
+                <GroupRenderer
                   key={nodeKey(node)}
                   node={node}
                   variant={variant}
                   accentIndex={accentIndex}
                   fill={nodeKey(node) === filling}
                 />
-            })}
-          </div>
-        )
-      }}
+              ),
+            ),
+          ]}
+        />
+      )}
     </SlideFrame>
   )
 }

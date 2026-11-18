@@ -1,6 +1,6 @@
-import type { ReactElement, ReactNode } from 'react'
+import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { ContentBlock, VisualStyle } from '@/engine/contentBlocks'
-import { slotsOf } from '@/engine/composition'
+import { slotsOf, type Composition } from '@/engine/composition'
 import { SLIDE_GAP } from '@/lib/theme-tokens'
 import { BlockRenderer, Heading } from './BlockRenderer'
 import { textRef } from '@/engine/marks'
@@ -25,16 +25,90 @@ import { textRef } from '@/engine/marks'
  * photo's index stays in the body list, so the caller draws it where it sits. A card
  * with a second photo keeps that one in the body, drawn where it sits.
  */
+/**
+ * The block indices the frame hands its child as `body`: everything but the claim and the
+ * lead, ascending, with the card's photo taken out only when the caller draws one as the
+ * aside (`asideIndex`: the block it drew, or null for none). Callers that need the body
+ * before the frame renders (to pick a composition) read it here, so the frame and its
+ * callers cannot disagree.
+ */
+export function frameBody(blocks: ContentBlock[], asideIndex: number | null = null): number[] {
+  const slots = slotsOf(blocks)
+  const rest = slots.aside === null ? slots.body : [...slots.body, slots.aside].sort((a, b) => a - b)
+  return asideIndex === null ? rest : rest.filter((index) => index !== asideIndex)
+}
+
+/**
+ * The zone panel: a tinted, rounded box one zone of a composed slide is drawn on. It is a
+ * container of its own so the arrangements inside lay out for the panel's width, and the
+ * index.css rule on `[data-zone-panel]` swaps a comparison's featured panel to the surface.
+ */
+const PANEL_STYLE: CSSProperties = {
+  backgroundColor: 'var(--slide-ground-tint)',
+  padding: SLIDE_GAP.group,
+  gap: SLIDE_GAP.group,
+}
+
+/**
+ * Draws a body's units for a composition. `stack` and `sideHead` are one column (today's
+ * body wrapper; the side head's panel is the frame's body zone around it). `splitBody`
+ * puts its two units side by side from the 640px container width up (stacked below it),
+ * the first on a zone panel and the second plain with the same padding so their text tops
+ * line up. Units are drawn once each, in order; nothing here is an element or addressable.
+ */
+export function BodyUnits({
+  composition,
+  units,
+}: {
+  composition: Composition
+  units: ReactNode[]
+}): ReactElement {
+  if (composition === 'splitBody' && units.length === 2) {
+    return (
+      <div
+        className="grid flex-1 grid-cols-1 @min-[640px]:grid-cols-2"
+        style={{ gap: SLIDE_GAP.section }}
+      >
+        <div
+          data-zone-panel=""
+          className="@container flex min-w-0 flex-col rounded-slide"
+          style={PANEL_STYLE}
+        >
+          {units[0]}
+        </div>
+        <div
+          className="@container flex min-w-0 flex-col"
+          style={{ padding: SLIDE_GAP.group, gap: SLIDE_GAP.group }}
+        >
+          {units[1]}
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-1 flex-col" style={{ gap: SLIDE_GAP.group }}>
+      {units}
+    </div>
+  )
+}
+
 export function SlideFrame({
   blocks,
   variant,
   children,
   aside,
+  composition = 'stack',
 }: {
   blocks: ContentBlock[]
   variant: VisualStyle
   /** Draws the body zone. Receives the body indices from `slotsOf`, ascending. */
   children: (body: number[]) => ReactNode
+  /**
+   * How the zones are arranged (see `compositionOf`); the caller decides from the body's
+   * units, which it knows before the frame renders. Ignored (read as `stack`) when `aside`
+   * is set. `data-composition` on the root names what was drawn.
+   */
+  composition?: Composition
   /**
    * The photo drawn beside the text column; absent = the photo index stays in `body`.
    * `index` names the block the caller drew as the aside, so the frame leaves exactly
@@ -62,13 +136,20 @@ export function SlideFrame({
   const lead = slots.lead !== null ? blocks[slots.lead] : null
   // Everything that is not the claim or the lead, ascending; the aside's own index
   // is taken out only when the caller draws an aside.
-  const rest = slots.aside === null ? slots.body : [...slots.body, slots.aside].sort((a, b) => a - b)
   const asideIndex = aside ? (aside.index ?? slots.aside) : null
-  const body = asideIndex === null ? rest : rest.filter((index) => index !== asideIndex)
+  const body = frameBody(blocks, asideIndex)
+
+  // Composed zones need a head to sit beside or above; an aside owns the row, so it is a stack.
+  const mode: Composition = aside || slots.claim === null ? 'stack' : composition
+  const sideHead = mode === 'sideHead'
 
   const head =
     slots.claim !== null && claim?.type === 'heading' ? (
-      <div data-slot="head" className="flex flex-col" style={{ gap: SLIDE_GAP.tight }}>
+      <div
+        data-slot="head"
+        className={`flex flex-col${sideHead ? ' @min-[640px]:self-start' : ''}`}
+        style={{ gap: SLIDE_GAP.tight }}
+      >
         <Heading
           text={claim.text}
           textRef={textRef(slots.claim, 'text')}
@@ -86,15 +167,38 @@ export function SlideFrame({
       {head}
       <div
         data-slot="body"
-        className="flex flex-1 flex-col"
-        style={head ? { marginTop: SLIDE_GAP.section } : undefined}
+        data-zone-panel={sideHead ? '' : undefined}
+        className={`flex flex-1 flex-col${sideHead ? ' @container rounded-slide' : ''}`}
+        style={
+          sideHead
+            ? PANEL_STYLE
+            : head
+              ? { marginTop: SLIDE_GAP.section }
+              : undefined
+        }
       >
         {children(body)}
       </div>
     </>
   )
 
-  if (!aside) return <div className="flex flex-1 flex-col">{text}</div>
+  if (!aside) {
+    // From the 640px container width up the side head is a two-column grid (the head at the
+    // top of the left cell, the body panel stretched to the row's height); below it, a stack.
+    return (
+      <div
+        data-composition={mode}
+        className={
+          sideHead
+            ? 'flex flex-1 flex-col @min-[640px]:grid @min-[640px]:grid-cols-[2fr_3fr] @min-[640px]:items-stretch'
+            : 'flex flex-1 flex-col'
+        }
+        style={sideHead ? { gap: SLIDE_GAP.section } : undefined}
+      >
+        {text}
+      </div>
+    )
+  }
 
   const columns =
     aside.width === 'half'
@@ -123,6 +227,7 @@ export function SlideFrame({
   )
   return (
     <div
+      data-composition="stack"
       className={`flex flex-1 flex-col @min-[640px]:grid @min-[640px]:items-start ${columns}`}
       style={{ gap: SLIDE_GAP.section }}
     >

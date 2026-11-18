@@ -190,6 +190,34 @@ describe('every block on a card reaches the screen', () => {
 })
 
 /*
+  The same kitchen sink without its photos: a card holding photos is always a stack, so
+  this is the one that can resolve to a composed slide (side head or split body). Every block
+  is still drawn exactly once whichever composition the card lands in.
+*/
+const IMAGE_FREE_SINK: ContentBlock[] = KITCHEN_SINK.filter((block) => block.type !== 'image').map((block) =>
+  // Short enough for a side head, so the zoned path is really exercised.
+  block.type === 'heading' && block.text === 'MARKHEADING' ? { ...block, text: 'MARKHEAD' } : block,
+)
+
+describe('an image-free card draws every block once, composed or not', () => {
+  const compositions = new Set<string>()
+  for (const layout of LAYOUTS) {
+    for (const variant of VARIANTS) {
+      it(`${layout} (${variant}) draws every block of an image-free kitchen-sink card`, () => {
+        const html = renderToStaticMarkup(<LayoutRenderer card={card(IMAGE_FREE_SINK, layout, variant)} />)
+        expectEveryBlockDrawn(html, IMAGE_FREE_SINK)
+        const kind = html.match(/data-composition="(\w+)"/)?.[1]
+        if (kind) compositions.add(kind)
+      })
+    }
+  }
+
+  it('at least one of those runs is a side head, so the zoned path is exercised', () => {
+    expect(compositions.has('sideHead')).toBe(true)
+  })
+})
+
+/*
   A card with exactly ONE photo: the photo is part of the arrangement (a background, half a
   split, beside a figure, a band over a list, an image slide), and every layout must still
   draw each other block once, draw the photo once, and show the photographer's credit once.
