@@ -44,9 +44,9 @@ function fakeSlide() {
   return slide
 }
 
-function renderOn(card: Card, theme: ThemeTokens = DEFAULT_THEME) {
+function renderOn(card: Card, theme: ThemeTokens = DEFAULT_THEME, images: Map<string, string> = new Map()) {
   const isFirstCard = card.orderIndex === 0
-  const context: RenderContext = { images: new Map(), layout: resolveLayout(card.layout, card.blocks, { isFirstCard }) }
+  const context: RenderContext = { images, layout: resolveLayout(card.layout, card.blocks, { isFirstCard }) }
   const slide = fakeSlide()
   RENDERERS[slideGroup(card, isFirstCard)](slide, card, theme, mergeTextStyle({}, card.textStyle), estimateMeasurer, context)
   return slide
@@ -81,7 +81,7 @@ describe('a kicker', () => {
 
   it('is a small accent paragraph above its heading, and pushes the heading down', () => {
     const slide = renderOn(withKicker)
-    const kicker = textOf(slide, 'Part two')
+    const kicker = textOf(slide, 'PART TWO')
     const heading = textOf(slide, 'Loops')
     expect(kicker.options.fontSize).toBeLessThan(heading.options.fontSize as number)
     expect(kicker.options.color).toBe(hex(smallAccentInk(c)))
@@ -104,8 +104,8 @@ describe('a kicker', () => {
     const card = cardOf([{ type: 'heading', text: 'Loops', kicker: 'Part two' }], {
       inline: { '0:kicker': { marks: [{ type: 'bold', start: 0, end: 4 }] } },
     })
-    const kicker = textOf(renderOn(card), 'Part two')
-    expect(kicker.runs[0].text).toBe('Part')
+    const kicker = textOf(renderOn(card), 'PART TWO')
+    expect(kicker.runs[0].text).toBe('PART')
     expect(kicker.runs[0].options.bold).toBe(true)
   })
 
@@ -115,7 +115,7 @@ describe('a kicker', () => {
       layout: 'hero',
     })
     const slide = renderOn(title)
-    const kicker = textOf(slide, 'Lesson one')
+    const kicker = textOf(slide, 'LESSON ONE')
     const heading = textOf(slide, 'Welcome')
     expect(kicker.options.align).toBe('center')
     expect((kicker.options.y as number) + (kicker.options.h as number)).toBeLessThanOrEqual(heading.options.y as number)
@@ -130,13 +130,13 @@ describe('a kicker', () => {
       cardOf([kicked, { type: 'comparisonGroup', heading: 'A', items: ['x'] }, { type: 'comparisonGroup', heading: 'B', items: ['y'] }]),
       cardOf([kicked, { type: 'quote', text: 'Said' }]),
     ]
-    for (const card of cards) expect(allText(renderOn(card)), slideGroup(card, false)).toContain('Small words')
+    for (const card of cards) expect(allText(renderOn(card)), slideGroup(card, false)).toContain('SMALL WORDS')
   })
 
   it('on a nudged card shares the heading frame with its title', () => {
     const card = cardOf([{ type: 'heading', text: 'Loops', kicker: 'Part two' }], { adjusts: NUDGE })
     const slide = renderOn(card)
-    const kicker = textOf(slide, 'Part two')
+    const kicker = textOf(slide, 'PART TWO')
     const heading = textOf(slide, 'Loops')
     expect(kicker.options.fontSize).toBeLessThan(heading.options.fontSize as number)
     expect((kicker.options.y as number) + (kicker.options.h as number)).toBeLessThanOrEqual((heading.options.y as number) + 1e-9)
@@ -406,7 +406,7 @@ describe('every arrangement carries the structured blocks', () => {
     ['a comparison', cardOf([kicked, { type: 'comparisonGroup', heading: 'A', items: ['x'] }, { type: 'comparisonGroup', heading: 'B', items: ['y'] }, ...extras])],
     ['a quote slide', cardOf([kicked, { type: 'quote', text: 'Said it', attribution: 'Someone' }, ...extras])],
     ['a body slide', cardOf([kicked, { type: 'paragraph', text: 'Prose' }, ...extras])],
-    ['a timeline', cardOf([kicked, { type: 'timelineStep', label: 'S1', text: 'first' }, { type: 'timelineStep', label: 'S2', text: 'second' }, ...extras])],
+    ['a timeline', cardOf([kicked, { type: 'timelineStep', label: 'S1', text: 'first' }, ...extras])],
     ['a statement', cardOf([kicked, { type: 'paragraph', text: 'Short claim' }, ...extras], { layout: 'statement' })],
     ['a card with a nudged element', cardOf([kicked, { type: 'paragraph', text: 'Prose' }, ...extras], { adjusts: NUDGE })],
   ]
@@ -417,7 +417,7 @@ describe('every arrangement carries the structured blocks', () => {
     for (const word of words) {
       expect(text.split(word).length - 1, word).toBe(1)
     }
-    expect(text).toContain('Kicker words')
+    expect(text).toContain('KICKER WORDS')
   })
 
   it.each(cases)('%s keeps everything on the slide', (_name, card) => {
@@ -437,5 +437,220 @@ describe('every arrangement carries the structured blocks', () => {
     expect(y('Prose')).toBeLessThan(y('TermOne'))
     expect(y('TermOne')).toBeLessThan(y('KeyLabel'))
     expect(y('KeyLabel')).toBeLessThan(y('CodeLabel'))
+  })
+})
+
+/* ------------------------------------------------------------ fix round 1 --- */
+
+const URL_A = 'https://images.pexels.com/photos/9/lake.jpeg'
+const JPEG =
+  'data:image/jpeg;base64,' +
+  btoa(String.fromCharCode(0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x58, 0x03, 0x20, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1))
+
+describe('on a placed photo (hero)', () => {
+  const card = cardOf(
+    [
+      { type: 'heading', text: 'Welcome' },
+      { type: 'callout', label: 'Key', text: 'The idea' },
+      { type: 'code', label: 'main.cpp', code: 'x = 1', caption: 'Tiny' },
+      { type: 'image', url: URL_A, alt: 'A lake' },
+    ],
+    { orderIndex: 0, layout: 'hero' },
+  )
+
+  it('keeps the callout and code in their own inks while the heading goes white', () => {
+    const slide = renderOn(card, DEFAULT_THEME, new Map([[URL_A, JPEG]]))
+    expect(textOf(slide, 'Welcome').options.color).toBe('ffffff')
+    expect(textOf(slide, 'The idea').options.color).toBe(hex(c.accentForeground))
+    expect(textOf(slide, 'Key').options.color).toBe(hex(c.accentForeground))
+    expect(textOf(slide, 'x = 1').options.color).toBe(hex(c.deepForeground))
+    expect(textOf(slide, 'main.cpp').options.color).toBe(hex(deepMuted(c)))
+    expect(textOf(slide, 'Tiny').options.color).toBe(hex(deepMuted(c)))
+  })
+})
+
+describe('size picks on the structured blocks', () => {
+  const pick = { style: { fontScale: 1.4 } }
+  const blocks: ContentBlock[] = [
+    HEADING,
+    { type: 'point', label: 'TermX', text: 'Meaning x' },
+    { type: 'callout', label: 'LabelX', text: 'Callout x' },
+    { type: 'code', code: 'codeX = 1' },
+  ]
+  const sizeOf = (slide: ReturnType<typeof fakeSlide>, needle: string) => textOf(slide, needle).options.fontSize as number
+  const ADJ = {
+    '1': { dx: 0, dy: 0, rotation: 0, w: 0.9, h: 0.1 },
+    '2': { dx: 0, dy: 0, rotation: 0, w: 0.9, h: 0.6 },
+    '3': { dx: 0, dy: 0, rotation: 0, w: 0.9, h: 0.6 },
+  }
+
+  describe.each([
+    ['in the arrangement', {}],
+    ['on a nudged card', { adjusts: ADJ }],
+  ])('%s', (_name, extra) => {
+    it.each([
+      ['a point (term and meaning)', 1, ['TermX', 'Meaning x']],
+      ['a callout (label and text)', 2, ['LabelX', 'Callout x']],
+      ['code', 3, ['codeX']],
+    ])('an element size pick on %s makes its text larger', (_what, index, needles) => {
+      const base = renderOn(cardOf(blocks, extra))
+      const picked = renderOn(cardOf(blocks, { ...extra, inline: { [String(index)]: pick } }))
+      for (const needle of needles) expect(sizeOf(picked, needle), needle).toBeGreaterThan(sizeOf(base, needle))
+    })
+  })
+
+  it('a pick on one block leaves its neighbours alone', () => {
+    const base = renderOn(cardOf(blocks))
+    const picked = renderOn(cardOf(blocks, { inline: { '2': pick } }))
+    expect(sizeOf(picked, 'Meaning x')).toBe(sizeOf(base, 'Meaning x'))
+  })
+})
+
+describe('small type floors', () => {
+  it('a kicker and a callout label are never below the export text floor', () => {
+    const slide = renderOn(
+      cardOf([{ type: 'heading', text: 'Loops', kicker: 'Part two' }, { type: 'callout', label: 'Key', text: 'Idea' }]),
+    )
+    expect(textOf(slide, 'PART TWO').options.fontSize as number).toBeGreaterThanOrEqual(10)
+    expect(textOf(slide, 'Key').options.fontSize as number).toBeGreaterThanOrEqual(10)
+  })
+})
+
+describe('a long kicker and title with a strip at the foot', () => {
+  const long = 'A very long small heading that wraps onto a second line ' + 'word '.repeat(12)
+  const longTitle = 'An extremely long title that goes on and on across lines ' + 'title '.repeat(25)
+
+  it('keeps the heading group above the strip on a title slide', () => {
+    const card = cardOf(
+      [
+        { type: 'heading', text: longTitle, kicker: long },
+        { type: 'callout', label: 'Key', text: 'The idea of the slide, said in a sentence' },
+        { type: 'code', code: 'a\nb\nc' },
+      ],
+      { orderIndex: 0, layout: 'hero' },
+    )
+    const slide = renderOn(card)
+    const stripTop = Math.min(...slide.shapes.filter((s) => s.shape === 'roundRect').map((s) => s.options.y as number))
+    const group = slide.texts.filter((t) => /word|title/.test(t.text))
+    expect(group.length).toBeGreaterThan(0)
+    for (const t of group) expect((t.options.y as number) + (t.options.h as number), t.text.slice(0, 20)).toBeLessThanOrEqual(stripTop + 1e-6)
+  })
+
+  it('the heading under a kicker never takes more than the room the kicker leaves', () => {
+    const card = cardOf([{ type: 'heading', text: longTitle, kicker: long }, { type: 'paragraph', text: 'x' }])
+    const slide = renderOn(card)
+    const kicker = slide.texts.find((t) => t.text.includes('SMALL HEADING'))!
+    const heading = slide.texts.find((t) => t.text.startsWith('An extremely'))!
+    expect((kicker.options.y as number) + (kicker.options.h as number)).toBeLessThanOrEqual(heading.options.y as number)
+    expect((kicker.options.h as number) + (heading.options.h as number)).toBeLessThanOrEqual(1.5 + 1e-9)
+  })
+})
+
+describe('later headings, stored colours, tint ground, shapes', () => {
+  it('a later heading in a merged body carries its kicker as a line above it', () => {
+    const slide = renderOn(
+      cardOf([HEADING, { type: 'paragraph', text: 'Intro' }, { type: 'heading', text: 'Second part', kicker: 'Side note' }, { type: 'paragraph', text: 'More' }], { layout: 'standard' }),
+    )
+    const body = allText(slide)
+    expect(body).toContain('SIDE NOTE')
+    expect(body.indexOf('SIDE NOTE')).toBeLessThan(body.indexOf('Second part'))
+  })
+
+  it('on a deep slide every stored colour pick on the new refs is dropped', () => {
+    const title = cardOf(
+      [
+        { type: 'heading', text: 'Welcome', kicker: 'Lesson' },
+        { type: 'point', label: 'Term', text: 'Meaning' },
+        { type: 'callout', label: 'Key', text: 'Idea' },
+        { type: 'code', label: 'file', code: 'x', caption: 'cap' },
+      ],
+      {
+        orderIndex: 0,
+        layout: 'hero',
+        textStyle: { color: '#123456' },
+        inline: {
+          '0:kicker': { marks: [{ type: 'color', start: 0, end: 3, value: '#123456' }] },
+          '1:label': { style: { color: '#123456' } },
+          '1:text': { marks: [{ type: 'color', start: 0, end: 3, value: '#123456' }] },
+          '2:label': { style: { color: '#123456' } },
+          '2:text': { marks: [{ type: 'color', start: 0, end: 2, value: '#123456' }] },
+          '3:label': { marks: [{ type: 'color', start: 0, end: 2, value: '#123456' }] },
+          '3:caption': { style: { color: '#123456' } },
+        },
+      },
+    )
+    const slide = renderOn(title)
+    const colours = slide.texts.flatMap((t) => [t.options.color, ...t.runs.map((r) => r.options.color)]).filter(Boolean)
+    expect(colours.length).toBeGreaterThan(0)
+    for (const colour of colours) expect(String(colour).toLowerCase()).not.toBe('123456')
+  })
+
+  it('a code panel on a tinted slide is the deep ground with light ink', () => {
+    const slide = renderOn(cardOf([HEADING, { type: 'quote', text: 'Said' }, { type: 'code', code: 'x = 1' }]))
+    const panel = slide.shapes.find((s) => s.shape === 'roundRect')!
+    expect(fillOf(panel)).toBe(hex(c.deep))
+    expect(textOf(slide, 'x = 1').options.color).toBe(hex(c.deepForeground))
+  })
+
+  it('every shape stays on the slide too', () => {
+    const card = cardOf([HEADING, { type: 'paragraph', text: 'Prose' }, ...POINTS, { type: 'callout', text: 'Idea' }, { type: 'code', code: 'x = 1' }])
+    for (const shape of renderOn(card).shapes) {
+      const { x, y, w, h } = shape.options as { x: number; y: number; w: number; h: number }
+      expect(x).toBeGreaterThanOrEqual(-1e-9)
+      expect(y).toBeGreaterThanOrEqual(-1e-9)
+      expect(x + w).toBeLessThanOrEqual(10 + 1e-9)
+      expect(y + h).toBeLessThanOrEqual(5.625 + 1e-6)
+    }
+  })
+})
+
+describe('the kicker capitals', () => {
+  it('are set at export time', () => {
+    expect(textOf(renderOn(cardOf([{ type: 'heading', text: 'T', kicker: 'part two' }])), 'PART TWO')).toBeDefined()
+  })
+
+  it('keep the typed words when capitals would change the length, so marks stay on their letters', () => {
+    const slide = renderOn(cardOf([{ type: 'heading', text: 'T', kicker: 'straße' }]))
+    expect(textOf(slide, 'straße')).toBeDefined()
+  })
+})
+
+describe('rotation of the structured blocks on a nudged card', () => {
+  const blocks: ContentBlock[] = [HEADING, { type: 'callout', label: 'Key', text: 'Idea' }, { type: 'point', label: 'T', text: 'M' }, { type: 'code', code: 'x = 1' }]
+  const ADJ = (rotation: number) => ({
+    '1': { dx: 0, dy: 0, w: 0.4, h: 0.2, rotation },
+    '2': { dx: 0, dy: 0, w: 0.4, h: 0.1, rotation },
+    '3': { dx: 0, dy: 0, w: 0.4, h: 0.15, rotation },
+  })
+  const centre = (o: Record<string, unknown>) => ({ x: (o.x as number) + (o.w as number) / 2, y: (o.y as number) + (o.h as number) / 2 })
+
+  it.each([
+    ['callout', 'Idea', 0],
+    ['code', 'x = 1', 1],
+  ])('turns a %s panel and its text together about the panel centre', (_name, needle, panelIndex) => {
+    const flat = renderOn(cardOf(blocks, { adjusts: ADJ(0) }))
+    const turned = renderOn(cardOf(blocks, { adjusts: ADJ(30) }))
+    const flatPanel = flat.shapes.filter((s) => s.shape === 'roundRect')[panelIndex]
+    const turnedPanel = turned.shapes.filter((s) => s.shape === 'roundRect')[panelIndex]
+    expect(turnedPanel.options.rotate).toBe(30)
+    const about = centre(flatPanel.options)
+    expect(centre(turnedPanel.options).x).toBeCloseTo(about.x, 6)
+    expect(centre(turnedPanel.options).y).toBeCloseTo(about.y, 6)
+    const text = (slide: ReturnType<typeof fakeSlide>) => textOf(slide, needle).options
+    expect(text(turned).rotate).toBe(30)
+    const dist = (o: Record<string, unknown>) => Math.hypot(centre(o).x - about.x, centre(o).y - about.y)
+    expect(dist(text(turned))).toBeCloseTo(dist(text(flat)), 6)
+    expect(centre(text(turned)).x).not.toBeCloseTo(centre(text(flat)).x, 3)
+  })
+
+  it('turns a term row and its rules', () => {
+    const turned = renderOn(cardOf(blocks, { adjusts: ADJ(30) }))
+    expect(textOf(turned, 'M').options.rotate).toBe(30)
+    for (const rule of turned.shapes.filter((s) => s.shape === 'line')) expect(rule.options.rotate).toBe(30)
+  })
+
+  it('leaves an unrotated block with no rotate option', () => {
+    const flat = renderOn(cardOf(blocks, { adjusts: ADJ(0) }))
+    expect(textOf(flat, 'Idea').options.rotate).toBeUndefined()
   })
 })

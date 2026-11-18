@@ -154,7 +154,7 @@ export function makeEnv(
 export interface BlockLayout {
   heightIn: number
   /** `opts.h` stretches a panel to a box the user sized; the text keeps its measured place at the top. */
-  draw(slide: PptxSlide, x: number, y: number, opts?: { h?: number }): void
+  draw(slide: PptxSlide, x: number, y: number, opts?: { h?: number; rotate?: number }): void
 }
 
 /**
@@ -168,6 +168,18 @@ export interface Painter {
 
 /** A step of the body size, in whole points. */
 const stepPt = (pt: number, ratio: number) => Math.max(6, Math.round(pt * ratio))
+
+/** A small step (the kicker, a callout's label): never under the export's text floor, unless the body itself is. */
+const smallPt = (pt: number, ratio: number) => Math.max(Math.min(FLOOR_PT, pt), stepPt(pt, ratio))
+
+/**
+ * How much larger (or smaller) a run's own size pick makes it than the body the painter was sized from.
+ * The deck and card pick is already in that body (`Env.bodyPt`), so only what the element or run adds counts.
+ */
+const relScale = (env: Env, own: TextStyle): number => (own.fontScale ?? 1) / (env.style.fontScale ?? 1)
+
+/** A size to a tenth of a point. */
+const tenth = (pt: number) => Math.round(pt * 10) / 10
 
 /** The term's size: the h3 step over the body, capped at the subheading band like every other subheading. */
 function termPt(theme: ThemeTokens, pt: number): number {
@@ -183,6 +195,36 @@ function sizesFrom(from: number, to: number): number[] {
 }
 
 type Box = { x: number; y: number; w: number; h: number }
+
+/**
+ * The slide with everything drawn through it turned `deg` degrees clockwise about `(cx, cy)`: each box
+ * keeps its size, its centre moves round the pivot and it takes the rotation, so a panel and the text
+ * boxes on it turn as one block (a nudged card's rotation). The unwhitened slide, if any, is turned too.
+ */
+export function rotateAbout(slide: PptxSlide, cx: number, cy: number, deg: number): PptxSlide {
+  return {
+    addImage: (options) => slide.addImage(options),
+    addShape: (shape, options) => slide.addShape(shape, turnOptions(options, cx, cy, deg)),
+    addText: (text, options) => slide.addText(text, turnOptions(options, cx, cy, deg)),
+    ...(slide.unwhitened ? { unwhitened: rotateAbout(slide.unwhitened, cx, cy, deg) } : {}),
+  }
+}
+
+/** One box's options turned `deg` degrees clockwise about `(cx, cy)`: same size, centre moved round the pivot, rotation set. */
+export function turnOptions<T extends Record<string, unknown>>(options: T, cx: number, cy: number, deg: number): T {
+  const rad = (deg * Math.PI) / 180
+  const { x, y, w, h } = options as unknown as { x: number; y: number; w: number; h: number }
+  const dx = x + w / 2 - cx
+  const dy = y + h / 2 - cy
+  const nx = cx + dx * Math.cos(rad) - dy * Math.sin(rad)
+  const ny = cy + dx * Math.sin(rad) + dy * Math.cos(rad)
+  return { ...options, x: nx - w / 2, y: ny - h / 2, rotate: deg }
+}
+
+/** `slide` turned about the centre of the `w` by `h` block at `(x, y)` when `rotate` asks for it. */
+function turned(slide: PptxSlide, x: number, y: number, w: number, h: number, rotate: number | undefined): PptxSlide {
+  return rotate ? rotateAbout(slide, x + w / 2, y + h / 2, rotate) : slide
+}
 
 function addBox(slide: PptxSlide, runs: PptxTextRun[], box: Box, options: Record<string, unknown>): void {
   slide.addText(runs, {
@@ -217,6 +259,15 @@ export function kickerOf(card: Card, index: number): string | null {
   return block.kicker
 }
 
+/**
+ * A kicker's words as the file shows them: in capitals, as the screen sets them. Marks are character
+ * offsets, so a string whose capitals change its length (a German sharp s) is kept as typed.
+ */
+export function kickerText(text: string): string {
+  const upper = text.toUpperCase()
+  return upper.length === text.length ? upper : text
+}
+
 export interface KickerLayout {
   pt: number
   heightIn: number
@@ -227,15 +278,16 @@ export interface KickerLayout {
 /**
  * The small heading over a heading: small, accent-tinted and letter-spaced, directly above its title.
  * It is a run of its own (`N:kicker`), so it carries its own marks and typography. The words are
- * drawn as typed (the screen sets them in capitals with a style rule; the file has no such rule).
+ * set in capitals here (`kickerText`), since the file has no style rule to do it.
  */
 export function kickerLayout(env: Env, index: number, widthIn: number, bodyPt: number = env.bodyPt): KickerLayout | null {
-  const text = kickerOf(env.card, index)
-  if (text === null) return null
+  const typed = kickerOf(env.card, index)
+  if (typed === null) return null
+  const text = kickerText(typed)
   const ref = textRef(index, 'kicker')
   const own = styleFor(env.card, ref, env.style)
   const face = headingFace(env.theme, own)
-  const pt = stepPt(bodyPt, EYEBROW_RATIO)
+  const pt = smallPt(tenth(bodyPt * relScale(env, own)), EYEBROW_RATIO)
   const heightIn = boxHeight(text, widthIn, face, pt, { bold: true, markBold: markBold(env.card, ref), scale: markScale(env.card, ref) }, env.measure)
   return {
     pt,
@@ -269,23 +321,25 @@ export function pointRun(env: Env, items: { block: PointBlock; index: number }[]
   return {
     layout(pt, _budget) {
       void _budget
-      const tPt = termPt(env.theme, pt)
       const rows = items.map(({ block, index }) => {
         const labelRef = textRef(index, 'label')
         const textRefKey = textRef(index, 'text')
         const term = styleFor(env.card, labelRef, env.style)
         const meaning = styleFor(env.card, textRefKey, env.style)
+        const tPt = tenth(termPt(env.theme, pt) * relScale(env, term))
+        const mPt = tenth(pt * relScale(env, meaning))
         const termFace = headingFace(env.theme, term)
         const textFace = bodyFace(env.theme, meaning)
         const termBold = term.bold ?? true
         const termH = boxHeight(block.label, termW, termFace, tPt, { bold: termBold, italic: term.italic, markBold: markBold(env.card, labelRef), scale: markScale(env.card, labelRef) }, env.measure)
-        const textH = boxHeight(block.text, textW, textFace, pt, { bold: meaning.bold, italic: meaning.italic, lineSpacing: env.theme.typography.lineHeight, markBold: markBold(env.card, textRefKey), scale: markScale(env.card, textRefKey) }, env.measure)
-        return { block, index, term, meaning, termFace, textFace, termBold, rowH: Math.max(termH, textH) + 2 * ROW_PAD }
+        const textH = boxHeight(block.text, textW, textFace, mPt, { bold: meaning.bold, italic: meaning.italic, lineSpacing: env.theme.typography.lineHeight, markBold: markBold(env.card, textRefKey), scale: markScale(env.card, textRefKey) }, env.measure)
+        return { block, index, term, meaning, termFace, textFace, termBold, tPt, mPt, rowH: Math.max(termH, textH) + 2 * ROW_PAD }
       })
       const heightIn = rows.reduce((sum, row) => sum + row.rowH, 0)
       return {
         heightIn,
-        draw(slide, x, y) {
+        draw(target, x, y, opts) {
+          const slide = turned(target, x, y, widthIn, opts?.h ?? heightIn, opts?.rotate)
           let top = y
           const rule = (at: number) =>
             slide.addShape('line', { x, y: at, w: widthIn, h: 0, line: { color: hex(env.inks.border), width: RULE_PT } })
@@ -298,13 +352,13 @@ export function pointRun(env: Env, items: { block: PointBlock; index: number }[]
               { x, y: top + ROW_PAD, w: termW, h: inner },
               {
                 fontFace: row.termFace,
-                fontSize: tPt,
+                fontSize: row.tPt,
                 color: hex(row.term.color ?? env.theme.colors.accent),
                 bold: row.termBold,
                 italic: row.term.italic,
                 underline: row.term.underline,
                 align: 'left',
-                lineSpacing: spacingPt(tPt, DEFAULT_LINE_SPACING),
+                lineSpacing: spacingPt(row.tPt, DEFAULT_LINE_SPACING),
               },
             )
             addBox(
@@ -313,13 +367,13 @@ export function pointRun(env: Env, items: { block: PointBlock; index: number }[]
               { x: x + termW + COL_GAP, y: top + ROW_PAD, w: textW, h: inner },
               {
                 fontFace: row.textFace,
-                fontSize: pt,
+                fontSize: row.mPt,
                 color: hex(row.meaning.color ?? env.theme.colors.foreground),
                 bold: row.meaning.bold,
                 italic: row.meaning.italic,
                 underline: row.meaning.underline,
                 align: 'left',
-                lineSpacing: spacingPt(pt, env.theme.typography.lineHeight),
+                lineSpacing: spacingPt(row.mPt, env.theme.typography.lineHeight),
               },
             )
             top += row.rowH
@@ -352,8 +406,8 @@ export function calloutBlock(env: Env, index: number, block: CalloutBlock, owner
       const textRefKey = textRef(index, 'text')
       const label = block.label ? styleFor(env.card, labelRef, env.style) : undefined
       const text = styleFor(env.card, textRefKey, env.style)
-      const labelPt = stepPt(pt, EYEBROW_RATIO)
-      const textPt = stepPt(pt, LEAD_RATIO)
+      const labelPt = smallPt(tenth(pt * relScale(env, label ?? env.style)), EYEBROW_RATIO)
+      const textPt = stepPt(tenth(pt * relScale(env, text)), LEAD_RATIO)
       const labelFace = headingFace(env.theme, label ?? env.style)
       const textFace = bodyFace(env.theme, text)
       const labelH = block.label
@@ -365,12 +419,15 @@ export function calloutBlock(env: Env, index: number, block: CalloutBlock, owner
       const ink = owner ? env.inks.calloutInk : undefined
       return {
         heightIn,
-        draw(slide, x, y, opts) {
+        draw(target, x, y, opts) {
+          // The panel keeps its own inks on a photo (the text on a photo is white, a panel's is not).
+          const panelH = Math.max(heightIn, opts?.h ?? 0)
+          const slide = turned(target.unwhitened ?? target, x, y, widthIn, panelH, opts?.rotate)
           slide.addShape('roundRect', {
             x,
             y,
             w: widthIn,
-            h: Math.max(heightIn, opts?.h ?? 0),
+            h: panelH,
             rectRadius: cornerIn(env.theme),
             fill: { color: hex(owner ? env.inks.calloutFill : env.inks.quietFill) },
             line: { type: 'none' },
@@ -432,14 +489,20 @@ export function codeBlock(env: Env, index: number, block: CodeBlock, widthIn: nu
   const minPt = stepPt(env.bodyPt, CAPTION_RATIO)
   return {
     layout(pt, budgetIn) {
-      const codePt = Math.max(minPt, stepPt(pt, CODE_RATIO))
       const labelRef = textRef(index, 'label')
       const captionRef = textRef(index, 'caption')
+      const codeRel = relScale(env, styleFor(env.card, textRef(index, 'code'), env.style))
+      const labelRel = relScale(env, styleFor(env.card, labelRef, env.style))
+      const captionRel = relScale(env, styleFor(env.card, captionRef, env.style))
+      // A size pick moves the code with the body; the floor is the caption step of the size it asked for.
+      const codePt = Math.max(Math.round(minPt * codeRel), stepPt(tenth(pt * codeRel), CODE_RATIO))
+      const labelPt = Math.max(Math.round(minPt * labelRel), stepPt(tenth(pt * labelRel), CODE_RATIO))
+      const captionPt = Math.max(Math.round(minPt * captionRel), stepPt(tenth(pt * captionRel), CODE_RATIO))
       const labelH = block.label
-        ? boxHeight(block.label, innerW, bodyFace(env.theme, env.style), codePt, { markBold: markBold(env.card, labelRef), scale: markScale(env.card, labelRef) }, env.measure)
+        ? boxHeight(block.label, innerW, bodyFace(env.theme, env.style), labelPt, { markBold: markBold(env.card, labelRef), scale: markScale(env.card, labelRef) }, env.measure)
         : 0
       const captionH = block.caption
-        ? boxHeight(block.caption, innerW, bodyFace(env.theme, env.style), codePt, { markBold: markBold(env.card, captionRef), scale: markScale(env.card, captionRef) }, env.measure)
+        ? boxHeight(block.caption, innerW, bodyFace(env.theme, env.style), captionPt, { markBold: markBold(env.card, captionRef), scale: markScale(env.card, captionRef) }, env.measure)
         : 0
       const all = block.code.replace(/\t/g, '    ').split('\n').map((line) => clipLine(line, innerW, codePt, env.measure))
       const codeHeight = (n: number) =>
@@ -464,12 +527,15 @@ export function codeBlock(env: Env, index: number, block: CodeBlock, widthIn: nu
         })
       return {
         heightIn,
-        draw(slide, x, y, opts) {
+        draw(target, x, y, opts) {
+          // The panel keeps its own inks on a photo (the text on a photo is white, a panel's is not).
+          const panelH = Math.max(heightIn, opts?.h ?? 0)
+          const slide = turned(target.unwhitened ?? target, x, y, widthIn, panelH, opts?.rotate)
           slide.addShape('roundRect', {
             x,
             y,
             w: widthIn,
-            h: Math.max(heightIn, opts?.h ?? 0),
+            h: panelH,
             rectRadius: cornerIn(env.theme),
             fill: { color: hex(env.inks.code.fill) },
             line: { type: 'none' },
@@ -478,10 +544,10 @@ export function codeBlock(env: Env, index: number, block: CodeBlock, widthIn: nu
           if (block.label) {
             addBox(slide, stripColor(markedRuns(block.label, marksFor(env.card, labelRef))), { x: x + PANEL_PAD, y: top, w: innerW, h: labelH }, {
               fontFace: bodyFace(env.theme, env.style),
-              fontSize: codePt,
+              fontSize: labelPt,
               color: hex(env.inks.code.muted),
               align: 'left',
-              lineSpacing: spacingPt(codePt, DEFAULT_LINE_SPACING),
+              lineSpacing: spacingPt(labelPt, DEFAULT_LINE_SPACING),
             })
             top += labelH
           }
@@ -499,10 +565,10 @@ export function codeBlock(env: Env, index: number, block: CodeBlock, widthIn: nu
           if (block.caption) {
             addBox(slide, stripColor(markedRuns(block.caption, marksFor(env.card, captionRef))), { x: x + PANEL_PAD, y: top, w: innerW, h: captionH }, {
               fontFace: bodyFace(env.theme, env.style),
-              fontSize: codePt,
+              fontSize: captionPt,
               color: hex(env.inks.code.muted),
               align: 'left',
-              lineSpacing: spacingPt(codePt, DEFAULT_LINE_SPACING),
+              lineSpacing: spacingPt(captionPt, DEFAULT_LINE_SPACING),
             })
           }
         },
@@ -513,12 +579,22 @@ export function codeBlock(env: Env, index: number, block: CodeBlock, widthIn: nu
 
 /* ------------------------------------------------------------------ stack --- */
 
-/** The painters for the structured blocks of `card`, in author order, with consecutive points as one run. */
-export function structuredPainters(env: Env, widthIn: number): Painter[] {
+/**
+ * The painters for a card's blocks in author order: consecutive points as one run, each callout and
+ * code block on its own, and the first callout as the slide's one accent fill. A stretch of other
+ * blocks is handed to `plain(from, to)`, which may return a painter for it (the body arrangement's
+ * text) or `null` to leave it out (the foot strip, which carries only the structured blocks).
+ */
+export function structuredPainters(
+  env: Env,
+  widthIn: number,
+  plain: (from: number, to: number) => Painter | null = () => null,
+): Painter[] {
   const out: Painter[] = []
   const blocks = env.card.blocks
   const owner = blocks.findIndex((block) => block.type === 'callout')
-  for (let i = 0; i < blocks.length; i++) {
+  let i = 0
+  while (i < blocks.length) {
     const block = blocks[i]
     if (block.type === 'point') {
       const items: { block: PointBlock; index: number }[] = []
@@ -528,11 +604,19 @@ export function structuredPainters(env: Env, widthIn: number): Painter[] {
         j++
       }
       out.push(pointRun(env, items, widthIn, true))
-      i = j - 1
+      i = j
     } else if (block.type === 'callout') {
       out.push(calloutBlock(env, i, block, i === owner, widthIn))
+      i++
     } else if (block.type === 'code') {
       out.push(codeBlock(env, i, block, widthIn))
+      i++
+    } else {
+      let j = i
+      while (j < blocks.length && !isStructured(blocks[j])) j++
+      const painter = plain(i, j)
+      if (painter) out.push(painter)
+      i = j
     }
   }
   return out
@@ -594,11 +678,12 @@ export function planExtras(env: Env, widthIn: number, maxHeightIn: number): Extr
  * whose block fits the box's height, else the smallest with code cut to the box. Draws at the box's
  * corner and stretches a panel to the box's height.
  */
-export function drawInBox(slide: PptxSlide, painter: Painter, box: Box, maxPt: number, minPt: number): void {
+export function drawInBox(slide: PptxSlide, painter: Painter, box: Box & { rotate?: number }, maxPt: number, minPt: number): void {
   const floor = Math.min(minPt, maxPt)
+  const opts = { h: box.h, rotate: box.rotate }
   for (const pt of sizesFrom(maxPt, floor)) {
     const layout = painter.layout(pt, Infinity)
-    if (layout.heightIn <= box.h) return layout.draw(slide, box.x, box.y, { h: box.h })
+    if (layout.heightIn <= box.h) return layout.draw(slide, box.x, box.y, opts)
   }
-  painter.layout(floor, box.h).draw(slide, box.x, box.y, { h: box.h })
+  painter.layout(floor, box.h).draw(slide, box.x, box.y, opts)
 }

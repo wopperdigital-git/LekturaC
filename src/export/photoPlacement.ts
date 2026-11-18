@@ -146,6 +146,8 @@ export function whiteText(slide: PptxSlide): PptxSlide {
   return {
     addImage: (options) => slide.addImage(options),
     addShape: (shape, options) => slide.addShape(shape, options),
+    // A panel (a callout, a code block) keeps its own inks over a photo: it draws through this.
+    unwhitened: slide.unwhitened ?? slide,
     addText(text, options) {
       if (typeof text === 'string') return slide.addText(text, { ...options, color: white })
       const runs = text.map((run) => ({

@@ -1,4 +1,4 @@
-import type { Card, ContentBlock, ImageBlock, LayoutType, PointBlock } from '@/engine/contentBlocks'
+import type { Card, ContentBlock, ImageBlock, LayoutType } from '@/engine/contentBlocks'
 import { singlePhoto } from '@/engine/blockPartition'
 import { groundOfLayout, type Ground } from '@/engine/composition'
 import type { ThemeTokens } from '@/lib/theme-tokens'
@@ -27,14 +27,17 @@ import {
   drawStack,
   fitStack,
   hasStructured,
-  isStructured,
   kickerLayout,
   kickerOf,
+  kickerText,
   makeEnv,
   calloutBlock,
   codeBlock,
   planExtras,
   pointRun,
+  rotateAbout,
+  structuredPainters,
+  turnOptions,
   type Env,
   type Painter,
 } from './structuredBlocks'
@@ -69,6 +72,11 @@ export interface PptxSlide {
    * still written once); a colour, never image data, so it adds no media part.
    */
   background?: { color: string }
+  /**
+   * Set only on the slide `whiteText` hands to a photo slide's renderer: the same slide before its text
+   * was forced white, for a panel (a callout, a code block) that keeps its own inks over a photo.
+   */
+  unwhitened?: PptxSlide
 }
 
 /**
@@ -185,7 +193,7 @@ function addHeading(
   }
   const { sizePt, heightIn } = fitText(
     [{ text: headingText(card), bold: markBold(card, ref), scale: markScale(card, ref) }],
-    { widthIn: column.w, maxHeightIn: HEADING_MAX_H },
+    { widthIn: column.w, maxHeightIn: HEADING_MAX_H - (kicker ? kicker.heightIn : 0) },
     sizing,
     measure,
   )
@@ -272,7 +280,7 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure, context 
   }
   const { sizePt: titleSize, heightIn: titleH } = fitText(
     [{ text: headingText(card), bold: markBold(card, headingRef), scale: markScale(card, headingRef) }],
-    { widthIn: CONTENT_W, maxHeightIn: TITLE_MAX_H },
+    { widthIn: CONTENT_W, maxHeightIn: Math.min(TITLE_MAX_H, bottom - TOP) - kickerH },
     titleSizing,
     measure,
   )
@@ -315,7 +323,9 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure, context 
   // itself off the top of the slide.
   // Centred in the slide, or in what the strip of structured blocks leaves of it.
   const region = bottom === BOTTOM ? SLIDE_H : bottom + (SLIDE_H - BOTTOM)
-  const groupY = Math.max(TOP, (region - groupH) / 2)
+  const centred = (region - groupH) / 2
+  // With a strip at the foot the group stays above it (as high as the top margin allows).
+  const groupY = Math.max(TOP, bottom === BOTTOM ? centred : Math.min(centred, bottom - groupH))
 
   kicker?.draw(slide, MARGIN, groupY, CONTENT_W, 'center')
   slide.addText(markedRuns(headingText(card), marksFor(card, headingRef)), {
@@ -406,7 +416,7 @@ function flattenBlocks(card: Card, skip?: number, range?: readonly [number, numb
     switch (block.type) {
       case 'heading':
         // A later heading's kicker is its words on a line of their own above it.
-        if (kickerOf(card, i) !== null) lines.push({ text: block.kicker as string, bullet: false, indent: 0, ref: textRef(i, 'kicker') })
+        if (kickerOf(card, i) !== null) lines.push({ text: kickerText(block.kicker as string), bullet: false, indent: 0, ref: textRef(i, 'kicker') })
         lines.push({ text: block.text, bullet: false, indent: 0, ref: textRef(i, 'text') })
         break
       case 'paragraph':
@@ -606,34 +616,11 @@ function drawBodyStack(
   contentTop: number,
 ): void {
   const { card } = env
-  const owner = card.blocks.findIndex((block) => block.type === 'callout')
-  const painters: Painter[] = []
-  let i = 0
-  while (i < card.blocks.length) {
-    const block = card.blocks[i]
-    if (block.type === 'point') {
-      const items: { block: PointBlock; index: number }[] = []
-      let j = i
-      while (j < card.blocks.length && card.blocks[j].type === 'point') {
-        items.push({ block: card.blocks[j] as PointBlock, index: j })
-        j++
-      }
-      painters.push(pointRun(env, items, column.w, true))
-      i = j
-    } else if (block.type === 'callout') {
-      painters.push(calloutBlock(env, i, block, i === owner, column.w))
-      i++
-    } else if (block.type === 'code') {
-      painters.push(codeBlock(env, i, block, column.w))
-      i++
-    } else {
-      let j = i
-      while (j < card.blocks.length && !isStructured(card.blocks[j])) j++
-      const lines = flattenBlocks(card, photoIndex, [i, j])
-      if (lines.length > 0) painters.push(textPainter(env, lines, column.w))
-      i = j
-    }
-  }
+  // The structured blocks and the order come from `structuredPainters`; the stretches of ordinary text between them are ours.
+  const painters = structuredPainters(env, column.w, (from, to) => {
+    const lines = flattenBlocks(card, photoIndex, [from, to])
+    return lines.length > 0 ? textPainter(env, lines, column.w) : null
+  })
   const { layouts } = fitStack(painters, BOTTOM - contentTop, env.bodyPt)
   drawStack(slide, layouts, column.x, contentTop)
 }
@@ -1292,8 +1279,15 @@ function renderAdjustedBlock(
       const preferredPt = fittedPointSize(theme.typography.scale[headingStep], own.fontScale, fit)
       // A kicker takes the top of the heading's own frame (they are one block, so one box moves both).
       const kicker = kickerLayout(env, index, box.w, env.bodyPt)
-      kicker?.draw(slide, box.x, box.y, box.w, 'left', box.h * KICKER_SHARE)
-      const headingArea = kicker ? lowerSlice(box, KICKER_SHARE) : box
+      // Both halves turn together about the frame's centre when the heading is rotated.
+      const turnedAbout = (area: PlacedBox): PlacedBox =>
+        box.rotate ? turnOptions({ ...area, rotate: box.rotate }, box.x + box.w / 2, box.y + box.h / 2, box.rotate) : area
+      const unturned: PlacedBox = { x: box.x, y: box.y, w: box.w, h: box.h }
+      if (kicker) {
+        const target = box.rotate ? rotateAbout(slide, box.x + box.w / 2, box.y + box.h / 2, box.rotate) : slide
+        kicker.draw(target, box.x, box.y, box.w, 'left', box.h * KICKER_SHARE)
+      }
+      const headingArea = kicker ? turnedAbout(lowerSlice(unturned, KICKER_SHARE)) : box
       const { sizePt, spacing } = fitSize(
         [{ text: block.text, bold: markBold(card, ref), scale: markScale(card, ref) }],
         headingArea,
@@ -1350,15 +1344,15 @@ function renderAdjustedBlock(
       The structured blocks are drawn with their own shapes in the frame the user left them in
       (`structuredBlocks.ts`): each term row is its own element with its own box, a callout is
       a rounded panel and code a monospace panel, each fitted to its box (a code panel cuts
-      lines from the end rather than shrink below the caption size). Rotation is not applied to
-      them: a panel is several shapes and a text box, which would each turn about its own centre.
+      lines from the end rather than shrink below the caption size). A rotated block turns as one
+      (`rotateAbout`): its shapes and text boxes go round the frame's centre together.
     */
     case 'point':
     case 'callout':
     case 'code': {
       const maxPt = env.bodyPt
       const minPt = Math.min(maxPt, SIZE_LADDER.body.min)
-      const area = { x: box.x, y: box.y, w: box.w, h: box.h }
+      const area = { x: box.x, y: box.y, w: box.w, h: box.h, rotate: box.rotate }
       const painter =
         block.type === 'point'
           ? pointRun(env, [{ block, index }], box.w, card.blocks[index + 1]?.type !== 'point')
@@ -1719,13 +1713,11 @@ const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure, conte
     groundOnSlide(card, context),
     fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
   )
-  card.blocks.forEach((block, index) => {
+  card.blocks.forEach((_, index) => {
     if (onGround && index === onGround.index) return
     const box = boxes[String(index)]
-    // A callout and a code panel keep their own inks over a photo, as on screen; words that are
-    // not on a panel go white (`target`).
-    const on = block.type === 'callout' || block.type === 'code' ? slide : target
-    if (box) renderAdjustedBlock(on, card, index, placed(box, fit), fit, theme, style, measure, context.images, env)
+    // A callout and a code panel keep their own inks over a photo (they draw through `target.unwhitened`).
+    if (box) renderAdjustedBlock(target, card, index, placed(box, fit), fit, theme, style, measure, context.images, env)
   })
   if (onGround) addCredit(slide, onGround.block, whole, bodyFace(theme, style), measure, { pill: false })
 }
