@@ -75,9 +75,16 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
 
     it('grows the numeral in a single row and keeps h1 for the two-row form', () => {
       const one = numeralTags(html(find('g-icons3')))[0]
-      expect(one).toContain(`font-size:calc(var(--slide-size-h1) * ${expressive ? 2 : 1.6})`)
+      expect(one).toContain(`font-size:min(calc(var(--slide-size-h1) * ${expressive ? 2 : 1.6}), `)
       const two = numeralTags(html(find('g-icons6')))[0]
-      expect(two).toContain(expressive ? 'font-size:calc(var(--slide-size-h1) * 1.25)' : 'font-size:var(--slide-size-h1)')
+      expect(two).toContain(
+        expressive ? 'font-size:min(calc(var(--slide-size-h1) * 1.25), ' : 'font-size:min(var(--slide-size-h1), ',
+      )
+    })
+
+    it('caps the numeral by its column width, so two digits fit a narrow zone panel', () => {
+      expect(numeralTags(html(find('g-icons3')))[0]).toContain('calc(100cqi / 3 * 0.6))')
+      expect(numeralTags(html(find('g-icons6')))[0]).toContain('calc(100cqi / 3 * 0.6))')
     })
 
     it('sets the text at the foot of a single-row column and directly under the numeral in two rows', () => {
@@ -112,7 +119,7 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
       expect(out).not.toContain('repeat(3, minmax(0, 1fr))')
       expect(out).not.toContain('repeat(7, minmax(0, 1fr))')
       // The numbered drawing: the fixed numeral column and the two-column flow.
-      expect(out).toContain('width:3.5em')
+      expect(out).toContain('width:min(3.5em, 25cqi)')
       expect(out).toContain('@min-[640px]:grid-flow-col')
       expect(numerals(out)).toEqual(['01', '02', '03', '04', '05', '06', '07'])
       for (const text of texts) expect(out.split(text).length - 1).toBe(1)
@@ -120,12 +127,12 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
   })
 
   describe('numbered', () => {
-    it('sets the numeral at h2 (structured) or h1 (expressive) in a 3.5em column', () => {
+    it('sets the numeral at h2 (structured) or h1 (expressive) in a 3.5em column, capped at 25cqi', () => {
       const tags = numeralTags(html(find('g-numbered')))
       expect(tags.length).toBe(5)
       for (const tag of tags) {
         expect(tag).toContain(`font-size:var(--slide-size-${expressive ? 'h1' : 'h2'})`)
-        expect(tag).toContain('width:3.5em')
+        expect(tag).toContain('width:min(3.5em, 25cqi)')
         expect(tag).toContain('text-slide-accent')
       }
     })
@@ -133,7 +140,7 @@ describe.each(STYLES)('redrawn lists (%s)', (style) => {
     it('steps the numeral down to h3 past six items', () => {
       for (const tag of numeralTags(html(find('g-numbered10')))) {
         expect(tag).toContain('font-size:var(--slide-size-h3)')
-        expect(tag).toContain('width:3.5em')
+        expect(tag).toContain('width:min(3.5em, 25cqi)')
       }
     })
 

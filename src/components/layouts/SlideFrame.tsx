@@ -43,7 +43,7 @@ export function BodyUnits({
   if (composition === 'splitBody' && units.length === 2) {
     return (
       <div
-        className="grid flex-1 grid-cols-1 @min-[640px]:grid-cols-2"
+        className="grid flex-1 grid-cols-1 items-start @min-[640px]:grid-cols-2"
         style={{ gap: SLIDE_GAP.section }}
       >
         <div
@@ -183,13 +183,14 @@ export function SlideFrame({
 
   if (!aside) {
     // From the 640px container width up the side head is a two-column grid (the head at the
-    // top of the left cell, the body panel stretched to the row's height); below it, a stack.
+    // top of the left cell, the body panel as tall as its own content, so a light slide does
+    // not show an empty band of tint under its last unit); below it, a stack.
     return (
       <div
         data-composition={mode}
         className={
           sideHead
-            ? 'flex flex-1 flex-col @min-[640px]:grid @min-[640px]:grid-cols-[2fr_3fr] @min-[640px]:items-stretch'
+            ? 'flex flex-1 flex-col @min-[640px]:grid @min-[640px]:grid-cols-[2fr_3fr] @min-[640px]:items-start'
             : 'flex flex-1 flex-col'
         }
         style={sideHead ? { gap: SLIDE_GAP.section } : undefined}

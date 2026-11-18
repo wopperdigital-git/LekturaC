@@ -222,6 +222,9 @@ function Numeral({
   )
 }
 
+/** Largest numeral, as a share of its column's width, that still fits two digits (about 1.2em wide). */
+const NUMERAL_COLUMN_SHARE = 0.6
+
 /**
  * Up to six items as columns, each a big accent numeral over the item's text: one row of
  * equal columns for up to four, three columns in two rows for five or six. A column is
@@ -244,11 +247,15 @@ function NumeralColumns({
   const columns = Math.max(1, singleRow ? items.length : 3)
   // Chip items are short by definition, so the text is always at the lead size. In a single row the
   // numeral is larger and the text sits at the foot of the column, so a filled slide has no empty lower half.
-  const numeralSize = singleRow
+  const step = singleRow
     ? `calc(var(--slide-size-h1) * ${expressive ? 2 : 1.6})`
     : expressive
       ? 'calc(var(--slide-size-h1) * 1.25)'
       : 'var(--slide-size-h1)'
+  // Capped by the width of the box the list sits in (`cqi` of the nearest container: the slide's
+  // content area, or a zone panel), so two digits always fit their column. On a full-width slide
+  // the cap is above the step and changes nothing; in a narrow zone panel it keeps "03" inside.
+  const numeralSize = `min(${step}, calc(100cqi / ${columns} * ${NUMERAL_COLUMN_SHARE}))`
   return (
     <Adjustable index={list.index}>
       <ol
@@ -316,7 +323,8 @@ function RuledRows({
   const mark = (i: number) => {
     if (kind === 'numbered') {
       const size = long ? 'var(--slide-size-h3)' : expressive ? 'var(--slide-size-h1)' : 'var(--slide-size-h2)'
-      return <Numeral i={i} size={size} expressive={expressive} width="3.5em" />
+      // Capped at a quarter of the container (the slide or a zone panel) so the text keeps the room.
+      return <Numeral i={i} size={size} expressive={expressive} width="min(3.5em, 25cqi)" />
     }
     if (kind === 'split') {
       if (expressive) return <Numeral i={i} size="var(--slide-size-h3)" expressive width="2.5em" />
