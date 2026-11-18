@@ -90,6 +90,12 @@ export interface BlockAdjusting {
   canAddItem?: (blockIndex: number) => boolean
   /** Appends an item to the list at this block index. Behind the plus under a selected list. */
   addItem?: (blockIndex: number) => void
+  /** Whether the block at this index is a term row (a `point`) and the card has room for another row. */
+  canAddRow?: (blockIndex: number) => boolean
+  /** The index of the last row of the run of term rows holding this block, where the plus is drawn. */
+  rowRunEnd?: (blockIndex: number) => number
+  /** Inserts a new row after the run holding this block. Behind the plus under a table's last row. */
+  addRow?: (blockIndex: number) => void
   /** Whether the block at this index is a photo that Replace can swap. */
   canReplaceImage?: (blockIndex: number) => boolean
   /** Opens the photo picker for the image at this block index. Behind Replace beside the bin. */

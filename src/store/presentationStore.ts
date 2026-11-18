@@ -34,6 +34,7 @@ import { withKickerAt, withoutBlankKickers } from '@/engine/kicker'
 import { imageBlock, withBlockAdded, withBlockAppended, withImageReplaced, type ContentType } from '@/engine/newContent'
 import type { Photo } from '@/images/types'
 import { withBlockRemoved, withItemRemoved, type Removal } from '@/engine/removeElement'
+import { withBlockInserted } from '@/engine/insertBlock'
 
 export interface DeckSummary {
   id: string
@@ -204,6 +205,14 @@ interface PresentationState {
    * to remove or it may not be — the card's last element stays.
    */
   removeBlock: (cardId: string, blockIndex: number) => boolean
+  /**
+   * Inserts `block` right after the block at `afterIndex` (the last row of a table of term rows),
+   * renumbering every later block's marks, typography and nudges so each stays on its own element,
+   * and returns the new block's index — `null` when the card is full or the index is out of range.
+   * One undo step, written immediately after the card's pending text saves are dropped, exactly as
+   * a removal is: the exact inverse of `removeBlock`.
+   */
+  insertBlockAfter: (cardId: string, afterIndex: number, block: ContentBlock) => number | null
   /**
    * Removes one item from a list (a bullet list or a comparison group). When that
    * empties a bullet list the whole list goes, and `blockRemoved` says so, because
@@ -717,9 +726,15 @@ let lastPush: { key: string; at: number } | null = null
  * before this removal, so one landing afterwards would put the element back, or
  * re-attach formatting to the wrong one. All three columns go together because a
  * removal renumbers all three; writing any one alone leaves them disagreeing
- * about which element is which.
+ * about which element is which. An insertion in the middle of a card renumbers the
+ * same three columns and so goes through here too.
  */
-function commitRemoval(set: StatusSetter, get: Getter, cardId: string, removal: Removal) {
+function commitRemoval(
+  set: StatusSetter,
+  get: Getter,
+  cardId: string,
+  removal: Pick<Removal, 'blocks' | 'inline' | 'adjusts'>,
+) {
   pushHistory(set, get)
   set({
     cards: get().cards.map((c) =>
@@ -1336,6 +1351,16 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     if (!removal) return false
     commitRemoval(set, get, cardId, removal)
     return true
+  },
+
+  insertBlockAfter(cardId, afterIndex, block) {
+    const card = get().cards.find((c) => c.id === cardId)
+    if (!card) return null
+    const at = afterIndex + 1
+    const insertion = withBlockInserted(card, at, block)
+    if (!insertion) return null
+    commitRemoval(set, get, cardId, insertion)
+    return at
   },
 
   removeListItem(cardId, blockIndex, itemIndex) {

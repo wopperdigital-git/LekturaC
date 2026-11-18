@@ -2,8 +2,8 @@ import type { MouseEvent, PointerEvent, ReactNode } from 'react'
 import type { Frame } from '@/engine/frame'
 
 /*
-  The two buttons that ride on the selected element: a bin at its corner, and —
-  when it is a list — a plus where the next item would go.
+  The buttons that ride on the selected element: a bin at its corner, and — when it is a list —
+  a plus where the next item would go (for a term row, the plus under the table's last row adds a row).
 
   Drawn as siblings of the selection box in the same rotated frame, so they
   follow the element when it is rotated instead of drifting off it. Like the box,
@@ -29,6 +29,7 @@ export function ElementActions({
   onRemove,
   onReplace,
   onAddItem,
+  onAddRow,
   inside = false,
 }: {
   frame: Frame
@@ -40,6 +41,11 @@ export function ElementActions({
   onReplace?: () => void
   /** Present only for a list that can take another item. */
   onAddItem?: () => void
+  /**
+   * Present only with a term row selected: a plus under the run's last row (the caller passes that
+   * row's frame), inserting one more row after it.
+   */
+  onAddRow?: () => void
 }) {
   return (
     <div
@@ -96,6 +102,13 @@ export function ElementActions({
           onClick={onAddItem}
           style={{ left: 0, top: frame.h + GAP_PX }}
         >
+          <PlusIcon />
+        </ActionButton>
+      )}
+
+      {onAddRow && (
+        // Under the last row of the table, at its left edge: where the next row would be drawn.
+        <ActionButton label="Add row" onClick={onAddRow} style={{ left: 0, top: frame.h + GAP_PX }}>
           <PlusIcon />
         </ActionButton>
       )}

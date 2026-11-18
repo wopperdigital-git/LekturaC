@@ -37,4 +37,18 @@ describe('ElementActions', () => {
     expect(html).toContain('aria-label="Add item"')
     expect(html).not.toContain('Replace photo')
   })
+
+  it('offers the add-row plus for a term row, labelled as a row, not an item', () => {
+    const html = renderToStaticMarkup(
+      <ElementActions frame={FRAME} removeLabel="Remove element" onRemove={noop} onAddRow={noop} />,
+    )
+    expect(html).toContain('aria-label="Add row"')
+    expect(html).not.toContain('aria-label="Add item"')
+  })
+
+  it('offers neither plus for a paragraph', () => {
+    const html = renderToStaticMarkup(<ElementActions frame={FRAME} removeLabel="Remove element" onRemove={noop} />)
+    expect(html).not.toContain('Add row')
+    expect(html).not.toContain('Add item')
+  })
 })

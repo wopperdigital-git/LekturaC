@@ -104,4 +104,31 @@ const PICTURES: Record<ContentType, ReactNode> = {
       <Bar x={18} y={26} w={22} h={3} />
     </>
   ),
+  point: (
+    <>
+      {[10, 18, 26].map((y, i) => (
+        <g key={y}>
+          <Bar x={10} y={y} w={12} h={3.5} accent />
+          <Bar x={27} y={y + 0.25} w={i === 2 ? 18 : 27} h={3} />
+          {i < 2 && <rect x={10} y={y + 5.5} width={44} height={0.8} fill={INK} opacity={0.2} />}
+        </g>
+      ))}
+    </>
+  ),
+  callout: (
+    <>
+      <rect x={8.5} y={8.5} width={47} height={23} rx={3} fill={ACCENT} fillOpacity={0.14} />
+      <Bar x={13} y={13} w={14} h={3} accent />
+      <Bar x={13} y={19.5} w={38} h={3} strong />
+      <Bar x={13} y={25} w={26} h={3} strong />
+    </>
+  ),
+  code: (
+    <>
+      <rect x={8.5} y={7.5} width={47} height={25} rx={3} fill={INK} fillOpacity={0.12} stroke={INK} strokeOpacity={0.25} />
+      <Bar x={13} y={12} w={14} h={2.5} accent />
+      <Bar x={13} y={18} w={30} h={2.5} strong />
+      <Bar x={17} y={23} w={20} h={2.5} />
+    </>
+  ),
 }

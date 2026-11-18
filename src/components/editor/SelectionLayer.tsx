@@ -47,6 +47,14 @@ export function SelectionLayer({
   const adjust = selected === null ? undefined : data?.adjusts?.[String(selected)]
 
   const [measured, setMeasured] = useState<Measured | null>(null)
+  /*
+    With a term row selected, the plus sits under the *run's last* row, which is not the selected
+    one unless it is the last. Its frame is measured with the selection and held beside it.
+  */
+  const [rowEnd, setRowEnd] = useState<{ index: number; frame: Frame } | null>(null)
+  const runEnd =
+    selected !== null && adjusting?.canAddRow?.(selected) ? (adjusting.rowRunEnd?.(selected) ?? selected) : null
+  const runEndAdjust = runEnd === null ? undefined : data?.adjusts?.[String(runEnd)]
   // Bumped to re-measure when nothing in props changed but the layout did — a
   // window resize, or the card reflowing around an edit.
   const [revision, bump] = useState(0)
@@ -55,10 +63,13 @@ export function SelectionLayer({
     const cardNode = cardRef.current
     if (!cardNode || selected === null) {
       setMeasured(null)
+      setRowEnd(null)
       return
     }
     setMeasured(measureBlock(cardNode, selected))
-  }, [cardRef, selected, adjust, revision])
+    const last = runEnd !== null && runEnd !== selected ? measureBlock(cardNode, runEnd) : null
+    setRowEnd(last && runEnd !== null ? { index: runEnd, frame: currentFrame(last.natural, runEndAdjust, last.card) } : null)
+  }, [cardRef, selected, adjust, revision, runEnd, runEndAdjust])
 
   // The card is responsive and reflows as its text is edited, so the box has to
   // be re-measured rather than pinned where it was first drawn.
@@ -198,7 +209,13 @@ export function SelectionLayer({
             ? () => adjusting.addItem?.(selected)
             : undefined
         }
+        // The selected row is the last: its own frame carries the plus.
+        onAddRow={runEnd === selected && adjusting?.addRow ? () => adjusting.addRow?.(selected) : undefined}
       />
+      {runEnd !== null && runEnd !== selected && rowEnd?.index === runEnd && adjusting?.addRow && (
+        // Not the last row: the plus rides on the run's last row, not on the one picked.
+        <ElementActions frame={rowEnd.frame} removeLabel="" onAddRow={() => adjusting.addRow?.(selected)} />
+      )}
     </>
   )
 }

@@ -29,6 +29,9 @@ export const CONTENT_TYPES = [
   'step',
   'group',
   'image',
+  'point',
+  'callout',
+  'code',
 ] as const
 
 export type ContentType = (typeof CONTENT_TYPES)[number]
@@ -49,12 +52,15 @@ export const CONTENT_OPTIONS: readonly { type: ContentType; label: string; descr
   { type: 'step', label: 'Timeline step', description: 'A labelled stage in a sequence' },
   { type: 'group', label: 'Comparison group', description: 'A titled set of points' },
   { type: 'image', label: 'Image', description: 'A photo you search for or paste a link to' },
+  { type: 'point', label: 'Term row', description: 'A term and what it means, in a ruled table' },
+  { type: 'callout', label: 'Callout', description: 'The one idea to remember' },
+  { type: 'code', label: 'Code', description: 'A short code sample' },
 ]
 
-const CONTENT_TYPE_OF: Record<
-  Exclude<ContentBlock['type'], 'heading' | 'image' | 'point' | 'callout' | 'code'>,
-  ContentType
-> = {
+const CONTENT_TYPE_OF: Record<Exclude<ContentBlock['type'], 'heading' | 'image'>, ContentType> = {
+  point: 'point',
+  callout: 'callout',
+  code: 'code',
   paragraph: 'body',
   bulletList: 'list',
   stat: 'stat',
@@ -74,10 +80,6 @@ export function elementLabel(block: ContentBlock, itemIndex: number | null = nul
     return block.type === 'bulletList' ? 'List item' : 'Group item'
   }
   if (block.type === 'image') return 'Image'
-  // Not in the Insert menu yet, so they name themselves.
-  if (block.type === 'point') return 'Term row'
-  if (block.type === 'callout') return 'Callout'
-  if (block.type === 'code') return 'Code'
   const type = block.type === 'heading' ? block.size : CONTENT_TYPE_OF[block.type]
   if (!type) return 'Heading'
   return CONTENT_OPTIONS.find((option) => option.type === type)?.label ?? 'Element'
@@ -102,6 +104,12 @@ const NEW_QUOTE_TEXT = 'New quote'
 const NEW_STEP_LABEL = 'Step'
 const NEW_STEP_TEXT = 'What happens at this stage'
 const NEW_GROUP_HEADING = 'New group'
+const NEW_POINT_LABEL = 'Term'
+const NEW_POINT_TEXT = 'What it means'
+const NEW_CALLOUT_LABEL = 'Key idea'
+const NEW_CALLOUT_TEXT = 'The one thing to remember.'
+const NEW_CODE_LABEL = 'Short example'
+const NEW_CODE_TEXT = 'int x = 0;'
 
 const PLACEHOLDERS: ReadonlySet<string> = new Set([
   NEW_ITEM_TEXT,
@@ -114,6 +122,12 @@ const PLACEHOLDERS: ReadonlySet<string> = new Set([
   NEW_STEP_TEXT,
   NEW_GROUP_HEADING,
   KICKER_PLACEHOLDER,
+  NEW_POINT_LABEL,
+  NEW_POINT_TEXT,
+  NEW_CALLOUT_LABEL,
+  NEW_CALLOUT_TEXT,
+  NEW_CODE_LABEL,
+  NEW_CODE_TEXT,
 ])
 
 /** True while a run still holds text this module put there, so it can be selected for replacement. */
@@ -158,6 +172,12 @@ export function newBlock(type: Exclude<ContentType, 'image'>): ContentBlock {
       return { type: 'timelineStep', label: NEW_STEP_LABEL, text: NEW_STEP_TEXT }
     case 'group':
       return { type: 'comparisonGroup', heading: NEW_GROUP_HEADING, items: [NEW_ITEM_TEXT] }
+    case 'point':
+      return { type: 'point', label: NEW_POINT_LABEL, text: NEW_POINT_TEXT }
+    case 'callout':
+      return { type: 'callout', label: NEW_CALLOUT_LABEL, text: NEW_CALLOUT_TEXT }
+    case 'code':
+      return { type: 'code', label: NEW_CODE_LABEL, code: NEW_CODE_TEXT }
   }
 }
 

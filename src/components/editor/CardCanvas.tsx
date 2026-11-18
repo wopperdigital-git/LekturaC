@@ -9,6 +9,8 @@ import { groundOf } from '@/engine/composition'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
 import { mergeTextStyle, type TextStyle } from '@/engine/textStyle'
 import { listTarget } from '@/engine/listItems'
+import { pointRun } from '@/engine/insertBlock'
+import { MAX_BLOCKS } from '@/engine/newContent'
 import { TextEditingContext, type TextEditing } from '@/components/layouts/textEditingContext'
 import { ZoomFrame } from './ZoomFrame'
 import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
@@ -47,6 +49,7 @@ export function CardCanvas({
   onChangeAdjust,
   onRemoveSelected,
   onAddItem,
+  onAddRow,
   onReplaceImage,
   onDuplicateCard,
   onDeleteCard,
@@ -74,6 +77,8 @@ export function CardCanvas({
   onRemoveSelected: () => void
   /** The plus under a selected list: appends an item to the list at this block index. */
   onAddItem: (blockIndex: number) => void
+  /** The plus under a table of term rows: inserts a row after the run holding this block index. */
+  onAddRow: (blockIndex: number) => void
   /** Replace on a selected photo: opens the picker for the image at this block index. */
   onReplaceImage: (blockIndex: number) => void
   /** The buttons above the selected slide's top-right corner. */
@@ -193,6 +198,10 @@ export function CardCanvas({
                           remove: onRemoveSelected,
                           canAddItem: (blockIndex) => listTarget(card.blocks, blockIndex) === blockIndex,
                           addItem: onAddItem,
+                          canAddRow: (blockIndex) =>
+                            card.blocks.length < MAX_BLOCKS && pointRun(card.blocks, blockIndex) !== null,
+                          rowRunEnd: (blockIndex) => pointRun(card.blocks, blockIndex)?.end ?? blockIndex,
+                          addRow: onAddRow,
                           canReplaceImage: (blockIndex) => card.blocks[blockIndex]?.type === 'image',
                           replaceImage: onReplaceImage,
                         }}

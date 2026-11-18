@@ -16,6 +16,7 @@ import {
 import { blockFieldText, parseTextRef } from './blockText'
 import { textRef } from './marks'
 import type { Photo } from '@/images/types'
+import { pointRuns } from './groups'
 
 const PHOTO: Photo = {
   url: 'https://images.pexels.com/photos/1/photo.jpeg',
@@ -161,7 +162,6 @@ describe('withImageReplaced', () => {
 })
 
 describe('structured blocks', () => {
-  // The Insert menu does not offer them yet; the panel and the caret still have to name them.
   it('names each by its own words', () => {
     expect(elementLabel({ type: 'point', label: 'A', text: 'B' })).toBe('Term row')
     expect(elementLabel({ type: 'callout', text: 'B' })).toBe('Callout')
@@ -172,5 +172,39 @@ describe('structured blocks', () => {
     expect(firstEditableField({ type: 'point', label: 'A', text: 'B' })).toEqual({ field: 'label' })
     expect(firstEditableField({ type: 'callout', text: 'B' })).toEqual({ field: 'text' })
     expect(firstEditableField({ type: 'code', code: 'x' })).toEqual({ field: 'code' })
+  })
+})
+
+describe('insert menu: structured blocks', () => {
+  it('offers Term row, Callout and Code, after the existing options', () => {
+    const labels = CONTENT_OPTIONS.map((o) => o.label)
+    expect(labels.slice(-3)).toEqual(['Term row', 'Callout', 'Code'])
+    expect(CONTENT_OPTIONS.map((o) => o.type)).toEqual([...CONTENT_TYPES])
+  })
+
+  it('builds each with its placeholders', () => {
+    expect(newBlock('point')).toEqual({ type: 'point', label: 'Term', text: 'What it means' })
+    expect(newBlock('callout')).toEqual({ type: 'callout', label: 'Key idea', text: 'The one thing to remember.' })
+    expect(newBlock('code')).toEqual({ type: 'code', label: 'Short example', code: 'int x = 0;' })
+    expect(newBlock('code')).not.toHaveProperty('caption')
+  })
+
+  it('every placeholder is selected on arrival', () => {
+    for (const text of ['Term', 'What it means', 'Key idea', 'The one thing to remember.', 'Short example', 'int x = 0;']) {
+      expect(isPlaceholderText(text)).toBe(true)
+    }
+  })
+
+  it('names the new block as the menu does', () => {
+    for (const type of ['point', 'callout', 'code'] as const) {
+      const option = CONTENT_OPTIONS.find((o) => o.type === type)!
+      expect(elementLabel(newBlock(type))).toBe(option.label)
+    }
+  })
+
+  it('a term row appended after a trailing run extends it', () => {
+    const result = withBlockAppended([HEADING, newBlock('point')], 'point')!
+    expect(result.blockIndex).toBe(2)
+    expect(pointRuns(result.blocks, [1, 2])).toEqual([[1, 2]])
   })
 })

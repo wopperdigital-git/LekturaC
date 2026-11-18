@@ -33,12 +33,12 @@ export interface Removal {
 type Removable = Pick<Card, 'blocks' | 'inline' | 'adjusts'>
 
 /** `inline` is keyed by a bare block index for an element's own style, or a full `textRef` for a run. */
-function isBareIndex(key: string): boolean {
+export function isBareIndex(key: string): boolean {
   return /^\d+$/.test(key)
 }
 
 /** `undefined` rather than an empty record: an untouched card has neither, and that is how absence is stored. */
-function orUndefined<T extends Record<string, unknown>>(record: T): T | undefined {
+export function orUndefined<T extends Record<string, unknown>>(record: T): T | undefined {
   return Object.keys(record).length > 0 ? record : undefined
 }
 
@@ -48,7 +48,7 @@ function orUndefined<T extends Record<string, unknown>>(record: T): T | undefine
  * key's new spelling, or `null` to drop it. A key that is not an address at all is
  * kept as it is — losing data nobody asked to lose is the worse mistake.
  */
-function remapInline(
+export function remapInline(
   inline: Card['inline'],
   remap: (address: { blockIndex: number; field: string | null; itemIndex?: number }) => string | null,
 ): Card['inline'] {
@@ -67,7 +67,7 @@ function remapInline(
   return orUndefined(next)
 }
 
-function spell(blockIndex: number, field: string | null, itemIndex?: number): string {
+export function spell(blockIndex: number, field: string | null, itemIndex?: number): string {
   if (field === null) return String(blockIndex)
   return itemIndex === undefined ? `${blockIndex}:${field}` : `${blockIndex}:${field}:${itemIndex}`
 }

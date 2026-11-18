@@ -39,7 +39,8 @@ import type { Photo } from '@/images/types'
 import { Button } from '@/components/ui/Button'
 import type { CreatableKind } from '@/engine/cardTemplates'
 import { hasMarkThroughout, markValueAt, textRef, type TextRange } from '@/engine/marks'
-import { elementLabel, firstEditableField, type ContentType } from '@/engine/newContent'
+import { elementLabel, firstEditableField, newBlock, type ContentType } from '@/engine/newContent'
+import { pointRun } from '@/engine/insertBlock'
 import { KICKER_PLACEHOLDER, canAddKicker, isBlankKicker } from '@/engine/kicker'
 import {
   selectionAfterCardPress,
@@ -913,6 +914,24 @@ export function EditorPage() {
   }
 
   /*
+    The plus under a table of term rows: a new row right after the run holding `blockIndex`
+    (not at the card's end, so it lands in the table), selected and opened for typing with its
+    placeholder selected. Every later block's marks and nudges are renumbered by the store.
+  */
+  function addRow(blockIndex: number) {
+    if (!selectedCard) return
+    const run = pointRun(selectedCard.blocks, blockIndex)
+    if (!run) return
+    const row = newBlock('point')
+    const inserted = store.insertBlockAfter(selectedCard.id, run.end, row)
+    if (inserted === null) return
+    apply({ cardId: selectedCard.id, blockIndex: inserted, itemIndex: null })
+    const { field, item } = firstEditableField(row)
+    setActiveTextRef(textRef(inserted, field, item))
+    setTextRange(null)
+  }
+
+  /*
     Adds a new element to the selected card and opens it for typing.
 
     It goes at the end of the card (see `withBlockAppended`), so no existing
@@ -1420,6 +1439,7 @@ export function EditorPage() {
                 onChangeAdjust={store.setBlockAdjust}
                 onRemoveSelected={() => void removeSelected(true)}
                 onAddItem={addListItem}
+                onAddRow={addRow}
                 onReplaceImage={(blockIndex) => {
                   if (selectedCard) setPhotoRequest({ kind: 'replace', cardId: selectedCard.id, blockIndex })
                 }}
