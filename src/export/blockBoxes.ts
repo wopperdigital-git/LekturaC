@@ -92,7 +92,8 @@ function lines(text: string, charsPerLine: number): number {
 function naturalHeight(block: ContentBlock, step: Steps): number {
   switch (block.type) {
     case 'heading':
-      return 0.078 * step.h2
+      // A kicker (the small heading over it) is a line of its own above the title.
+      return 0.078 * step.h2 + (block.kicker && block.kicker.trim() !== '' ? 0.022 * step.body : 0)
     case 'paragraph':
       // A larger body is taller and fits fewer characters on a line.
       return lines(block.text, CHARS_PER_LINE / step.body) * BODY_LINE_H * step.body

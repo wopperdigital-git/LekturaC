@@ -1,15 +1,43 @@
-import type { Card, ContentBlock, ImageBlock, LayoutType } from '@/engine/contentBlocks'
+import type { Card, ContentBlock, ImageBlock, LayoutType, PointBlock } from '@/engine/contentBlocks'
 import { singlePhoto } from '@/engine/blockPartition'
 import { groundOfLayout, type Ground } from '@/engine/composition'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { TextStyle } from '@/engine/textStyle'
 import { textRef } from '@/engine/marks'
-import { parseTextRef } from '@/engine/blockText'
 import { cardBoxes, type Box } from './blockBoxes'
+import {
+  BODY,
+  H1,
+  H2,
+  H3,
+  bodyFace,
+  elementStyleOf,
+  headingFace,
+  markBold,
+  markScale,
+  marksFor,
+  styleFor,
+} from './blockStyle'
 import { groundColors, groundTheme, withoutStoredColors } from './ground'
 import type { PptxTextRun } from './textRun'
-import { SIZE_SCALE_KEY, faceName, hex, markedRuns, resolveRunStyle } from './textRun'
+import { SIZE_SCALE_KEY, hex, markedRuns } from './textRun'
 import type { PptxGroup } from './slideGroup'
+import {
+  drawInBox,
+  drawStack,
+  fitStack,
+  hasStructured,
+  isStructured,
+  kickerLayout,
+  kickerOf,
+  makeEnv,
+  calloutBlock,
+  codeBlock,
+  planExtras,
+  pointRun,
+  type Env,
+  type Painter,
+} from './structuredBlocks'
 import { SLIDE_H, SLIDE_W, addCredit, addPhoto, addScrim, usablePhoto, whiteText, type PhotoBox } from './photoPlacement'
 import type { FitParagraph, FitSizing, SizeRole, TextMeasurer } from './textFit'
 import {
@@ -20,6 +48,7 @@ import {
   fitText,
   preferredSize,
   spacingPt,
+  textHeight,
 } from './textFit'
 
 /*
@@ -90,82 +119,10 @@ interface Column {
 }
 const FULL_COLUMN: Column = { x: MARGIN, w: CONTENT_W }
 
-/** Index into `theme.typography.scale`. */
-const H1 = 0
-const H2 = 1
-const H3 = 2
-const BODY = 3
-
-function headingFace(theme: ThemeTokens, style: TextStyle): string {
-  return faceName(style.fontFamily ?? theme.typography.headingFont)
-}
-
-function bodyFace(theme: ThemeTokens, style: TextStyle): string {
-  return faceName(style.fontFamily ?? theme.typography.bodyFont)
-}
-
 /** The card's heading text. The generation schema guarantees block 0 is a heading. */
 function headingText(card: Card): string {
   const first = card.blocks[0]
   return first?.type === 'heading' ? first.text : ''
-}
-
-/** Marks stored for one run of text, or undefined if nobody formatted it. */
-function marksFor(card: Card, ref: string) {
-  return card.inline?.[ref]?.marks
-}
-
-/** The merged style for one run, with its own inline overrides on top. */
-function styleFor(card: Card, ref: string, style: TextStyle): TextStyle {
-  /*
-    Three levels, narrowest last: deck and card (already merged into `style`),
-    then the element the run belongs to, then the run itself.
-
-    The element's own typography — what the toolbar writes while an element is
-    selected — lives under the bare block index, not under any run's ref (see
-    `blockStyleKey` in the editor). It used to be skipped here, so a font, size,
-    alignment or colour set on one selected element showed on screen and vanished
-    from the exported file. Written as `String(index)` because `src/export/` may
-    not import from a component.
-  */
-  return resolveRunStyle(resolveRunStyle(style, elementStyleOf(card, ref)), card.inline?.[ref]?.style)
-}
-
-/** The typography set on the whole element a run belongs to, or undefined if nobody set any. */
-function elementStyleOf(card: Card, ref: string | null): TextStyle | undefined {
-  const block = ref ? parseTextRef(ref)?.blockIndex : undefined
-  return block === undefined ? undefined : card.inline?.[String(block)]?.style
-}
-
-/**
- * `true` when `ref` carries a bold mark anywhere in its text, else `undefined`
- * (never `false`) — so setting it on a `FitParagraph` can only ever *add*
- * bold to the measurement, never strip a box-level bold already carried by
- * `sizing.bold` (e.g. a heading). Conservative on purpose: a paragraph with
- * even one bold word is measured as if it were entirely bold, which can only
- * overestimate its width and never under-fit it. `ref` is `null` for the
- * composite lines (`flattenBlocks`'s stat/timeline/quote-with-attribution
- * text) that join two separately-addressed runs with no single ref to read.
- */
-function markBold(card: Card, ref: string | null): true | undefined {
-  if (!ref) return undefined
-  return marksFor(card, ref)?.some((mark) => mark.type === 'bold') ? true : undefined
-}
-
-/**
- * The largest size multiple any size mark on `ref` sets, or `undefined` if none
- * enlarges it. Only enlargement matters to the fit — a run set *smaller* than the
- * box's size cannot make its paragraph taller — and, like `markBold`, it is
- * deliberately conservative: a paragraph with one enlarged word is measured as if
- * every word were that size.
- */
-function markScale(card: Card, ref: string | null): number | undefined {
-  if (!ref) return undefined
-  let largest = 1
-  for (const mark of marksFor(card, ref) ?? []) {
-    if (mark.type === 'fontScale' && typeof mark.value === 'number') largest = Math.max(largest, mark.value)
-  }
-  return largest > 1 ? largest : undefined
 }
 
 function firstOfType<T extends ContentBlock['type']>(
@@ -209,6 +166,14 @@ function addHeading(
   measure: TextMeasurer,
   column: Column = FULL_COLUMN,
 ): number {
+  /*
+    A kicker (the small heading over the title) takes its own line above the heading, which
+    then starts below it; a heading without one starts at TOP exactly as before. Its colour is
+    the same on every ground (the grounded theme's accent pulled toward its foreground).
+  */
+  const kicker = kickerLayout(makeEnv(card, theme, style, measure, 'plain'), 0, column.w)
+  if (kicker) kicker.draw(slide, column.x, TOP, column.w, 'left')
+  const top = TOP + (kicker ? kicker.heightIn : 0)
   const ref = textRef(0, 'text')
   const runStyle = styleFor(card, ref, style)
   const sizing: FitSizing = {
@@ -227,7 +192,7 @@ function addHeading(
 
   slide.addText(markedRuns(headingText(card), marksFor(card, ref)), {
     x: column.x,
-    y: TOP,
+    y: top,
     w: column.w,
     h: heightIn,
     fontFace: headingFace(theme, runStyle),
@@ -244,7 +209,7 @@ function addHeading(
     fit: 'shrink',
   })
 
-  const ruleY = TOP + heightIn + RULE_GAP
+  const ruleY = top + heightIn + RULE_GAP
   slide.addShape('rect', {
     x: column.x,
     y: ruleY,
@@ -254,6 +219,23 @@ function addHeading(
   })
 
   return ruleY + RULE_H + CONTENT_GAP
+}
+
+/*
+  The structured blocks (term rows, a callout, a code panel) in an arrangement with no place of
+  its own for them: one strip at the foot of the slide, fitted into at most this share of the
+  room below the heading, with the arrangement's own content given what is left. Drawn straight
+  away, so an arrangement that returns early still shows them. Returns the bottom edge the
+  arrangement may use, `BOTTOM` itself when the card holds none of them.
+*/
+const EXTRAS_MAX_SHARE = 0.45
+const EXTRAS_GAP = 0.15
+
+function addExtras(slide: PptxSlide, env: Env, top: number): number {
+  const plan = planExtras(env, CONTENT_W, (BOTTOM - top) * EXTRAS_MAX_SHARE)
+  if (!plan) return BOTTOM
+  plan.draw(slide, MARGIN, BOTTOM)
+  return BOTTOM - plan.heightIn - EXTRAS_GAP
 }
 
 /* ---------------------------------------------------------------- title --- */
@@ -272,7 +254,11 @@ const TITLE_MAX_H = 2.4
 const TITLE_SUBTITLE_GAP = 0.25
 const TITLE_SUBTITLE_INSET = 1.6
 
-const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
+const renderTitle: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
+  const env = makeEnv(card, theme, style, measure, groundOnSlide(card, context))
+  const kicker = kickerLayout(env, 0, CONTENT_W)
+  const kickerH = kicker ? kicker.heightIn : 0
+  const bottom = addExtras(slide, env, TOP)
   const paragraphs = allOfType(card, 'paragraph')
   const headingRef = textRef(0, 'text')
   const headingStyle = styleFor(card, headingRef, style)
@@ -313,7 +299,7 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
       subParagraphs,
       {
         widthIn: CONTENT_W - TITLE_SUBTITLE_INSET,
-        maxHeightIn: BOTTOM - TOP - titleH - TITLE_SUBTITLE_GAP,
+        maxHeightIn: bottom - TOP - kickerH - titleH - TITLE_SUBTITLE_GAP,
       },
       subSizing,
       measure,
@@ -322,16 +308,19 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
     subSize = fitted.sizePt
   }
 
-  const groupH = paragraphs.length > 0 ? titleH + TITLE_SUBTITLE_GAP + subH : titleH
+  const groupH = kickerH + (paragraphs.length > 0 ? titleH + TITLE_SUBTITLE_GAP + subH : titleH)
   // Clamped to at least TOP: a group taller than the slide (an oversized
   // subtitle at the FLOOR_PT size) must not be centred up past the same
   // top margin every other arrangement respects, which would push the title
   // itself off the top of the slide.
-  const groupY = Math.max(TOP, (SLIDE_H - groupH) / 2)
+  // Centred in the slide, or in what the strip of structured blocks leaves of it.
+  const region = bottom === BOTTOM ? SLIDE_H : bottom + (SLIDE_H - BOTTOM)
+  const groupY = Math.max(TOP, (region - groupH) / 2)
 
+  kicker?.draw(slide, MARGIN, groupY, CONTENT_W, 'center')
   slide.addText(markedRuns(headingText(card), marksFor(card, headingRef)), {
     x: MARGIN,
-    y: groupY,
+    y: groupY + kickerH,
     w: CONTENT_W,
     h: titleH,
     fontFace: headingFace(theme, headingStyle),
@@ -361,7 +350,7 @@ const renderTitle: SlideRenderer = (slide, card, theme, style, measure) => {
 
     slide.addText(runs, {
       x: MARGIN + TITLE_SUBTITLE_INSET / 2,
-      y: groupY + titleH + TITLE_SUBTITLE_GAP,
+      y: groupY + kickerH + titleH + TITLE_SUBTITLE_GAP,
       w: CONTENT_W - TITLE_SUBTITLE_INSET,
       h: subH,
       fontFace: bodyFace(theme, boxStyle),
@@ -406,15 +395,20 @@ interface BulletLine {
  * the arrangement that survives translation without inventing structure the
  * card does not have.
  */
-function flattenBlocks(card: Card, skip?: number): BulletLine[] {
+function flattenBlocks(card: Card, skip?: number, range?: readonly [number, number]): BulletLine[] {
   const lines: BulletLine[] = []
 
   card.blocks.forEach((block, i) => {
+    if (range && (i < range[0] || i >= range[1])) return // another segment's
     if (i === 0 && block.type === 'heading') return // rendered by addHeading
     if (i === skip) return // a photo drawn in its own box
 
     switch (block.type) {
       case 'heading':
+        // A later heading's kicker is its words on a line of their own above it.
+        if (kickerOf(card, i) !== null) lines.push({ text: block.kicker as string, bullet: false, indent: 0, ref: textRef(i, 'kicker') })
+        lines.push({ text: block.text, bullet: false, indent: 0, ref: textRef(i, 'text') })
+        break
       case 'paragraph':
         lines.push({ text: block.text, bullet: false, indent: 0, ref: textRef(i, 'text') })
         break
@@ -449,23 +443,11 @@ function flattenBlocks(card: Card, skip?: number): BulletLine[] {
         // is worse than no bullet.
         if (block.alt) lines.push({ text: block.alt, bullet: true, indent: 0, ref: null })
         break
-      // Stand-ins until the structured drawings are exported (a table of rows, an accent
-      // panel, a code panel): the words, in order, as plain lines.
+      // Term rows, a callout and a code panel are shapes, not lines: `renderBody` and the strip at the
+      // foot of the other arrangements draw them (`structuredBlocks.ts`).
       case 'point':
-        lines.push({ text: `${block.label} — ${block.text}`, bullet: false, indent: 0, ref: null })
-        break
       case 'callout':
-        lines.push({
-          text: block.label ? `${block.label} — ${block.text}` : block.text,
-          bullet: false,
-          indent: 0,
-          ref: block.label ? null : textRef(i, 'text'),
-        })
-        break
       case 'code':
-        if (block.label) lines.push({ text: block.label, bullet: false, indent: 0, ref: null })
-        for (const line of block.code.split('\n')) lines.push({ text: line, bullet: false, indent: 0, ref: null })
-        if (block.caption) lines.push({ text: block.caption, bullet: false, indent: 0, ref: null })
         break
     }
   })
@@ -563,6 +545,99 @@ function photoSide(card: Card, context: RenderContext): PhotoSide | null {
   }
 }
 
+/**
+ * A run of flattened lines as one block of the body stack: the merged text box at a given size,
+ * top-anchored so the structured blocks around it keep their order.
+ */
+function textPainter(env: Env, lines: BulletLine[], widthIn: number): Painter {
+  const { card, theme, style, measure } = env
+  return {
+    layout(pt) {
+      const paragraphs: FitParagraph[] = lines.map((line) => ({
+        text: line.text,
+        indentIn: lineIndent(line),
+        bold: markBold(card, line.ref),
+        scale: markScale(card, line.ref),
+      }))
+      const sizing: FitSizing = {
+        preferredPt: pt,
+        minPt: pt,
+        face: bodyFace(theme, style),
+        bold: style.bold,
+        italic: style.italic,
+        lineSpacing: theme.typography.lineHeight,
+      }
+      const heightIn = textHeight(paragraphs, widthIn, sizing, pt, measure)
+      const runs = lines.flatMap((line, i) => runsForLine(line, card, i === lines.length - 1))
+      return {
+        heightIn,
+        draw(slide, x, y) {
+          slide.addText(runs, {
+            x,
+            y,
+            w: widthIn,
+            h: heightIn,
+            fontFace: bodyFace(theme, style),
+            fontSize: pt,
+            color: hex(style.color ?? theme.colors.foreground),
+            align: style.align ?? 'left',
+            valign: 'top',
+            lineSpacing: spacingPt(pt, sizing.lineSpacing ?? DEFAULT_LINE_SPACING),
+            margin: TEXT_MARGIN_PT,
+            fit: 'shrink',
+          })
+        },
+      }
+    },
+  }
+}
+
+/**
+ * The body of a card that holds term rows, a callout or a code panel: its blocks in author order,
+ * each run of ordinary text as one text box and each structured block as its own shapes, stacked
+ * from the top of the content area at the largest body size at which they all fit. A card with none
+ * of them never comes here (its body is the single text box below, unchanged).
+ */
+function drawBodyStack(
+  slide: PptxSlide,
+  env: Env,
+  photoIndex: number | undefined,
+  column: Column,
+  contentTop: number,
+): void {
+  const { card } = env
+  const owner = card.blocks.findIndex((block) => block.type === 'callout')
+  const painters: Painter[] = []
+  let i = 0
+  while (i < card.blocks.length) {
+    const block = card.blocks[i]
+    if (block.type === 'point') {
+      const items: { block: PointBlock; index: number }[] = []
+      let j = i
+      while (j < card.blocks.length && card.blocks[j].type === 'point') {
+        items.push({ block: card.blocks[j] as PointBlock, index: j })
+        j++
+      }
+      painters.push(pointRun(env, items, column.w, true))
+      i = j
+    } else if (block.type === 'callout') {
+      painters.push(calloutBlock(env, i, block, i === owner, column.w))
+      i++
+    } else if (block.type === 'code') {
+      painters.push(codeBlock(env, i, block, column.w))
+      i++
+    } else {
+      let j = i
+      while (j < card.blocks.length && !isStructured(card.blocks[j])) j++
+      const lines = flattenBlocks(card, photoIndex, [i, j])
+      if (lines.length > 0) painters.push(textPainter(env, lines, column.w))
+      i = j
+    }
+  }
+  const { layouts } = fitStack(painters, BOTTOM - contentTop, env.bodyPt)
+  drawStack(slide, layouts, column.x, contentTop)
+}
+
 const renderBody: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
   const side = photoSide(card, context)
   if (side) {
@@ -571,6 +646,11 @@ const renderBody: SlideRenderer = (slide, card, theme, style, measure, context =
   }
   const column = side ? side.column : FULL_COLUMN
   const contentTop = addHeading(slide, card, theme, style, measure, column)
+
+  if (hasStructured(card)) {
+    drawBodyStack(slide, makeEnv(card, theme, style, measure, groundOnSlide(card, context)), side?.index, column, contentTop)
+    return
+  }
 
   const lines = flattenBlocks(card, side?.index)
   if (lines.length === 0) return
@@ -629,8 +709,9 @@ const CELL_PAD_IN = 0.08
  * A single stat lands centred and very large; several lay out in rows of at
  * most four, wrapping beyond that rather than shrinking indefinitely.
  */
-const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
+const renderStat: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
   const contentTop = addHeading(slide, card, theme, style, measure)
+  const bottom = addExtras(slide, makeEnv(card, theme, style, measure, groundOnSlide(card, context)), contentTop)
 
   const stats: { value: string; label: string; index: number }[] = []
   card.blocks.forEach((block, i) => {
@@ -646,7 +727,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
   const columns = Math.min(stats.length, MAX_STAT_COLUMNS)
   const rows = Math.ceil(stats.length / columns)
   const cellW = CONTENT_W / columns
-  const area = BOTTOM - contentTop
+  const area = bottom - contentTop
 
   // Paragraphs, when present, are fitted first and take a bottom slice off the
   // stat area — sized to what they actually need (up to `PARAGRAPH_MAX_H`)
@@ -786,7 +867,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
 
     slide.addText(runs, {
       x: MARGIN,
-      y: BOTTOM - paragraphH,
+      y: bottom - paragraphH,
       w: CONTENT_W,
       h: paragraphH,
       fontFace: bodyFace(theme, paragraphStyle),
@@ -817,7 +898,7 @@ const renderStat: SlideRenderer = (slide, card, theme, style, measure) => {
  * nothing, since `flattenBlocks` already renders every `comparisonGroup` as a
  * heading plus indented bullets.
  */
-const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
+const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
   const groups: { heading: string; items: string[]; index: number }[] = []
   card.blocks.forEach((block, i) => {
     if (block.type === 'comparisonGroup') {
@@ -832,11 +913,12 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
   // rather than a lone heading over an empty backdrop — or, as before, nothing
   // at all.
   if (groups.length === 0 || groups.length > 4) {
-    renderBody(slide, card, theme, style, measure)
+    renderBody(slide, card, theme, style, measure, context)
     return
   }
 
   const contentTop = addHeading(slide, card, theme, style, measure)
+  const bottom = addExtras(slide, makeEnv(card, theme, style, measure, groundOnSlide(card, context)), contentTop)
 
   const shown = groups.slice(0, 4)
   const columns = shown.length
@@ -872,7 +954,7 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
   const headingH = Math.max(...headingFits.map((f) => f.heightIn))
 
   const bulletsTop = contentTop + headingH + HEADING_BODY_GAP
-  const bulletsAreaH = BOTTOM - bulletsTop
+  const bulletsAreaH = bottom - bulletsTop
 
   // Fitted independently per column too, then unified the same way — the
   // smallest size wins so every column's bullets read at one size.
@@ -949,10 +1031,10 @@ const renderTwoCol: SlideRenderer = (slide, card, theme, style, measure) => {
 /* ---------------------------------------------------------------- quote --- */
 
 /** `quote`: the words fill the slide, attribution beneath, or nothing if it has none. */
-const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
+const renderQuote: SlideRenderer = (slide, card, theme, style, measure, context = NO_CONTEXT) => {
   const quote = firstOfType(card, 'quote')
   if (!quote) {
-    renderBody(slide, card, theme, style, measure)
+    renderBody(slide, card, theme, style, measure, context)
     return
   }
 
@@ -960,11 +1042,12 @@ const renderQuote: SlideRenderer = (slide, card, theme, style, measure) => {
   // fallback; drawing it again here too would duplicate it, so this call
   // sits only on the path where a quote block actually exists.
   const contentTop = addHeading(slide, card, theme, style, measure)
+  const bottom = addExtras(slide, makeEnv(card, theme, style, measure, groundOnSlide(card, context)), contentTop)
 
   // The quote and its attribution are fitted independently, then centred as
   // one pair inside the area below the heading — clearing `addHeading`'s real
   // bottom rather than a fixed guess at where its box ends.
-  const area = BOTTOM - contentTop
+  const area = bottom - contentTop
   const quoteW = CONTENT_W - 1.0
   const attribution = quote.block.attribution
   const ATTRIBUTION_MAX_H = 0.6
@@ -1118,6 +1201,9 @@ function lowerSlice(box: PlacedBox, share: number): PlacedBox {
   return { ...box, y: box.y + box.h * share, h: box.h * (1 - share) }
 }
 
+/** The share of a heading's frame a kicker takes on a nudged card. */
+const KICKER_SHARE = 0.22
+
 /** The upper slice of a box. */
 function upperSlice(box: PlacedBox, share: number): PlacedBox {
   return { ...box, h: box.h * share }
@@ -1141,6 +1227,7 @@ function renderAdjustedBlock(
   style: TextStyle,
   measure: TextMeasurer,
   images: ReadonlyMap<string, string>,
+  env: Env,
 ) {
   const block = card.blocks[index]
 
@@ -1203,24 +1290,32 @@ function renderAdjustedBlock(
       // theme step the screen draws it at; everything the AI wrote is unset → H2.
       const headingStep = block.size === 'h1' ? H1 : block.size === 'h3' ? H3 : H2
       const preferredPt = fittedPointSize(theme.typography.scale[headingStep], own.fontScale, fit)
+      // A kicker takes the top of the heading's own frame (they are one block, so one box moves both).
+      const kicker = kickerLayout(env, index, box.w, env.bodyPt)
+      kicker?.draw(slide, box.x, box.y, box.w, 'left', box.h * KICKER_SHARE)
+      const headingArea = kicker ? lowerSlice(box, KICKER_SHARE) : box
       const { sizePt, spacing } = fitSize(
         [{ text: block.text, bold: markBold(card, ref), scale: markScale(card, ref) }],
-        box,
+        headingArea,
         preferredPt,
         face,
         bold,
         own.italic,
       )
-      text(markedRuns(block.text, marksFor(card, ref)), {
-        fontFace: face,
-        fontSize: sizePt,
-        color: hex(own.color ?? theme.colors.foreground),
-        bold,
-        italic: own.italic,
-        underline: own.underline,
-        align: own.align ?? 'left',
-        lineSpacing: spacingPt(sizePt, spacing),
-      })
+      text(
+        markedRuns(block.text, marksFor(card, ref)),
+        {
+          fontFace: face,
+          fontSize: sizePt,
+          color: hex(own.color ?? theme.colors.foreground),
+          bold,
+          italic: own.italic,
+          underline: own.underline,
+          align: own.align ?? 'left',
+          lineSpacing: spacingPt(sizePt, spacing),
+        },
+        headingArea,
+      )
       return
     }
 
@@ -1252,45 +1347,25 @@ function renderAdjustedBlock(
     }
 
     /*
-      Stand-in for the structured blocks until they are exported as drawn: one body
-      text box holding the same words (a term row as `label — text`, code as its own
-      lines in a monospace face), so a nudged card never loses them.
+      The structured blocks are drawn with their own shapes in the frame the user left them in
+      (`structuredBlocks.ts`): each term row is its own element with its own box, a callout is
+      a rounded panel and code a monospace panel, each fitted to its box (a code panel cuts
+      lines from the end rather than shrink below the caption size). Rotation is not applied to
+      them: a panel is several shapes and a text box, which would each turn about its own centre.
     */
     case 'point':
     case 'callout':
     case 'code': {
-      const isCode = block.type === 'code'
-      const content =
+      const maxPt = env.bodyPt
+      const minPt = Math.min(maxPt, SIZE_LADDER.body.min)
+      const area = { x: box.x, y: box.y, w: box.w, h: box.h }
+      const painter =
         block.type === 'point'
-          ? `${block.label} — ${block.text}`
+          ? pointRun(env, [{ block, index }], box.w, card.blocks[index + 1]?.type !== 'point')
           : block.type === 'callout'
-            ? block.label
-              ? `${block.label} — ${block.text}`
-              : block.text
-            : [block.label, block.code, block.caption].filter((part): part is string => !!part).join('\n')
-      const ref = block.type === 'callout' && !block.label ? textRef(index, 'text') : null
-      const own = ref ? runStyle(ref) : style
-      const face = isCode ? 'Courier New' : bodyFace(theme, own)
-      const preferredPt = fittedPointSize(theme.typography.scale[BODY], own.fontScale, fit)
-      const { sizePt, spacing } = fitSize(
-        [{ text: content, bold: ref ? markBold(card, ref) : undefined, scale: ref ? markScale(card, ref) : undefined }],
-        box,
-        preferredPt,
-        face,
-        own.bold,
-        own.italic,
-        theme.typography.lineHeight,
-      )
-      text(ref ? markedRuns(content, marksFor(card, ref)) : content, {
-        fontFace: face,
-        fontSize: sizePt,
-        color: hex(own.color ?? theme.colors.foreground),
-        bold: own.bold,
-        italic: own.italic,
-        underline: own.underline,
-        align: own.align ?? 'left',
-        lineSpacing: spacingPt(sizePt, spacing),
-      })
+            ? calloutBlock(env, index, block, index === card.blocks.findIndex((b) => b.type === 'callout'), box.w)
+            : codeBlock(env, index, block, box.w)
+      drawInBox(slide, painter, area, maxPt, minPt)
       return
     }
 
@@ -1636,10 +1711,21 @@ const renderAdjusted: SlideRenderer = (slide, card, theme, style, measure, conte
   const target = onGround ? whiteText(slide) : slide
   const { boxes, height } = cardBoxes(card, theme.typography.scale)
   const fit = fitCard(height)
-  card.blocks.forEach((_, index) => {
+  const env = makeEnv(
+    card,
+    theme,
+    style,
+    measure,
+    groundOnSlide(card, context),
+    fittedPointSize(theme.typography.scale[BODY], style.fontScale, fit),
+  )
+  card.blocks.forEach((block, index) => {
     if (onGround && index === onGround.index) return
     const box = boxes[String(index)]
-    if (box) renderAdjustedBlock(target, card, index, placed(box, fit), fit, theme, style, measure, context.images)
+    // A callout and a code panel keep their own inks over a photo, as on screen; words that are
+    // not on a panel go white (`target`).
+    const on = block.type === 'callout' || block.type === 'code' ? slide : target
+    if (box) renderAdjustedBlock(on, card, index, placed(box, fit), fit, theme, style, measure, context.images, env)
   })
   if (onGround) addCredit(slide, onGround.block, whole, bodyFace(theme, style), measure, { pill: false })
 }
