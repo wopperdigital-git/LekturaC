@@ -245,6 +245,24 @@ describe('normalizeStructuredBlocks', () => {
       expect(flags.filter((f) => f.type === 'VISUAL_MISMATCH')).toEqual([])
     })
 
+    it('drops imageQuery on a card holding a code block', () => {
+      const withQuery: GeneratedCard = {
+        ...card([H('Code'), { type: 'code', code: 'int x = 0;' }]),
+        imageQuery: 'computer screen',
+      }
+      const out = normalizeStructuredBlocks(after(withQuery))
+      expect('imageQuery' in out.cards[1]).toBe(false)
+      expect(out.cards[1].blocks).toStrictEqual(withQuery.blocks)
+      expect(normalizeStructuredBlocks(out)).toBe(out)
+    })
+
+    it('keeps a code card with no imageQuery as it is, and imageQuery on other cards', () => {
+      const plain = card([H('Code'), { type: 'code', code: 'int x = 0;' }])
+      const other: GeneratedCard = { ...card([H('Plain'), para('x')]), imageQuery: 'a street' }
+      const d = after(plain, other)
+      expect(normalizeStructuredBlocks(d)).toBe(d)
+    })
+
     it('still parses as a generated deck after cleaning', () => {
       const out = normalizeStructuredBlocks(after(card([H('A', 'one two three four five six'), C('a'), C('b')])))
       expect(generatedDeckSchema.safeParse(out).success).toBe(true)

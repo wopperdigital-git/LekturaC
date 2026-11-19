@@ -207,6 +207,19 @@ describe('structureFlags', () => {
       expect(flags[0].severity).toBe('medium')
     })
 
+    it('counts a callout toward the minimum, so a callout slide is not thin (and the same slide without it still is)', () => {
+      const withCallout = card({
+        blocks: [
+          { type: 'heading', text: 'A slide' },
+          { type: 'paragraph', text: words(20) },
+          { type: 'callout', text: words(20) },
+        ],
+      })
+      const without = card({ blocks: [{ type: 'heading', text: 'A slide' }, { type: 'paragraph', text: words(20) }] })
+      expect(of('BODY_TOO_THIN', deck([body(5), withCallout]), 'detailed')).toEqual([])
+      expect(of('BODY_TOO_THIN', deck([body(5), without]), 'detailed')).toHaveLength(1)
+    })
+
     it('never flags thin slides for balanced or simplified decks', () => {
       const d = deck([body(5), body(5)])
       expect(of('BODY_TOO_THIN', d, 'balanced')).toEqual([])
@@ -409,6 +422,30 @@ describe('structureFlags', () => {
     it('does not flag a deck of fewer than 4 slides', () => {
       const d = deck([textCard(1), textCard(2), textCard(3)])
       expect(structureFlags(d).filter((f) => f.type === 'TEXT_ONLY_DECK')).toEqual([])
+    })
+
+    it('treats a point run as rich', () => {
+      const points = card({
+        blocks: [
+          { type: 'heading', text: 'Terms' },
+          { type: 'point', label: 'A', text: 'first meaning' },
+          { type: 'point', label: 'B', text: 'second meaning' },
+        ],
+      })
+      const d = deck([textCard(1), textCard(2), textCard(3), points])
+      expect(structureFlags(d).filter((f) => f.type === 'TEXT_ONLY_DECK')).toEqual([])
+    })
+
+    it('treats a code block as rich', () => {
+      const code = card({ blocks: [{ type: 'heading', text: 'Code' }, { type: 'code', code: 'int x = 0;' }] })
+      const d = deck([textCard(1), textCard(2), textCard(3), code])
+      expect(structureFlags(d).filter((f) => f.type === 'TEXT_ONLY_DECK')).toEqual([])
+    })
+
+    it('still flags a deck whose only structured block is a callout', () => {
+      const callout = card({ blocks: [{ type: 'heading', text: 'Idea' }, { type: 'callout', text: 'The main idea.' }] })
+      const d = deck([textCard(1), textCard(2), textCard(3), callout])
+      expect(structureFlags(d).filter((f) => f.type === 'TEXT_ONLY_DECK')).toHaveLength(1)
     })
   })
 

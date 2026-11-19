@@ -154,6 +154,12 @@ describe('generatedDeckSchema (v2)', () => {
     expect(withBlocks([H, { type: 'code', code: '' }]).success).toBe(false)
   })
 
+  it('refuses whitespace-only code, and stores code with indentation or a trailing newline unchanged', () => {
+    expect(withBlocks([H, { type: 'code', code: '   \n  ' }]).success).toBe(false)
+    const result = withBlocks([H, { type: 'code', code: '  x\n' }])
+    expect(result.success && result.data.cards[0].blocks[1]).toEqual({ type: 'code', code: '  x\n' })
+  })
+
   it('drops an empty callout label, code label and code caption rather than failing', () => {
     const result = withBlocks([
       H,

@@ -57,7 +57,7 @@ export const DENSITY: Record<DetailLevel, DensityRules> = {
     paragraphWords: 25,
     rules: [
       'One idea per slide, stated plainly. No sub-points, qualifiers or secondary detail on the slide.',
-      'Everyday words only; define nothing on the slide that needs defining; leave it out instead.',
+      'Everyday words only. Leave out a term the audience would need defined, unless the slide exists to define it.',
       'A stat\'s label is a few plain words.',
     ],
   },

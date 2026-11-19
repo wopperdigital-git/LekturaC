@@ -44,7 +44,7 @@ const OVERCLAIM_TERMS = [
 
 const CONCLUDING_PURPOSES = new Set(['summary', 'conclusion', 'recommendation', 'call_to_action'])
 
-const RICH_BLOCK_TYPES = new Set(['stat', 'timelineStep', 'comparisonGroup', 'quote'])
+const RICH_BLOCK_TYPES = new Set(['stat', 'timelineStep', 'comparisonGroup', 'quote', 'point', 'code'])
 
 /** Which coarse family a resolved layout belongs to, for `LAYOUT_REPETITION`. */
 const LAYOUT_FAMILY: Record<ReturnType<typeof resolveLayout>, string> = {
@@ -122,6 +122,11 @@ function visibleWordCount(card: GeneratedDeck['cards'][number]): number {
   return visibleLines(card).reduce((sum, line) => sum + wordCount(line), 0)
 }
 
+/** Words in the card's callouts, which `visibleLines` does not count. */
+function calloutWordCount(card: GeneratedDeck['cards'][number]): number {
+  return card.blocks.reduce((sum, block) => sum + (block.type === 'callout' ? wordCount(block.text) : 0), 0)
+}
+
 function bodyTooDenseFlags(deck: GeneratedDeck, level: DetailLevel): QualityFlag[] {
   const max = DENSITY[level].maxVisibleWords
   const flags: QualityFlag[] = []
@@ -172,7 +177,10 @@ function bodyTooThinFlags(deck: GeneratedDeck, level: DetailLevel): QualityFlag[
     if (card.blocks.some((block) => block.type === 'quote' || block.type === 'timelineStep' || block.type === 'code')) {
       return
     }
-    const words = visibleWordCount(card)
+    // A callout counts toward the floor only: `visibleLines` leaves it out so the
+    // ceiling stays where the prompt put it, but a slide built around a callout
+    // is not thin.
+    const words = visibleWordCount(card) + calloutWordCount(card)
     if (words < min) {
       flags.push({
         type: 'BODY_TOO_THIN',

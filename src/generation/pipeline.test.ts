@@ -186,6 +186,7 @@ describe('generatePresentation', () => {
 
     expect(stages).toEqual(['research', 'write', 'validate', 'repair'])
   })
+
   describe('structured block clean-up', () => {
     const callout = (text: string, label?: string): GeneratedCard['blocks'][number] =>
       label === undefined ? { type: 'callout', text } : { type: 'callout', label, text }

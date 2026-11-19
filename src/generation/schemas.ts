@@ -120,7 +120,8 @@ const generatedCalloutSchema = calloutBlockSchema.extend({
 })
 
 const generatedCodeSchema = codeBlockSchema.extend({
-  code: z.string().min(1),
+  // Checked, not trimmed: leading spaces are code, but a blank panel is not.
+  code: z.string().min(1).refine((s) => s.trim().length > 0, 'code must not be blank'),
   label: z.string().trim().min(1).optional().catch(undefined),
   caption: z.string().trim().min(1).optional().catch(undefined),
 })

@@ -42,7 +42,7 @@ The user wants Gamma-quality lesson slides; their own decks are teaching decks (
 - `generatedBlockSchema` gains `point`, `callout` and `code`, and the generated heading keeps `kicker` (Part 1 omitted it). Strings the model writes are required non-empty (`min(1)` after trim) for `point.label`, `point.text`, `callout.text` and `code.code`; an empty optional (`callout.label`, `code.label`, `code.caption`, `kicker`) is dropped, not fatal (`.catch(undefined)` on a trimmed string, the pattern `imageQuery` uses).
 - `VISUAL_TYPES` gains `definitions` and `code_example`.
 - The Anthropic structured-output mirror (`deckOutputSchema.ts`) gets its **own loose shapes** for the three blocks and the kicker: plain strings, no `.trim()`, `min(1)` or `.catch` (*my call*, following that file's existing rule, the one `imageQuery` already follows). On the default chain Claude's reply is checked against the mirror first, and a mirror failure is a `response` error with no retry and no failover, so a strict mirror would let one empty string cost the whole deck; the real schema behind it keeps `min(1)` and its one retry with the exact errors.
-- The tests Part 1 added that pin "the model cannot write these" are reversed: they now pin that it can, and that `image` is still refused where it was.
+- The tests Part 1 added that pin "the model cannot write these" are reversed: they now pin that it can, and that an `image` block still parses (the photo stage strips model-written ones).
 
 ### Prompt (`src/ai/prompts.ts`, `src/ai/repairPrompt.ts`)
 
@@ -65,13 +65,14 @@ Kept short: the addition to the deck system prompt targets about 1,200 character
 2. **More than one callout on a card**: keep the first; each later one becomes a `paragraph` whose text is `label: text` (or `text` without a label).
 3. **A lone point** (a `point` with no `point` directly before or after it): becomes a `paragraph` `**label**: text`, which ingest's `applyEmphasis` turns into a bold term (*my call*, as promised to the user: one row of a table reads as a stray). If the card then holds no point and its `plan.visualType` is `definitions`, the visual type becomes `text`, so the clean-up never creates a mismatch.
 4. **A kicker over 4 words or 32 characters**: dropped (it would wrap and stop reading as an eyebrow).
-5. **A point run longer than 6**: left as is (dropping a real definition is worse; the run draws fine) and flagged `low` (see below).
+5. **A card holding a `code` block**: its `imageQuery` is dropped (a photo beside code puts it in a narrow column, where 60-character lines clip).
+6. **A point run longer than 6**: left as is (dropping a real definition is worse; the run draws fine) and flagged `low` (see below).
 
 *Not* in the net (*my call*, against what the conversation floated): turning code into text in a non-programming deck. Nothing in the brief says reliably whether a deck is about programming, and a wrong guess would destroy real code. The prompt's "only when the subject is programming or computing" carries it, and a code block in such a deck is the model's own judgement.
 
 ### Quality checks (`src/generation/validation/`)
 
-- `visibleLines`/`visibleWordCount` count point labels and meanings (they replace a bullet list and have its budget); **the kicker and the callout are not counted** (*my call*: the kicker is a 1-to-3-word label on the heading, which is already uncounted; the callout restates the slide's key message in one sentence, and counting it would push ordinary slides past the ceilings, e.g. a balanced slide of 5 points plus a callout is about 64 words against 55, sending it to repair, which the anti-goals forbid); **code is exempt** (like a timeline or quote: its words are not prose), so a code slide is never `BODY_TOO_DENSE` from its code. A card holding a `code` block is also exempt from `BODY_TOO_THIN`.
+- `visibleLines`/`visibleWordCount` count point labels and meanings (they replace a bullet list and have its budget); **the kicker and the callout are not counted** (*my call*: the kicker is a 1-to-3-word label on the heading, which is already uncounted; the callout restates the slide's key message in one sentence, and counting it would push ordinary slides past the ceilings, e.g. a balanced slide of 5 points plus a callout is about 64 words against 55, sending it to repair, which the anti-goals forbid); **code is exempt** (like a timeline or quote: its words are not prose), so a code slide is never `BODY_TOO_DENSE` from its code. A card holding a `code` block is also exempt from `BODY_TOO_THIN`. **`BODY_TOO_THIN` does add a callout's words toward its minimum** (final review: the exclusion protects the ceiling, but a detailed slide built around a callout is not thin). `point` and `code` count as rich blocks for `TEXT_ONLY_DECK`.
 - `VISUAL_MISMATCH`: `definitions` needs 2+ `point` blocks and `code_example` needs a `code` block, but these two cases are reported **`low`** (*my call*, from the anti-goal: the new blocks never send a slide to repair on their own); the existing cases stay medium.
 - `LIST_DOMINANT`: a slide led by a point run is **not** a list slide (it draws as term rows, not bullets). The current code already treats it so; a test pins it.
 - New flags, all `low` (logged, never repaired): `POINT_RUN_TOO_LONG` (more than 6), `CODE_TOO_LONG` (more than 12 lines or a line over 60 characters), `CALLOUT_REPEATS_HEADING` (normalized callout text equals or contains the heading). `QUALITY_FLAG_TYPES` and the admin page's flag breakdown (which reads stored flag types) gain them.
@@ -88,7 +89,7 @@ Nothing new: ingest already stores whatever blocks validate, `applyEmphasis` run
 
 ## Testing
 
-- Schema: each new block and a kicker parse; empty optionals are dropped; empty required strings fail; `image` still refused where it was; the mirror accepts the same.
+- Schema: each new block and a kicker parse; empty optionals are dropped; empty required strings fail (whitespace-only code too, with indentation kept); an `image` block still parses; the mirror accepts the same.
 - Prompt: the four shapes, the HEADINGS, KICKER and VISUAL CHOICE lines, SLIDE DENSITY carrying the point and callout sizes from `DENSITY`, no long dashes, the length budget.
 - `normalizeStructuredBlocks`: each rule, idempotence (running twice equals once), never changes card count, keeps every word of a converted block.
 - Validators: visible-word counting, code exemptions, the two visual-type bindings, `LIST_DOMINANT` not counting point runs, the three low flags.
@@ -100,6 +101,7 @@ Nothing new: ingest already stores whatever blocks validate, `applyEmphasis` run
 - The model's judgement on "programming deck" is trusted for code.
 - Existing decks gain nothing (generate once).
 - A slightly longer prompt on every deck call.
+- A second callout the safety net turns into a paragraph counts toward the word ceiling, so a slide near it can be sent to repair; this happens only when the model wrote two callouts (accepted).
 
 ## Left to the builder
 

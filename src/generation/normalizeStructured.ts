@@ -5,9 +5,11 @@ import type { GeneratedBlock, GeneratedCard, GeneratedDeck } from './schemas'
   points, callouts). The prompt asks for a small, disciplined use of them; this
   makes sure a deck that slips is still well formed before it is validated and
   stored: one callout a slide, points only in runs, short kickers, none on the
-  title slide. Nothing here is a validator rule and nothing sends a slide to
-  repair, and no provider is called: a block that breaks a rule becomes the
-  plain block it nearly was, with every word kept.
+  title slide, and no photo on a card that holds code. Nothing here is a
+  validator rule and nothing sends a slide to repair, and no provider is
+  called: a block that breaks a rule becomes the plain block it nearly was,
+  with every word kept (a dropped photo query is the one thing that is not a
+  word).
 
   Pure. The input is never mutated, a card that needs nothing keeps its object
   identity, and the card count never changes. Idempotent: a cleaned deck is
@@ -91,9 +93,15 @@ function normalizeCard(card: GeneratedCard, index: number): GeneratedCard {
     plan = { ...plan, visualType: 'text' }
   }
 
-  const changed = plan !== card.plan || blocks.some((block, i) => block !== original[i])
+  // 5: a photo beside code puts the code in a narrow column, where 60-character
+  // lines clip, so a code card gets no photo.
+  const dropPhoto = card.imageQuery !== undefined && blocks.some((block) => block.type === 'code')
+
+  const changed = dropPhoto || plan !== card.plan || blocks.some((block, i) => block !== original[i])
   if (!changed) return card
-  return { ...card, plan, blocks: blocks as GeneratedCard['blocks'] }
+  const next = { ...card, plan, blocks: blocks as GeneratedCard['blocks'] }
+  if (dropPhoto) delete next.imageQuery
+  return next
 }
 
 export function normalizeStructuredBlocks(deck: GeneratedDeck): GeneratedDeck {
