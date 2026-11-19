@@ -186,4 +186,60 @@ describe('generatePresentation', () => {
 
     expect(stages).toEqual(['research', 'write', 'validate', 'repair'])
   })
+  describe('structured block clean-up', () => {
+    const callout = (text: string, label?: string): GeneratedCard['blocks'][number] =>
+      label === undefined ? { type: 'callout', text } : { type: 'callout', label, text }
+
+    /** A 60-word second callout: a paragraph of that length is past the balanced ceiling. */
+    const longText = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ')
+
+    function twoCalloutCard(): GeneratedCard {
+      return card('A slide with ideas', {
+        blocks: [
+          { type: 'heading', text: 'A slide with ideas' },
+          callout('The main idea.', 'Key'),
+          callout(longText, 'Also'),
+        ],
+      })
+    }
+
+    it('cleans the model deck before it is validated, so flags describe what is stored', async () => {
+      const { provider, generateDeck, repairSlides } = stubProvider()
+      generateDeck.mockResolvedValue(deck([card('A short clear title'), twoCalloutCard()]))
+
+      const result = await generatePresentation(provider, 'EVs', BRIEF, { now: FIXED_NOW })
+
+      const blocks = result.deck.cards[1].blocks
+      expect(blocks.filter((b) => b.type === 'callout')).toHaveLength(1)
+      expect(blocks[2]).toEqual({ type: 'paragraph', text: `Also: ${longText}` })
+      // The converted paragraph is what tripped the density rule, so validation saw the cleaned card.
+      expect(result.flags.some((f) => f.type === 'BODY_TOO_DENSE' && f.slideIndex === 1)).toBe(true)
+      const sent = repairSlides.mock.calls[0]?.[0] as GeneratedDeck
+      expect(sent.cards[1].blocks.filter((b) => b.type === 'callout')).toHaveLength(1)
+    })
+
+    it('cleans a repaired card before the re-validation and the stored deck', async () => {
+      const { provider, generateDeck, repairSlides } = stubProvider()
+      generateDeck.mockResolvedValue(flaggedDeck())
+      repairSlides.mockResolvedValue({ repairs: [{ slide: 1, card: twoCalloutCard() }] } satisfies RepairResponse)
+
+      const result = await generatePresentation(provider, 'EVs', BRIEF, { now: FIXED_NOW })
+
+      expect(result.repaired).toEqual([0])
+      const blocks = result.deck.cards[0].blocks
+      expect(blocks.filter((b) => b.type === 'callout')).toHaveLength(1)
+      expect(blocks[2]).toEqual({ type: 'paragraph', text: `Also: ${longText}` })
+      expect(result.flags.some((f) => f.type === 'BODY_TOO_DENSE' && f.slideIndex === 0)).toBe(true)
+    })
+
+    it('hands back the same deck when there is nothing to clean', async () => {
+      const { provider, generateDeck } = stubProvider()
+      const model = cleanDeck()
+      generateDeck.mockResolvedValue(model)
+
+      const result = await generatePresentation(provider, 'EVs', BRIEF, { now: FIXED_NOW })
+
+      expect(result.deck).toBe(model)
+    })
+  })
 })

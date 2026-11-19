@@ -1,5 +1,6 @@
 import { isUserMaterialOnly } from '@/ai/researchPrompt'
 import type { AIProvider, DeckContext, GenerationBrief } from '@/ai/provider'
+import { normalizeStructuredBlocks } from './normalizeStructured'
 import { applyRepairs } from './repair'
 import type { Claim, EvidencePack, GeneratedDeck, QualityFlag } from './schemas'
 import { requiresFreshness } from './validation/evidence'
@@ -101,7 +102,9 @@ export async function generatePresentation(
   const context: DeckContext = { evidence, today, detailLevel: brief.detailLevel }
 
   onStage?.('write')
-  let deck = await provider.generateDeck(topic, brief, signal, context)
+  // The model's structured blocks are tidied before anything judges the deck, so
+  // the flags (and any repair) describe what will be stored.
+  let deck = normalizeStructuredBlocks(await provider.generateDeck(topic, brief, signal, context))
 
   onStage?.('validate')
   const freshnessRequired = deck.brief.freshnessRequired || requiresFreshness(topic, brief.guidance)
@@ -116,7 +119,7 @@ export async function generatePresentation(
     try {
       const response = await provider.repairSlides(deck, targets, flags, context, signal)
       const result = applyRepairs(deck, response, targets)
-      deck = result.deck
+      deck = normalizeStructuredBlocks(result.deck)
       repaired.push(...result.repaired)
       if (result.repaired.length > 0) {
         const revalidated = validateDeck(deck, { pack: evidence, currentYear, freshnessRequired, detailLevel })
