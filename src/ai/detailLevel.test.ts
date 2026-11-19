@@ -41,6 +41,41 @@ describe('DENSITY', () => {
   })
 })
 
+describe('point runs', () => {
+  /*
+    A point's label and meaning are counted together (visibleLines), so one
+    point costs what one bullet costs, and a full run must fit the level's
+    ceiling the way a full list does (the detailed level with its paired
+    paragraph), or the prompt asks for a slide repair would trim.
+  */
+  it("fits every level's fullest point run under its ceiling", () => {
+    for (const [level, d] of Object.entries(DENSITY)) {
+      const paired = level === 'detailed' ? DETAILED_PAIRED_PARAGRAPH_WORDS : 0
+      expect(Math.min(d.bulletItems[1], MAX_POINT_RUN) * d.bulletWords + paired).toBeLessThanOrEqual(d.maxVisibleWords)
+    }
+  })
+})
+
+describe('densitySection structured block sizes', () => {
+  for (const level of ['simplified', 'balanced', 'detailed'] as const) {
+    it(`gives the ${level} level its point, callout and code numbers from the table`, () => {
+      const d = DENSITY[level]
+      const section = densitySection(level)
+      const run = Math.min(d.bulletItems[1], MAX_POINT_RUN)
+      expect(section).toContain(`A run of "point" blocks holds at most ${run} points`)
+      expect(section).toContain(`label and meaning together ${d.bulletWords} words or fewer, the label 1-3 words`)
+      expect(section).toContain(`A "callout" is one sentence of ${d.bulletWords + 6} words or fewer`)
+      expect(section).toContain(`A "code" block is ${CODE_MAX_LINES} lines or fewer, each ${CODE_MAX_LINE_CHARS} characters or fewer`)
+    })
+  }
+
+  it('has no long dash', () => {
+    for (const level of ['simplified', 'balanced', 'detailed'] as const) {
+      expect(densitySection(level)).not.toMatch(/[—–]/)
+    }
+  })
+})
+
 describe('structured block limits', () => {
   it('pins the point-run and code size limits the validators and prompts share', () => {
     expect(MAX_POINT_RUN).toBe(6)

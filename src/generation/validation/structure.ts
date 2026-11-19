@@ -438,7 +438,8 @@ function codeTooLongFlags(deck: GeneratedDeck): QualityFlag[] {
   deck.cards.forEach((card, index) => {
     const tooLong = card.blocks.some((block) => {
       if (block.type !== 'code') return false
-      const lines = block.code.split('\n')
+      // CRLF reads as LF and one final newline ends the last line, it does not open another.
+      const lines = block.code.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n')
       return lines.length > CODE_MAX_LINES || lines.some((line) => line.length > CODE_MAX_LINE_CHARS)
     })
     if (tooLong) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { REPAIR_MAX_TOKENS, REPAIR_SYSTEM_PROMPT, buildRepairUserPrompt, parseRepairResponse } from './repairPrompt'
 import type { DeckContext } from './prompts'
+import { PLAIN_LANGUAGE_RULES } from './plainLanguage'
 import type { GeneratedDeck, QualityFlag } from '@/generation/schemas'
 
 function card(heading: string, keyMessage: string, speakerNotes: string) {
@@ -118,5 +119,32 @@ describe('parseRepairResponse', () => {
 describe('REPAIR_MAX_TOKENS', () => {
   it('is 6000', () => {
     expect(REPAIR_MAX_TOKENS).toBe(6000)
+  })
+})
+
+const REPAIR_BASE_LENGTH = 3557
+const REPAIR_GROWTH_CAP = 800
+
+describe('REPAIR_SYSTEM_PROMPT (structured blocks)', () => {
+  it('lists the four block shapes a repaired slide may write', () => {
+    expect(REPAIR_SYSTEM_PROMPT).toContain('{ "type": "heading", "text": string, "kicker"?: string }')
+    expect(REPAIR_SYSTEM_PROMPT).toContain('{ "type": "point", "label": string, "text": string }')
+    expect(REPAIR_SYSTEM_PROMPT).toContain('{ "type": "callout", "label"?: string, "text": string }')
+    expect(REPAIR_SYSTEM_PROMPT).toContain('{ "type": "code", "code": string, "label"?: string, "caption"?: string }')
+  })
+
+  it('has one compact line each for the kicker, the callout and the two visual types', () => {
+    expect(REPAIR_SYSTEM_PROMPT).toMatch(/kicker.*1-3 words/)
+    expect(REPAIR_SYSTEM_PROMPT).toMatch(/callout.*at most one per slide/)
+    expect(REPAIR_SYSTEM_PROMPT).toMatch(/"definitions".*"point"/)
+    expect(REPAIR_SYSTEM_PROMPT).toMatch(/"code_example".*"code"/)
+  })
+
+  it('has no long dash outside the plain-language rule that bans them', () => {
+    expect(REPAIR_SYSTEM_PROMPT.replace(PLAIN_LANGUAGE_RULES, '')).not.toMatch(/[—–]/)
+  })
+
+  it(`grows by at most ${REPAIR_GROWTH_CAP} characters over its ${REPAIR_BASE_LENGTH}-character base`, () => {
+    expect(REPAIR_SYSTEM_PROMPT.length).toBeLessThanOrEqual(REPAIR_BASE_LENGTH + REPAIR_GROWTH_CAP)
   })
 })

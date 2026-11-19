@@ -7,6 +7,7 @@ import {
   geminiDeckMaxTokens,
   type DeckContext,
 } from './prompts'
+import { PLAIN_LANGUAGE_RULES } from './plainLanguage'
 import type { EvidencePack } from '@/generation/schemas'
 
 const BRIEF = {
@@ -224,5 +225,80 @@ describe('geminiDeckMaxTokens', () => {
     // deckMaxTokens is tuned to — the two must be independent functions, not
     // one shared formula.
     expect(geminiDeckMaxTokens(5)).not.toBe(deckMaxTokens(5))
+  })
+})
+
+/*
+  Part 2 of the structured blocks: the model may now write a heading kicker,
+  "point", "callout" and "code" blocks. The prompt grows by a pinned amount over
+  its length before that work (Groq counts input against ~8,000 tokens a
+  minute), and carries no long dash (models copy their prompt's punctuation).
+*/
+const DECK_BASE_LENGTH = 15575
+const DECK_GROWTH_CAP = 1600
+
+describe('DECK_SYSTEM_PROMPT (structured blocks)', () => {
+  it('lists the four new block shapes beside the old ones', () => {
+    expect(DECK_SYSTEM_PROMPT).toContain('{ "type": "heading", "text": string, "kicker"?: string }')
+    expect(DECK_SYSTEM_PROMPT).toContain('{ "type": "point", "label": string, "text": string }')
+    expect(DECK_SYSTEM_PROMPT).toContain('{ "type": "callout", "label"?: string, "text": string }')
+    expect(DECK_SYSTEM_PROMPT).toContain('{ "type": "code", "code": string, "label"?: string, "caption"?: string }')
+  })
+
+  it('still refuses an image block and any other type', () => {
+    expect(DECK_SYSTEM_PROMPT).toContain('never write an "image" block yourself')
+  })
+
+  it('has headings state the point, with a question or topic label only where a part opens', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toMatch(/a topic label, a clear claim, or a question/i)
+    expect(DECK_SYSTEM_PROMPT).toContain("State the slide's point as a short claim")
+    expect(DECK_SYSTEM_PROMPT).toMatch(/question or topic label only for the title slide or a slide that opens a part/)
+  })
+
+  it('teaches the kicker: 1-3 words, shared by a part, never on the title slide, never the heading', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/^KICKER$/m)
+    expect(DECK_SYSTEM_PROMPT).toContain('1-3 words naming the part of the talk or topic')
+    expect(DECK_SYSTEM_PROMPT).toContain('never on the title slide')
+    expect(DECK_SYSTEM_PROMPT).toContain('Never repeat the heading')
+  })
+
+  it('binds definitions to a run of points and code_example to one code block, for programming only', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/run of "point" blocks.*"definitions"/)
+    expect(DECK_SYSTEM_PROMPT).toMatch(/one "code" block.*"code_example"/)
+    expect(DECK_SYSTEM_PROMPT).toContain("only when the deck's subject is programming or computing")
+    expect(DECK_SYSTEM_PROMPT).toContain('"definitions" needs 2+ "point" blocks')
+    expect(DECK_SYSTEM_PROMPT).toContain('"code_example" needs a "code" block')
+  })
+
+  it('names both new visual types in the enum list it is built from', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/"visualType": .*"definitions".*"code_example"/)
+  })
+
+  it('teaches the callout: the single key takeaway, one per slide, about one slide in three', () => {
+    expect(DECK_SYSTEM_PROMPT).toContain('single most important takeaway')
+    expect(DECK_SYSTEM_PROMPT).toContain('"Key idea", "Remember" or "Watch out"')
+    expect(DECK_SYSTEM_PROMPT).toContain('at most one per slide')
+    expect(DECK_SYSTEM_PROMPT).toContain('about one slide in three')
+  })
+
+  it('keeps a definitions or code slide to its heading, one short paragraph and its points or code', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/"definitions" or "code_example" slide holds only its heading, at most one short paragraph/)
+  })
+
+  it('skips photos on definitions and code slides, and tells notes to explain code, not read it out', () => {
+    expect(DECK_SYSTEM_PROMPT).toMatch(/Skip "definitions" and "code_example" slides/)
+    expect(DECK_SYSTEM_PROMPT).toContain('character by character')
+  })
+
+  it('states no point, callout or code size of its own (SLIDE DENSITY carries them)', () => {
+    expect(DECK_SYSTEM_PROMPT).not.toMatch(/\b12 lines|\b60 characters/)
+  })
+
+  it('has no long dash outside the plain-language rule that bans them', () => {
+    expect(DECK_SYSTEM_PROMPT.replace(PLAIN_LANGUAGE_RULES, '')).not.toMatch(/[—–]/)
+  })
+
+  it(`grows by at most ${DECK_GROWTH_CAP} characters over its ${DECK_BASE_LENGTH}-character base`, () => {
+    expect(DECK_SYSTEM_PROMPT.length).toBeLessThanOrEqual(DECK_BASE_LENGTH + DECK_GROWTH_CAP)
   })
 })

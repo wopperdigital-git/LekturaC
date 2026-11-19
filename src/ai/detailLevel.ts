@@ -102,5 +102,8 @@ export function densitySection(level: DetailLevel): string {
 - Visible text (everything except the heading) is ${d.visibleWords[0]}-${d.visibleWords[1]} words, ${d.maxVisibleWords} at most. The title slide, timelines and quotes are exempt from this range, and a call to action or a story's insight or closing line may be shorter.
 - Bullet lists run ${d.bulletItems[0]}-${d.bulletItems[1]} items, each ${d.bulletWords} words or fewer.
 - A "paragraph" runs ${d.paragraphWords} words or fewer.
+- A run of "point" blocks holds at most ${Math.min(d.bulletItems[1], MAX_POINT_RUN)} points, each with label and meaning together ${d.bulletWords} words or fewer, the label 1-3 words.
+- A "callout" is one sentence of ${d.bulletWords + 6} words or fewer.
+- A "code" block is ${CODE_MAX_LINES} lines or fewer, each ${CODE_MAX_LINE_CHARS} characters or fewer.
 ${d.rules.map((rule) => `- ${rule}`).join('\n')}`
 }

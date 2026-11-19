@@ -110,21 +110,27 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching exactly this
 "role" is optional: set it only when this card fills a row from the STRUCTURE section below, and omit it otherwise. "imageQuery" is optional: see IMAGES below. "claims" lists every factual claim the card makes (see EVIDENCE below); an empty array is correct for a card with no factual claims. "transition" is one short phrase from the previous slide into this one ('' on the first card).
 
 Each ContentBlock is one of these EXACT shapes (field names matter, do not rename or omit fields):
-- { "type": "heading", "text": string }
+- { "type": "heading", "text": string, "kicker"?: string }
 - { "type": "paragraph", "text": string }
 - { "type": "bulletList", "items": string[] }
 - { "type": "stat", "value": string, "label": string }
 - { "type": "quote", "text": string, "attribution"?: string }
 - { "type": "timelineStep", "label": string, "text": string }
 - { "type": "comparisonGroup", "heading": string, "items": string[] }
+- { "type": "point", "label": string, "text": string }
+- { "type": "callout", "label"?: string, "text": string }
+- { "type": "code", "code": string, "label"?: string, "caption"?: string }
 
 Do not use any block type other than the ones listed above (in particular, never write an "image" block yourself: photos are found and added afterwards from "imageQuery", see IMAGES below). Every card's "blocks" array MUST start with exactly one "heading" block. This is the card's title and is required, not optional.
 
 HEADINGS
 - 3-10 words, never more than 14.
-- A topic label, a clear claim, or a question, never a generic AI-report sentence.
+- State the slide's point as a short claim ("A for loop repeats a known number of times", not "For loops"). A question or topic label only for the title slide or a slide that opens a part of the talk. Never a generic AI-report sentence.
 - Never open with "This presentation", "This deck", "This slide", "You will learn", or "In this slide".
 - Example: "EV adoption is accelerating", not "Global EV sales have surged to a significant share of new car registrations".
+
+KICKER
+- Add a "kicker" to the heading on most content slides, never on the title slide: 1-3 words naming the part of the talk or topic ("Loops", "Why it matters"). Slides in the same part share it. Never repeat the heading.
 
 ONE MAIN IDEA PER SLIDE
 - Exactly one idea per card. Everything on it supports plan.keyMessage; do not cram in a second, unrelated point.
@@ -142,6 +148,7 @@ SPEAKER NOTES
 Write "speakerNotes" as the actual words a presenter would say out loud for this slide, not a summary of it.
 ${NARRATION_STYLE_RULES}
 - Add context that is not on the slide: definitions, how a number was measured, caveats, and a transition into and out of the slide. Never copy or lightly reword the visible text.
+- On a code slide, explain what the code does; never read it out character by character.
 
 EVIDENCE
 - Every number, date, named statistic, or quotation must come from the EVIDENCE PACK when the user prompt includes one, and must be listed in that card's "claims" with the pack's own source ids in "sourceIds". Never invent a source id, a source, a citation, or a quotation.
@@ -163,7 +170,10 @@ Choose each slide's information structure before you choose its wording. Ask wha
 - One explanatory idea → a single short "paragraph".
 - A thesis or a verbatim quotation → a "quote" block.
 - Only 3-5 parallel items where order does not matter (categories, features, criteria) → a short "bulletList".
-- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList". We cannot draw charts, maps or diagrams, so never plan one of those as the visualType. A photo is never a visualType either: it arrives only through "imageQuery", and the slide's visualType still names the structure its blocks deliver. A trend or a set of numbers is "metric_cards", but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
+- 2+ terms, each with its meaning → a run of "point" blocks (the term as the label), plan.visualType "definitions".
+- A short program or command the audience must read → one "code" block, plan.visualType "code_example", only when the deck's subject is programming or computing.
+- A "callout" holds the slide's single most important takeaway in one sentence, with a label such as "Key idea", "Remember" or "Watch out": at most one per slide, on about one slide in three, never repeating the heading. A "definitions" or "code_example" slide holds only its heading, at most one short paragraph and its points or code, so put a callout on another slide.
+- plan.visualType must be the structure the blocks actually deliver, because the slide is drawn from the blocks and not from the plan: "timeline" or "process_flow" needs 2+ "timelineStep" blocks; "two_column_comparison" or "comparison_table" needs 2+ "comparisonGroup" blocks; "metric_cards" needs "stat" blocks; "quote" needs a "quote" block; "text" means a "paragraph"; "icon_grid" means a "bulletList"; "definitions" needs 2+ "point" blocks; "code_example" needs a "code" block. We cannot draw charts, maps or diagrams, so never plan one of those as the visualType. A photo is never a visualType either: it arrives only through "imageQuery", and the slide's visualType still names the structure its blocks deliver. A trend or a set of numbers is "metric_cards", but only when the numbers are real (from the evidence pack, or long-established and widely known); with no such numbers, use a different structure instead of inventing them.
 - Vary the structure across the deck on purpose. In a deck of 5 or more slides no more than about 40% of the slides should be "bulletList" slides, never put two "bulletList" slides next to each other, and use at least three different block structures across the deck when the subject supports it. Avoid three consecutive cards using the same block-type pattern:
   - Use a single "stat" block for a card that leads with one striking number (market size, growth rate, performance metric, savings, etc).
   - Use 2-4 "stat" blocks together on one card when several related numbers belong side by side (e.g. three KPIs, a before/after pair plus the delta); this reads far better as one card than as several single-stat cards in a row.
@@ -177,7 +187,7 @@ IMAGES
 - Add "imageQuery" to a card only when the slide's point is something a photograph can show: a place, an object, people doing something, a natural scene. Otherwise omit it.
 - Write 2-6 concrete English words naming what is in the frame, e.g. "wind turbines on a hill" or "students in a laboratory". Never ask for text, logos, charts or named real people.
 - ALWAYS give the title slide an "imageQuery".
-- Aim for roughly a third to a half of the slides. Skip definitions, comparisons of abstract ideas and dense lists.
+- Aim for roughly a third to a half of the slides. Skip "definitions" and "code_example" slides, comparisons of abstract ideas and dense lists.
 - The photo is found and added to the slide after you finish, so never write an "image" block yourself and never put a URL in the deck.
 
 CONTENT QUALITY

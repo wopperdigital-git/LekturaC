@@ -863,6 +863,16 @@ describe('structureFlags', () => {
         expect(flags[0].severity).toBe('low')
       })
 
+      it('does not count a final newline as a 13th line', () => {
+        expect(ofType(deck([codeCard(lines(12, 10) + '\n')]), 'CODE_TOO_LONG')).toEqual([])
+        expect(ofType(deck([codeCard(lines(13, 10) + '\n')]), 'CODE_TOO_LONG')).toHaveLength(1)
+      })
+
+      it('does not count the carriage return of a CRLF line as a character', () => {
+        expect(ofType(deck([codeCard(lines(2, 60).replace(/\n/g, '\r\n') + '\r\n')]), 'CODE_TOO_LONG')).toEqual([])
+        expect(ofType(deck([codeCard(lines(2, 61).replace(/\n/g, '\r\n'))]), 'CODE_TOO_LONG')).toHaveLength(1)
+      })
+
       it('flags a line of 61 characters', () => {
         expect(ofType(deck([codeCard(lines(2, 61))]), 'CODE_TOO_LONG')).toHaveLength(1)
       })

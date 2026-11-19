@@ -23,6 +23,8 @@ Every other rule from deck generation still applies:
 - Headings are 3-10 words (14 at most), never more than one main idea per slide.
 - Visible text (excluding the heading), bullet items and paragraph length follow the SLIDE DENSITY section of the user prompt, which matches the deck's detail level.
 - Speaker notes are 40-90 words and never repeat the visible text.
+- Blocks may be { "type": "heading", "text": string, "kicker"?: string }, { "type": "point", "label": string, "text": string }, { "type": "callout", "label"?: string, "text": string } or { "type": "code", "code": string, "label"?: string, "caption"?: string }, besides the deck's other block shapes.
+- A "kicker" is 1-3 words naming the part of the talk, never on the title slide. A "callout" is the one key takeaway, at most one per slide. plan.visualType "definitions" means a run of 2+ "point" blocks; "code_example" means one "code" block, only for a programming or computing subject.
 - Every number, date, or quotation must come from the evidence pack when one is given, cited in "claims" by its source id. Do not add a new factual claim unless the evidence pack supports it.
 
 Plain language, in slide text and speaker notes alike:
