@@ -3,7 +3,6 @@ import {
   bulletListBlockSchema,
   comparisonGroupBlockSchema,
   headingBlockSchema,
-  imageBlockSchema,
   paragraphBlockSchema,
   quoteBlockSchema,
   statBlockSchema,
@@ -84,17 +83,27 @@ const deckBriefOutputSchema = z.object({
   no failover) and costs the deck, while the real schema's one retry (a required
   string left empty) or `.catch(undefined)` (an optional one) handles the same
   value. Same reason as `imageQuery` below.
+
+  Anthropic refuses a schema whose compiled grammar is too large (a 400, kind
+  `request`: no retry, no failover, no deck), and the block union is what
+  drives that size, so it holds at most nine variants (measured against the
+  live API on 2026-11-19; see `deckOutputSchema.test.ts`). Two choices keep it
+  there, neither of which changes what the real schema accepts:
+  - No `image` variant. The prompt forbids writing one (photos are found from
+    `imageQuery` afterwards) and the photo stage strips any that arrive.
+  - `point` and `timelineStep` share one variant. They are the same shape
+    (`label`, `text`), and `zodOutputFormat` demotes the `type` literal to a
+    plain string anyway, so the grammar could not tell them apart; the real
+    schema discriminates them afterwards.
 */
 const blockOutputSchema = z.discriminatedUnion('type', [
   headingBlockSchema.extend({ kicker: z.string().optional() }),
   paragraphBlockSchema,
   bulletListBlockSchema,
   statBlockSchema,
-  imageBlockSchema,
   quoteBlockSchema,
-  timelineStepBlockSchema,
   comparisonGroupBlockSchema,
-  z.object({ type: z.literal('point'), label: z.string(), text: z.string() }),
+  z.object({ type: z.enum([timelineStepBlockSchema.shape.type.value, 'point']), label: z.string(), text: z.string() }),
   z.object({ type: z.literal('callout'), label: z.string().optional(), text: z.string() }),
   z.object({
     type: z.literal('code'),

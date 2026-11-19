@@ -151,4 +151,47 @@ describe('deckOutputSchema and the structured blocks', () => {
   it.each(['definitions', 'code_example'])('accepts plan.visualType %s', (visualType) => {
     expect(deckOutputSchema.safeParse(deckWithBlocks([{ type: 'heading', text: 'H' }], visualType)).success).toBe(true)
   })
+
+  it('still accepts a timeline step, and both shared-shape types reach the real schema intact', () => {
+    const blocks = [
+      { type: 'heading', text: 'H' },
+      { type: 'timelineStep', label: '1990', text: 'Start' },
+      { type: 'point', label: 'Term', text: 'Meaning' },
+    ]
+    expect(deckOutputSchema.parse(deckWithBlocks(blocks)).cards[0].blocks).toEqual(blocks)
+    expect(generatedDeckSchema.parse(deckWithBlocks(blocks)).cards[0].blocks).toEqual(blocks)
+  })
+
+  it('refuses a block type the real schema does not know', () => {
+    const blocks = [{ type: 'heading', text: 'H' }, { type: 'banner', label: 'x', text: 'y' }]
+    expect(deckOutputSchema.safeParse(deckWithBlocks(blocks)).success).toBe(false)
+  })
+})
+
+describe('deckOutputSchema stays under Anthropic’s grammar limit', () => {
+  /*
+    Anthropic compiles the structured-output schema into a grammar and refuses one that is too large with a
+    400 ("The compiled grammar is too large…"), which is a `request` failure: no retry, no failover, no deck.
+    `zodOutputFormat` turns every `type` literal into a plain string, so each block variant is an object the
+    grammar cannot tell apart by its tag; variant count is what drives the size. Measured against the live
+    API on 2026-11-19 (claude-sonnet-5): eleven variants (and ten, without `image`) were refused for the deck
+    call; nine passed for both the deck and the repair call, and nine with the point/step merge passed with
+    a spare variant. Keep it at nine or fewer, and probe the live API before adding one.
+  */
+  async function blockVariants() {
+    const { zodOutputFormat } = await import('@anthropic-ai/sdk/helpers/zod')
+    const schema = zodOutputFormat(deckOutputSchema).schema as { $defs: Record<string, { anyOf?: unknown[] }> }
+    const unions = Object.values(schema.$defs).filter((d) => Array.isArray(d.anyOf))
+    expect(unions).toHaveLength(1)
+    return unions[0].anyOf as { properties: Record<string, unknown> }[]
+  }
+
+  it('offers at most nine block variants', async () => {
+    expect((await blockVariants()).length).toBeLessThanOrEqual(9)
+  })
+
+  it('does not offer an image block (photos come from imageQuery; the prompt forbids writing one)', async () => {
+    const variants = await blockVariants()
+    expect(variants.some((v) => 'url' in v.properties)).toBe(false)
+  })
 })
