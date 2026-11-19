@@ -90,17 +90,17 @@ describe('deckOutputSchema leniency', () => {
 })
 
 describe('deckOutputSchema and the structured blocks', () => {
-  // The model cannot write a point, a callout or a code block, nor a heading kicker (they are hand-made
-  // only). The mirror is built on the same generated block union, so the structured-output grammar never
-  // offers them and a stray one is refused (the one retry fires) or stripped, never stored.
-  function deckWithBlocks(blocks: unknown[]) {
+  // The model may write a point, a callout, a code block and a heading kicker. The mirror is loose: a
+  // failure here throws (kind `response`, no failover), so an empty string must pass and the real schema's
+  // one retry or `.catch` deals with it.
+  function deckWithBlocks(blocks: unknown[], visualType = 'text') {
     return {
       title: 'T',
       blueprint: 'inform',
       brief: { objective: 'O', audienceKnowledgeLevel: 'beginner', presentationType: 'other', freshnessRequired: false, keyQuestions: [] },
       cards: [
         {
-          plan: { purpose: 'hook', audienceQuestion: 'q', keyMessage: 'k', visualType: 'text', layoutFamily: 'list', transition: '', importance: 'essential' },
+          plan: { purpose: 'hook', audienceQuestion: 'q', keyMessage: 'k', visualType, layoutFamily: 'list', transition: '', importance: 'essential' },
           blocks,
           visualStyle: 'structured',
           speakerNotes: 'n',
@@ -112,14 +112,43 @@ describe('deckOutputSchema and the structured blocks', () => {
 
   it.each([
     ['point', { type: 'point', label: 'Term', text: 'Meaning' }],
-    ['callout', { type: 'callout', text: 'Key idea' }],
-    ['code', { type: 'code', code: 'x = 1' }],
-  ])('refuses a %s block', (_name, block) => {
-    expect(deckOutputSchema.safeParse(deckWithBlocks([{ type: 'heading', text: 'H' }, block])).success).toBe(false)
+    ['callout with a label', { type: 'callout', label: 'Key', text: 'Key idea' }],
+    ['callout without a label', { type: 'callout', text: 'Key idea' }],
+    ['code', { type: 'code', code: 'x = 1', label: 'C', caption: 'A line' }],
+  ])('accepts a %s block', (_name, block) => {
+    expect(deckOutputSchema.safeParse(deckWithBlocks([{ type: 'heading', text: 'H' }, block])).success).toBe(true)
   })
 
-  it('strips a heading kicker rather than keeping it', () => {
+  it('accepts an empty string in every new string field, which the real schema then fixes or refuses', () => {
+    const blocks = [
+      { type: 'heading', text: 'H', kicker: '' },
+      { type: 'point', label: '', text: 'Meaning' },
+      { type: 'callout', label: '', text: 'Key idea' },
+      { type: 'code', code: 'x', label: '', caption: '' },
+    ]
+    expect(deckOutputSchema.safeParse(deckWithBlocks(blocks)).success).toBe(true)
+    // The empty point label is a required-empty: the real schema refuses it (the pipeline's one retry).
+    expect(generatedDeckSchema.safeParse(deckWithBlocks(blocks)).success).toBe(false)
+    const fixable = [blocks[0], blocks[2], blocks[3]]
+    const real = generatedDeckSchema.parse(deckWithBlocks(fixable))
+    expect(real.cards[0].blocks).toEqual([
+      { type: 'heading', text: 'H' },
+      { type: 'callout', text: 'Key idea' },
+      { type: 'code', code: 'x' },
+    ])
+  })
+
+  it('accepts an over-long kicker and a code block with empty code', () => {
+    const blocks = [{ type: 'heading', text: 'H', kicker: 'x'.repeat(200) }, { type: 'code', code: '' }]
+    expect(deckOutputSchema.safeParse(deckWithBlocks(blocks)).success).toBe(true)
+  })
+
+  it('keeps a heading kicker', () => {
     const parsed = deckOutputSchema.parse(deckWithBlocks([{ type: 'heading', text: 'H', kicker: 'PART ONE' }]))
-    expect(parsed.cards[0].blocks[0]).toEqual({ type: 'heading', text: 'H' })
+    expect(parsed.cards[0].blocks[0]).toEqual({ type: 'heading', text: 'H', kicker: 'PART ONE' })
+  })
+
+  it.each(['definitions', 'code_example'])('accepts plan.visualType %s', (visualType) => {
+    expect(deckOutputSchema.safeParse(deckWithBlocks([{ type: 'heading', text: 'H' }], visualType)).success).toBe(true)
   })
 })

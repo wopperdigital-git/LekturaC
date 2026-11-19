@@ -1,8 +1,17 @@
 import { z } from 'zod'
-import { visualStyleSchema } from '@/engine/contentBlocks'
+import {
+  bulletListBlockSchema,
+  comparisonGroupBlockSchema,
+  headingBlockSchema,
+  imageBlockSchema,
+  paragraphBlockSchema,
+  quoteBlockSchema,
+  statBlockSchema,
+  timelineStepBlockSchema,
+  visualStyleSchema,
+} from '@/engine/contentBlocks'
 import {
   CLAIM_TYPES,
-  generatedBlockSchema,
   LAYOUT_FAMILIES,
   PRESENTATION_TYPES,
   SLIDE_PURPOSES,
@@ -68,6 +77,33 @@ const deckBriefOutputSchema = z.object({
   keyQuestions: z.array(z.string()).default([]),
 })
 
+/*
+  The blocks, as the mirror states them. The three structured blocks and the
+  heading's `kicker` are deliberately loose: plain `z.string()`, no trim, min,
+  max or catch. A failure against the mirror throws (kind `response`, no retry,
+  no failover) and costs the deck, while the real schema's one retry (a required
+  string left empty) or `.catch(undefined)` (an optional one) handles the same
+  value. Same reason as `imageQuery` below.
+*/
+const blockOutputSchema = z.discriminatedUnion('type', [
+  headingBlockSchema.extend({ kicker: z.string().optional() }),
+  paragraphBlockSchema,
+  bulletListBlockSchema,
+  statBlockSchema,
+  imageBlockSchema,
+  quoteBlockSchema,
+  timelineStepBlockSchema,
+  comparisonGroupBlockSchema,
+  z.object({ type: z.literal('point'), label: z.string(), text: z.string() }),
+  z.object({ type: z.literal('callout'), label: z.string().optional(), text: z.string() }),
+  z.object({
+    type: z.literal('code'),
+    code: z.string(),
+    label: z.string().optional(),
+    caption: z.string().optional(),
+  }),
+])
+
 /**
  * Exported (unlike the other pieces above) because `anthropicProvider.ts`'s
  * `repairSlides` reuses it for `repairOutputSchema.card` — a repair reply's
@@ -85,7 +121,7 @@ export const generatedCardOutputSchema = z.object({
   // and a failure there throws (kind `response`, no failover), so a short or
   // long query would cost the deck. The real schema's `.catch(undefined)` drops it.
   imageQuery: z.string().optional(),
-  blocks: z.array(generatedBlockSchema).min(1),
+  blocks: z.array(blockOutputSchema).min(1),
   visualStyle: visualStyleSchema,
   speakerNotes: z.string(),
   claims: z.array(generatedClaimOutputSchema).default([]),

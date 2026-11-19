@@ -1,10 +1,13 @@
 import { z } from 'zod'
 import {
   bulletListBlockSchema,
+  calloutBlockSchema,
+  codeBlockSchema,
   comparisonGroupBlockSchema,
   headingBlockSchema,
   imageBlockSchema,
   paragraphBlockSchema,
+  pointBlockSchema,
   quoteBlockSchema,
   statBlockSchema,
   timelineStepBlockSchema,
@@ -33,7 +36,7 @@ export const VISUAL_TYPES = [
   'hero_image', 'photo', 'illustration', 'timeline', 'bar_chart', 'line_chart',
   'pie_chart', 'donut_chart', 'scatter_plot', 'map', 'comparison_table',
   'two_column_comparison', 'process_flow', 'diagram', 'icon_grid',
-  'metric_cards', 'quote', 'text', 'mixed',
+  'metric_cards', 'quote', 'text', 'mixed', 'definitions', 'code_example',
 ] as const
 export type VisualType = (typeof VISUAL_TYPES)[number]
 
@@ -94,14 +97,36 @@ export const deckBriefSchema = z.object({
 export type DeckBrief = z.infer<typeof deckBriefSchema>
 
 /*
-  The blocks a model may write: the original eight and nothing else. `point`,
-  `callout`, `code` and a heading's `kicker` exist in the content model but are
-  made by hand until the AI is taught them, so a reply holding one fails the shape
-  check like any unknown type (and gets the one retry with the exact errors). The
-  heading drops `kicker` so a stray one is stripped, not stored.
+  The blocks a model may write: the original eight plus `point`, `callout` and
+  `code`, and a heading's optional `kicker`. A required string left empty (a
+  point's label or text, a callout's text, the code) fails the shape check and
+  gets the one retry with the exact errors; an optional one (a kicker, a callout
+  label, a code label or caption) that is empty or too long is dropped, never
+  fatal. The code is not trimmed: its leading spaces are code. The Anthropic
+  mirror (`@/ai/deckOutputSchema`) states looser versions of these shapes.
 */
+const generatedHeadingSchema = headingBlockSchema.extend({
+  kicker: z.string().trim().min(1).max(80).optional().catch(undefined),
+})
+
+const generatedPointSchema = pointBlockSchema.extend({
+  label: z.string().trim().min(1),
+  text: z.string().trim().min(1),
+})
+
+const generatedCalloutSchema = calloutBlockSchema.extend({
+  label: z.string().trim().min(1).optional().catch(undefined),
+  text: z.string().trim().min(1),
+})
+
+const generatedCodeSchema = codeBlockSchema.extend({
+  code: z.string().min(1),
+  label: z.string().trim().min(1).optional().catch(undefined),
+  caption: z.string().trim().min(1).optional().catch(undefined),
+})
+
 export const generatedBlockSchema = z.discriminatedUnion('type', [
-  headingBlockSchema.omit({ kicker: true }),
+  generatedHeadingSchema,
   paragraphBlockSchema,
   bulletListBlockSchema,
   statBlockSchema,
@@ -109,6 +134,9 @@ export const generatedBlockSchema = z.discriminatedUnion('type', [
   quoteBlockSchema,
   timelineStepBlockSchema,
   comparisonGroupBlockSchema,
+  generatedPointSchema,
+  generatedCalloutSchema,
+  generatedCodeSchema,
 ])
 
 export type GeneratedBlock = z.infer<typeof generatedBlockSchema>

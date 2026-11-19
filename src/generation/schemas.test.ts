@@ -120,29 +120,72 @@ describe('generatedDeckSchema (v2)', () => {
     }
   })
 
-  // Structured blocks are written by hand only in this part: a model reply holding one
-  // is rejected like any unknown type, so the one retry (with the exact errors) fires.
+  function withBlocks(blocks: unknown[]) {
+    const deck = fullDeck()
+    const card = deck.cards[0] as Record<string, unknown>
+    return generatedDeckSchema.safeParse({ ...deck, cards: [{ ...card, blocks }] })
+  }
+  const H = { type: 'heading', text: 'EVs are going mainstream' }
+
   it.each([
     { type: 'point', label: 'Pointer', text: 'Holds an address' },
+    { type: 'callout', label: 'Key', text: 'Key idea' },
     { type: 'callout', text: 'Key idea' },
+    { type: 'code', code: '  int x = 0;', label: 'C', caption: 'A variable' },
     { type: 'code', code: 'int x = 0;' },
-  ])('rejects a card holding a $type block', (block) => {
-    const deck = fullDeck()
-    const card = deck.cards[0] as Record<string, unknown>
-    const heading = { type: 'heading', text: 'EVs are going mainstream' }
-    const result = generatedDeckSchema.safeParse({ ...deck, cards: [{ ...card, blocks: [heading, block] }] })
-    expect(result.success).toBe(false)
+  ])('accepts a card holding a $type block', (block) => {
+    const result = withBlocks([H, block])
+    expect(result.success).toBe(true)
   })
 
-  it('ignores a kicker the model wrote on a heading', () => {
-    const deck = fullDeck()
-    const card = deck.cards[0] as Record<string, unknown>
-    const blocks = [{ type: 'heading', text: 'EVs are going mainstream', kicker: 'Chapter 1' }]
-    const result = generatedDeckSchema.safeParse({ ...deck, cards: [{ ...card, blocks }] })
+  it('keeps a code block unchanged, leading spaces included', () => {
+    const result = withBlocks([H, { type: 'code', code: '  indented();' }])
+    expect(result.success && result.data.cards[0].blocks[1]).toEqual({ type: 'code', code: '  indented();' })
+  })
+
+  it('refuses a point with an empty label or text', () => {
+    expect(withBlocks([H, { type: 'point', label: '', text: 'Meaning' }]).success).toBe(false)
+    expect(withBlocks([H, { type: 'point', label: '  ', text: 'Meaning' }]).success).toBe(false)
+    expect(withBlocks([H, { type: 'point', label: 'Term', text: '' }]).success).toBe(false)
+  })
+
+  it('refuses a callout with no text and a code block with no code', () => {
+    expect(withBlocks([H, { type: 'callout', text: ' ' }]).success).toBe(false)
+    expect(withBlocks([H, { type: 'code', code: '' }]).success).toBe(false)
+  })
+
+  it('drops an empty callout label, code label and code caption rather than failing', () => {
+    const result = withBlocks([
+      H,
+      { type: 'callout', label: '', text: 'Key idea' },
+      { type: 'code', code: 'x', label: '', caption: '' },
+    ])
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.cards[0].blocks[0]).toEqual({ type: 'heading', text: 'EVs are going mainstream' })
+      expect(result.data.cards[0].blocks[1]).toEqual({ type: 'callout', text: 'Key idea' })
+      expect(result.data.cards[0].blocks[2]).toEqual({ type: 'code', code: 'x' })
     }
+  })
+
+  it('keeps a heading kicker and trims it', () => {
+    const result = withBlocks([{ ...H, kicker: '  Chapter 1 ' }])
+    expect(result.success && result.data.cards[0].blocks[0]).toEqual({ ...H, kicker: 'Chapter 1' })
+  })
+
+  it('drops an empty or over-long kicker rather than failing', () => {
+    for (const kicker of ['', '   ', 'x'.repeat(81)]) {
+      const result = withBlocks([{ ...H, kicker }])
+      expect(result.success).toBe(true)
+      if (result.success) expect(result.data.cards[0].blocks[0]).toEqual(H)
+    }
+  })
+
+  it.each(['definitions', 'code_example'])('parses plan.visualType %s', (visualType) => {
+    const deck = fullDeck()
+    const card = deck.cards[0] as Record<string, unknown>
+    const plan = { ...(card.plan as Record<string, unknown>), visualType }
+    const result = generatedDeckSchema.safeParse({ ...deck, cards: [{ ...card, plan }] })
+    expect(result.success && result.data.cards[0].plan.visualType).toBe(visualType)
   })
 
   it('rejects an unknown blueprint id', () => {
