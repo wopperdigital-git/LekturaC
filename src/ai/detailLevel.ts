@@ -38,6 +38,15 @@ export interface DensityRules {
  */
 export const DETAILED_PAIRED_PARAGRAPH_WORDS = 30
 
+/** The longest run of consecutive `point` blocks a slide should carry (`POINT_RUN_TOO_LONG`, low). */
+export const MAX_POINT_RUN = 6
+
+/** The most lines a `code` block should hold (`CODE_TOO_LONG`, low). */
+export const CODE_MAX_LINES = 12
+
+/** The longest line a `code` block should hold, in characters (`CODE_TOO_LONG`, low). */
+export const CODE_MAX_LINE_CHARS = 60
+
 export const DENSITY: Record<DetailLevel, DensityRules> = {
   simplified: {
     visibleWords: [10, 30],

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { DENSITY, DETAILED_PAIRED_PARAGRAPH_WORDS, densitySection } from './detailLevel'
+import {
+  CODE_MAX_LINE_CHARS,
+  CODE_MAX_LINES,
+  DENSITY,
+  DETAILED_PAIRED_PARAGRAPH_WORDS,
+  MAX_POINT_RUN,
+  densitySection,
+} from './detailLevel'
 
 describe('DENSITY', () => {
   /*
@@ -31,5 +38,13 @@ describe('DENSITY', () => {
 
   it('tells the model which slides may be short, as BODY_TOO_THIN allows', () => {
     expect(densitySection('detailed')).toMatch(/call to action or a story's insight or closing line may be shorter/)
+  })
+})
+
+describe('structured block limits', () => {
+  it('pins the point-run and code size limits the validators and prompts share', () => {
+    expect(MAX_POINT_RUN).toBe(6)
+    expect(CODE_MAX_LINES).toBe(12)
+    expect(CODE_MAX_LINE_CHARS).toBe(60)
   })
 })

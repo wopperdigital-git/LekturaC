@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GeneratedCard, GeneratedDeck } from '../schemas'
 import { structureFlags } from './structure'
+import { visibleLines } from './text'
 
 /** N space-separated placeholder words — enough to hit an exact word-count threshold. */
 function words(n: number): string {
@@ -693,6 +694,217 @@ describe('structureFlags', () => {
         }),
       ])
       expect(structureFlags(d).filter((f) => f.type === 'NARRATION_DUPLICATES_SLIDE')).toEqual([])
+    })
+  })
+
+  describe('structured blocks', () => {
+    const ofType = (d: GeneratedDeck, type: string) => structureFlags(d).filter((f) => f.type === type)
+    const point = (n: number, extra = '') => ({
+      type: 'point' as const,
+      label: `Term${n}`,
+      text: `meaning ${n}${extra}`,
+    })
+    const pointCard = (count: number, plan: PlanOverrides = {}) =>
+      card({
+        plan,
+        blocks: [{ type: 'heading', text: 'Key terms' }, ...Array.from({ length: count }, (_, i) => point(i))],
+      })
+
+    describe('visible text', () => {
+      it('counts each point label and text, and nothing from a kicker, callout or code', () => {
+        const c = card({
+          blocks: [
+            { type: 'heading', text: 'Title', kicker: 'Kick words not counted here' },
+            { type: 'point', label: 'one two', text: 'three four five' },
+            { type: 'callout', label: 'Note', text: 'callout words are not counted either' },
+            { type: 'code', code: 'a = 1\nb = 2', label: 'Python', caption: 'caption words' },
+          ],
+        })
+        expect(visibleLines(c)).toEqual(['one two three four five'])
+      })
+
+      it('flags a point slide that is over the density ceiling', () => {
+        const d = deck([
+          card({
+            blocks: [{ type: 'heading', text: 'Terms' }, { type: 'point', label: 'Term', text: words(60) }],
+          }),
+        ])
+        expect(ofType(d, 'BODY_TOO_DENSE')).toHaveLength(1)
+      })
+
+      it('does not flag a balanced slide of 5 points, a callout and a kicker', () => {
+        const d = deck([
+          card({
+            blocks: [
+              { type: 'heading', text: 'Key terms', kicker: 'Vocabulary for the week' },
+              ...Array.from({ length: 5 }, (_, i) => ({
+                type: 'point' as const,
+                label: `Term ${i}`,
+                text: 'a short plain meaning here',
+              })),
+              { type: 'callout', label: 'Remember', text: words(14) },
+            ],
+          }),
+        ])
+        // 5 x (2 + 5) = 35 counted words, under the 55 ceiling; the callout and kicker add none.
+        expect(ofType(d, 'BODY_TOO_DENSE')).toEqual([])
+      })
+    })
+
+    describe('code slides are exempt from density', () => {
+      const longCode = Array.from({ length: 12 }, (_, i) => `line_${i} = compute(${words(8)})`).join('\n')
+
+      it('is not dense, even with a long paragraph beside the code', () => {
+        const dense = card({
+          blocks: [
+            { type: 'heading', text: 'A code slide' },
+            { type: 'paragraph', text: words(60) },
+            { type: 'code', code: longCode },
+          ],
+        })
+        expect(ofType(deck([dense]), 'BODY_TOO_DENSE')).toEqual([])
+      })
+
+      it('is not thin on a detailed deck', () => {
+        const thin = card({ blocks: [{ type: 'heading', text: 'A code slide' }, { type: 'code', code: 'x = 1' }] })
+        // Slide 0 is skipped by the rule, so the code slide goes second.
+        const d = deck([card(), thin])
+        expect(structureFlags(d, 'detailed').filter((f) => f.type === 'BODY_TOO_THIN' && f.slideIndex === 1)).toEqual([])
+      })
+
+      it('is still thin without code, so the exemption is what spares it', () => {
+        const thin = card({ blocks: [{ type: 'heading', text: 'A slide' }, { type: 'paragraph', text: 'Short.' }] })
+        const d = deck([card(), thin])
+        expect(structureFlags(d, 'detailed').filter((f) => f.type === 'BODY_TOO_THIN' && f.slideIndex === 1)).toHaveLength(1)
+      })
+    })
+
+    describe('VISUAL_MISMATCH for the new visual types', () => {
+      it('flags definitions with fewer than 2 points, at low', () => {
+        for (const count of [0, 1]) {
+          const flags = ofType(deck([pointCard(count, { visualType: 'definitions' })]), 'VISUAL_MISMATCH')
+          expect(flags).toHaveLength(1)
+          expect(flags[0].severity).toBe('low')
+        }
+      })
+
+      it('does not flag definitions with 2 points', () => {
+        expect(ofType(deck([pointCard(2, { visualType: 'definitions' })]), 'VISUAL_MISMATCH')).toEqual([])
+      })
+
+      it('flags code_example with no code block, at low', () => {
+        const flags = ofType(deck([card({ plan: { visualType: 'code_example' } })]), 'VISUAL_MISMATCH')
+        expect(flags).toHaveLength(1)
+        expect(flags[0].severity).toBe('low')
+      })
+
+      it('does not flag code_example with a code block', () => {
+        const c = card({
+          plan: { visualType: 'code_example' },
+          blocks: [{ type: 'heading', text: 'Code' }, { type: 'code', code: 'x = 1' }],
+        })
+        expect(ofType(deck([c]), 'VISUAL_MISMATCH')).toEqual([])
+      })
+
+      it('keeps the existing cases at medium', () => {
+        const flags = ofType(deck([card({ plan: { visualType: 'metric_cards' } })]), 'VISUAL_MISMATCH')
+        expect(flags[0].severity).toBe('medium')
+      })
+    })
+
+    describe('LIST_DOMINANT', () => {
+      it('does not treat a point-run slide as list-led', () => {
+        const prose = (n: number) =>
+          card({ blocks: [{ type: 'heading', text: `Prose ${n}` }, { type: 'paragraph', text: 'One idea, said plainly.' }] })
+        const stat = card({ blocks: [{ type: 'heading', text: 'Stat' }, { type: 'stat', value: '1', label: 'm' }] })
+        // Three point-run slides, two of them adjacent: would be flagged if they counted as lists.
+        const d = deck([prose(1), pointCard(3), pointCard(3), stat, pointCard(4), prose(2)])
+        expect(ofType(d, 'LIST_DOMINANT')).toEqual([])
+      })
+    })
+
+    describe('POINT_RUN_TOO_LONG', () => {
+      it('does not flag a run of 6', () => {
+        expect(ofType(deck([pointCard(6)]), 'POINT_RUN_TOO_LONG')).toEqual([])
+      })
+
+      it('flags a run of 7 as low, on that slide', () => {
+        const flags = ofType(deck([card(), pointCard(7)]), 'POINT_RUN_TOO_LONG')
+        expect(flags).toHaveLength(1)
+        expect(flags[0].severity).toBe('low')
+        expect(flags[0].slideIndex).toBe(1)
+      })
+
+      it('judges runs separately: two runs of 4 split by a paragraph are fine', () => {
+        const c = card({
+          blocks: [
+            { type: 'heading', text: 'Terms' },
+            ...Array.from({ length: 4 }, (_, i) => point(i)),
+            { type: 'paragraph', text: 'A break.' },
+            ...Array.from({ length: 4 }, (_, i) => point(i + 4)),
+          ],
+        })
+        expect(ofType(deck([c]), 'POINT_RUN_TOO_LONG')).toEqual([])
+      })
+    })
+
+    describe('CODE_TOO_LONG', () => {
+      const codeCard = (code: string) =>
+        card({ blocks: [{ type: 'heading', text: 'Code' }, { type: 'code', code }] })
+      const lines = (n: number, width = 10) => Array.from({ length: n }, () => 'x'.repeat(width)).join('\n')
+
+      it('does not flag 12 lines of 60 characters', () => {
+        expect(ofType(deck([codeCard(lines(12, 60))]), 'CODE_TOO_LONG')).toEqual([])
+      })
+
+      it('flags 13 lines, at low', () => {
+        const flags = ofType(deck([codeCard(lines(13))]), 'CODE_TOO_LONG')
+        expect(flags).toHaveLength(1)
+        expect(flags[0].severity).toBe('low')
+      })
+
+      it('flags a line of 61 characters', () => {
+        expect(ofType(deck([codeCard(lines(2, 61))]), 'CODE_TOO_LONG')).toHaveLength(1)
+      })
+
+      it('flags a slide once even with two long code blocks', () => {
+        const c = card({
+          blocks: [
+            { type: 'heading', text: 'Code' },
+            { type: 'code', code: lines(13) },
+            { type: 'code', code: lines(14) },
+          ],
+        })
+        expect(ofType(deck([c]), 'CODE_TOO_LONG')).toHaveLength(1)
+      })
+    })
+
+    describe('CALLOUT_REPEATS_HEADING', () => {
+      const calloutCard = (heading: string, text: string) =>
+        card({ blocks: [{ type: 'heading', text: heading }, { type: 'callout', text }] })
+
+      it('flags a callout that equals the heading, ignoring case and punctuation', () => {
+        const flags = ofType(deck([calloutCard('Why it matters', 'Why it matters!')]), 'CALLOUT_REPEATS_HEADING')
+        expect(flags).toHaveLength(1)
+        expect(flags[0].severity).toBe('low')
+      })
+
+      it('flags a callout that contains the heading', () => {
+        expect(
+          ofType(deck([calloutCard('Why it matters', 'Remember why it matters most.')]), 'CALLOUT_REPEATS_HEADING'),
+        ).toHaveLength(1)
+      })
+
+      it('does not flag a callout that says something else', () => {
+        expect(ofType(deck([calloutCard('Why it matters', 'Check the label twice.')]), 'CALLOUT_REPEATS_HEADING')).toEqual(
+          [],
+        )
+      })
+
+      it('does not flag a card with no heading text to compare', () => {
+        const c = card({ blocks: [{ type: 'heading', text: '' }, { type: 'callout', text: 'Anything at all.' }] })
+        expect(ofType(deck([c]), 'CALLOUT_REPEATS_HEADING')).toEqual([])
+      })
     })
   })
 })

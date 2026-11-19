@@ -1,4 +1,4 @@
-import { DENSITY, type DetailLevel } from '@/ai/detailLevel'
+import { CODE_MAX_LINES, CODE_MAX_LINE_CHARS, DENSITY, MAX_POINT_RUN, type DetailLevel } from '@/ai/detailLevel'
 import { resolveLayout } from '@/engine/layoutEngine'
 import { isHeroRole, isTitleShaped } from '@/engine/roleLayout'
 import type { GeneratedDeck, QualityFlag } from '../schemas'
@@ -130,7 +130,10 @@ function bodyTooDenseFlags(deck: GeneratedDeck, level: DetailLevel): QualityFlag
     // The prompt exempts timelines and quotes from the visible-text ceiling by
     // content too, not only by declared purpose — a card whose blocks carry a
     // timelineStep or quote is exempt whatever `plan.purpose` says.
-    if (card.blocks.some((block) => block.type === 'timelineStep' || block.type === 'quote')) return
+    // A code slide is exempt too: its code is not counted and is bounded by `CODE_TOO_LONG`.
+    if (card.blocks.some((block) => block.type === 'timelineStep' || block.type === 'quote' || block.type === 'code')) {
+      return
+    }
     const words = visibleWordCount(card)
     if (words > max) {
       flags.push({
@@ -166,7 +169,9 @@ function bodyTooThinFlags(deck: GeneratedDeck, level: DetailLevel): QualityFlag[
   deck.cards.forEach((card, index) => {
     if (index === 0 || SHORT_BY_DESIGN_PURPOSES.has(card.plan.purpose)) return
     if (isHeroRole(card.role)) return
-    if (card.blocks.some((block) => block.type === 'quote' || block.type === 'timelineStep')) return
+    if (card.blocks.some((block) => block.type === 'quote' || block.type === 'timelineStep' || block.type === 'code')) {
+      return
+    }
     const words = visibleWordCount(card)
     if (words < min) {
       flags.push({
@@ -353,6 +358,22 @@ function visualMismatchFlags(deck: GeneratedDeck): QualityFlag[] {
     const hasTimelineStep = card.blocks.some((block) => block.type === 'timelineStep')
     const comparisonGroupCount = card.blocks.filter((block) => block.type === 'comparisonGroup').length
     const hasStat = card.blocks.some((block) => block.type === 'stat')
+    const pointCount = card.blocks.filter((block) => block.type === 'point').length
+    const hasCode = card.blocks.some((block) => block.type === 'code')
+
+    // The two newer visual types are bound to their blocks too, but at low: they
+    // are a nicety, and a repair call must never be spent on them.
+    if ((visualType === 'definitions' && pointCount < 2) || (visualType === 'code_example' && !hasCode)) {
+      flags.push({
+        type: 'VISUAL_MISMATCH',
+        severity: 'low',
+        slideIndex: index,
+        message: `${slideLabel(index)} claims visual type "${visualType}" but its blocks don't support it.`,
+        suggestedAction:
+          'Use two or more point blocks for definitions and a code block for a code example, or change the visual type.',
+      })
+      return
+    }
 
     // Chart types are deliberately absent: the only block that can back one is
     // `stat`, and demanding stats of a deck with no evidence would push the
@@ -373,6 +394,79 @@ function visualMismatchFlags(deck: GeneratedDeck): QualityFlag[] {
         message: `${slideLabel(index)} claims visual type "${visualType}" but its blocks don't support it.`,
         suggestedAction:
           "Rebuild the blocks so they deliver the plan's visual type (a timelineStep run for timeline/process_flow, 2+ comparisonGroup blocks for a comparison, stat blocks for metric_cards). Change the visual type instead only if the content genuinely isn't that shape.",
+      })
+    }
+  })
+  return flags
+}
+
+/** The length of every run of consecutive `point` blocks on the card. */
+function pointRunLengths(card: GeneratedDeck['cards'][number]): number[] {
+  const runs: number[] = []
+  let current = 0
+  for (const block of card.blocks) {
+    if (block.type === 'point') {
+      current += 1
+    } else if (current > 0) {
+      runs.push(current)
+      current = 0
+    }
+  }
+  if (current > 0) runs.push(current)
+  return runs
+}
+
+function pointRunTooLongFlags(deck: GeneratedDeck): QualityFlag[] {
+  const flags: QualityFlag[] = []
+  deck.cards.forEach((card, index) => {
+    const longest = Math.max(0, ...pointRunLengths(card))
+    if (longest > MAX_POINT_RUN) {
+      flags.push({
+        type: 'POINT_RUN_TOO_LONG',
+        severity: 'low',
+        slideIndex: index,
+        message: `${slideLabel(index)} has a run of ${longest} point blocks, past the ${MAX_POINT_RUN}-point guideline.`,
+        suggestedAction: `Keep a run of point blocks to ${MAX_POINT_RUN} or fewer.`,
+      })
+    }
+  })
+  return flags
+}
+
+function codeTooLongFlags(deck: GeneratedDeck): QualityFlag[] {
+  const flags: QualityFlag[] = []
+  deck.cards.forEach((card, index) => {
+    const tooLong = card.blocks.some((block) => {
+      if (block.type !== 'code') return false
+      const lines = block.code.split('\n')
+      return lines.length > CODE_MAX_LINES || lines.some((line) => line.length > CODE_MAX_LINE_CHARS)
+    })
+    if (tooLong) {
+      flags.push({
+        type: 'CODE_TOO_LONG',
+        severity: 'low',
+        slideIndex: index,
+        message: `${slideLabel(index)} has a code block past ${CODE_MAX_LINES} lines or ${CODE_MAX_LINE_CHARS} characters a line.`,
+        suggestedAction: `Cut the code to ${CODE_MAX_LINES} lines of ${CODE_MAX_LINE_CHARS} characters or fewer.`,
+      })
+    }
+  })
+  return flags
+}
+
+function calloutRepeatsHeadingFlags(deck: GeneratedDeck): QualityFlag[] {
+  const flags: QualityFlag[] = []
+  deck.cards.forEach((card, index) => {
+    const heading = normalize(headingOf(card))
+    if (!heading) return
+    const repeats = card.blocks.some((block) => block.type === 'callout' && normalize(block.text).includes(heading))
+    if (repeats) {
+      flags.push({
+        type: 'CALLOUT_REPEATS_HEADING',
+        severity: 'low',
+        slideIndex: index,
+        message: `${slideLabel(index)} has a callout that repeats the slide's title.`,
+        suggestedAction: 'Make the callout say something the title does not.',
       })
     }
   })
@@ -502,6 +596,9 @@ export function structureFlags(deck: GeneratedDeck, level: DetailLevel = 'balanc
     ...weakConclusionFlags(deck),
     ...fillerSlideFlags(deck),
     ...visualMismatchFlags(deck),
+    ...pointRunTooLongFlags(deck),
+    ...codeTooLongFlags(deck),
+    ...calloutRepeatsHeadingFlags(deck),
     ...duplicateContentFlags(deck),
     ...overclaimFlags(deck),
     ...narrationDuplicatesSlideFlags(deck),

@@ -23,7 +23,9 @@ export function headingOf(card: GeneratedCard): string {
  * block order: a paragraph's text, each bullet item, a stat as
  * `${value} ${label}`, a quote's text (with its attribution appended when
  * present), a timeline step as `${label} ${text}`, a comparison group's own
- * heading plus its items, and an image's alt text when it has one.
+ * heading plus its items, a point as `${label} ${text}`, and an image's alt
+ * text when it has one. A heading's kicker, a callout and a code block are
+ * left out.
  *
  * Used by the density, duplicate-content, overclaim and narration-overlap
  * rules, which all care about what's visible on the slide — never the
@@ -58,6 +60,12 @@ export function visibleLines(card: GeneratedCard): string[] {
       case 'comparisonGroup':
         lines.push(block.heading, ...block.items)
         break
+      case 'point':
+        lines.push(`${block.label} ${block.text}`)
+        break
+      // A kicker, a callout and a code block are deliberately not counted: the
+      // callout and kicker are short by construction (clean-up and the schema
+      // cap them) and code is exempt from the density rules.
     }
   })
   return lines

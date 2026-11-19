@@ -76,6 +76,45 @@ describe('validateDeck', () => {
   })
 })
 
+describe('repairTargets with structured blocks', () => {
+  const ctx = { pack: null, currentYear: 2026, freshnessRequired: false }
+  const points = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ type: 'point' as const, label: `Term ${i}`, text: 'a plain meaning' }))
+  const only = (...types: string[]) => (f: QualityFlag) => types.includes(f.type)
+
+  it('never sends a slide to repair when only the new rules fire on it', () => {
+    const d = deck([
+      card(),
+      card({
+        plan: { visualType: 'definitions' },
+        blocks: [{ type: 'heading', text: 'Terms' }, ...points(7)],
+        speakerNotes: 'Say more than the slide does, with plenty of new spoken framing around it.',
+      }),
+      card({
+        plan: { visualType: 'code_example' },
+        blocks: [
+          { type: 'heading', text: 'Why it matters' },
+          { type: 'callout', text: 'Why it matters, again.' },
+          { type: 'code', code: Array.from({ length: 13 }, () => 'x = 1').join('\n') },
+        ],
+        speakerNotes: 'Say more than the slide does, with plenty of new spoken framing around it.',
+      }),
+      card({ plan: { visualType: 'definitions' }, blocks: [{ type: 'heading', text: 'One' }, ...points(1)] }),
+      card({ plan: { visualType: 'code_example' } }),
+    ])
+    const { flags } = validateDeck(d, ctx)
+    const newOnes = flags.filter(only('POINT_RUN_TOO_LONG', 'CODE_TOO_LONG', 'CALLOUT_REPEATS_HEADING', 'VISUAL_MISMATCH'))
+    expect(newOnes.map((f) => f.type).sort()).toEqual([
+      'CALLOUT_REPEATS_HEADING',
+      'CODE_TOO_LONG',
+      'POINT_RUN_TOO_LONG',
+      'VISUAL_MISMATCH',
+      'VISUAL_MISMATCH',
+    ])
+    expect(repairTargets(newOnes)).toEqual([])
+  })
+})
+
 describe('repairTargets', () => {
   function flag(overrides: Partial<QualityFlag> = {}): QualityFlag {
     return {
