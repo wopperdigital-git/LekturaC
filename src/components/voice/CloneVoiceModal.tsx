@@ -59,7 +59,7 @@ import { RecordingError, recordingSupport, startRecording, type Recorder, type R
 import { supabase } from '@/lib/supabaseClient'
 import { hasWebCodecs } from '@/video/format'
 import { loadVideo, supabasePorts, type VideoView } from '@/video/storage'
-import { canStartGenerate, faceBlocker, generateBlocker } from '@/video/ui'
+import { canStartGenerate, faceBlocker, faceRequest, generateBlocker } from '@/video/ui'
 import { videoLength } from '@/video/library'
 import type { VideoDeck } from '@/video/generate'
 import { startVideoJob } from '@/jobs/start'
@@ -469,7 +469,8 @@ export function CloneVoiceModal({
     slideCount: deck.cards.length,
     voiceChosen: choice.voiceId !== null,
   })
-  const canGenerate = canStartGenerate({
+  // Until the saved photo is known, the face step cannot say what Generate would do.
+  const canGenerate = !checkingPhoto && canStartGenerate({
     configured,
     blocker,
     ready,
@@ -482,6 +483,8 @@ export function CloneVoiceModal({
 
   async function generate() {
     if (!canGenerate) return
+    // The switch as drawn when pressed, taken before any await.
+    const faceWasOn = faceOn
     const voice = choice
     if (voice.voiceId === null) return
     setVideoError(null)
@@ -499,12 +502,14 @@ export function CloneVoiceModal({
     const intro = bookendText(saved, 'intro', deck.title)
     const outro = bookendText(saved, 'outro', deck.title)
     const stop = faceBlocker({ configured: isWavespeedConfigured(), hasPhoto: photo !== null, introText: intro, outroText: outro })
-    // The switch was on when Generate was pressed, so a video without the face would be a surprise: say why.
-    if (faceSwitch && stop !== null) {
-      setVideoError(stop)
+    // A switch that showed off or blocked makes a plain video; one that showed on and has since become
+    // impossible says why instead of making a video without the face in silence.
+    const request = faceRequest({ effectiveOn: faceWasOn, blockerNow: stop, intro, outro })
+    if (request.kind === 'blocked') {
+      setVideoError(request.message)
       return
     }
-    const face = faceSwitch ? { bookends: { intro, outro } } : null
+    const face = request.kind === 'on' ? { bookends: request.bookends } : null
     const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null, face })
     if (!started) {
       setVideoError(ALREADY_GENERATING)

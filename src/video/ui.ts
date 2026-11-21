@@ -39,6 +39,29 @@ export function faceBlocker(i: FaceBlockerInput): string | null {
   return null
 }
 
+export type FaceRequest =
+  | { kind: 'off' }
+  | { kind: 'blocked'; message: string }
+  | { kind: 'on'; bookends: { intro: string; outro: string } }
+
+/**
+ * What Generate does about the talking intro and outro. `effectiveOn` is the switch as the user saw it
+ * when they pressed Generate (on, and nothing stopping it); `blockerNow` is the blocker worked out again
+ * from the freshest intro and outro. A switch that was already off or blocked on screen never stops the
+ * video: only one the user saw on that has since become impossible does, so it is not made without the face
+ * in silence.
+ */
+export function faceRequest(o: {
+  effectiveOn: boolean
+  blockerNow: string | null
+  intro: string
+  outro: string
+}): FaceRequest {
+  if (!o.effectiveOn) return { kind: 'off' }
+  if (o.blockerNow !== null) return { kind: 'blocked', message: o.blockerNow }
+  return { kind: 'on', bookends: { intro: o.intro, outro: o.outro } }
+}
+
 export interface StartInput {
   configured: boolean
   blocker: string | null

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canCancelVideo, canStartGenerate, faceBlocker, generateBlocker, stageRows } from './ui'
+import { canCancelVideo, canStartGenerate, faceBlocker, faceRequest, generateBlocker, stageRows } from './ui'
 import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 
 const ok = { webCodecs: true, hasDeck: true, slideCount: 3, voiceChosen: true }
@@ -120,5 +120,28 @@ describe('canStartGenerate', () => {
     ['recording', { recording: true }],
   ])('is false when %s stops it', (_name, patch) => {
     expect(canStartGenerate({ ...good, ...patch })).toBe(false)
+  })
+})
+
+describe('faceRequest', () => {
+  const texts = { intro: 'Hi!', outro: 'Bye!' }
+
+  it('makes a plain video when the switch was off or blocked on screen, whatever the blocker now', () => {
+    expect(faceRequest({ effectiveOn: false, blockerNow: 'Add a photo of your face first.', ...texts })).toEqual({ kind: 'off' })
+    expect(faceRequest({ effectiveOn: false, blockerNow: null, ...texts })).toEqual({ kind: 'off' })
+  })
+
+  it('stops with the reason when the switch was on but is now blocked', () => {
+    expect(faceRequest({ effectiveOn: true, blockerNow: 'Write an intro or an outro in the Narrate tab first.', ...texts })).toEqual({
+      kind: 'blocked',
+      message: 'Write an intro or an outro in the Narrate tab first.',
+    })
+  })
+
+  it('asks for the clips with the texts when the switch is on and nothing stops it', () => {
+    expect(faceRequest({ effectiveOn: true, blockerNow: null, ...texts })).toEqual({
+      kind: 'on',
+      bookends: { intro: 'Hi!', outro: 'Bye!' },
+    })
   })
 })
