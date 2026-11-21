@@ -28,7 +28,7 @@ CI (`.github/workflows/ci.yml`): typecheck, lint, test, build.
 - **Fixtures:** `engine/fixtures/cppDeck.ts` (`CPP_DECK`, one slide per arrangement) and `engine/fixtures/galleryDeck.ts` (`GALLERY_DECK`, one card per arrangement and size variant, ids like `g-section`, `g-termrows`; `galleryDeck.test.ts` pins each id resolves to its arrangement).
 - **Dev slide gallery** `/dev/slides` (`pages/DevSlidesPage.tsx`, dev builds only, no login): `?deck=gallery` (else `CPP_DECK`), `?theme=<id>`, `?style=expressive`, `?only=<card id>`, `?all=1`. It draws the read-only presenter path, not the editor.
 - **Not testable here, checked by hand:** the live editing DOM (`EditableText`, selection, zoom, pan, drag, drawing), two presenter windows, video encode, voice recording, the lesson player. Recent layout work was checked only on `/dev/slides`; the editor, thumbnails, Present, video and PPTX on it are unchecked.
-- **RLS/SQL** is hand-run: `supabase/tests/*.sql` (0009, 0010, 0012, 0014, 0015, 0016, 0017, 0018, 0021); all passed at their last run (latest 2026-11-06, after 0018). **0021's test is written but not yet run.**
+- **RLS/SQL** is hand-run: `supabase/tests/*.sql` (0009, 0010, 0012, 0014, 0015, 0016, 0017, 0018, 0021); all passed at their last run (latest 2026-11-21, after 0021).
 
 ## Environment
 
@@ -262,7 +262,7 @@ Migrations in `supabase/migrations/`. RLS on deck tables is `owner_id = auth.uid
 | 0017 | `cloned_voices` | recording your own voice |
 | 0018 | lessons | posting/taking a lesson only |
 | 0019, 0020 | `admins`, `admin_overview(p_range)` | admin page only |
-| 0021 | `presentations.bookends`, private `face-photos` bucket | talking intro/outro only (own best-effort read/write, never `loadDeck`; written, not yet run) |
+| 0021 | `presentations.bookends`, private `face-photos` bucket | talking intro/outro only (own best-effort read/write, never `loadDeck`) |
 
 - `parseAdjusts`/`parseNarration` map the `{}` column default back to `undefined` ("has the column" ≠ "was adjusted").
 - Title/theme are debounced (`scheduleSave`, 500ms); structural changes persist immediately via `persistCardsSync`.

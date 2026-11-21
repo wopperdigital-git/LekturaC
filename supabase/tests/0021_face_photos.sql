@@ -4,7 +4,7 @@
 -- transaction that rolls back, so no fixture survives. Any failed check raises and aborts
 -- with a message naming it; a clean run ends by printing "face photo checks passed".
 --
--- Not yet run: written before 0021 was applied.
+-- Last run: 2026-11-21, passed, right after 0021 was applied.
 
 begin;
 
