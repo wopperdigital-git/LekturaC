@@ -117,6 +117,7 @@ interface VoiceLists {
 }
 
 const OWNER_UNKNOWN: OwnVoices = { kind: 'failed' }
+const ALREADY_GENERATING = 'A video is already generating. Wait for it to finish, then try again.'
 
 // Ruled in ink like `Input`, so the dialog's fields read as one set.
 const SELECT =
@@ -187,6 +188,9 @@ export function CloneVoiceModal({
   /* ---- the talking intro and outro ---- */
   const uid = useAuthStore((s) => s.user?.id ?? null)
   const [photo, setPhoto] = useState<FacePhoto | null>(null)
+  // The user the photo was read for. With no one signed in or no database there is nothing to wait for.
+  const [photoReadFor, setPhotoReadFor] = useState<string | null>(null)
+  const checkingPhoto = supabase !== null && uid !== null && photoReadFor !== uid
   // The switch starts on; whether it is *in effect* also depends on `faceStop` below.
   const [faceSwitch, setFaceSwitch] = useState(true)
   // The dialog loads the intro and outro itself: opened from the Create & export menu, the Narrate tab
@@ -202,7 +206,9 @@ export function CloneVoiceModal({
     if (!supabase || !uid) return
     let cancelled = false
     void readFacePhoto(supabaseFacePorts(supabase), uid).then((found) => {
-      if (!cancelled) setPhoto(found)
+      if (cancelled) return
+      setPhoto(found)
+      setPhotoReadFor(uid)
     })
     return () => {
       cancelled = true
@@ -493,10 +499,15 @@ export function CloneVoiceModal({
     const intro = bookendText(saved, 'intro', deck.title)
     const outro = bookendText(saved, 'outro', deck.title)
     const stop = faceBlocker({ configured: isWavespeedConfigured(), hasPhoto: photo !== null, introText: intro, outroText: outro })
-    const face = faceSwitch && stop === null ? { bookends: { intro, outro } } : null
+    // The switch was on when Generate was pressed, so a video without the face would be a surprise: say why.
+    if (faceSwitch && stop !== null) {
+      setVideoError(stop)
+      return
+    }
+    const face = faceSwitch ? { bookends: { intro, outro } } : null
     const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null, face })
     if (!started) {
-      setVideoError('A video is already generating. Wait for it to finish, then try again.')
+      setVideoError(ALREADY_GENERATING)
       return
     }
     // The editor stays open: the video shows its progress in the corner panel, like a quiz.
@@ -514,8 +525,9 @@ export function CloneVoiceModal({
 
   // What the footer says about Generate: every error, and also why it is off or that a run is in
   // progress, so a stale error never hides the reason the button is disabled.
-  // The only video error is "one is already generating", which stops holding once that run ends.
-  const footerErrors = [saveError, generating ? videoError : null].filter((e): e is string => Boolean(e))
+  // "One is already generating" stops holding once that run ends; the face blocker stays until the switch,
+  // the photo or the next Generate clears it.
+  const footerErrors = [saveError, videoError !== null && (generating || videoError !== ALREADY_GENERATING) ? videoError : null].filter((e): e is string => Boolean(e))
   const footerNote =
     ready && !savedVoiceKnown
       ? 'Your saved voice could not be read, so generating is turned off. Close this and open it again to retry.'
@@ -827,9 +839,16 @@ export function CloneVoiceModal({
           <FaceStep
             uid={uid}
             photo={photo}
-            onPhoto={setPhoto}
+            onPhoto={(p) => {
+              setVideoError(null)
+              setPhoto(p)
+            }}
             checked={faceOn}
-            onToggle={setFaceSwitch}
+            onToggle={(on) => {
+              setVideoError(null)
+              setFaceSwitch(on)
+            }}
+            checking={checkingPhoto}
             blocker={faceStop}
             costLine={faceOn ? faceCostLine(introText, outroText) : null}
           />

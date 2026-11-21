@@ -60,6 +60,17 @@ describe('FaceStep', () => {
     expect(render({ photo: PHOTO, checked: true })).not.toContain('WaveSpeed')
   })
 
+  it('while the saved photo is being looked up, hides the picker and thumbnail, shows no blocker and keeps the switch off', () => {
+    const html = render({ checking: true, blocker: 'Add a photo of your face first.' })
+    expect(html).toContain('Checking for your photo…')
+    expect(html).not.toContain('Add a photo of your face first.')
+    expect(html).not.toContain('type="file"')
+    expect(html).not.toContain('Upload photo')
+    expect(html).not.toContain('<img')
+    expect(switchTag(html)).toContain('disabled=""')
+    expect(render({ blocker: 'x' })).not.toContain('Checking for your photo')
+  })
+
   it('never names a key variable', () => {
     expect(render()).not.toContain('VITE_')
   })

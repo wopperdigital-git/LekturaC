@@ -21,6 +21,7 @@ import {
 */
 
 const CONSENT = 'This is my face, or I have permission to use it.'
+const REMOVE_FAILED = 'Your face photo could not be removed. Try again.'
 
 export function FaceStep({
   uid,
@@ -30,6 +31,7 @@ export function FaceStep({
   onToggle,
   blocker,
   costLine,
+  checking = false,
 }: {
   uid: string | null
   photo: FacePhoto | null
@@ -39,6 +41,8 @@ export function FaceStep({
   onToggle: (on: boolean) => void
   blocker: string | null
   costLine: string | null
+  /** The saved photo is still being looked up: nothing to pick or replace yet, and no blocker to read. */
+  checking?: boolean
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [consented, setConsented] = useState(false)
@@ -49,7 +53,7 @@ export function FaceStep({
   const [error, setError] = useState<string | null>(null)
 
   const busy = uploading || removing
-  const showForm = photo === null || replacing
+  const showForm = !checking && (photo === null || replacing)
   const problem = file ? faceUploadProblem(file, consented) : null
   const canUpload = file !== null && problem === null && uid !== null && supabase !== null && !busy
 
@@ -86,7 +90,8 @@ export function FaceStep({
     try {
       const result = await deleteFacePhoto(supabaseFacePorts(client), uid)
       if (result.error) {
-        setError(result.error)
+        // `deleteFacePhoto`'s message is written for deleting an account; this is only the photo.
+        setError(REMOVE_FAILED)
         return
       }
       onPhoto(null)
@@ -104,17 +109,18 @@ export function FaceStep({
             id="voice-face-switch"
             type="checkbox"
             checked={checked}
-            disabled={blocker !== null}
+            disabled={blocker !== null || checking}
             onChange={(e) => onToggle(e.target.checked)}
             className="mt-0.5 size-3.5 shrink-0 cursor-pointer accent-app-accent disabled:cursor-not-allowed"
           />
           Add a talking intro &amp; outro
         </label>
-        {blocker && <p className="pl-5 text-xs text-app-muted">{blocker}</p>}
+        {checking && <p className="pl-5 text-xs text-app-muted">Checking for your photo…</p>}
+        {!checking && blocker && <p className="pl-5 text-xs text-app-muted">{blocker}</p>}
         {checked && costLine && <p className="pl-5 text-xs text-app-muted">{costLine}</p>}
       </div>
 
-      {photo && !replacing && (
+      {!checking && photo && !replacing && (
         <div className="flex items-center gap-3">
           <img src={photo.url} alt="Your face photo" className="size-16 shrink-0 rounded-full border border-app-border object-cover" />
           <div className="flex flex-wrap gap-2">
