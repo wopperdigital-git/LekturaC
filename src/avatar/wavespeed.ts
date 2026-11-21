@@ -94,8 +94,9 @@ async function fetchChecked(url: string, init: RequestInit, signal?: AbortSignal
   try {
     res = await fetch(url, { ...init, signal })
   } catch (err) {
-    // A cancel is not a failure to report: let it through for the caller to recognise.
-    if (signal?.aborted || isAbort(err)) throw err
+    // A cancel is not a failure to report: it always surfaces as an AbortError.
+    if (isAbort(err)) throw err
+    if (signal?.aborted) throw abortError()
     throw new WavespeedError('Could not reach WaveSpeed. Check your connection and try again.', 'unknown')
   }
   if (!res.ok) throw await errorFor(res)
@@ -110,13 +111,16 @@ async function send(path: string, init: RequestInit, signal?: AbortSignal): Prom
   return fetchChecked(`${WAVESPEED_URL}${path}`, { ...init, headers }, signal)
 }
 
-async function readData(res: Response): Promise<Record<string, unknown>> {
+async function readData(res: Response, signal?: AbortSignal): Promise<Record<string, unknown>> {
   try {
     const body: unknown = await res.json()
     const data = typeof body === 'object' && body !== null ? (body as { data?: unknown }).data : undefined
     if (typeof data === 'object' && data !== null) return data as Record<string, unknown>
-  } catch {
-    // Falls through to the error below.
+  } catch (err) {
+    // A cancel while the body streams is still a cancel.
+    if (isAbort(err)) throw err
+    if (signal?.aborted) throw abortError()
+    // Otherwise falls through to the error below.
   }
   throw new WavespeedError('WaveSpeed sent a reply the app could not read.', 'unknown')
 }
@@ -127,7 +131,7 @@ export async function uploadMedia(file: Blob, filename: string, signal?: AbortSi
   form.append('file', file, filename)
   // No Content-Type: the browser has to set the multipart boundary itself.
   const res = await send('/media/upload/binary', { method: 'POST', body: form }, signal)
-  const url = (await readData(res)).download_url
+  const url = (await readData(res, signal)).download_url
   if (typeof url !== 'string' || url === '') {
     throw new WavespeedError('WaveSpeed did not return the uploaded file.', 'unknown')
   }
@@ -148,7 +152,7 @@ export async function submitTalk(o: { imageUrl: string; audioUrl: string; signal
     },
     o.signal,
   )
-  const id = (await readData(res)).id
+  const id = (await readData(res, o.signal)).id
   if (typeof id !== 'string' || id === '') {
     throw new WavespeedError('WaveSpeed did not return a job id.', 'unknown')
   }
@@ -179,7 +183,7 @@ export async function waitForTalk(
     if (signal?.aborted) throw abortError()
     try {
       const res = await send(`/predictions/${encodeURIComponent(id)}/result`, { method: 'GET' }, signal)
-      const data = await readData(res)
+      const data = await readData(res, signal)
       const status = typeof data.status === 'string' ? data.status.toLowerCase() : ''
       if (status === 'completed') {
         const outputs = data.outputs
@@ -211,7 +215,10 @@ export async function downloadClip(url: string, signal?: AbortSignal): Promise<B
   const res = await fetchChecked(url, { method: 'GET' }, signal)
   try {
     return await res.blob()
-  } catch {
+  } catch (err) {
+    // A cancel while the body streams is still a cancel.
+    if (isAbort(err)) throw err
+    if (signal?.aborted) throw abortError()
     throw new WavespeedError('The clip could not be downloaded. Try again.', 'unknown')
   }
 }

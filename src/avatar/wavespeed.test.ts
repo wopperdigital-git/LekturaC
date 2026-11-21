@@ -208,6 +208,39 @@ describe('aborting', () => {
     expect((err as Error).name).toBe('AbortError')
   })
 
+  const abortErr = () => new DOMException('Aborted', 'AbortError')
+
+  it('stays an AbortError when aborted while the submit reply is being read', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.reject(abortErr()) })
+    const err = await submitTalk({ imageUrl: 'i', audioUrl: 'a' }).catch((e: unknown) => e)
+    expect(err).not.toBeInstanceOf(WavespeedError)
+    expect((err as Error).name).toBe('AbortError')
+  })
+
+  it('stays an AbortError when aborted while the clip is downloading', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, blob: () => Promise.reject(abortErr()) })
+    const err = await downloadClip('https://cdn/clip.mp4').catch((e: unknown) => e)
+    expect(err).not.toBeInstanceOf(WavespeedError)
+    expect((err as Error).name).toBe('AbortError')
+  })
+
+  it('turns any rejection after an abort into an AbortError', async () => {
+    const ctrl = new AbortController()
+    fetchMock.mockImplementationOnce(() => {
+      ctrl.abort()
+      return Promise.reject(new TypeError('network error'))
+    })
+    const err = await submitTalk({ imageUrl: 'i', audioUrl: 'a', signal: ctrl.signal }).catch((e: unknown) => e)
+    expect(err).not.toBeInstanceOf(WavespeedError)
+    expect((err as Error).name).toBe('AbortError')
+  })
+
+  it('ends polling on a 404 as a request error', async () => {
+    fetchMock.mockResolvedValue(json({ message: 'not found' }, 404))
+    await expect(waitForTalk('job1', undefined, { sleep: instantSleep })).rejects.toMatchObject({ kind: 'request', status: 404 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('does not poll on once aborted between polls', async () => {
     const ctrl = new AbortController()
     fetchMock.mockResolvedValue(json({ data: { status: 'processing' } }))
