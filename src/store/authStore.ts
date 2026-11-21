@@ -180,6 +180,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       configured: isCartesiaConfigured(),
     })
     if (voices.error) return { error: voices.error }
+    // The face photo for talking intros sits in a private bucket the RPC can't reach either, so it
+    // goes the same way: a failed removal stops here with the account intact. No photo, or a project
+    // without migration 0021 (no bucket), is "nothing to delete" and never blocks.
+    const uid = get().user?.id
+    if (uid) {
+      const { deleteFacePhoto, supabaseFacePorts } = await import('@/avatar/facePhoto')
+      const face = await deleteFacePhoto(supabaseFacePorts(client), uid)
+      if (face.error) return { error: face.error }
+    }
     // Server-side by necessity: the anon key cannot delete an auth.users row.
     // The RPC takes no argument and reads auth.uid(), so it can only ever
     // delete the caller's own account.
