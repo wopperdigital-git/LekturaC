@@ -28,13 +28,14 @@ CI (`.github/workflows/ci.yml`): typecheck, lint, test, build.
 - **Fixtures:** `engine/fixtures/cppDeck.ts` (`CPP_DECK`, one slide per arrangement) and `engine/fixtures/galleryDeck.ts` (`GALLERY_DECK`, one card per arrangement and size variant, ids like `g-section`, `g-termrows`; `galleryDeck.test.ts` pins each id resolves to its arrangement).
 - **Dev slide gallery** `/dev/slides` (`pages/DevSlidesPage.tsx`, dev builds only, no login): `?deck=gallery` (else `CPP_DECK`), `?theme=<id>`, `?style=expressive`, `?only=<card id>`, `?all=1`. It draws the read-only presenter path, not the editor.
 - **Not testable here, checked by hand:** the live editing DOM (`EditableText`, selection, zoom, pan, drag, drawing), two presenter windows, video encode, voice recording, the lesson player. Recent layout work was checked only on `/dev/slides`; the editor, thumbnails, Present, video and PPTX on it are unchecked.
-- **RLS/SQL** is hand-run: `supabase/tests/*.sql` (0009, 0010, 0012, 0014, 0015, 0016, 0017, 0018); all passed at their last run (latest 2026-11-06, after 0018).
+- **RLS/SQL** is hand-run: `supabase/tests/*.sql` (0009, 0010, 0012, 0014, 0015, 0016, 0017, 0018, 0021); all passed at their last run (latest 2026-11-06, after 0018). **0021's test is written but not yet run.**
 
 ## Environment
 
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (see `.env.example`). Absent → `supabaseConfigured` false, store methods no-op, `/login` explains; the app is unusable.
 - `VITE_ANTHROPIC_API_KEY`, `VITE_GROQ_API_KEY` (two chain links), `VITE_GEMINI_API_KEY`: build `PROVIDER_CHAIN` in `fallbackProvider.ts`. Any may be omitted; at least one required (`/new` checks on mount). **Baked into the client bundle by design** (no in-app key entry, no proxy). The Anthropic key is billed per token, so a deployed build is spendable.
 - `VITE_CARTESIA_API_KEY` (optional): voice cloning/preview/video narration. A full-account key in the bundle; see Voice.
+- `VITE_WAVESPEED_API_KEY` (optional): talking intro/outro (WaveSpeed InfiniteTalk, 480p). **Baked into the bundle by decision, and billed per second of video**, so a deployed build is spendable. Without it the video dialog's face step explains it is not set up and the video is made without the clips. See Talking intro & outro.
 - `VITE_PEXELS_API_KEY` (optional, 200 requests/hour): photo search. Without it decks get no photos and the image picker is paste-link only (`imagesConfigured` false).
 - **Users never see a key's variable name** outside `/new`'s and `/login`'s setup messages. User-facing copy lives in `lib/setupCopy.ts`; variable names go to the console (`warnMissingKey`). Tests assert no `VITE_` in user UI.
 - Accounts required: everything except `/login`, `/admin/login`, `/reset-password` is under `<RequireAuth>`. No guest mode.
@@ -261,6 +262,7 @@ Migrations in `supabase/migrations/`. RLS on deck tables is `owner_id = auth.uid
 | 0017 | `cloned_voices` | recording your own voice |
 | 0018 | lessons | posting/taking a lesson only |
 | 0019, 0020 | `admins`, `admin_overview(p_range)` | admin page only |
+| 0021 | `presentations.bookends`, private `face-photos` bucket | talking intro/outro only (own best-effort read/write, never `loadDeck`; written, not yet run) |
 
 - `parseAdjusts`/`parseNarration` map the `{}` column default back to `undefined` ("has the column" ≠ "was adjusted").
 - Title/theme are debounced (`scheduleSave`, 500ms); structural changes persist immediately via `persistCardsSync`.
@@ -298,6 +300,17 @@ Spec: `2026-09-27-narrated-video-design.md`. Narrates every slide, draws slides,
 - MP4 preferred, WebM fallback; `detectFormat()` runs before any Cartesia request so a browser that can't encode never spends credits.
 - **Save order is the safety rule** (`saveVideo`): upload → write record → remove old object if the path differs. Upload takes no `AbortSignal`, so it's the point of no return (`cancellable: false`).
 - Deleting a deck deletes the row, then its video. `delete_own_account()` orphans videos.
+
+### Talking intro & outro (`src/avatar/`)
+
+Spec: `2026-11-21-talking-intro-outro-design.md`. An optional lip-synced face clip (WaveSpeed InfiniteTalk 480p, from the user's photo and the narration audio) before slide 1 and after the last slide. Not a card edit: nothing here writes `cards` or calls the deck model.
+
+- **Pipeline** (`video/pipeline.ts`): segments are `[intro?, ...slides, outro?]`. The intro and outro are narrated first and their clips **start before the slides are narrated** (they take minutes), under an internal `AbortController` that follows the caller's signal and is aborted when the run ends. A `null` clip (any non-cancel failure) draws a **title card** and sets `faceFailed`, which becomes `Job.notice`; the video still saves. **`VideoRecord.slides` lists slides only, offset by the intro's length**, so lessons are unchanged (the outro plays after the last question).
+- **`wavespeed.ts` holds every WaveSpeed call.** `submitTalk` is billed per job and **never retried**, here or by a caller; polling and download repeat freely. **An abort stays an `AbortError`**, never a `WavespeedError`. The key is in the bundle by decision (a proxy would replace only this file). Cancelling still bills a submitted job; the dialog's cost line (`costLine.ts`) says so.
+- **Lazy:** `drawClip.ts` (mediabunny) and `talker.ts` are browser-only and reached only through `import('@/video/generate')`. `openClip` decodes a first picture, so a clip that cannot be decoded falls back to a title card before credits are spent. `clipFrames.ts` (pure) holds the placement rule: picture is clamped/held to the narration's length so sound and later slides keep their timing.
+- **Text** (`bookends.ts`, `bookendsRow.ts`, `bookendsStore.ts`): `null` = never edited (the starter is used), `''` = cleared on purpose (no clip). Never conflate them. Stored in `presentations.bookends` by **its own best-effort read/write** (never `loadDeck`'s select or the card upsert); failure sets `warning`, never `status: 'error'`. The store debounces 500 ms, flushes before loading another deck and on `beforeunload`, **`NarrationTab` flushes on unmount**, and it resets on its own `authStore` subscription (an import from `authStore` would be a cycle).
+- **Face photo** (`facePhoto.ts`): private `face-photos` bucket, one object at `<uid>/face.<ext>`, consent tick required to upload. **Deleted in `deleteAccount` before the RPC** (a failed removal stops the deletion). A list error counts as no photo, so a project without 0021 is never blocked.
+- **Video dialog** (`CloneVoiceModal`, section 3 `FaceStep.tsx`): `faceRequest` (`video/ui.ts`) decides `off` / `blocked` / `on` from the switch and `faceBlocker` at press time; only a face that was on and became impossible blocks. **Generate is disabled while the photo is still being checked.** Job tray rows come from `videoTimeline(p, withFace)` (adds an `Animating your intro & outro` stage).
 
 ## Background jobs (`src/jobs/`, `components/jobs/`)
 
