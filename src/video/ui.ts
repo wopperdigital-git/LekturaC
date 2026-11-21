@@ -15,6 +15,25 @@ export interface BlockerInput {
   voiceChosen: boolean
 }
 
+export interface BookendsReadyInput {
+  presentationId: string | null
+  /** Whether the app talks to a database at all (the intro and outro are read from it). */
+  hasDatabase: boolean
+  /** The bookends store has finished reading. */
+  loaded: boolean
+  /** The deck the bookends store holds. */
+  deckId: string | null
+}
+
+/**
+ * Whether the deck's saved intro and outro have been read, so the cost line and Generate use the
+ * user's words, not the starters. With no saved deck or no database there is nothing to wait for.
+ */
+export function bookendsReady(i: BookendsReadyInput): boolean {
+  if (i.presentationId === null || !i.hasDatabase) return true
+  return i.loaded && i.deckId === i.presentationId
+}
+
 /** Why Generate Presentation cannot be pressed, or `null`. The browser is named first: it is the hardest to fix. */
 export function generateBlocker(i: BlockerInput): string | null {
   if (!i.webCodecs) return 'This browser cannot encode video. Try a recent Chrome, Edge or Safari.'

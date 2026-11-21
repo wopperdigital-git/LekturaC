@@ -9,6 +9,7 @@ import { READING_SCRIPTS } from '@/voice/scripts'
 import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 import { useVoiceStore } from '@/voice/voiceStore'
 import { useBookendsStore } from '@/avatar/bookendsStore'
+import { supabaseConfigured } from '@/lib/supabaseClient'
 import { CloneVoiceModal } from './CloneVoiceModal'
 
 /**
@@ -182,13 +183,20 @@ describe('CloneVoiceModal', () => {
     expect(tagLabelled(render(), 'Generate video')).not.toContain('disabled=""')
   })
 
-  it("waits for this deck's intro and outro to be read before Generate is on", () => {
+  // The rule itself is `bookendsReady` (unit-tested in video/ui.test.ts); these two check the modal uses it,
+  // each in the environment where it can be seen: with a database the gate waits, without one it does not.
+  it.skipIf(!supabaseConfigured)("waits for this deck's intro and outro to be read before Generate is on", () => {
     stubEncoders()
     withVoice()
     Object.assign(useBookendsStore.getInitialState(), { deckId: 'other', loaded: true })
-    const html = render()
-    // Only meaningful where the modal talks to a database at all; without one there is nothing to wait for.
-    expect(tagLabelled(html, 'Generate video')).toContain('disabled=""')
+    expect(tagLabelled(render(), 'Generate video')).toContain('disabled=""')
+  })
+
+  it.skipIf(supabaseConfigured)('does not wait for the intro and outro when there is no database', () => {
+    stubEncoders()
+    withVoice()
+    Object.assign(useBookendsStore.getInitialState(), { deckId: 'other', loaded: false })
+    expect(tagLabelled(render(), 'Generate video')).not.toContain('disabled=""')
   })
 
   it('cannot generate in a browser without WebCodecs, and says so', () => {

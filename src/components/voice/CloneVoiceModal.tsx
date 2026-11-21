@@ -59,7 +59,7 @@ import { RecordingError, recordingSupport, startRecording, type Recorder, type R
 import { supabase } from '@/lib/supabaseClient'
 import { hasWebCodecs } from '@/video/format'
 import { loadVideo, supabasePorts, type VideoView } from '@/video/storage'
-import { canStartGenerate, faceBlocker, faceRequest, generateBlocker } from '@/video/ui'
+import { bookendsReady, canStartGenerate, faceBlocker, faceRequest, generateBlocker } from '@/video/ui'
 import { videoLength } from '@/video/library'
 import type { VideoDeck } from '@/video/generate'
 import { startVideoJob } from '@/jobs/start'
@@ -197,8 +197,8 @@ export function CloneVoiceModal({
   // that normally loads them may not be mounted.
   const bookends = useBookendsStore((s) => (s.deckId === deck.presentationId ? s.bookends : EMPTY_BOOKENDS))
   // Until this deck's intro and outro are read, the cost line and Generate would use starters, not the saved words.
-  const bookendsLoadedForThisDeck = useBookendsStore(
-    (s) => !deck.presentationId || supabase === null || (s.loaded && s.deckId === deck.presentationId),
+  const bookendsLoadedForThisDeck = useBookendsStore((s) =>
+    bookendsReady({ presentationId: deck.presentationId, hasDatabase: supabase !== null, loaded: s.loaded, deckId: s.deckId }),
   )
 
   useEffect(() => {

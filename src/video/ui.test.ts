@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canCancelVideo, canStartGenerate, faceBlocker, faceRequest, generateBlocker, stageRows } from './ui'
+import { bookendsReady, canCancelVideo, canStartGenerate, faceBlocker, faceRequest, generateBlocker, stageRows } from './ui'
 import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 
 const ok = { webCodecs: true, hasDeck: true, slideCount: 3, voiceChosen: true }
@@ -143,5 +143,24 @@ describe('faceRequest', () => {
       kind: 'on',
       bookends: { intro: 'Hi!', outro: 'Bye!' },
     })
+  })
+})
+
+describe('bookendsReady', () => {
+  const ready = { presentationId: 'p1', hasDatabase: true, loaded: true, deckId: 'p1' }
+
+  it("is ready once this deck's intro and outro are read", () => {
+    expect(bookendsReady(ready)).toBe(true)
+  })
+
+  it('waits while they are loading, or the store holds another deck', () => {
+    expect(bookendsReady({ ...ready, loaded: false })).toBe(false)
+    expect(bookendsReady({ ...ready, deckId: 'other' })).toBe(false)
+    expect(bookendsReady({ ...ready, deckId: null })).toBe(false)
+  })
+
+  it('has nothing to wait for without a saved deck or a database', () => {
+    expect(bookendsReady({ ...ready, presentationId: null, loaded: false, deckId: null })).toBe(true)
+    expect(bookendsReady({ ...ready, hasDatabase: false, loaded: false, deckId: null })).toBe(true)
   })
 })
