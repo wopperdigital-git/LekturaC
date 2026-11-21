@@ -13,7 +13,7 @@ const base: Job = {
     { id: 'write', label: 'Writing slides', state: 'active' },
     { id: 'save', label: 'Saving', state: 'pending' },
   ],
-  cancellable: true, error: null, resultDeckId: null, notice: null, editHref: '/new?draft=x',
+  cancellable: true, error: null, resultDeckId: null, notice: null, editHref: '/new?draft=x', retryLabel: null,
 }
 
 const render = (jobs: Job[], minimized = false, expanded = false) =>
@@ -59,6 +59,13 @@ describe('JobTrayView', () => {
     const html = render([{ ...base, kind: 'narration', title: 'Deck' }])
     expect(html).toContain('Writing scripts')
     expect(html).toContain('Cancel')
+  })
+
+  it('a failed face video job says what trying again bills', () => {
+    const label = 'Try again (WaveSpeed bills about $0.39 again)'
+    const html = render([{ ...base, kind: 'video', status: 'failed', error: 'x', editHref: null, retryLabel: label }])
+    expect(html).toContain('Try again (WaveSpeed bills about $0.39 again)')
+    expect(render([{ ...base, kind: 'video', status: 'failed', error: 'x', editHref: null }])).toContain('>Try again<')
   })
 
   it('a failed quiz job offers only Try again', () => {

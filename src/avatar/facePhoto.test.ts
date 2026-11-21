@@ -134,10 +134,19 @@ describe('deleteFacePhoto', () => {
     expect(ports.remove).not.toHaveBeenCalled()
   })
 
-  it('treats a list error (such as a missing bucket) as nothing to delete', async () => {
+  it('treats a missing bucket as nothing to delete', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { ports } = fakePorts([], { list: vi.fn(async () => ({ names: [], error: { message: 'Bucket not found' } })) })
     expect(await deleteFacePhoto(ports, 'u')).toEqual({ error: null })
+    expect(ports.remove).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('reports any other list error, so a photo is not orphaned', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { ports } = fakePorts([], { list: vi.fn(async () => ({ names: [], error: { message: 'permission denied' } })) })
+    const res = await deleteFacePhoto(ports, 'u')
+    expect(res.error).toMatch(/face photo/i)
     expect(ports.remove).not.toHaveBeenCalled()
     warn.mockRestore()
   })

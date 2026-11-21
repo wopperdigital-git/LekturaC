@@ -6,6 +6,7 @@ import { startNarrationJob } from '@/jobs/start'
 import { useJobsStore } from '@/jobs/jobsStore'
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
 import { useBookendsStore } from '@/avatar/bookendsStore'
+import { clipSeconds } from '@/avatar/costLine'
 import { EMPTY_BOOKENDS, clipCost, formatUsd, starterIntro, starterOutro } from '@/avatar/bookends'
 import { Button } from '@/components/ui/Button'
 import { GenerateScriptsModal } from '@/components/narrate/GenerateScriptsModal'
@@ -296,7 +297,7 @@ function BookendBox({
   disabled: boolean
   onChange: (value: string) => void
 }) {
-  const seconds = speakingSeconds(value)
+  const seconds = clipSeconds(value)
   return (
     <div>
       <label className="mb-1 block text-[11px] font-semibold text-app-foreground" htmlFor={`bookend-${label}`}>

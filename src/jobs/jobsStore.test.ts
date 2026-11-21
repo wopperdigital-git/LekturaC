@@ -145,6 +145,15 @@ describe('jobsStore', () => {
     expect(job('quiz')?.progress).toBe(0)
   })
 
+  it('copies the retry label from the spec to the job, and has none otherwise', () => {
+    const a = deferredSpec({ retryLabel: 'Try again (it costs money)' })
+    useJobsStore.getState().start(a.spec)
+    expect(job('quiz')?.retryLabel).toBe('Try again (it costs money)')
+    useJobsStore.getState().reset()
+    useJobsStore.getState().start(deferredSpec().spec)
+    expect(job('quiz')?.retryLabel).toBeNull()
+  })
+
   it('retry re-runs the same spec with a fresh signal', async () => {
     const a = deferredSpec()
     useJobsStore.getState().start(a.spec)

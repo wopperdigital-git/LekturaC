@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { supabase } from '@/lib/supabaseClient'
+import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 import {
   FACE_TYPES,
   deleteFacePhoto,
@@ -21,6 +22,8 @@ import {
 */
 
 const CONSENT = 'This is my face, or I have permission to use it.'
+const DISCLOSURE =
+  'To make the clips, your photo and the intro and outro audio are sent to WaveSpeed, which keeps them for 7 days.'
 const REMOVE_FAILED = 'Your face photo could not be removed. Try again.'
 
 export function FaceStep({
@@ -118,6 +121,7 @@ export function FaceStep({
         {checking && <p className="pl-5 text-xs text-app-muted">Checking for your photo…</p>}
         {!checking && blocker && <p className="pl-5 text-xs text-app-muted">{blocker}</p>}
         {checked && costLine && <p className="pl-5 text-xs text-app-muted">{costLine}</p>}
+        {blocker !== FACE_NOT_SET_UP && <p className="pl-5 text-xs text-app-muted">{DISCLOSURE}</p>}
       </div>
 
       {!checking && photo && !replacing && (

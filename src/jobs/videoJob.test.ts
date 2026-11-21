@@ -36,7 +36,7 @@ describe('videoJobSpec', () => {
     const { promise } = run(async () => ({ status: 'done', view: {} as never, faceFailed: true }))
     await expect(promise).resolves.toEqual({
       deckId: 'd1',
-      notice: 'The talking clip could not be made, so a title card was used instead.',
+      notice: 'A talking clip could not be made, so a title card was used instead.',
     })
   })
 
@@ -74,5 +74,16 @@ describe('videoJobSpec', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(spec.describe(new VideoError('narrating', 'Narrating slide 3 failed: quota'))).toBe('Narrating slide 3 failed: quota')
     expect(spec.describe(new Error('boom'))).toBe('Something went wrong. Try again.')
+  })
+
+  it('says what a retry bills when there are talking clips, and says nothing without', () => {
+    // 25 words is 10 s ($0.30); 'Hi' is a 1 s clip billed at the 3 s minimum ($0.09).
+    const ten = Array.from({ length: 25 }, () => 'word').join(' ')
+    const withFace = videoJobSpec({ ...input, face: { bookends: { intro: ten, outro: 'Hi' } } }, { generate: async () => ({ status: 'cancelled' }) })
+    expect(withFace.retryLabel).toBe('Try again (WaveSpeed bills about $0.39 again)')
+    const oneEnd = videoJobSpec({ ...input, face: { bookends: { intro: ten, outro: '' } } }, { generate: async () => ({ status: 'cancelled' }) })
+    expect(oneEnd.retryLabel).toBe('Try again (WaveSpeed bills about $0.30 again)')
+    const without = videoJobSpec(input, { generate: async () => ({ status: 'cancelled' }) })
+    expect(without.retryLabel).toBeUndefined()
   })
 })

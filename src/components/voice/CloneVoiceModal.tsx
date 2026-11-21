@@ -196,6 +196,10 @@ export function CloneVoiceModal({
   // The dialog loads the intro and outro itself: opened from the Create & export menu, the Narrate tab
   // that normally loads them may not be mounted.
   const bookends = useBookendsStore((s) => (s.deckId === deck.presentationId ? s.bookends : EMPTY_BOOKENDS))
+  // Until this deck's intro and outro are read, the cost line and Generate would use starters, not the saved words.
+  const bookendsLoadedForThisDeck = useBookendsStore(
+    (s) => !deck.presentationId || supabase === null || (s.loaded && s.deckId === deck.presentationId),
+  )
 
   useEffect(() => {
     if (deck.presentationId) void useBookendsStore.getState().load(deck.presentationId)
@@ -470,7 +474,7 @@ export function CloneVoiceModal({
     voiceChosen: choice.voiceId !== null,
   })
   // Until the saved photo is known, the face step cannot say what Generate would do.
-  const canGenerate = !checkingPhoto && canStartGenerate({
+  const canGenerate = !checkingPhoto && bookendsLoadedForThisDeck && canStartGenerate({
     configured,
     blocker,
     ready,

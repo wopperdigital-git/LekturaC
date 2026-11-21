@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { faceCostLine } from './costLine'
+import { clipSeconds, faceCostLine } from './costLine'
 
 // 150 words per minute: 25 words is 10 s, 5 words is 2 s (billed as the 3 s minimum).
 const words = (n: number) => Array.from({ length: n }, () => 'word').join(' ')
@@ -25,5 +25,14 @@ describe('faceCostLine', () => {
 
   it('has nothing to say when both boxes are empty', () => {
     expect(faceCostLine('', '  ')).toBeNull()
+  })
+})
+
+describe('clipSeconds', () => {
+  it('is at least a second for a box with words, and nothing for a blank one', () => {
+    expect(clipSeconds('Hi')).toBe(1)
+    expect(clipSeconds('  ')).toBe(0)
+    expect(clipSeconds('')).toBe(0)
+    expect(clipSeconds(words(25))).toBe(10)
   })
 })

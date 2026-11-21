@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 import { FaceStep } from './FaceStep'
 
 /**
@@ -57,7 +58,7 @@ describe('FaceStep', () => {
   it('shows the cost line when it is given, and not otherwise', () => {
     const line = 'Adds about 2–5 min and $0.45 (WaveSpeed). It still bills if you cancel.'
     expect(render({ photo: PHOTO, checked: true, costLine: line })).toContain(line)
-    expect(render({ photo: PHOTO, checked: true })).not.toContain('WaveSpeed')
+    expect(render({ photo: PHOTO, checked: true })).not.toContain('(WaveSpeed)')
   })
 
   it('while the saved photo is being looked up, hides the picker and thumbnail, shows no blocker and keeps the switch off', () => {
@@ -73,5 +74,15 @@ describe('FaceStep', () => {
 
   it('never names a key variable', () => {
     expect(render()).not.toContain('VITE_')
+  })
+
+  const DISCLOSURE =
+    'To make the clips, your photo and the intro and outro audio are sent to WaveSpeed, which keeps them for 7 days.'
+
+  it('says the photo and audio go to WaveSpeed, unless talking intros are not set up', () => {
+    expect(render()).toContain(DISCLOSURE)
+    expect(render({ photo: PHOTO, checked: true })).toContain(DISCLOSURE)
+    expect(render({ blocker: 'Add a photo of your face first.' })).toContain(DISCLOSURE)
+    expect(render({ blocker: FACE_NOT_SET_UP })).not.toContain('sent to WaveSpeed')
   })
 })

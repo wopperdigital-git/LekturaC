@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS } from '@/voice/settingsRow'
 import { READING_SCRIPTS } from '@/voice/scripts'
 import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 import { useVoiceStore } from '@/voice/voiceStore'
+import { useBookendsStore } from '@/avatar/bookendsStore'
 import { CloneVoiceModal } from './CloneVoiceModal'
 
 /**
@@ -31,6 +32,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   Object.assign(useVoiceStore.getInitialState(), { loaded: false })
+  Object.assign(useBookendsStore.getInitialState(), { deckId: null, loaded: false })
 })
 
 // The modal only counts the slides here; drawing them is the browser-only code in src/video.
@@ -55,6 +57,8 @@ const stubEncoders = () => {
 const withVoice = () => {
   useVoiceStore.setState({ settings: { ...DEFAULT_SETTINGS, voiceId: 'v1', voiceName: 'Skylar', voiceSource: 'premade' } })
   Object.assign(useVoiceStore.getInitialState(), { loaded: true })
+  // Likewise the intro and outro: Generate waits until they have been read for this deck.
+  Object.assign(useBookendsStore.getInitialState(), { deckId: 'p1', loaded: true })
 }
 
 /** The opening tag of the element with this `aria-label`; fails loudly if there is none, so a
@@ -176,6 +180,15 @@ describe('CloneVoiceModal', () => {
     stubEncoders()
     withVoice()
     expect(tagLabelled(render(), 'Generate video')).not.toContain('disabled=""')
+  })
+
+  it("waits for this deck's intro and outro to be read before Generate is on", () => {
+    stubEncoders()
+    withVoice()
+    Object.assign(useBookendsStore.getInitialState(), { deckId: 'other', loaded: true })
+    const html = render()
+    // Only meaningful where the modal talks to a database at all; without one there is nothing to wait for.
+    expect(tagLabelled(html, 'Generate video')).toContain('disabled=""')
   })
 
   it('cannot generate in a browser without WebCodecs, and says so', () => {

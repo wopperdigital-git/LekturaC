@@ -7,7 +7,7 @@ import { clipCost, formatUsd, waitMinutes } from './bookends'
 */
 
 /** Seconds of speech for one box; a box with words is at least a second, so it is never priced at nothing. */
-function clipSeconds(text: string): number {
+export function clipSeconds(text: string): number {
   if (text.trim() === '') return 0
   return Math.max(1, speakingSeconds(text))
 }

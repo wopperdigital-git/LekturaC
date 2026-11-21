@@ -67,8 +67,13 @@ export async function readFacePhoto(ports: FacePorts, uid: string): Promise<Face
   }
 }
 
+/** The storage error for a bucket that does not exist: migration 0021 has not been run. */
+function isBucketMissing(err: PortError | null | undefined): boolean {
+  return /bucket not found/i.test(err?.message ?? '')
+}
+
 function describeSaveFailure(err: PortError | null | undefined): string {
-  if (/bucket not found/i.test(err?.message ?? '')) return 'Run migration 0021 in Supabase.'
+  if (isBucketMissing(err)) return 'Run migration 0021 in Supabase.'
   return 'The photo could not be saved. Try again.'
 }
 
@@ -112,17 +117,19 @@ export async function saveFacePhoto(
 }
 
 /**
- * Removes every stored face photo (account deletion). A listing that errors counts as "nothing to
- * delete": before migration 0021 the bucket does not exist, and that must not block deleting an
- * account that never had a photo. Only a failed removal of photos that were listed is an error.
+ * Removes every stored face photo (account deletion). Only a missing bucket counts as "nothing to
+ * delete": before migration 0021 it does not exist, and that must not block deleting an account that
+ * never had a photo. Any other listing error is a failure, or a photo could be left behind with the
+ * account gone. A failed removal of photos that were listed is an error too.
  */
 export async function deleteFacePhoto(ports: FacePorts, uid: string): Promise<{ error: string | null }> {
   const failed = { error: 'Your face photo could not be deleted, so the account was not deleted. Try again.' }
   try {
     const listed = await ports.list(uid)
     if (listed.error) {
-      console.warn('[avatar] could not list face photos, treating as none:', listed.error)
-      return { error: null }
+      if (isBucketMissing(listed.error)) return { error: null }
+      console.warn('[avatar] could not list face photos:', listed.error)
+      return failed
     }
     const paths = listed.names.filter(isFaceName).map((n) => `${uid}/${n}`)
     if (paths.length === 0) return { error: null }

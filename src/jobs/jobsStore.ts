@@ -32,6 +32,8 @@ export interface Job {
   notice: string | null
   /** Where "Edit brief" goes for a failed deck job; null otherwise. */
   editHref: string | null
+  /** Words for "Try again" when running again costs something; null for the plain label. */
+  retryLabel: string | null
 }
 
 export interface JobReport {
@@ -51,6 +53,8 @@ export interface JobSpec {
   title: string
   timeline: StageEntry[]
   editHref?: string
+  /** Replaces "Try again" on a failed job whose retry would cost money again. */
+  retryLabel?: string
   /** Resolves with the deck the result belongs to (and optionally a notice to show with it); rejects on failure or cancel. */
   run(ctx: JobContext): Promise<{ deckId: string; notice?: string }>
   /** Words for a failure, shown in the panel. */
@@ -104,6 +108,7 @@ export const useJobsStore = create<JobsState>()((set, get) => {
       resultDeckId: null,
       notice: null,
       editHref: spec.editHref ?? null,
+      retryLabel: spec.retryLabel ?? null,
     }
     set({ jobs: { ...get().jobs, [spec.kind]: job } })
     void execute(run)

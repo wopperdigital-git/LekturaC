@@ -93,7 +93,7 @@ export function JobRow({ job, actions }: { job: Job; actions: JobActions }) {
               </button>
             )}
             <button type="button" onClick={() => actions.retry(job.kind)} className="rounded-app bg-app-accent px-2 py-1 text-xs font-medium text-app-accent-foreground hover:opacity-90">
-              Try again
+              {job.retryLabel ?? 'Try again'}
             </button>
           </div>
         </>

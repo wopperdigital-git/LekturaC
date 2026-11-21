@@ -1,8 +1,8 @@
 -- Talking intro & outro: a lip-synced face clip before slide 1 and after the last slide of the
 -- narrated video.
 --
--- `presentations.bookends` holds the settings and finished clips for both ends of one deck.
--- Its shape is owned by the app (src/video), not by SQL; `{}` means no bookends.
+-- `presentations.bookends` holds `{intro?, outro?}`: the text spoken in the talking intro and outro
+-- of one deck. Its shape is owned by the app (src/avatar), not by SQL; `{}` means never edited.
 --
 -- Gates ONLY the talking intro/outro: the app writes `bookends` in its own best-effort update
 -- (never through the card upsert), so a project that has not run this migration still saves and
