@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { Card } from '@/engine/contentBlocks'
+import { useBookendsStore } from '@/avatar/bookendsStore'
+import { usePresentationStore } from '@/store/presentationStore'
 import { NarrationTab } from './NarrationTab'
 
 /**
@@ -131,5 +133,54 @@ describe('NarrationTab', () => {
     expect(tag).toContain('disabled=""')
     expect(tag).toContain('Cartesia key')
     expect(html).not.toContain('VITE_')
+  })
+})
+
+describe('NarrationTab intro and outro', () => {
+  const bookendsInitial = { ...useBookendsStore.getInitialState() }
+  const deckInitial = { title: usePresentationStore.getInitialState().title }
+
+  function setStores(bookends: { intro: string | null; outro: string | null }, title: string, warning: string | null = null) {
+    Object.assign(useBookendsStore.getInitialState(), { bookends, warning })
+    Object.assign(usePresentationStore.getInitialState(), { title })
+  }
+
+  afterEach(() => {
+    Object.assign(useBookendsStore.getInitialState(), bookendsInitial)
+    Object.assign(usePresentationStore.getInitialState(), deckInitial)
+  })
+
+  it('has an Intro & outro section, with or without a slide selected', () => {
+    for (const cardId of ['a', null]) {
+      const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={cardId} />)
+      expect(html).toContain('<details')
+      expect(html).toContain('Intro &amp; outro')
+      expect(html).toContain('Spoken over your face before the first slide and after the last. Leave a box empty for no clip.')
+    }
+  })
+
+  it('shows the starter for a never-edited intro, and No clip for a cleared outro', () => {
+    setStores({ intro: null, outro: '' }, 'Volcanoes')
+    const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="a" />)
+    expect(html).toContain("Hi! Today we&#x27;re looking at Volcanoes. Let&#x27;s get started.")
+    expect(html).toContain('No clip')
+    // The intro has words, so it carries a price line and only the outro says No clip.
+    expect(html).toContain('about $0.12')
+    expect(html.match(/No clip/g)).toHaveLength(1)
+  })
+
+  it('labels the two boxes and gives each three rows', () => {
+    setStores({ intro: 'Hello', outro: 'Bye' }, 'Volcanoes')
+    const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={null} />)
+    expect(tagLabelled(html, 'Intro')).toContain('rows="3"')
+    expect(tagLabelled(html, 'Outro')).toContain('rows="3"')
+    expect(html).toContain('>Hello</textarea>')
+    expect(html).toContain('>Bye</textarea>')
+  })
+
+  it('shows the store warning as the tab error', () => {
+    setStores({ intro: null, outro: null }, 'Volcanoes', 'Your intro and outro could not be saved.')
+    const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={null} />)
+    expect(html).toContain('Your intro and outro could not be saved.')
   })
 })

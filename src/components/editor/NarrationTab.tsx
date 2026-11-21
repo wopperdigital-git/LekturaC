@@ -5,6 +5,8 @@ import { hasValidTargets, isResettable, narrationStatus, type NarrationStatus } 
 import { startNarrationJob } from '@/jobs/start'
 import { useJobsStore } from '@/jobs/jobsStore'
 import { formatDuration, speakingSeconds, wordCount } from '@/lib/speakingTime'
+import { useBookendsStore } from '@/avatar/bookendsStore'
+import { EMPTY_BOOKENDS, clipCost, formatUsd, starterIntro, starterOutro } from '@/avatar/bookends'
 import { Button } from '@/components/ui/Button'
 import { GenerateScriptsModal } from '@/components/narrate/GenerateScriptsModal'
 import { CloneVoiceModal } from '@/components/voice/CloneVoiceModal'
@@ -62,6 +64,15 @@ export function NarrationTab({
   const job = useJobsStore((s) => (s.jobs.narration && s.jobs.narration.deckId === presentationId ? s.jobs.narration : null))
   const generating = job?.status === 'running'
 
+  // The intro and outro text for the open deck. Until this deck's text has loaded, show the
+  // starters read-only: an edit then would have nowhere to go.
+  const bookendsDeckId = useBookendsStore((s) => s.deckId)
+  const bookendsLoaded = useBookendsStore((s) => s.loaded)
+  const storedBookends = useBookendsStore((s) => s.bookends)
+  const bookendsWarning = useBookendsStore((s) => s.warning)
+  const bookendsMine = bookendsDeckId === presentationId
+  const bookends = bookendsMine ? storedBookends : EMPTY_BOOKENDS
+
   const [error, setError] = useState<string | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
@@ -70,6 +81,19 @@ export function NarrationTab({
   useEffect(() => {
     if (job?.status === 'done') useJobsStore.getState().dismiss('narration')
   }, [job?.status])
+
+  useEffect(() => {
+    if (presentationId) void useBookendsStore.getState().load(presentationId)
+  }, [presentationId])
+
+  // `beforeunload` does not fire when the user only navigates away inside the app, so an
+  // edit made just before leaving would wait on the 500 ms timer.
+  useEffect(
+    () => () => {
+      void useBookendsStore.getState().flush()
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!openVoice) return
@@ -152,6 +176,33 @@ export function NarrationTab({
         </div>
       )}
 
+      <div className="scrollbar-subtle max-h-[60%] shrink-0 overflow-y-auto border-b border-app-border px-3 py-2.5">
+        <details>
+          <summary className="cursor-pointer text-[11px] font-semibold text-app-foreground">Intro &amp; outro</summary>
+          <div className="mt-2 space-y-3">
+            <BookendBox
+              label="Intro"
+              value={bookends.intro ?? starterIntro(title)}
+              disabled={!(bookendsMine && bookendsLoaded)}
+              onChange={(value) => useBookendsStore.getState().set({ intro: value })}
+            />
+            <BookendBox
+              label="Outro"
+              value={bookends.outro ?? starterOutro(title)}
+              disabled={!(bookendsMine && bookendsLoaded)}
+              onChange={(value) => useBookendsStore.getState().set({ outro: value })}
+            />
+            <p className="text-[11px] text-app-muted">
+              Spoken over your face before the first slide and after the last. Leave a box empty for no clip.
+            </p>
+          </div>
+        </details>
+        {/* Outside the details so a failed save is seen with the section closed. It is not in
+            `shownError` below, so the existing save > job > generation order stays true and a
+            job's Try again is never hidden by it. */}
+        {bookendsWarning && <p className="mt-2 text-xs font-medium text-app-danger-text">{bookendsWarning}</p>}
+      </div>
+
       {card ? (
         <div className="flex min-h-0 flex-1 flex-col px-3 pt-2.5">
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -229,6 +280,40 @@ export function NarrationTab({
           onClose={() => setVoiceOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+/** One of the two bookend boxes: a labelled textarea, and its length and price (or "No clip"). */
+function BookendBox({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string
+  value: string
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const seconds = speakingSeconds(value)
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-semibold text-app-foreground" htmlFor={`bookend-${label}`}>
+        {label}
+      </label>
+      <textarea
+        id={`bookend-${label}`}
+        value={value}
+        rows={3}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="scrollbar-subtle min-h-0 w-full resize-none rounded-app border border-app-border bg-app-background p-3 text-sm leading-relaxed text-app-foreground outline-none focus:border-app-accent disabled:opacity-60"
+      />
+      <p className="mt-1 text-[11px] text-app-muted">
+        {value.trim() === '' ? 'No clip' : `~${formatDuration(seconds)} · about ${formatUsd(clipCost(seconds))}`}
+      </p>
     </div>
   )
 }
