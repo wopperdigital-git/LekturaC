@@ -45,7 +45,13 @@ export function createTalker(o: { photoUrl: string }): {
         const id = await submitTalk({ imageUrl, audioUrl, signal })
         const clipUrl = await waitForTalk(id, signal)
         // A clip nobody can decode comes back `null`, and a title card takes its place.
-        return await openClip(await downloadClip(clipUrl, signal))
+        const clip = await openClip(await downloadClip(clipUrl, signal))
+        // A cancel during the decode check: nobody will take this clip, so free it.
+        if (signal.aborted) {
+          clip?.dispose()
+          throw new DOMException('Aborted', 'AbortError')
+        }
+        return clip
       } catch (err) {
         if (isAbort(err, signal)) throw err
         console.warn('[avatar]', err)

@@ -22,6 +22,9 @@ export interface ClipSlot {
 /**
  * The slot for one source frame. `isLast` marks the last frame that starts inside the segment: it is
  * stretched (or clamped) so it ends exactly at the segment end; any other frame is only clamped.
+ * `origin` is the clip's first timestamp (0 for most clips; an edit list can make it positive or
+ * negative): it is subtracted, so the first picture always lands on `segmentStart` with no gap and
+ * no overlap with what comes before.
  */
 export function clipSlot(
   frame: ClipFrame,
@@ -29,11 +32,13 @@ export function clipSlot(
   segmentStart: number,
   segmentSeconds: number,
   isLast: boolean,
+  origin = 0,
 ): ClipSlot {
-  const room = segmentSeconds - frame.timestamp
+  const at = frame.timestamp - origin
+  const room = segmentSeconds - at
   return {
     index,
-    timestamp: segmentStart + frame.timestamp,
+    timestamp: segmentStart + at,
     duration: isLast ? room : Math.min(frame.duration, room),
   }
 }
@@ -44,9 +49,13 @@ export function clipFrameSlots(
   segmentStart: number,
   segmentSeconds: number,
 ): ClipSlot[] {
+  if (frames.length === 0) return []
+  const origin = frames[0].timestamp
   const kept: number[] = []
   for (let i = 0; i < frames.length; i++) {
-    if (frames[i].timestamp < segmentSeconds) kept.push(i)
+    if (frames[i].timestamp - origin < segmentSeconds) kept.push(i)
   }
-  return kept.map((index, n) => clipSlot(frames[index], index, segmentStart, segmentSeconds, n === kept.length - 1))
+  return kept.map((index, n) =>
+    clipSlot(frames[index], index, segmentStart, segmentSeconds, n === kept.length - 1, origin),
+  )
 }

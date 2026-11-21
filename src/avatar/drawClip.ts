@@ -36,6 +36,15 @@ export async function openClip(blob: Blob): Promise<DecodedClip | null> {
       return null
     }
     const sink = new CanvasSink(track)
+    // canDecode() only checks the codec settings. Decoding the first picture is what shows the data
+    // can be read, and a clip that fails here is a title card, not a failed video after credits are spent.
+    const frames = sink.canvases()
+    const first = await frames.next()
+    await frames.return()
+    if (first.done) {
+      input.dispose()
+      return null
+    }
     return { duration, frames: () => sink.canvases(), dispose: () => input.dispose() }
   } catch (err) {
     console.warn('[avatar] the clip could not be read:', err)
@@ -64,8 +73,10 @@ export async function encodeClip(o: {
   const ctx = target.getContext('2d')
   if (!ctx) throw new Error('could not draw the talking clip')
 
+  // The clip's first timestamp, known once its first frame arrives (see clipSlot's `origin`).
+  let origin = 0
   const emit = async (frame: DecodedFrame, index: number, isLast: boolean) => {
-    const slot = clipSlot(frame, index, o.startSeconds, durationSeconds, isLast)
+    const slot = clipSlot(frame, index, o.startSeconds, durationSeconds, isLast, origin)
     const { width: sw, height: sh } = frame.canvas
     const scale = frameScale(sw, sh, target.width, target.height)
     const w = sw * scale
@@ -81,7 +92,8 @@ export async function encodeClip(o: {
   for await (const frame of clip.frames()) {
     if (o.signal.aborted) throw new DOMException('Aborted', 'AbortError')
     const here = index++
-    if (frame.timestamp >= durationSeconds) break // the rest is past the segment
+    if (here === 0) origin = frame.timestamp
+    if (frame.timestamp - origin >= durationSeconds) break // the rest is past the segment
     if (pending) await emit(pending.frame, pending.index, false)
     pending = { frame, index: here }
   }
