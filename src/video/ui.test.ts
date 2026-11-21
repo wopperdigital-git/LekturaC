@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { canCancelVideo, canStartGenerate, generateBlocker, stageRows } from './ui'
+import { canCancelVideo, canStartGenerate, faceBlocker, generateBlocker, stageRows } from './ui'
+import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 
 const ok = { webCodecs: true, hasDeck: true, slideCount: 3, voiceChosen: true }
 
@@ -37,6 +38,46 @@ describe('stageRows', () => {
 
   it('shows no count for a single-step stage', () => {
     expect(stageRows({ stage: 'uploading', done: 0, total: 1 })[3].detail).toBeNull()
+  })
+})
+
+describe('stageRows with the face', () => {
+  it('adds the animating row second, only when the face is on', () => {
+    const rows = stageRows(null, true)
+    expect(rows.map((r) => r.stage)).toEqual(['narrating', 'animating', 'rendering', 'encoding', 'uploading'])
+    expect(rows[1].label).toBe('Animating your intro & outro')
+    expect(stageRows(null)).toHaveLength(4)
+    expect(stageRows(null, false).map((r) => r.stage)).not.toContain('animating')
+  })
+
+  it('marks narrating done and animating active with its count', () => {
+    const rows = stageRows({ stage: 'animating', done: 1, total: 2 }, true)
+    expect(rows.map((r) => r.state)).toEqual(['done', 'active', 'pending', 'pending', 'pending'])
+    expect(rows[1].detail).toBe('1/2')
+  })
+})
+
+describe('faceBlocker', () => {
+  const good = { configured: true, hasPhoto: true, introText: 'Hi', outroText: '' }
+
+  it('is null when set up, with a photo and some text', () => {
+    expect(faceBlocker(good)).toBeNull()
+    expect(faceBlocker({ ...good, introText: '', outroText: 'Bye' })).toBeNull()
+  })
+
+  it('names the blockers in order', () => {
+    const none = { configured: false, hasPhoto: false, introText: '', outroText: '' }
+    expect(faceBlocker(none)).toBe(FACE_NOT_SET_UP)
+    expect(faceBlocker({ ...none, configured: true })).toBe('Add a photo of your face first.')
+    expect(faceBlocker({ ...none, configured: true, hasPhoto: true })).toBe(
+      'Write an intro or an outro in the Narrate tab first.',
+    )
+  })
+
+  it('counts whitespace as no text', () => {
+    expect(faceBlocker({ ...good, introText: '  \n', outroText: ' ' })).toBe(
+      'Write an intro or an outro in the Narrate tab first.',
+    )
   })
 })
 

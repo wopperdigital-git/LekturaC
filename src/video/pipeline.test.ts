@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { VideoError } from './errors'
-import { generateVideo, type Clip, type PipelineDeps, type Progress } from './pipeline'
+import {
+  generateVideo,
+  type BookendDeps,
+  type Clip,
+  type PipelineBookends,
+  type PipelineDeps,
+  type Progress,
+} from './pipeline'
 import type { VideoRecord } from './videoRecord'
 
 const clip = (duration: number, numberOfChannels = 1): Clip => ({ duration, numberOfChannels })
@@ -60,7 +67,7 @@ describe('generateVideo: the happy path', () => {
   it('narrates, then draws and encodes each slide in order, then finishes and saves', async () => {
     const { log, run } = setup()
     const result = await run(['A', '   '])
-    expect(result).toEqual({ status: 'done', record: { ...RECORD, durationSeconds: 6 } })
+    expect(result).toEqual({ status: 'done', record: { ...RECORD, durationSeconds: 6 }, faceFailed: false })
     expect(log).toEqual([
       'narrate A',
       'silence 4 1',
@@ -296,5 +303,265 @@ describe('generateVideo: slide timings', () => {
     const err = await run(['hi', 'there'], undefined, ['only-one']).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(RangeError)
     expect(log).toEqual([])
+  })
+})
+
+/* ---- face intro and outro ---- */
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve: (v: T) => void
+  reject: (e: unknown) => void
+}
+function deferred<T>(): Deferred<T> {
+  let resolve!: (v: T) => void
+  let reject!: (e: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+type Talk = { id: string }
+
+/** The plain setup, plus bookend fakes. Intro audio is 3 s and outro audio 2 s; `talk` resolves at once unless told otherwise. */
+function bookendSetup(bookends: PipelineBookends = { intro: 'Hello', outro: 'Bye' }) {
+  const base = setup()
+  const { deps, log, controller } = base
+  const intro = clip(3)
+  const outro = clip(2)
+  let drawTitleCalls = 0
+  let talkResult: (file: Blob, signal: AbortSignal) => Promise<Talk | null> = async () => ({ id: 'clip' })
+  const bookendDeps: BookendDeps<Clip, Talk> = {
+    narrateWithFile: async (text) => {
+      log.push(`narrateWithFile:${text === 'Hello' ? 'intro' : 'outro'}`)
+      return { audio: text === 'Hello' ? intro : outro, file: new Blob([text]) }
+    },
+    talk: (file, signal) => {
+      log.push('talk')
+      return talkResult(file, signal)
+    },
+    encodeTalk: async (_clip, start, duration) => {
+      log.push(`encodeTalk(${start},${duration})`)
+    },
+    drawTitleCard: async () => {
+      drawTitleCalls++
+      log.push('title')
+    },
+  }
+  const full: PipelineDeps<Clip, Talk> = { ...deps, bookends: bookendDeps }
+  full.narrate = async (text) => {
+    log.push(`narrate:${text}`)
+    return clip(text === 'A' ? 2 : 4)
+  }
+  // An explicit third argument (even `undefined`) replaces the default bookends.
+  const run = (texts: string[], onProgress?: (p: Progress) => void, ...override: (PipelineBookends | undefined)[]) =>
+    generateVideo<Clip, Talk>(
+      {
+        texts,
+        cardIds: texts.map((_, i) => String.fromCharCode(97 + i)),
+        signal: controller.signal,
+        onProgress,
+        bookends: override.length > 0 ? override[0] : bookends,
+      },
+      full,
+    )
+  return {
+    deps: full,
+    bookendDeps,
+    log,
+    controller,
+    run,
+    drawTitleCalls: () => drawTitleCalls,
+    setTalk: (fn: typeof talkResult) => {
+      talkResult = fn
+    },
+  }
+}
+
+describe('generateVideo: bookends', () => {
+  it('bookends off makes zero talk and narrateWithFile calls', async () => {
+    for (const b of [undefined, { intro: '', outro: '  ' }]) {
+      const { log, run } = bookendSetup()
+      const result = await run(['A', 'B'], undefined, b)
+      expect(result.status).toBe('done')
+      expect(log.filter((l) => l === 'talk' || l.startsWith('narrateWithFile'))).toEqual([])
+    }
+  })
+
+  it('refuses an intro with no way to make one', async () => {
+    const { deps, run } = bookendSetup()
+    deps.bookends = undefined
+    const err = await run(['A']).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RangeError)
+  })
+
+  it('narrates intro and outro first and starts both talks before slide narration', async () => {
+    const { log, run } = bookendSetup()
+    await run(['A', 'B'])
+    expect(log.slice(0, 5)).toEqual(['narrateWithFile:intro', 'narrateWithFile:outro', 'talk', 'talk', 'narrate:A'])
+  })
+
+  it('encodes intro, slides, outro in order', async () => {
+    const { log, run } = bookendSetup()
+    const result = await run(['A', 'B'])
+    const enc = log.filter((l) => l.startsWith('encodeTalk') || l.startsWith('draw '))
+    expect(enc).toEqual(['encodeTalk(0,3)', 'draw 0', 'draw 1', 'encodeTalk(9,2)'])
+    expect(log.filter((l) => l.startsWith('audio'))).toEqual(['audio 3', 'audio 2', 'audio 4', 'audio 2'])
+    expect(log).toContain('save 11')
+    expect(result).toMatchObject({ status: 'done', faceFailed: false })
+    expect(log.some((l) => l.startsWith('frame'))).toBe(true)
+  })
+
+  it('reports narrating, animating, rendering, encoding, uploading with bookends counted first', async () => {
+    const { run } = bookendSetup()
+    const seen: Progress[] = []
+    await run(['A', 'B'], (p) => seen.push(p))
+    expect(seen[0]).toEqual({ stage: 'narrating', done: 0, total: 4 })
+    expect(seen.find((p) => p.stage === 'narrating' && p.done === 2)).toEqual({ stage: 'narrating', done: 2, total: 4 })
+    expect(seen.filter((p) => p.stage === 'animating')).toEqual([
+      { stage: 'animating', done: 0, total: 2 },
+      { stage: 'animating', done: 1, total: 2 },
+      { stage: 'animating', done: 2, total: 2 },
+    ])
+    const stages = seen.map((p) => p.stage).filter((s, i, all) => i === 0 || s !== all[i - 1])
+    expect(stages).toEqual(['narrating', 'animating', 'rendering', 'encoding', 'uploading'])
+  })
+
+  // Review Focus 5.
+  it('slide timings are offset by the intro and exclude bookends', async () => {
+    const { deps, run } = bookendSetup()
+    let seen: unknown
+    deps.save = async (_blob, seconds, slides) => {
+      seen = slides
+      return { ...RECORD, durationSeconds: seconds }
+    }
+    await run(['A', 'B'])
+    expect(seen).toEqual([
+      { cardId: 'a', startSeconds: 3, durationSeconds: 2 },
+      { cardId: 'b', startSeconds: 5, durationSeconds: 4 },
+    ])
+  })
+
+  it('an outro alone leaves slide timings starting at zero', async () => {
+    const { deps, log, run } = bookendSetup()
+    let seen: unknown
+    deps.save = async (_blob, seconds, slides) => {
+      seen = slides
+      return { ...RECORD, durationSeconds: seconds }
+    }
+    await run(['A', 'B'], undefined, { intro: '', outro: 'Bye' })
+    expect(seen).toEqual([
+      { cardId: 'a', startSeconds: 0, durationSeconds: 2 },
+      { cardId: 'b', startSeconds: 2, durationSeconds: 4 },
+    ])
+    expect(log).toContain('encodeTalk(6,2)')
+  })
+
+  it('a null talk falls back to a title card and reports faceFailed', async () => {
+    const { log, setTalk, drawTitleCalls, run } = bookendSetup()
+    setTalk(async () => null)
+    const result = await run(['A'], undefined, { intro: 'Hello', outro: '' })
+    expect(result).toMatchObject({ status: 'done', faceFailed: true })
+    expect(drawTitleCalls()).toBe(1)
+    expect(log.some((l) => l.startsWith('encodeTalk'))).toBe(false)
+    // The title card's three seconds are three frames, added before the first slide is drawn.
+    const before = log.slice(0, log.indexOf('draw 0'))
+    expect(before.filter((l) => l.startsWith('frame'))).toEqual(['frame 0', 'frame 1', 'frame 2'])
+    expect(before).toContain('title')
+    expect(before).toContain('audio 3')
+  })
+
+  it('a talk that rejects without a cancel also falls back', async () => {
+    const { setTalk, run } = bookendSetup()
+    setTalk(async () => {
+      throw new Error('boom')
+    })
+    expect(await run(['A'], undefined, { intro: 'Hello', outro: '' })).toMatchObject({
+      status: 'done',
+      faceFailed: true,
+    })
+  })
+
+  it('refuses bookend audio with no sound in it', async () => {
+    const { bookendDeps, run } = bookendSetup()
+    bookendDeps.narrateWithFile = async () => ({ audio: clip(0.05), file: new Blob() })
+    const err = await run(['A']).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(VideoError)
+    expect((err as VideoError).stage).toBe('narrating')
+    expect((err as VideoError).message).toBe('Narrating the intro failed: no audio came back.')
+  })
+
+  // Review Focus 1.
+  it('cancel during animating returns cancelled and saves nothing', async () => {
+    const { log, controller, setTalk, deps, run } = bookendSetup()
+    const pending = deferred<Talk | null>()
+    setTalk(() => pending.promise)
+    let cancelled = 0
+    deps.encoder.cancel = async () => {
+      cancelled++
+    }
+    const done = run(['A'])
+    await new Promise((r) => setTimeout(r, 0))
+    controller.abort()
+    pending.reject(new DOMException('aborted', 'AbortError'))
+    expect(await done).toEqual({ status: 'cancelled' })
+    expect(log.some((l) => l.startsWith('save'))).toBe(false)
+    expect(log).not.toContain('start')
+    // The encoder had not started, so there is nothing for it to cancel.
+    expect(cancelled).toBe(0)
+  })
+
+  it('cancel while the encoder runs still cancels the encoder', async () => {
+    const { controller, deps, log, run } = bookendSetup()
+    deps.drawSlide = async () => {
+      controller.abort()
+    }
+    expect(await run(['A'])).toEqual({ status: 'cancelled' })
+    expect(log).toContain('cancel')
+    expect(log.some((l) => l.startsWith('save'))).toBe(false)
+  })
+
+  // Review Focus 1: a failure while the clips are still processing.
+  it('a slide narration failure with talks in flight throws that error, no unhandled rejection', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const { deps, setTalk, run } = bookendSetup()
+      const intro = deferred<Talk | null>()
+      const outro = deferred<Talk | null>()
+      let n = 0
+      setTalk(() => (n++ === 0 ? intro.promise : outro.promise))
+      deps.narrate = async (text) => {
+        if (text === 'B') throw new Error('boom')
+        return clip(2)
+      }
+      const err = await run(['A', 'B']).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(VideoError)
+      expect((err as VideoError).stage).toBe('narrating')
+      expect((err as VideoError).message).toBe('Narrating slide 2 failed: boom')
+      intro.reject(new Error('late'))
+      outro.reject(new Error('late'))
+      await new Promise((r) => setTimeout(r, 0))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+
+  it('stops the clips still being made when the run fails', async () => {
+    const { deps, setTalk, run } = bookendSetup()
+    let signalSeen: AbortSignal | undefined
+    setTalk((_file, signal) => {
+      signalSeen = signal
+      return new Promise(() => {})
+    })
+    deps.narrate = async () => {
+      throw new Error('boom')
+    }
+    await run(['A']).catch(() => {})
+    expect(signalSeen?.aborted).toBe(true)
   })
 })

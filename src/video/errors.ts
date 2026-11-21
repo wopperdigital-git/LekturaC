@@ -1,5 +1,5 @@
-/** The four stages a run reports and can fail in, in order. */
-export type VideoStage = 'narrating' | 'rendering' | 'encoding' | 'uploading'
+/** The stages a run reports and can fail in, in order. `animating` only runs with a face intro or outro. */
+export type VideoStage = 'narrating' | 'animating' | 'rendering' | 'encoding' | 'uploading'
 
 /**
  * A failure with a message meant for the user. `message` is shown as it is, so every throw site

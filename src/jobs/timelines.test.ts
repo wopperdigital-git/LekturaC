@@ -62,6 +62,27 @@ describe('videoTimeline', () => {
   })
 })
 
+describe('videoTimeline with the face', () => {
+  it('has the animating row second and starts it at 0.15 of the bar', () => {
+    const r = videoTimeline({ stage: 'animating', done: 0, total: 2 }, true)
+    expect(r.timeline.map((e) => e.id)).toEqual(['narrating', 'animating', 'rendering', 'encoding', 'uploading'])
+    expect(r.progress).toBe(0.15)
+  })
+  it('rises through the stages and ends at 1', () => {
+    const at = (stage: 'narrating' | 'animating' | 'rendering' | 'encoding' | 'uploading') =>
+      videoTimeline({ stage, done: 0, total: 1 }, true).progress
+    const expected = [0, 0.15, 0.6, 0.85, 0.93]
+    ;(['narrating', 'animating', 'rendering', 'encoding', 'uploading'] as const).forEach((s, i) =>
+      expect(at(s)).toBeCloseTo(expected[i]),
+    )
+    expect(videoTimeline({ stage: 'uploading', done: 1, total: 1 }, true).progress).toBeCloseTo(1)
+  })
+  it('is unchanged without the face', () => {
+    expect(videoTimeline({ stage: 'rendering', done: 0, total: 1 }).progress).toBeCloseTo(0.4)
+    expect(videoTimeline({ stage: 'rendering', done: 0, total: 1 }, false).timeline).toHaveLength(4)
+  })
+})
+
 describe('narrationTimeline', () => {
   it('writes, then saves, naming how many slides', () => {
     expect(states(narrationTimeline(3, 'write'))).toEqual(['write:active', 'save:pending'])

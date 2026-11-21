@@ -52,9 +52,12 @@ export function quizTimeline(titles: readonly string[], at: number | 'save'): Ti
 
 /** Share of the bar each video stage fills, in order: narrating, rendering, encoding, uploading. */
 const VIDEO_SPANS = [0.4, 0.4, 0.1, 0.1]
+/** With a face intro or outro, animating takes a share of its own: narrating, animating, rendering, encoding, uploading. */
+const VIDEO_SPANS_WITH_FACE = [0.15, 0.45, 0.25, 0.08, 0.07]
 
-export function videoTimeline(p: Progress | null): TimelineReport {
-  const rows = stageRows(p)
+export function videoTimeline(p: Progress | null, withFace = false): TimelineReport {
+  const spans = withFace ? VIDEO_SPANS_WITH_FACE : VIDEO_SPANS
+  const rows = stageRows(p, withFace)
   const timeline: StageEntry[] = rows.map((r) => ({
     id: r.stage,
     label: r.detail ? `${r.label} ${r.detail}` : r.label,
@@ -62,9 +65,9 @@ export function videoTimeline(p: Progress | null): TimelineReport {
   }))
   if (!p) return { timeline: timeline.map((e, i) => (i === 0 ? { ...e, state: 'active' } : e)), progress: 0 }
   const index = rows.findIndex((r) => r.stage === p.stage)
-  const before = VIDEO_SPANS.slice(0, index).reduce((a, b) => a + b, 0)
+  const before = spans.slice(0, index).reduce((a, b) => a + b, 0)
   const within = p.total > 0 ? Math.min(1, p.done / p.total) : 0
-  return { timeline, progress: before + VIDEO_SPANS[index] * within }
+  return { timeline, progress: before + spans[index] * within }
 }
 
 export function narrationTimeline(slideCount: number, stage: 'write' | 'save'): TimelineReport {
