@@ -27,19 +27,22 @@ export function JobRow({ job, actions }: { job: Job; actions: JobActions }) {
   const [confirming, setConfirming] = useState(false)
   if (job.status === 'done') {
     return (
-      <div className="flex items-center gap-2 rounded-app border border-app-border bg-app-background p-2 shadow-app">
-        <Check />
-        <button
-          type="button"
-          onClick={() => actions.view(job)}
-          className="job-rise-in flex-1 rounded-app bg-app-accent px-3 py-1.5 text-left text-sm font-medium text-app-accent-foreground hover:opacity-90"
-        >
-          {VIEW_LABEL[job.kind]}
-          <span className="ml-1 font-normal opacity-80">· {job.title}</span>
-        </button>
-        <button type="button" aria-label={`Dismiss ${job.title}`} onClick={() => actions.dismiss(job.kind)} className="px-1 text-app-muted hover:text-app-foreground">
-          ×
-        </button>
+      <div className="rounded-app border border-app-border bg-app-background p-2 shadow-app">
+        <div className="flex items-center gap-2">
+          <Check />
+          <button
+            type="button"
+            onClick={() => actions.view(job)}
+            className="job-rise-in flex-1 rounded-app bg-app-accent px-3 py-1.5 text-left text-sm font-medium text-app-accent-foreground hover:opacity-90"
+          >
+            {VIEW_LABEL[job.kind]}
+            <span className="ml-1 font-normal opacity-80">· {job.title}</span>
+          </button>
+          <button type="button" aria-label={`Dismiss ${job.title}`} onClick={() => actions.dismiss(job.kind)} className="px-1 text-app-muted hover:text-app-foreground">
+            ×
+          </button>
+        </div>
+        {job.notice && <p className="mt-1.5 text-xs text-app-muted">{job.notice}</p>}
       </div>
     )
   }

@@ -6,7 +6,7 @@ import { QuizJobStripView } from './QuizJobStrip'
 const noop = () => {}
 const job: Job = {
   id: '1', kind: 'quiz', deckId: 'd1', title: 'Deck', status: 'running', progress: 0.5, timeline: [],
-  cancellable: true, error: null, resultDeckId: null, editHref: null,
+  cancellable: true, error: null, resultDeckId: null, notice: null, editHref: null,
 }
 const render = (j: Job) => renderToStaticMarkup(<QuizJobStripView job={j} onCancel={noop} onRetry={noop} onDismiss={noop} onView={noop} />)
 

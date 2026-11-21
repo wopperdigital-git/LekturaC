@@ -13,7 +13,7 @@ const base: Job = {
     { id: 'write', label: 'Writing slides', state: 'active' },
     { id: 'save', label: 'Saving', state: 'pending' },
   ],
-  cancellable: true, error: null, resultDeckId: null, editHref: '/new?draft=x',
+  cancellable: true, error: null, resultDeckId: null, notice: null, editHref: '/new?draft=x',
 }
 
 const render = (jobs: Job[], minimized = false, expanded = false) =>
@@ -37,6 +37,11 @@ describe('JobTrayView', () => {
     expect(render([{ ...base, status: 'done', resultDeckId: 'd1' }])).toContain('View Slide')
     expect(render([{ ...base, kind: 'quiz', status: 'done', resultDeckId: 'd1' }])).toContain('View Quiz')
     expect(render([{ ...base, kind: 'video', status: 'done', resultDeckId: 'd1' }])).toContain('View Video')
+  })
+  it('shows a notice under the View button, and nothing without one', () => {
+    const done = { ...base, kind: 'video' as const, status: 'done' as const, resultDeckId: 'd1' }
+    expect(render([{ ...done, notice: 'A title card was used.' }])).toContain('A title card was used.')
+    expect(render([done])).not.toContain('text-xs')
   })
   // A video takes minutes; a View button that fades after seconds is missed by anyone who looked away.
   it('keeps a done video until it is viewed or dismissed, like every other done job', () => {

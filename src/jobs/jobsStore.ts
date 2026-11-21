@@ -28,6 +28,8 @@ export interface Job {
   cancellable: boolean
   error: string | null
   resultDeckId: string | null
+  /** A word about a finished job that worked but not fully; null otherwise. */
+  notice: string | null
   /** Where "Edit brief" goes for a failed deck job; null otherwise. */
   editHref: string | null
 }
@@ -49,8 +51,8 @@ export interface JobSpec {
   title: string
   timeline: StageEntry[]
   editHref?: string
-  /** Resolves with the deck the result belongs to; rejects on failure or cancel. */
-  run(ctx: JobContext): Promise<{ deckId: string }>
+  /** Resolves with the deck the result belongs to (and optionally a notice to show with it); rejects on failure or cancel. */
+  run(ctx: JobContext): Promise<{ deckId: string; notice?: string }>
   /** Words for a failure, shown in the panel. */
   describe(err: unknown): string
 }
@@ -100,6 +102,7 @@ export const useJobsStore = create<JobsState>()((set, get) => {
       cancellable: true,
       error: null,
       resultDeckId: null,
+      notice: null,
       editHref: spec.editHref ?? null,
     }
     set({ jobs: { ...get().jobs, [spec.kind]: job } })
@@ -116,7 +119,7 @@ export const useJobsStore = create<JobsState>()((set, get) => {
       },
     }
     try {
-      const { deckId } = await spec.run(ctx)
+      const { deckId, notice } = await spec.run(ctx)
       if (!current()) return
       // Scripts land in the tab the user is writing them in: no dot on the dashboard card.
       if (kind !== 'narration') markNew(deckId, kind)
@@ -125,6 +128,7 @@ export const useJobsStore = create<JobsState>()((set, get) => {
         progress: 1,
         deckId,
         resultDeckId: deckId,
+        notice: notice ?? null,
         cancellable: false,
         timeline: get().jobs[kind]?.timeline.map((e) => ({ ...e, state: 'done' as const })) ?? [],
       })

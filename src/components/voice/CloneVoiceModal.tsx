@@ -447,7 +447,7 @@ export function CloneVoiceModal({
     if (!mountedRef.current) return
     const { presentationId } = deck
     if (!presentationId) return
-    const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null })
+    const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null, face: null })
     if (!started) {
       setVideoError('A video is already generating. Wait for it to finish, then try again.')
       return

@@ -28,7 +28,7 @@ import type { JobContext, JobSpec } from './jobsStore'
 
 /** A spec whose run waits until the test settles it. */
 function deferredSpec(over: Partial<JobSpec> = {}) {
-  let resolve!: (v: { deckId: string }) => void
+  let resolve!: (v: { deckId: string; notice?: string }) => void
   let reject!: (e: unknown) => void
   let ctx!: JobContext
   const runs: number[] = []
@@ -48,7 +48,7 @@ function deferredSpec(over: Partial<JobSpec> = {}) {
     describe: (e) => (e instanceof Error ? e.message : 'failed'),
     ...over,
   }
-  return { spec, resolve: (v: { deckId: string }) => resolve(v), reject: (e: unknown) => reject(e), ctx: () => ctx, runs }
+  return { spec, resolve: (v: { deckId: string; notice?: string }) => resolve(v), reject: (e: unknown) => reject(e), ctx: () => ctx, runs }
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
@@ -59,6 +59,23 @@ describe('jobsStore', () => {
     useJobsStore.getState().reset()
     marked.length = 0
     useAuthStore.setState({ user: { id: 'u1' } })
+  })
+
+  it('keeps a notice from the result, and has none otherwise', async () => {
+    const a = deferredSpec()
+    useJobsStore.getState().start(a.spec)
+    expect(job('quiz')?.notice).toBeNull()
+    a.resolve({ deckId: 'd', notice: 'n' })
+    await flush()
+    expect(job('quiz')?.status).toBe('done')
+    expect(job('quiz')?.notice).toBe('n')
+
+    useJobsStore.getState().dismiss('quiz')
+    const b = deferredSpec()
+    useJobsStore.getState().start(b.spec)
+    b.resolve({ deckId: 'd' })
+    await flush()
+    expect(job('quiz')?.notice).toBeNull()
   })
 
   it('runs one job per kind and refuses a second while it runs', () => {
