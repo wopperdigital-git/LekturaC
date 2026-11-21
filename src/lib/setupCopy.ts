@@ -13,6 +13,8 @@ export const VOICE_NOT_SET_UP = "Voices aren't set up on this site yet. Whoever 
 
 export const PHOTOS_NOT_SET_UP = "Photo search isn't set up on this site yet. Whoever runs it needs to add a Pexels key."
 
+export const FACE_NOT_SET_UP = "Talking intros aren't set up on this site yet. Whoever runs it needs to add a WaveSpeed key."
+
 export const AI_NOT_SET_UP = 'No AI service is set up on this site yet. Whoever runs it needs to add an AI key.'
 
 /** The variable names, for whoever runs the site. */
