@@ -59,13 +59,20 @@ import { RecordingError, recordingSupport, startRecording, type Recorder, type R
 import { supabase } from '@/lib/supabaseClient'
 import { hasWebCodecs } from '@/video/format'
 import { loadVideo, supabasePorts, type VideoView } from '@/video/storage'
-import { canStartGenerate, generateBlocker } from '@/video/ui'
+import { canStartGenerate, faceBlocker, generateBlocker } from '@/video/ui'
 import { videoLength } from '@/video/library'
 import type { VideoDeck } from '@/video/generate'
 import { startVideoJob } from '@/jobs/start'
 import { useJobsStore } from '@/jobs/jobsStore'
 import { clearNew } from '@/jobs/newItems'
 import { VOICE_NOT_SET_UP } from '@/lib/setupCopy'
+import { useAuthStore } from '@/store/authStore'
+import { isWavespeedConfigured } from '@/avatar/wavespeed'
+import { readFacePhoto, supabaseFacePorts, type FacePhoto } from '@/avatar/facePhoto'
+import { EMPTY_BOOKENDS, bookendText } from '@/avatar/bookends'
+import { useBookendsStore } from '@/avatar/bookendsStore'
+import { faceCostLine } from '@/avatar/costLine'
+import { FaceStep } from './FaceStep'
 
 /*
   Makes the narrated video. First the voice: pick a premade voice or record and clone your
@@ -176,6 +183,36 @@ export function CloneVoiceModal({
       cancelled = true
     }
   }, [])
+
+  /* ---- the talking intro and outro ---- */
+  const uid = useAuthStore((s) => s.user?.id ?? null)
+  const [photo, setPhoto] = useState<FacePhoto | null>(null)
+  // The switch starts on; whether it is *in effect* also depends on `faceStop` below.
+  const [faceSwitch, setFaceSwitch] = useState(true)
+  // The dialog loads the intro and outro itself: opened from the Create & export menu, the Narrate tab
+  // that normally loads them may not be mounted.
+  const bookends = useBookendsStore((s) => (s.deckId === deck.presentationId ? s.bookends : EMPTY_BOOKENDS))
+
+  useEffect(() => {
+    if (deck.presentationId) void useBookendsStore.getState().load(deck.presentationId)
+  }, [deck.presentationId])
+
+  // The photo, read once on open. Best effort: no photo on any failure.
+  useEffect(() => {
+    if (!supabase || !uid) return
+    let cancelled = false
+    void readFacePhoto(supabaseFacePorts(supabase), uid).then((found) => {
+      if (!cancelled) setPhoto(found)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [uid])
+
+  const introText = bookendText(bookends, 'intro', deck.title)
+  const outroText = bookendText(bookends, 'outro', deck.title)
+  const faceStop = faceBlocker({ configured: isWavespeedConfigured(), hasPhoto: photo !== null, introText, outroText })
+  const faceOn = faceSwitch && faceStop === null
 
   /* ---- voices ---- */
   // Picking a voice is what most people do; recording one sits behind the second tab.
@@ -447,7 +484,17 @@ export function CloneVoiceModal({
     if (!mountedRef.current) return
     const { presentationId } = deck
     if (!presentationId) return
-    const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null, face: null })
+    // The words come from the store as it is after the read and any pending edit are done, not from
+    // what was drawn: a late read must not send the starters over a box the user cleared.
+    await useBookendsStore.getState().load(presentationId)
+    await useBookendsStore.getState().flush()
+    if (!mountedRef.current) return
+    const saved = useBookendsStore.getState().bookends
+    const intro = bookendText(saved, 'intro', deck.title)
+    const outro = bookendText(saved, 'outro', deck.title)
+    const stop = faceBlocker({ configured: isWavespeedConfigured(), hasPhoto: photo !== null, introText: intro, outroText: outro })
+    const face = faceSwitch && stop === null ? { bookends: { intro, outro } } : null
+    const started = startVideoJob({ deck: { ...deck, presentationId }, voice, previous: existing?.record ?? null, face })
     if (!started) {
       setVideoError('A video is already generating. Wait for it to finish, then try again.')
       return
@@ -772,9 +819,25 @@ export function CloneVoiceModal({
           </section>
         </div>
 
-        {/* ---- 3. The video ---- */}
+        {/* ---- 3. A talking intro and outro ---- */}
+        <section aria-labelledby="voice-face" className="flex flex-col gap-3 border-t border-app-border pt-6">
+          <StepHeading n={3} id="voice-face">
+            Talking intro &amp; outro
+          </StepHeading>
+          <FaceStep
+            uid={uid}
+            photo={photo}
+            onPhoto={setPhoto}
+            checked={faceOn}
+            onToggle={setFaceSwitch}
+            blocker={faceStop}
+            costLine={faceOn ? faceCostLine(introText, outroText) : null}
+          />
+        </section>
+
+        {/* ---- 4. The video ---- */}
         <section aria-labelledby="voice-video" className="flex flex-col gap-3 border-t border-app-border pt-6">
-          <StepHeading n={3} id="voice-video">
+          <StepHeading n={4} id="voice-video">
             Video
           </StepHeading>
           {existing ? (

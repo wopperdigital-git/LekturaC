@@ -6,6 +6,7 @@ import type { Card } from '@/engine/contentBlocks'
 import type { VideoDeck } from '@/video/generate'
 import { DEFAULT_SETTINGS } from '@/voice/settingsRow'
 import { READING_SCRIPTS } from '@/voice/scripts'
+import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
 import { useVoiceStore } from '@/voice/voiceStore'
 import { CloneVoiceModal } from './CloneVoiceModal'
 
@@ -22,6 +23,7 @@ import { CloneVoiceModal } from './CloneVoiceModal'
 
 beforeEach(() => {
   vi.stubEnv('VITE_CARTESIA_API_KEY', 'sk_car_test')
+  vi.stubEnv('VITE_WAVESPEED_API_KEY', 'ws_test')
   useVoiceStore.setState({ settings: { ...DEFAULT_SETTINGS }, loaded: true, warning: null, error: null, status: 'idle' })
 })
 
@@ -200,5 +202,46 @@ describe('CloneVoiceModal', () => {
 
   it('says there is no video yet before one is generated', () => {
     expect(render()).toContain('No video yet')
+  })
+
+  /* ---- 3. Talking intro & outro ---- */
+  // renderToStaticMarkup escapes quotes and ampersands, so the copy is compared in its escaped form.
+  const escaped = (text: string) => text.replace(/&/g, '&amp;').replace(/'/g, '&#x27;')
+  const faceSwitch = (html: string) => {
+    const tag = html.match(/<input[^>]*id="voice-face-switch"[^>]*>/)?.[0]
+    if (!tag) throw new Error('no talking intro switch in the markup')
+    return tag
+  }
+
+  it('explains that talking intros are not set up, and turns the switch off, when there is no WaveSpeed key', () => {
+    vi.stubEnv('VITE_WAVESPEED_API_KEY', '')
+    const html = render()
+    expect(html).toContain(escaped(FACE_NOT_SET_UP))
+    expect(faceSwitch(html)).toContain('disabled=""')
+    expect(html).not.toContain('VITE_')
+  })
+
+  it('asks for a photo and for consent when the key is set and there is no photo yet', () => {
+    const html = render()
+    expect(html).toContain('Add a photo of your face first.')
+    expect(faceSwitch(html)).toContain('disabled=""')
+    expect(html).toContain('This is my face, or I have permission to use it.')
+    expect(html).toMatch(/<input[^>]*type="file"[^>]*accept="image\/jpeg,image\/png,image\/webp"/)
+    expect(html).toContain('Upload photo')
+    expect(html).not.toContain('VITE_')
+  })
+
+  it('puts the talking intro step between the settings and the video', () => {
+    const html = render()
+    const at = (needle: string) => html.indexOf(needle)
+    expect(html).toContain('>Talking intro &amp; outro<')
+    expect(at('id="voice-settings"')).toBeLessThan(at('id="voice-face"'))
+    expect(at('id="voice-face"')).toBeLessThan(at('id="voice-video"'))
+    expect(html).toMatch(/id="voice-face"[^>]*>[\s\S]*?<span[^>]*>3<\/span>[\s\S]*?Talking intro &amp; outro/)
+    expect(html).toMatch(/id="voice-video"[^>]*>[\s\S]*?<span[^>]*>4<\/span>[\s\S]*?Video</)
+  })
+
+  it('leaves the footer line about Cartesia credits as it was', () => {
+    expect(render()).toContain('Narrates every slide with Cartesia, which uses credits.')
   })
 })
