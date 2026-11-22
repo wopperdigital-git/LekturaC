@@ -258,6 +258,9 @@ export class AnthropicProvider implements AIProvider {
     // (sub)class check above, or a rate limit/auth/etc error would be
     // misclassified as a generic parse failure.
     if (err instanceof AnthropicError) {
+      // The user-facing message is generic; keep the SDK's own reason (bad JSON vs which
+      // field failed the mirror schema) where a developer can find it.
+      console.warn('[anthropic] structured output rejected:', err.message)
       return new AIProviderError('The AI returned content that could not be parsed. Try again.', {
         kind: 'response',
       })
