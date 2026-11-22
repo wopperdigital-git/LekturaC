@@ -13,6 +13,13 @@ import { SlideBody } from '@/components/layouts/SlideBody'
 import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { FRAME_HEIGHT, FRAME_WIDTH, STAGE_PADDING, frameScale } from './timeline'
 import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
+import {
+  BLOCK_INDEX_ATTR,
+  BUILD_ITEM_ATTR,
+  BuildItemsContext,
+  FIXED_ELEMENT_ATTR,
+} from '@/components/layouts/adjustContext'
+import { buildSchedule, cameraOrigin, cameraScale, crossfadeAlpha, layerPlan, stepCountFor, stepOf } from './motion'
 
 /*
   Draws one slide, exactly as the presenter and the thumbnails do, into the encoder's canvas.
@@ -43,7 +50,16 @@ import { SLIDE_WIDTH_PX } from '@/lib/slideSize'
     The toolbar's own fonts are system fonts, which need no embedding; a web font added there must
     join the probe. The code panel's face (`CODE_FONT`, JetBrains Mono) is one: it joins the probe when a
     slide holds a code block.
+
+  Motion: `draw` captures the slide once per build state (state k = the first k steps shown), and
+  `paint` composes those pictures for a moment in the slide's time. Parts are hidden with
+  `visibility: hidden` only, so the geometry is identical in every capture and the last state equals
+  the plain capture. The ground, the background photo (`[data-fixed-element]`) and the surface are
+  never hidden; saved ink (`[data-overlay]`) appears with the last step.
 */
+
+/** What `OverlayLayer` stamps on saved ink. */
+const OVERLAY_SELECTOR = '[data-overlay]'
 
 /** Lets layout settle after the synchronous render, and any late resize callback run, before the capture. */
 const SETTLE_MS = 100
@@ -109,11 +125,13 @@ function videoSlide(o: {
           style={{ width: SLIDE_WIDTH_PX, transformOrigin: 'center center' }}
         >
           <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-            <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card" ground={ground}>
-              <SlideBody card={card}>
-                <LayoutRenderer card={card} context={{ isFirstCard }} />
-              </SlideBody>
-            </SlideSurface>
+            <BuildItemsContext value={true}>
+              <SlideSurface padding="roomy" className="w-full rounded-slide shadow-slide-card" ground={ground}>
+                <SlideBody card={card}>
+                  <LayoutRenderer card={card} context={{ isFirstCard }} />
+                </SlideBody>
+              </SlideSurface>
+            </BuildItemsContext>
           </TextStyleScope>
         </div>
       </SlideStage>
@@ -121,9 +139,82 @@ function videoSlide(o: {
   )
 }
 
+/** One part of a slide that arrives on its own: a list item, or a whole block holder with none. */
+interface Unit {
+  holder: HTMLElement
+  /** The item's own element, or null when the unit is the whole holder. */
+  item: HTMLElement | null
+}
+
+/** The block holders of a stage in reading order, as units. Everything but the fixed photo holder. */
+function findUnits(stage: HTMLElement): Unit[] {
+  const holders = Array.from(
+    stage.querySelectorAll<HTMLElement>(`[${BLOCK_INDEX_ATTR}]:not([${FIXED_ELEMENT_ATTR}])`),
+  ).sort((a, b) => Number(a.getAttribute(BLOCK_INDEX_ATTR)) - Number(b.getAttribute(BLOCK_INDEX_ATTR)))
+  const units: Unit[] = []
+  for (const holder of holders) {
+    const items = Array.from(holder.querySelectorAll<HTMLElement>(`[${BUILD_ITEM_ATTR}]`))
+    if (items.length === 0) units.push({ holder, item: null })
+    else for (const item of items) units.push({ holder, item })
+  }
+  return units
+}
+
+/**
+ * Sets `visibility` so exactly the units whose step is before `state` show, and the ink only when
+ * `showOverlay`. A holder is `display: contents`, so hiding it hides its subtree; a holder with some
+ * items shown is made visible and its other items are hidden one by one. The holder's own non-item
+ * content arrives with its first item. Returns a function that puts every inline value back.
+ */
+function showState(stage: HTMLElement, units: Unit[], state: number, showOverlay: boolean): () => void {
+  const touched: [HTMLElement, string][] = []
+  const set = (el: HTMLElement, hidden: boolean) => {
+    touched.push([el, el.style.visibility])
+    el.style.visibility = hidden ? 'hidden' : ''
+  }
+  const holderShown = new Map<HTMLElement, boolean>()
+  units.forEach((unit, u) => {
+    const shown = stepOf(u) < state
+    if (unit.item) {
+      if (shown) holderShown.set(unit.holder, true)
+      else if (!holderShown.has(unit.holder)) holderShown.set(unit.holder, false)
+      set(unit.item, !shown)
+    } else {
+      holderShown.set(unit.holder, shown)
+    }
+  })
+  for (const [holder, shown] of holderShown) set(holder, !shown)
+  for (const overlay of stage.querySelectorAll<HTMLElement>(OVERLAY_SELECTOR)) set(overlay, !showOverlay)
+  return () => {
+    // Backwards, so an element touched twice ends at its first (original) value.
+    for (let i = touched.length - 1; i >= 0; i--) touched[i][0].style.visibility = touched[i][1]
+  }
+}
+
+function makeCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  canvas.width = FRAME_WIDTH
+  canvas.height = FRAME_HEIGHT
+  return canvas
+}
+
+function freeCanvas(canvas: HTMLCanvasElement): void {
+  canvas.width = 0
+  canvas.height = 0
+}
+
 export interface SlideRenderer {
-  /** Draws slide `index` into the target canvas. Rejects with an AbortError if cancelled while waiting. */
+  /**
+   * Captures every build state of slide `index`, then paints its first moment into the target canvas.
+   * Rejects with an AbortError if cancelled while waiting.
+   */
   draw(index: number, signal: AbortSignal): Promise<void>
+  /**
+   * Paints slide `index` at `localSeconds` into its `durationSeconds`: the build states layered, pushed in,
+   * and faded in over the picture before it. Synchronous. Only valid after `draw(index)`, and for a slide
+   * after the first, after the slide before was painted to its end.
+   */
+  paint(index: number, localSeconds: number, durationSeconds: number): void
   /** Unmounts and removes the off-screen slide. Always call it, including after a failure. */
   dispose(): void
 }
@@ -135,6 +226,8 @@ export async function createSlideRenderer(o: {
   textStyle: TextStyle
   /** The encoder's canvas. */
   target: HTMLCanvasElement
+  /** What the first slide fades in from (the theme's `colors.deep`). */
+  stageColor: string
 }): Promise<SlideRenderer> {
   // Lazy: the library is only fetched when a video is actually made.
   const { toCanvas, getFontEmbedCSS } = await import('html-to-image')
@@ -203,7 +296,49 @@ export async function createSlideRenderer(o: {
     return fontsLoaded
   }
 
+  // The pictures of the slide being drawn, one per build state, and the last picture of the slide before.
+  let states: HTMLCanvasElement[] = []
+  let stepCount = 0
+  const scratch = makeCanvas()
+  const scratchContext = scratch.getContext('2d')
+  if (!scratchContext) throw new Error('the canvas has no 2d context')
+  let previous: HTMLCanvasElement | null = null
+  const freeStates = () => {
+    for (const canvas of states) freeCanvas(canvas)
+    states = []
+  }
+
+  const paint = (index: number, localSeconds: number, durationSeconds: number) => {
+    const plan = layerPlan(buildSchedule(stepCount, durationSeconds), localSeconds)
+    scratchContext.globalAlpha = 1
+    scratchContext.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    scratchContext.drawImage(states[plan.base], 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    for (const blend of plan.blends) {
+      scratchContext.globalAlpha = blend.alpha
+      scratchContext.drawImage(states[blend.state], 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    }
+    scratchContext.globalAlpha = 1
+
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.globalAlpha = 1
+    context.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    if (index > 0 && previous) {
+      context.drawImage(previous, 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    } else {
+      context.fillStyle = o.stageColor
+      context.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    }
+    const s = cameraScale(localSeconds, durationSeconds)
+    const { x, y } = cameraOrigin(index)
+    context.globalAlpha = crossfadeAlpha(localSeconds)
+    context.setTransform(s, 0, 0, s, x - s * x, y - s * y)
+    context.drawImage(scratch, 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.globalAlpha = 1
+  }
+
   return {
+    paint,
     async draw(index, signal) {
       await whenVisible(signal)
       await loadThemeFonts()
@@ -243,16 +378,41 @@ export async function createSlideRenderer(o: {
       )
       fit.style.transform = scale !== 1 ? `scale(${scale})` : ''
 
-      const picture = await toCanvas(stage, {
-        width: FRAME_WIDTH,
-        height: FRAME_HEIGHT,
-        pixelRatio: 1,
-        fontEmbedCSS: await embeddedFonts(),
-      })
-      context.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
-      context.drawImage(picture, 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+      // The target still holds the last picture painted for the slide before: this slide fades in from it.
+      freeStates()
+      if (index > 0) {
+        previous ??= makeCanvas()
+        const previousContext = previous.getContext('2d')
+        previousContext?.clearRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+        previousContext?.drawImage(o.target, 0, 0, FRAME_WIDTH, FRAME_HEIGHT)
+      }
+
+      const units = findUnits(stage)
+      stepCount = stepCountFor(units.length)
+      const fontCSS = await embeddedFonts()
+      for (let k = 0; k <= stepCount; k++) {
+        await whenVisible(signal)
+        const restore = showState(stage, units, k, k === stepCount)
+        try {
+          states.push(
+            await toCanvas(stage, {
+              width: FRAME_WIDTH,
+              height: FRAME_HEIGHT,
+              pixelRatio: 1,
+              fontEmbedCSS: fontCSS,
+            }),
+          )
+        } finally {
+          restore()
+        }
+      }
+      // Its first moment. At 0 s nothing has arrived and the slide is fully faded out, so the length does not matter.
+      paint(index, 0, 1)
     },
     dispose() {
+      freeStates()
+      freeCanvas(scratch)
+      if (previous) freeCanvas(previous)
       root.unmount()
       host.remove()
     },

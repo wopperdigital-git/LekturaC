@@ -162,8 +162,9 @@ const BUILD_ITEM_PROPS = (): HTMLAttributes<HTMLElement> => ({ [BUILD_ITEM_ATTR]
  *
  * Returned as a function of the item's address so a layout that draws a whole
  * list calls the hook once and then spreads per item. With no editing context —
- * the presenter, the thumbnails — it spreads nothing, so those surfaces carry no
- * handlers and no attribute.
+ * the presenter, the thumbnails — it spreads no handlers; only the video surface
+ * (`BuildItemsContext`) gets the build marker (`BUILD_ITEM_ATTR`), and every other
+ * such surface carries no attribute.
  *
  * The press stops here. Left to bubble, the `Adjustable` around the list would
  * read it as a press on the list and replace the item selection with a list

@@ -21,6 +21,7 @@ Spec: `2026-09-27-narrated-video-design.md`. Narrates every slide, draws slides,
 - **The tab must be visible while slides are drawn** (`whenVisible`). **Theme web fonts are embedded** via a probe holding both theme fonts; **a web font added to the toolbar must join the probe** (as must `CODE_FONT`).
 - MP4 preferred, WebM fallback; `detectFormat()` runs before any Cartesia request so a browser that can't encode never spends credits.
 - **Save order is the safety rule** (`saveVideo`): upload → write record → remove old object if the path differs. Upload takes no `AbortSignal`, so it's the point of no return (`cancellable: false`).
+- **Motion** (spec `2026-11-22-video-motion-design.md`): slides build in (≤6 steps), push in 3% and crossfade, at 30 fps; the math is pure in `motion.ts`, quality comes from length in `sizeGuard.ts`. Build states are captures with parts set `visibility: hidden` (never removed, so geometry is identical); the last state must equal a plain capture. List items are marked only on the video surface (`BuildItemsContext`). Slide timings are unchanged by motion.
 - Deleting a deck deletes the row, then its video. `delete_own_account()` orphans videos.
 
 ## Talking intro & outro (`src/avatar/`)

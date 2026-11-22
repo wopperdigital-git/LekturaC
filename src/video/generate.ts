@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import type { VoiceSettings } from '@/voice/settingsRow'
 import { VideoError } from './errors'
 import { generateVideo, type BookendDeps, type PipelineBookends, type Progress } from './pipeline'
+import { MOTION_FPS } from './motion'
 import { loadVideo, saveVideo, supabasePorts, type VideoView } from './storage'
 import type { VideoRecord } from './videoRecord'
 
@@ -80,6 +81,7 @@ export async function generateVideoForDeck(o: {
     theme: o.deck.theme,
     textStyle: o.deck.textStyle,
     target: encoder.canvas,
+    stageColor: o.deck.theme.colors.deep,
   })
 
   // Every clip decoded this run is freed when it ends, whether or not it was ever drawn.
@@ -137,6 +139,7 @@ export async function generateVideoForDeck(o: {
         drawSlide: (index, signal) => renderer.draw(index, signal),
         encoder,
         bookends,
+        motion: { frameStepSeconds: 1 / MOTION_FPS, paint: (i, t, d) => renderer.paint(i, t, d) },
         save: (blob, durationSeconds, slides) =>
           saveVideo(ports, {
             uid,
