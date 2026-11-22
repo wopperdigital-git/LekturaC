@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSchedule,
   cameraOrigin,
+  chooseUnits,
   cameraScale,
   crossfadeAlpha,
   easeOut,
@@ -102,5 +103,20 @@ describe('camera and crossfade', () => {
     expect(crossfadeAlpha(0.2)).toBeCloseTo(0.5, 9)
     expect(crossfadeAlpha(0.4)).toBe(1)
     expect(crossfadeAlpha(3)).toBe(1)
+  })
+})
+
+describe('chooseUnits', () => {
+  it('builds item by item while the items fit the step cap', () => {
+    expect(chooseUnits(0, 0)).toBe('items')
+    expect(chooseUnits(3, 2)).toBe('items')
+    expect(chooseUnits(6, 6)).toBe('items')
+  })
+  it('builds holder by holder when the items overflow the cap but the holders fit', () => {
+    expect(chooseUnits(7, 2)).toBe('holders')
+    expect(chooseUnits(12, 6)).toBe('holders')
+  })
+  it('keeps item units when both overflow the cap', () => {
+    expect(chooseUnits(9, 7)).toBe('items')
   })
 })

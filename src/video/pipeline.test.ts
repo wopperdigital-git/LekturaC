@@ -621,6 +621,25 @@ describe('generateVideo: motion', () => {
     expect(frames).toEqual(['paint', 'frame 0', 'paint', 'frame 0.5', 'paint', 'frame 1', 'paint', 'frame 1.5'])
   })
 
+  // The seam past the first slide: every slide's local time restarts at 0 and `index` is the slide's own.
+  it('paints each later slide from its own index and local time 0', async () => {
+    const { deps, run } = setup()
+    const painted: string[] = []
+    deps.motion = { frameStepSeconds: 1, paint: (i, t, d) => painted.push(`${i}@${t}/${d}`) }
+    await run(['A', 'B']) // narrate gives 2 s each
+    expect(painted).toEqual(['0@0/2', '0@1/2', '1@0/2', '1@1/2'])
+  })
+
+  it('still counts the first slide as 0 at local time 0 after an intro', async () => {
+    const { deps, run } = bookendSetup({ intro: 'Hello', outro: '' })
+    const painted: string[] = []
+    deps.motion = { frameStepSeconds: 1, paint: (i, t, d) => painted.push(`${i}@${t}/${d}`) }
+    await run(['A', 'B'])
+    // The intro lasts 3 s; slide 0 is 2 s long (the narrate fake gives 'A' 2 s and 'B' 4 s).
+    expect(painted[0]).toBe('0@0/2')
+    expect(painted).toEqual(['0@0/2', '0@1/2', '1@0/4', '1@1/4', '1@2/4', '1@3/4'])
+  })
+
   it('keeps slide timings unchanged', async () => {
     const a = setup()
     const b = setup()

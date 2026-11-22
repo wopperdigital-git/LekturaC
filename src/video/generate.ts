@@ -4,7 +4,7 @@ import type { DecodedClip } from '@/avatar/drawClip'
 import type { Card } from '@/engine/contentBlocks'
 import type { TextStyle } from '@/engine/textStyle'
 import { FACE_NOT_SET_UP } from '@/lib/setupCopy'
-import type { ThemeTokens } from '@/lib/theme-tokens'
+import { stageColor, type ThemeTokens } from '@/lib/theme-tokens'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuthStore } from '@/store/authStore'
 import type { VoiceSettings } from '@/voice/settingsRow'
@@ -81,7 +81,7 @@ export async function generateVideoForDeck(o: {
     theme: o.deck.theme,
     textStyle: o.deck.textStyle,
     target: encoder.canvas,
-    stageColor: o.deck.theme.colors.deep,
+    stageColor: stageColor(o.deck.theme),
   })
 
   // Every clip decoded this run is freed when it ends, whether or not it was ever drawn.

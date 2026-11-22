@@ -49,6 +49,15 @@ export function stepOf(unitIndex: number): number {
   return Math.min(unitIndex, MAX_BUILD_STEPS - 1)
 }
 
+/**
+ * Whether a slide builds item by item or holder by holder. Items win unless they overflow the step cap
+ * while the holders alone would fit it: then each holder is one unit, so no group is squeezed into the
+ * last step and the others spread out.
+ */
+export function chooseUnits(itemLevelCount: number, holderLevelCount: number): 'items' | 'holders' {
+  return itemLevelCount > MAX_BUILD_STEPS && holderLevelCount <= MAX_BUILD_STEPS ? 'holders' : 'items'
+}
+
 /** How many steps `unitCount` units build in. */
 export function stepCountFor(unitCount: number): number {
   return Math.min(unitCount, MAX_BUILD_STEPS)

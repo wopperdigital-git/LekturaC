@@ -19,7 +19,7 @@ import {
   BuildItemsContext,
   FIXED_ELEMENT_ATTR,
 } from '@/components/layouts/adjustContext'
-import { buildSchedule, cameraOrigin, cameraScale, crossfadeAlpha, layerPlan, stepCountFor, stepOf } from './motion'
+import { buildSchedule, cameraOrigin, chooseUnits, cameraScale, crossfadeAlpha, layerPlan, stepCountFor, stepOf } from './motion'
 
 /*
   Draws one slide, exactly as the presenter and the thumbnails do, into the encoder's canvas.
@@ -146,18 +146,25 @@ interface Unit {
   item: HTMLElement | null
 }
 
-/** The block holders of a stage in reading order, as units. Everything but the fixed photo holder. */
+/**
+ * The parts of a stage in reading order. `querySelectorAll` returns document order, which is the order
+ * the layouts draw in (the holders are `display: contents`, so there are no rects to sort by). Everything
+ * but the fixed photo holder. Normally one unit per marked item, or per holder with none; when the items
+ * overflow the step cap but the holders alone fit it, one unit per holder, so no group is squeezed into
+ * the last step.
+ */
 function findUnits(stage: HTMLElement): Unit[] {
   const holders = Array.from(
     stage.querySelectorAll<HTMLElement>(`[${BLOCK_INDEX_ATTR}]:not([${FIXED_ELEMENT_ATTR}])`),
-  ).sort((a, b) => Number(a.getAttribute(BLOCK_INDEX_ATTR)) - Number(b.getAttribute(BLOCK_INDEX_ATTR)))
-  const units: Unit[] = []
+  )
+  const itemUnits: Unit[] = []
   for (const holder of holders) {
     const items = Array.from(holder.querySelectorAll<HTMLElement>(`[${BUILD_ITEM_ATTR}]`))
-    if (items.length === 0) units.push({ holder, item: null })
-    else for (const item of items) units.push({ holder, item })
+    if (items.length === 0) itemUnits.push({ holder, item: null })
+    else for (const item of items) itemUnits.push({ holder, item })
   }
-  return units
+  if (chooseUnits(itemUnits.length, holders.length) === 'items') return itemUnits
+  return holders.map((holder) => ({ holder, item: null }))
 }
 
 /**
@@ -226,7 +233,7 @@ export async function createSlideRenderer(o: {
   textStyle: TextStyle
   /** The encoder's canvas. */
   target: HTMLCanvasElement
-  /** What the first slide fades in from (the theme's `colors.deep`). */
+  /** What the first slide fades in from (the stage background, `stageColor(theme)`). */
   stageColor: string
 }): Promise<SlideRenderer> {
   // Lazy: the library is only fetched when a video is actually made.
@@ -234,6 +241,9 @@ export async function createSlideRenderer(o: {
 
   const context = o.target.getContext('2d')
   if (!context) throw new Error('the canvas has no 2d context')
+  // The push-in resamples the picture every frame: smooth it rather than let it shimmer.
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
 
   const host = document.createElement('div')
   host.setAttribute('aria-hidden', 'true')
@@ -302,6 +312,8 @@ export async function createSlideRenderer(o: {
   const scratch = makeCanvas()
   const scratchContext = scratch.getContext('2d')
   if (!scratchContext) throw new Error('the canvas has no 2d context')
+  scratchContext.imageSmoothingEnabled = true
+  scratchContext.imageSmoothingQuality = 'high'
   let previous: HTMLCanvasElement | null = null
   const freeStates = () => {
     for (const canvas of states) freeCanvas(canvas)
@@ -377,6 +389,8 @@ export async function createSlideRenderer(o: {
         FRAME_HEIGHT - 2 * STAGE_PADDING,
       )
       fit.style.transform = scale !== 1 ? `scale(${scale})` : ''
+      // Pictures decode late; wait so every capture of this slide has the same geometry.
+      await Promise.all(Array.from(stage.querySelectorAll('img'), (img) => img.decode().catch(() => {})))
 
       // The target still holds the last picture painted for the slide before: this slide fades in from it.
       freeStates()

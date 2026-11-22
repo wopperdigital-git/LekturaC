@@ -1,6 +1,6 @@
 # Narrated video: motion (builds and a slow camera)
 
-Date: 2026-11-22. Status: draft, awaiting approval.
+Date: 2026-11-22. Status: approved 2026-11-22; implemented on branch feat/video-motion; hand check pending.
 Builds on `2026-09-27-narrated-video-design.md` (the pipeline this changes) and
 `2026-11-21-talking-intro-outro-design.md` (the face clips it leaves alone).
 
@@ -90,6 +90,12 @@ gimmicky.
   items carry no marker outside the editor (`useItemProps` returns nothing without an editing
   context), so the video gives them one. *(My call: per-item steps are what make a typical heading +
   bullets slide come alive; block-only would build it in two steps.)*
+- **Builds are fade-only on every ground.** The rise was dropped: blending whole frames is seam-free, a
+  shifted patch is not.
+- **Unit order is document order** (`querySelectorAll`), which is the reading order in every layout; not
+  block index, and not geometry (holders are `display: contents`).
+- **Balanced cap:** when a slide's item-level units exceed 6 but its holder-level units (one per block
+  holder, items not split) fit in 6, it builds per holder; otherwise units past the fifth arrive in step 6.
 - **Step cap:** at most 6 steps per slide. Past that, the remaining parts arrive together in the last
   step. *(My call: bounds capture time and keeps long slides from building for too long.)*
 - **Rhythm:** first step starts shortly after the slide opens (after the crossfade), each step's
