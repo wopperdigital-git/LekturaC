@@ -1,6 +1,6 @@
 import { VideoError, type VideoStage } from './errors'
 import { encodeQualityFor, tooLongMessage, type EncodeQuality } from './sizeGuard'
-import { SILENT_SLIDE_SECONDS, frameSlots, planTimeline, type SlideTiming } from './timeline'
+import { FRAME_STEP_SECONDS, SILENT_SLIDE_SECONDS, frameSlots, planTimeline, type SlideTiming } from './timeline'
 import type { VideoRecord, VideoSlideTiming } from './videoRecord'
 
 /*
@@ -51,6 +51,13 @@ export interface BookendDeps<A extends Clip, T> {
   drawTitleCard(signal: AbortSignal): Promise<void>
 }
 
+export interface MotionPort {
+  /** Seconds between pictures for a slide, e.g. 1 / MOTION_FPS. */
+  frameStepSeconds: number
+  /** Paints slide `index` at `localSeconds` into its slide time, into the encoder's canvas. Synchronous. */
+  paint(index: number, localSeconds: number, durationSeconds: number): void
+}
+
 export interface PipelineDeps<A extends Clip, T = never> {
   narrate(text: string, signal: AbortSignal): Promise<A>
   silence(seconds: number, channels: number): A
@@ -61,6 +68,8 @@ export interface PipelineDeps<A extends Clip, T = never> {
   save(blob: Blob, durationSeconds: number, slides: VideoSlideTiming[]): Promise<VideoRecord>
   /** Required whenever `input.bookends` has text. */
   bookends?: BookendDeps<A, T>
+  /** When given, each slide is painted again before every picture, at this finer step. */
+  motion?: MotionPort
 }
 
 /** The spoken intro and outro, trimmed. `''` means no clip at that end. */
@@ -196,6 +205,26 @@ export async function generateVideo<A extends Clip, T = never>(
     }
     report('narrating', narratingTotal, narratingTotal)
 
+    // Silence takes the channel count of the real narration so every buffer in the track matches.
+    const channels =
+      narrated.find((c) => c !== null)?.numberOfChannels ??
+      bookendAudio.intro?.audio.numberOfChannels ??
+      bookendAudio.outro?.audio.numberOfChannels ??
+      1
+    const slideAudio = narrated.map((c) => c ?? deps.silence(SILENT_SLIDE_SECONDS, channels))
+    const timeline = planTimeline([
+      ...(bookendAudio.intro ? [bookendAudio.intro.audio.duration] : []),
+      ...slideAudio.map((c) => c.duration),
+      ...(bookendAudio.outro ? [bookendAudio.outro.audio.duration] : []),
+    ])
+    const slideOffset = bookendAudio.intro ? 1 : 0
+    const slideTimings = timeline.slides.slice(slideOffset, slideOffset + slideCount)
+
+    // Planning needs only the audio durations, known now. A video too long for the bucket is refused
+    // here, before the encoder exists and before waiting on the face clips (the `finally` aborts them).
+    const quality = encodeQualityFor(timeline.totalSeconds)
+    if (quality === null) throw new VideoError('encoding', tooLongMessage(timeline.totalSeconds))
+
     /* ---- animate: wait for the clips ---- */
     const clips: Partial<Record<Bookend, T | null>> = {}
     if (wanted.length > 0) {
@@ -215,25 +244,6 @@ export async function generateVideo<A extends Clip, T = never>(
       report('animating', wanted.length, wanted.length)
     }
     const faceFailed = wanted.some((b) => clips[b] === null)
-
-    // Silence takes the channel count of the real narration so every buffer in the track matches.
-    const channels =
-      narrated.find((c) => c !== null)?.numberOfChannels ??
-      bookendAudio.intro?.audio.numberOfChannels ??
-      bookendAudio.outro?.audio.numberOfChannels ??
-      1
-    const slideAudio = narrated.map((c) => c ?? deps.silence(SILENT_SLIDE_SECONDS, channels))
-    const timeline = planTimeline([
-      ...(bookendAudio.intro ? [bookendAudio.intro.audio.duration] : []),
-      ...slideAudio.map((c) => c.duration),
-      ...(bookendAudio.outro ? [bookendAudio.outro.audio.duration] : []),
-    ])
-    const slideOffset = bookendAudio.intro ? 1 : 0
-    const slideTimings = timeline.slides.slice(slideOffset, slideOffset + slideCount)
-
-    // Before the encoder exists: a video too long for the bucket is refused with nothing to cancel.
-    const quality = encodeQualityFor(timeline.totalSeconds)
-    if (quality === null) throw new VideoError('encoding', tooLongMessage(timeline.totalSeconds))
 
     /* ---- draw and encode ---- */
     // Set before the call: a start that fails part-way may already hold an audio or video encoder.
@@ -269,7 +279,11 @@ export async function generateVideo<A extends Clip, T = never>(
       check()
       await step('encoding', `Could not encode slide ${index + 1}`, async () => {
         await deps.encoder.addAudio(slideAudio[index])
-        for (const slot of frameSlots(slide)) await deps.encoder.addFrame(slot.timestamp, slot.duration)
+        for (const slot of frameSlots(slide, deps.motion?.frameStepSeconds ?? FRAME_STEP_SECONDS)) {
+          check()
+          deps.motion?.paint(index, slot.timestamp - slide.startSeconds, slide.durationSeconds)
+          await deps.encoder.addFrame(slot.timestamp, slot.duration)
+        }
       })
     }
     report('rendering', slideCount, slideCount)

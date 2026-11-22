@@ -585,4 +585,79 @@ describe('generateVideo: bookends', () => {
     await run(['A']).catch(() => {})
     expect(signalSeen?.aborted).toBe(true)
   })
+
+  it('refuses a too-long video at once, without waiting for a face clip, and stops the clip', async () => {
+    const { deps, log, setTalk, run } = bookendSetup()
+    let talkSignal: AbortSignal | undefined
+    // A clip that only ever settles when it is aborted: awaiting it first would hang the run.
+    setTalk((_file, signal) => {
+      talkSignal = signal
+      return new Promise<Talk | null>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      })
+    })
+    deps.narrate = async () => clip(30 * 60)
+    await expect(run(['A'], undefined, { intro: 'Hello', outro: '' })).rejects.toMatchObject({ stage: 'encoding' })
+    expect(talkSignal?.aborted).toBe(true)
+    expect(log).not.toContain('start')
+    expect(log).not.toContain('cancel')
+  })
+})
+
+describe('generateVideo: motion', () => {
+  it('paints before every picture at the motion step, from local time 0', async () => {
+    const { deps, log, run } = setup()
+    const painted: string[] = []
+    deps.motion = {
+      frameStepSeconds: 0.5,
+      paint: (i, t, d) => {
+        painted.push(`${i}@${t}/${d}`)
+        log.push('paint')
+      },
+    }
+    await run(['A']) // narrate gives 2 s
+    expect(painted).toEqual(['0@0/2', '0@0.5/2', '0@1/2', '0@1.5/2'])
+    const frames = log.filter((l) => l === 'paint' || l.startsWith('frame'))
+    expect(frames).toEqual(['paint', 'frame 0', 'paint', 'frame 0.5', 'paint', 'frame 1', 'paint', 'frame 1.5'])
+  })
+
+  it('keeps slide timings unchanged', async () => {
+    const a = setup()
+    const b = setup()
+    b.deps.motion = { frameStepSeconds: 1 / 30, paint: () => {} }
+    const saved: unknown[] = []
+    a.deps.save = b.deps.save = async (_blob, seconds, slides) => {
+      saved.push(slides)
+      return { ...RECORD, durationSeconds: seconds }
+    }
+    await a.run(['A', ' ', 'B'])
+    await b.run(['A', ' ', 'B'])
+    expect(saved[1]).toEqual(saved[0])
+  })
+
+  it('stops the encoder and saves nothing when painting throws', async () => {
+    const { deps, log, run } = setup()
+    deps.motion = {
+      frameStepSeconds: 0.5,
+      paint: () => {
+        throw new Error('boom')
+      },
+    }
+    await expect(run(['A'])).rejects.toMatchObject({ stage: 'encoding' })
+    expect(log).toContain('cancel')
+    expect(log.some((l) => l.startsWith('save'))).toBe(false)
+  })
+
+  it('cancels cleanly when aborted mid-slide', async () => {
+    const { deps, log, controller, run } = setup()
+    let n = 0
+    deps.motion = {
+      frameStepSeconds: 0.1,
+      paint: () => {
+        if (++n === 5) controller.abort()
+      },
+    }
+    expect(await run(['A'])).toEqual({ status: 'cancelled' })
+    expect(log).toContain('cancel')
+  })
 })
