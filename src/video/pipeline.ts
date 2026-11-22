@@ -1,4 +1,5 @@
 import { VideoError, type VideoStage } from './errors'
+import { encodeQualityFor, tooLongMessage, type EncodeQuality } from './sizeGuard'
 import { SILENT_SLIDE_SECONDS, frameSlots, planTimeline, type SlideTiming } from './timeline'
 import type { VideoRecord, VideoSlideTiming } from './videoRecord'
 
@@ -26,7 +27,8 @@ export interface Progress {
 }
 
 export interface VideoEncoderPort<A extends Clip> {
-  start(): Promise<void>
+  /** Begins the file at this quality (chosen from the video's length so it fits the bucket). */
+  start(quality: EncodeQuality): Promise<void>
   addAudio(clip: A): Promise<void>
   addFrame(timestamp: number, duration: number): Promise<void>
   /** Completes the file. After it resolves there is nothing left to cancel. */
@@ -229,10 +231,14 @@ export async function generateVideo<A extends Clip, T = never>(
     const slideOffset = bookendAudio.intro ? 1 : 0
     const slideTimings = timeline.slides.slice(slideOffset, slideOffset + slideCount)
 
+    // Before the encoder exists: a video too long for the bucket is refused with nothing to cancel.
+    const quality = encodeQualityFor(timeline.totalSeconds)
+    if (quality === null) throw new VideoError('encoding', tooLongMessage(timeline.totalSeconds))
+
     /* ---- draw and encode ---- */
     // Set before the call: a start that fails part-way may already hold an audio or video encoder.
     encoderRunning = true
-    await step('encoding', 'Could not start the video', () => deps.encoder.start())
+    await step('encoding', 'Could not start the video', () => deps.encoder.start(quality))
 
     const encodeBookend = async (which: Bookend, at: SlideTiming) => {
       check()

@@ -36,7 +36,7 @@ function setup() {
       log.push(`draw ${i}`)
     },
     encoder: {
-      start: async () => {
+      start: async (_quality) => {
         log.push('start')
       },
       addAudio: async (c) => {
@@ -102,6 +102,27 @@ describe('generateVideo: the happy path', () => {
     deps.narrate = async () => clip(2, 2)
     await run(['A', ''])
     expect(log).toContain('silence 4 2')
+  })
+})
+
+describe('generateVideo: the size guard', () => {
+  it('starts the encoder at medium for a short video', async () => {
+    const { deps, run } = setup()
+    let quality: string | undefined
+    deps.encoder.start = async (q) => {
+      quality = q
+    }
+    await run(['A'])
+    expect(quality).toBe('medium')
+  })
+
+  it('refuses a video too long to save before starting the encoder', async () => {
+    const { deps, log, run } = setup()
+    deps.narrate = async () => clip(30 * 60)
+    await expect(run(['A'])).rejects.toMatchObject({ stage: 'encoding' })
+    expect(log).not.toContain('start')
+    expect(log).not.toContain('cancel')
+    expect(log.some((l) => l.startsWith('save'))).toBe(false)
   })
 })
 
