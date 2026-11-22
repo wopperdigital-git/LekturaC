@@ -144,6 +144,20 @@ export const ITEM_SELECTED_ATTR = 'data-item-selected'
 const NO_ITEM_PROPS = (): HTMLAttributes<HTMLElement> => ({})
 
 /**
+ * The attribute a list item carries on the video surface only, so the video can
+ * find each item in the DOM and reveal them one at a time.
+ */
+export const BUILD_ITEM_ATTR = 'data-build-item'
+
+/**
+ * True only inside the video's own render. Every other surface (editor,
+ * presenter, thumbnails) leaves it false and so carries no marker.
+ */
+export const BuildItemsContext = createContext(false)
+
+const BUILD_ITEM_PROPS = (): HTMLAttributes<HTMLElement> => ({ [BUILD_ITEM_ATTR]: '' }) as HTMLAttributes<HTMLElement>
+
+/**
  * What to spread onto an item's own container so it can be picked out on its own.
  *
  * Returned as a function of the item's address so a layout that draws a whole
@@ -159,7 +173,8 @@ const NO_ITEM_PROPS = (): HTMLAttributes<HTMLElement> => ({})
 export function useItemProps(): (blockIndex: number, itemIndex: number) => HTMLAttributes<HTMLElement> {
   const adjusting = useContext(BlockAdjustContext)
   const activeRef = useContext(TextEditingContext)?.activeRef
-  if (!adjusting) return NO_ITEM_PROPS
+  const buildItems = useContext(BuildItemsContext)
+  if (!adjusting) return buildItems ? BUILD_ITEM_PROPS : NO_ITEM_PROPS
   return (blockIndex, itemIndex) => ({
     onPointerDown: (event) => {
       event.stopPropagation()
