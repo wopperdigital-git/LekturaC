@@ -52,6 +52,23 @@ describe('frameSlots', () => {
     const [slide] = planTimeline([3]).slides
     expect(frameSlots(slide)).toHaveLength(3)
   })
+
+  it('tiles a long slide exactly at 30 fps, with no drift', () => {
+    const slide = { index: 0, startSeconds: 12.5, durationSeconds: 47.3 }
+    const slots = frameSlots(slide, 1 / 30)
+    expect(slots).toHaveLength(1419)
+    expect(slots[0].timestamp).toBe(12.5)
+    for (let i = 1; i < slots.length; i++) {
+      expect(slots[i].timestamp).toBeCloseTo(slots[i - 1].timestamp + slots[i - 1].duration, 9)
+    }
+    const last = slots.at(-1)!
+    expect(last.timestamp + last.duration).toBeCloseTo(59.8, 9)
+    expect(last.duration).toBeGreaterThan(0)
+  })
+
+  it('keeps the one-per-second default', () => {
+    expect(frameSlots({ index: 0, startSeconds: 0, durationSeconds: 3 })).toHaveLength(3)
+  })
 })
 
 describe('fitScale', () => {

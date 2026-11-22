@@ -51,18 +51,21 @@ export interface FrameSlot {
   duration: number
 }
 
-/** The pictures to add for one slide: one per second of hold, the last as long as what is left. Never empty. */
-export function frameSlots(slide: SlideTiming): FrameSlot[] {
+/**
+ * The pictures to add for one slide: one per `stepSeconds` of hold (a second by default), the
+ * last as long as what is left. Never empty. Each timestamp is `start + k * step` for a whole
+ * k rather than a running sum, so a long slide at 30 fps does not drift.
+ */
+export function frameSlots(slide: SlideTiming, stepSeconds = FRAME_STEP_SECONDS): FrameSlot[] {
+  // The epsilon keeps a whole number of steps (3 s -> frames at 0, 1, 2) from growing another.
+  const count = Math.max(1, Math.ceil(slide.durationSeconds / stepSeconds - 1e-9))
   const slots: FrameSlot[] = []
-  let offset = 0
-  do {
+  for (let k = 0; k < count; k++) {
     slots.push({
-      timestamp: slide.startSeconds + offset,
-      duration: Math.min(FRAME_STEP_SECONDS, slide.durationSeconds - offset),
+      timestamp: slide.startSeconds + k * stepSeconds,
+      duration: k === count - 1 ? slide.durationSeconds - (count - 1) * stepSeconds : stepSeconds,
     })
-    offset += FRAME_STEP_SECONDS
-    // The epsilon keeps a whole number of seconds (3 -> frames at 0, 1, 2) from growing a fourth.
-  } while (offset < slide.durationSeconds - 1e-9)
+  }
   return slots
 }
 
