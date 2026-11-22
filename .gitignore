@@ -113,6 +113,7 @@ scratch/
 !.claude/rules/
 .cursor/
 .cline/
+.playwright-mcp/
 
 # Ephemeral Skill Runtime & Review Artifacts
 .impeccable/
