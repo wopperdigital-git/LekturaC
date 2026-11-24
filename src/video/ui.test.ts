@@ -70,13 +70,13 @@ describe('faceBlocker', () => {
     expect(faceBlocker(none)).toBe(FACE_NOT_SET_UP)
     expect(faceBlocker({ ...none, configured: true })).toBe('Add a photo of your face first.')
     expect(faceBlocker({ ...none, configured: true, hasPhoto: true })).toBe(
-      'Write an intro or an outro in the Narrate tab first.',
+      'Write an intro or an outro first.',
     )
   })
 
   it('counts whitespace as no text', () => {
     expect(faceBlocker({ ...good, introText: '  \n', outroText: ' ' })).toBe(
-      'Write an intro or an outro in the Narrate tab first.',
+      'Write an intro or an outro first.',
     )
   })
 })
@@ -132,9 +132,9 @@ describe('faceRequest', () => {
   })
 
   it('stops with the reason when the switch was on but is now blocked', () => {
-    expect(faceRequest({ effectiveOn: true, blockerNow: 'Write an intro or an outro in the Narrate tab first.', ...texts })).toEqual({
+    expect(faceRequest({ effectiveOn: true, blockerNow: 'Write an intro or an outro first.', ...texts })).toEqual({
       kind: 'blocked',
-      message: 'Write an intro or an outro in the Narrate tab first.',
+      message: 'Write an intro or an outro first.',
     })
   })
 

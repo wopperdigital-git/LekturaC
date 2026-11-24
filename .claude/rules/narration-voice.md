@@ -24,7 +24,7 @@ Per-slide spoken script for a cloned voice. Spec: `2026-09-26-narration-tab-desi
 
 ## Voice (`src/voice/`, `CloneVoiceModal.tsx`)
 
-Cartesia voice: pick premade or record and clone (consent checkbox required), tune settings, preview, then **Generate video**. Spec: `2026-09-27-narration-voice-design.md`.
+Cartesia voice: pick premade or record and clone (consent required: a one-time "I agree" dialog on the first Record press, remembered per user per device in `voice/cloneConsent.ts`; bump `CLONE_CONSENT_VERSION` if its wording changes), tune settings, preview, then **Generate video**. **English only in the dialog**: no language picker; `inEnglish` reads a setting saved in another language as `en` (the other languages' texts stay in `voice/scripts.ts`). The reading passage is ~20 s; Sonic 3.6 learns from up to 60 s of clip. Spec: `2026-09-27-narration-voice-design.md`.
 
 - **All network calls are in `voice/cartesia.ts`.** The key is a full-account key in the bundle by decision (cloning needs it); a server proxy would replace only this file. Sent as `Authorization: Bearer` (the only credential header Cartesia's CORS allows).
 - Every call honours `AbortSignal`, and **an abort stays an `AbortError`** (never a `CartesiaError`). No retry.

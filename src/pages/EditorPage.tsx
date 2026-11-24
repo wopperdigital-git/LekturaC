@@ -30,6 +30,7 @@ import { ToolsPanel, type PanelTab } from '@/components/editor/ToolsPanel'
 import type { LayoutTools } from '@/components/editor/LayoutPicker'
 import type { Card } from '@/engine/contentBlocks'
 import { NarrationTab } from '@/components/editor/NarrationTab'
+import type { VideoStep } from '@/video/steps'
 import { modalIsOpen } from '@/lib/modalOpen'
 import { previewFont } from '@/engine/fontPreview'
 import { cardKindOf, layoutVarieties, resolveLayout } from '@/engine/layoutEngine'
@@ -157,25 +158,28 @@ export function EditorPage() {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
-  const [voiceRequested, setVoiceRequested] = useState(false)
+  // The step the video dialog was asked to open on, or null when nobody is asking.
+  const [voiceRequested, setVoiceRequested] = useState<VideoStep | null>(null)
 
   // The narrated video dialog lives in the Narrate tab, so asking for it opens the panel on that tab.
-  const openVideo = useCallback(() => {
+  // The Create & export menu starts at the voice; "View Video" goes straight to the video.
+  const openVideoAt = useCallback((step: VideoStep) => {
     setToolsOpen(true)
     setPanelTab('narration')
-    setVoiceRequested(true)
+    setVoiceRequested(step)
   }, [])
+  const openVideo = useCallback(() => openVideoAt('voice'), [openVideoAt])
 
-  // `?video=1` (the corner panel's "View Video") opens the video dialog, once.
+  // `?video=1` (the corner panel's "View Video") opens the video dialog on its video, once.
   useEffect(() => {
     if (searchParams.get('video') !== '1') return
-    openVideo()
+    openVideoAt('video')
     const next = new URLSearchParams(searchParams)
     next.delete('video')
     setSearchParams(next, { replace: true })
-  }, [searchParams, setSearchParams, openVideo])
+  }, [searchParams, setSearchParams, openVideoAt])
 
-  const onVoiceOpened = useCallback(() => setVoiceRequested(false), [])
+  const onVoiceOpened = useCallback(() => setVoiceRequested(null), [])
 
   // `?narrate=1` (the corner panel's "View Scripts", once you have left the editor) opens the Narrate tab, once.
   useEffect(() => {
@@ -1187,7 +1191,8 @@ export function EditorPage() {
               theme: store.theme,
               textStyle: store.textStyle,
             }}
-            onClose={() => setVoiceRequested(false)}
+            initialStep={voiceRequested}
+            onClose={() => setVoiceRequested(null)}
           />
         )}
         {quizModal}
@@ -1547,13 +1552,18 @@ export function EditorPage() {
                 fillDisabledReason={fillDisabledReason}
                 tab={panelTab}
                 // The slide the editor is on: the selected one, else the outline's active
-                // one (the same rule the pen uses). No stepper — the canvas is the viewer.
+                // one (the same rule the pen uses). The tab's own stepper moves the editor
+                // (selection too, when a slide is selected), so the canvas stays the viewer.
                 narrationTab={
                   <NarrationTab
                     cards={sortedCards}
                     cardId={selectedCardId ?? activeCardId}
-                    openVoice={voiceRequested && store.presentationId === id}
+                    openVoice={store.presentationId === id ? voiceRequested : null}
                     onVoiceOpened={onVoiceOpened}
+                    onGoToCard={(cardId) => {
+                      if (selectedCardId !== null) selectCard(cardId)
+                      scrollToCard(cardId)
+                    }}
                   />
                 }
               />

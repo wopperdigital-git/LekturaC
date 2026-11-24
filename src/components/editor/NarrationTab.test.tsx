@@ -9,8 +9,9 @@ import { NarrationTab } from './NarrationTab'
  * A render smoke test, and a deliberate exception to "pure logic only" like the
  * other editor panels: the failures worth catching are in what the tab draws for
  * which state (no slide, an empty deck, an edited script, no Cartesia key), which no
- * pure function can see. The gesture side (tab switching mid-generation, the modals
- * opening inside the panel) needs a browser and is not covered here.
+ * pure function can see. The gesture side (stepping, tab switching mid-generation, the
+ * modals opening inside the panel) needs a browser and is not covered here; the stepping
+ * rules themselves are `engine/scriptSpots.ts`.
  */
 
 beforeEach(() => {
@@ -46,7 +47,7 @@ function tagLabelled(html: string, label: string): string {
   return tag
 }
 
-const AI = 'Generate scripts with AI'
+const AI = 'Write with AI'
 const VOICE = 'Voice &amp; video'
 
 describe('NarrationTab', () => {
@@ -56,7 +57,7 @@ describe('NarrationTab', () => {
     expect(tagLabelled(html, AI)).toContain('disabled=""')
   })
 
-  it('asks for a slide when none is selected, and still offers the AI icon for the deck', () => {
+  it('asks for a slide when none is selected, and still offers Write with AI for the deck', () => {
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={null} />)
     expect(html).toContain('Select a slide to write its script.')
     expect(tagLabelled(html, AI)).not.toContain('disabled=""')
@@ -70,7 +71,7 @@ describe('NarrationTab', () => {
 
   it('shows the selected slide by its position, with its script and length', () => {
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="a" />)
-    expect(html).toContain('Slide 1 script')
+    expect(html).toContain('Slide 1 of 3')
     expect(html).toContain('Hello there')
     expect(html).toContain('2 words')
   })
@@ -83,7 +84,7 @@ describe('NarrationTab', () => {
 
   it('marks a hand-edited script, and offers to put the generated one back', () => {
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="b" />)
-    expect(html).toContain('Slide 2 script')
+    expect(html).toContain('Slide 2 of 3')
     expect(html).toContain('>Edited by you<')
     expect(html).toContain('Reset to generated')
   })
@@ -99,8 +100,8 @@ describe('NarrationTab', () => {
     expect(html).toContain('aria-label="Script for slide 2"')
   })
 
-  // The two big buttons became one small icon, and the generation strip only exists while
-  // something is happening.
+  // The two big buttons became one footer button over a slide picker, and the generation strip
+  // only exists while something is happening.
   it('no longer has the two Generate buttons', () => {
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="a" />)
     expect(html).not.toContain('Generate script for this slide only')
@@ -112,7 +113,7 @@ describe('NarrationTab', () => {
     expect(html).not.toContain('Writing narration')
   })
 
-  it('offers the AI icon and Voice & video in the footer with or without a slide selected', () => {
+  it('offers Write with AI and Voice & video in the footer with or without a slide selected', () => {
     for (const cardId of ['a', null]) {
       const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={cardId} />)
       expect(tagLabelled(html, AI)).toContain('type="button"')
@@ -136,6 +137,33 @@ describe('NarrationTab', () => {
   })
 })
 
+describe('NarrationTab navigator', () => {
+  const nav = (html: string) => html.match(/<nav aria-label="Narration scripts"[\s\S]*?<\/nav>/)?.[0] ?? ''
+
+  it('walks the narration in video order: Intro, a tick per slide, Outro', () => {
+    const html = nav(renderToStaticMarkup(<NarrationTab cards={DECK} cardId="b" onGoToCard={() => {}} />))
+    const at = (needle: string) => html.indexOf(needle)
+    expect(at('Intro</button>')).toBeGreaterThan(-1)
+    expect(at('Intro</button>')).toBeLessThan(at('aria-label="Slide 1, scripted"'))
+    expect(at('aria-label="Slide 3, no script"')).toBeLessThan(at('Outro</button>'))
+    expect(html).toMatch(/aria-label="Slide 2, scripted"[^>]*aria-current="step"/)
+  })
+
+  it('offers Previous and Next from a middle slide', () => {
+    const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="b" onGoToCard={() => {}} />)
+    expect(tagLabelled(html, 'Previous script')).not.toContain('disabled=""')
+    expect(tagLabelled(html, 'Next script')).not.toContain('disabled=""')
+  })
+
+  // Without a way to move the editor, the arrows can reach the intro and outro but not another slide.
+  it('only steps to another slide when it can move the editor there', () => {
+    const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="b" />)
+    expect(tagLabelled(html, 'Previous script')).toContain('disabled=""')
+    expect(tagLabelled(html, 'Next script')).toContain('disabled=""')
+    expect(tagLabelled(html, 'Slide 1, scripted')).toContain('disabled=""')
+  })
+})
+
 describe('NarrationTab intro and outro', () => {
   const bookendsInitial = { ...useBookendsStore.getInitialState() }
   const deckInitial = { title: usePresentationStore.getInitialState().title }
@@ -150,32 +178,21 @@ describe('NarrationTab intro and outro', () => {
     Object.assign(usePresentationStore.getInitialState(), deckInitial)
   })
 
-  it('has an Intro & outro section, with or without a slide selected', () => {
+  it('reaches the intro and outro from the navigator, with or without a slide selected', () => {
     for (const cardId of ['a', null]) {
       const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={cardId} />)
-      expect(html).toContain('<details')
-      expect(html).toContain('Intro &amp; outro')
-      expect(html).toContain('Spoken over your face before the first slide and after the last. Leave a box empty for no clip.')
+      expect(html).toContain('Intro</button>')
+      expect(html).toContain('Outro</button>')
     }
   })
 
-  it('shows the starter for a never-edited intro, and No clip for a cleared outro', () => {
+  // Rendered on the server the tab can only open on a slide; what an intro or outro box says is
+  // `bookendMeta`, shared with the video dialog's boxes and tested in BookendBox.test.tsx.
+  it('marks a written intro as filled and a cleared outro as empty in the map', () => {
     setStores({ intro: null, outro: '' }, 'Volcanoes')
     const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId="a" />)
-    expect(html).toContain("Hi! Today we&#x27;re looking at Volcanoes. Let&#x27;s get started.")
-    expect(html).toContain('No clip')
-    // The intro has words, so it carries a price line and only the outro says No clip.
-    expect(html).toContain('about $0.12')
-    expect(html.match(/No clip/g)).toHaveLength(1)
-  })
-
-  it('labels the two boxes and gives each three rows', () => {
-    setStores({ intro: 'Hello', outro: 'Bye' }, 'Volcanoes')
-    const html = renderToStaticMarkup(<NarrationTab cards={DECK} cardId={null} />)
-    expect(tagLabelled(html, 'Intro')).toContain('rows="3"')
-    expect(tagLabelled(html, 'Outro')).toContain('rows="3"')
-    expect(html).toContain('>Hello</textarea>')
-    expect(html).toContain('>Bye</textarea>')
+    expect(html).toContain('title="Intro"')
+    expect(html).toContain('title="Outro (empty: no clip)"')
   })
 
   it('shows the store warning as the tab error', () => {

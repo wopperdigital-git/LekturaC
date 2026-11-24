@@ -6,10 +6,17 @@ import type { VoiceLanguage } from './scripts'
   so they can be tested without one.
 */
 
-/** Cartesia's instant clone works from about 3-10 s of clean audio. */
-export const MIN_CLIP_SECONDS = 3
-/** Recording stops by itself here: a longer clip adds nothing and invites background noise. */
-export const MAX_CLIP_SECONDS = 15
+/*
+  Cartesia's instant clone needs about 10 s of clean audio to get started, and from Sonic 3.6 (the
+  model `cartesia.ts` uses) it learns from up to 60 s, keeping more of the speaker's accent and
+  range. The reading passage is written for about 20 s; the cap leaves room for a slower reader.
+*/
+/** Below this a clip is refused: too little to copy a voice from. */
+export const MIN_CLIP_SECONDS = 10
+/** How long the reading passage takes at a natural pace. */
+export const TARGET_CLIP_SECONDS = 20
+/** Recording stops by itself here: past this a clip mostly invites background noise. */
+export const MAX_CLIP_SECONDS = 30
 export const MAX_NAME_LENGTH = 60
 
 /* Formats Cartesia accepts (flac, mp3, mpeg, mpga, oga, ogg, wav, webm), best first. Safari's
@@ -44,7 +51,7 @@ export type RecState = 'idle' | 'starting' | 'recording' | 'recorded'
  * Not while a clone is in flight: finishing a clone clears the recording state, so a take
  * started meanwhile would be left running with its Stop button gone and its microphone
  * held. Not while one is already starting or running either. Not before the person has
- * ticked the consent box under the notice, and not while it is unknown whose voices are
+ * agreed in the consent dialog, and not while it is unknown whose voices are
  * whose (`clonedVoices.ts`): a clone that can't be recorded as theirs would be nobody's.
  */
 export function canRecord(s: {

@@ -18,12 +18,22 @@ describe('voice scripts', () => {
     }
   })
 
-  // Cartesia's instant clone works from about 3-10 s of clean audio: ~25 words read aloud.
-  it('keeps every reading script short enough to read in roughly ten seconds', () => {
+  // About 20 seconds read aloud (TARGET_CLIP_SECONDS): ~50 words at a teaching pace, well inside the cap.
+  it('keeps every reading script to roughly twenty seconds', () => {
     for (const { code } of VOICE_LANGUAGES) {
-      const n = words(READING_SCRIPTS[code])
-      expect(n).toBeGreaterThanOrEqual(20)
-      expect(n).toBeLessThanOrEqual(40)
+      const n = words(READING_SCRIPTS[code].replace(/ /g, ''))
+      expect(n).toBeGreaterThanOrEqual(42)
+      expect(n).toBeLessThanOrEqual(60)
+    }
+  })
+
+  // A pangram is one flat sentence; the passage should make the reader ask, list and exclaim.
+  it('gives every reading script a question, an exclamation and a list', () => {
+    for (const { code } of VOICE_LANGUAGES) {
+      const text = READING_SCRIPTS[code]
+      expect(text).toContain('?')
+      expect(text).toContain('!')
+      expect(text).toContain(':')
     }
   })
 

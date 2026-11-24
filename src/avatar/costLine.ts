@@ -1,4 +1,4 @@
-import { speakingSeconds } from '@/lib/speakingTime'
+import { formatDuration, speakingSeconds } from '@/lib/speakingTime'
 import { clipCost, formatUsd, waitMinutes } from './bookends'
 
 /*
@@ -18,4 +18,10 @@ export function faceCostLine(introText: string, outroText: string): string | nul
   if (intro === 0 && outro === 0) return null
   const { min, max } = waitMinutes(Math.max(intro, outro))
   return `Adds about ${min}–${max} min and ${formatUsd(clipCost(intro) + clipCost(outro))} (WaveSpeed). It still bills if you cancel.`
+}
+
+/** What one intro or outro box costs to animate: its length and price, or "No clip" when it is empty. */
+export function bookendMeta(value: string): string {
+  const seconds = clipSeconds(value)
+  return value.trim() === '' ? 'No clip' : `~${formatDuration(seconds)} · about ${formatUsd(clipCost(seconds))}`
 }

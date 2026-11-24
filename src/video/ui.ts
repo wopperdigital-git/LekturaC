@@ -54,7 +54,7 @@ export interface FaceBlockerInput {
 export function faceBlocker(i: FaceBlockerInput): string | null {
   if (!i.configured) return FACE_NOT_SET_UP
   if (!i.hasPhoto) return 'Add a photo of your face first.'
-  if (i.introText.trim() === '' && i.outroText.trim() === '') return 'Write an intro or an outro in the Narrate tab first.'
+  if (i.introText.trim() === '' && i.outroText.trim() === '') return 'Write an intro or an outro first.'
   return null
 }
 

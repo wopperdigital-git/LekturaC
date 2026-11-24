@@ -44,13 +44,13 @@ describe('canClone', () => {
   })
 
   it('refuses a blank or whitespace-only name', () => {
-    expect(canClone({ clipSeconds: 8, name: '' })).toBe(false)
-    expect(canClone({ clipSeconds: 8, name: '   ' })).toBe(false)
+    expect(canClone({ clipSeconds: 20, name: '' })).toBe(false)
+    expect(canClone({ clipSeconds: 20, name: '   ' })).toBe(false)
   })
 
   it('refuses a name longer than the limit', () => {
-    expect(canClone({ clipSeconds: 8, name: 'x'.repeat(MAX_NAME_LENGTH) })).toBe(true)
-    expect(canClone({ clipSeconds: 8, name: 'x'.repeat(MAX_NAME_LENGTH + 1) })).toBe(false)
+    expect(canClone({ clipSeconds: 20, name: 'x'.repeat(MAX_NAME_LENGTH) })).toBe(true)
+    expect(canClone({ clipSeconds: 20, name: 'x'.repeat(MAX_NAME_LENGTH + 1) })).toBe(false)
   })
 })
 
