@@ -110,7 +110,7 @@ export function VideosPage() {
             <ol className="mt-3 max-w-md list-decimal space-y-1 pl-5 text-left text-sm text-app-muted">
               <li>Open a deck.</li>
               <li>
-                Choose <span className="font-semibold text-app-foreground">Create &amp; export → Narrated video</span>.
+                Choose <span className="font-semibold text-app-foreground">Create &amp; export → Narrate Video</span>.
               </li>
               <li>Pick a voice and press Generate video. It shows up here when it is done.</li>
             </ol>
