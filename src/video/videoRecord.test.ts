@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseVideo } from './videoRecord'
+import { parseVideo, parseVideoHistory } from './videoRecord'
 
 const good = { path: 'u1/p1.mp4', contentType: 'video/mp4', durationSeconds: 42.5, generatedAt: '2026-09-27T10:00:00.000Z' }
 
@@ -52,5 +52,20 @@ describe('parseVideo', () => {
   it('old records have no slides', () => {
     expect(parseVideo(good)?.slides).toBeUndefined()
     expect('slides' in (parseVideo(good) ?? {})).toBe(false)
+  })
+})
+
+describe('parseVideoHistory', () => {
+  const ok = { path: 'u1/p1/a.mp4', contentType: 'video/mp4', durationSeconds: 3, generatedAt: '2026-01-01T00:00:00.000Z' }
+
+  it('keeps the readable entries in order and leaves out the rest', () => {
+    const second = { ...ok, path: 'u1/p1/b.mp4' }
+    expect(parseVideoHistory([ok, { path: 1 }, null, second]).map((r) => r.path)).toEqual(['u1/p1/a.mp4', 'u1/p1/b.mp4'])
+  })
+
+  it('is empty for anything that is not a list', () => {
+    expect(parseVideoHistory(null)).toEqual([])
+    expect(parseVideoHistory({})).toEqual([])
+    expect(parseVideoHistory('x')).toEqual([])
   })
 })

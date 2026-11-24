@@ -32,6 +32,15 @@ function parseSlides(raw: unknown): VideoSlideTiming[] | undefined {
 }
 
 /**
+ * A deck's earlier videos (`presentations.video_history`), newest first. Anything that is not a list
+ * is no history; an entry that does not read as a video is left out and the rest are kept.
+ */
+export function parseVideoHistory(raw: unknown): VideoRecord[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map(parseVideo).filter((r): r is VideoRecord => r !== null)
+}
+
+/**
  * Reads whatever the database returned. All or nothing: a record with one bad field is no
  * video, because half a record would show a player with nothing behind it. The one exception is
  * `slides`, which only lessons use: a bad list is left out and the video is kept.

@@ -29,6 +29,7 @@ Migrations in `supabase/migrations/`. RLS on deck tables is `owner_id = auth.uid
 | 0018 | lessons | posting/taking a lesson only |
 | 0019, 0020 | `admins`, `admin_overview(p_range)` | admin page only |
 | 0021 | `presentations.bookends`, private `face-photos` bucket | talking intro/outro only (own best-effort read/write, never `loadDeck`) |
+| 0022 | `presentations.video_history` | keeping earlier videos only (without it a new video replaces the old) |
 
 ## Rules
 

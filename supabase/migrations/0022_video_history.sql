@@ -1,0 +1,16 @@
+-- Earlier narrated videos of a deck are kept, not replaced.
+--
+-- `presentations.video` still points at the deck's current video, at `<user id>/<deck id>.<ext>` in the
+-- private `deck-videos` bucket: the only name `can_watch_deck_video` (0018) lets a lesson's student
+-- read, so lessons are unchanged. Before a new video is uploaded over it, the app copies the current
+-- file to `<user id>/<deck id>/<made at>.<ext>` and lists it first in `video_history`, in the same
+-- update that points `video` at the new one. Its shape is owned by the app (src/video/videoRecord.ts),
+-- not by SQL; `[]` means no earlier videos.
+--
+-- No new policy: the copies are in the owner's folder, which 0015's owner-only policies already cover
+-- (a copy needs select on the source and insert on the destination), and they never match the
+-- student policy's name pattern, so earlier videos stay private to the owner. Deleting a deck removes
+-- every file the app finds in `video` and `video_history`. `delete_own_account()` still orphans videos.
+--
+-- Gates ONLY keeping earlier videos: without this column the app replaces the video as it always did.
+alter table presentations add column if not exists video_history jsonb not null default '[]'::jsonb;

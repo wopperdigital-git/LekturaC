@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VideoError } from './errors'
 import { MP4_FORMAT, WEBM_FORMAT } from './format'
 import { MIGRATION_MESSAGE } from './storageErrors'
-import { deleteDeckWithVideo, loadVideo, saveVideo, signVideo, type SaveVideoInput, type StoragePorts } from './storage'
+import { deleteDeckWithVideo, loadVideo, loadVideoHistory, saveVideo, signVideo, type SaveVideoInput, type StoragePorts } from './storage'
 import type { VideoRecord } from './videoRecord'
 
 function fakePorts(overrides: Partial<StoragePorts> = {}) {
@@ -16,11 +16,16 @@ function fakePorts(overrides: Partial<StoragePorts> = {}) {
       log.push(`remove ${paths.join(',')}`)
       return { error: null }
     },
+    copy: async (from, to) => {
+      log.push(`copy ${from} -> ${to}`)
+      return { error: null }
+    },
     writeRecord: async (id) => {
       log.push(`write ${id}`)
       return { error: null }
     },
     readRecord: async () => ({ data: null, error: null }),
+    readHistory: async () => ({ data: [], error: null }),
     signedUrl: async (path, downloadName) => ({
       url: `https://signed/${path}${downloadName ? `?download=${downloadName}` : ''}`,
       error: null,
@@ -91,45 +96,111 @@ describe('saveVideo', () => {
     expect('slides' in (await saveVideo(ports, input()))).toBe(false)
   })
 
-  it('replaces at the same path without removing anything', async () => {
-    const { ports, log } = fakePorts()
-    await saveVideo(ports, input({ previous }))
-    expect(log).toEqual(['upload u1/p1.mp4', 'write p1'])
-  })
+  /* ---- earlier videos are kept (0022) ---- */
+  const stored = (over: Partial<StoragePorts> = {}) =>
+    fakePorts({ readRecord: async () => ({ data: previous, error: null }), ...over })
+  const KEPT = 'u1/p1/2026-09-01T00-00-00-000Z.mp4'
 
-  // Review Focus 4: a different browser can make a different container.
-  it('removes the previous object, but only after the new record is written', async () => {
-    const { ports, log } = fakePorts()
-    await saveVideo(ports, input({ previous, format: WEBM_FORMAT }))
-    expect(log).toEqual(['upload u1/p1.webm', 'write p1', 'remove u1/p1.mp4'])
-  })
-
-  it('keeps the previous video when the upload fails, and writes nothing', async () => {
-    const { ports, log } = fakePorts({
-      upload: async () => ({ error: { message: 'Bucket not found', statusCode: '404' } }),
+  it('keeps the current video under its own name before uploading over it, and lists it first in the history', async () => {
+    const older: VideoRecord = { ...previous, path: 'u1/p1/2026-08-01T00-00-00-000Z.mp4', generatedAt: '2026-08-01T00:00:00.000Z' }
+    const written: (VideoRecord[] | undefined)[] = []
+    const { ports, log } = stored({
+      readHistory: async () => ({ data: [older], error: null }),
+      writeRecord: async (id, _record, history) => {
+        log.push(`write ${id}`)
+        written.push(history)
+        return { error: null }
+      },
     })
-    const err = await saveVideo(ports, input({ previous, format: WEBM_FORMAT })).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(VideoError)
-    expect((err as VideoError).message).toBe(MIGRATION_MESSAGE)
-    expect((err as VideoError).stage).toBe('uploading')
+    await saveVideo(ports, input())
+    expect(log).toEqual([`copy u1/p1.mp4 -> ${KEPT}`, 'upload u1/p1.mp4', 'write p1'])
+    expect(written[0]).toEqual([{ ...previous, path: KEPT }, older])
+  })
+
+  it('reads the stored video rather than trusting the caller, and uses the caller only when the read fails', async () => {
+    const fromStore = stored()
+    await saveVideo(fromStore.ports, input({ previous: null }))
+    expect(fromStore.log[0]).toBe(`copy u1/p1.mp4 -> ${KEPT}`)
+    const unreadable = fakePorts({ readRecord: async () => ({ data: null, error: { message: 'offline' } }) })
+    await saveVideo(unreadable.ports, input({ previous }))
+    expect(unreadable.log[0]).toBe(`copy u1/p1.mp4 -> ${KEPT}`)
+  })
+
+  it('copies nothing for a deck with no video yet, and writes an empty history', async () => {
+    const histories: (VideoRecord[] | undefined)[] = []
+    const { ports, log } = fakePorts({
+      writeRecord: async (_id, _r, history) => {
+        histories.push(history)
+        return { error: null }
+      },
+    })
+    await saveVideo(ports, input())
+    expect(log.some((l) => l.startsWith('copy'))).toBe(false)
+    expect(histories).toEqual([[]])
+  })
+
+  // Mutation check: a failed copy must stop the save, or the upload would overwrite the only copy.
+  it('saves nothing when the current video cannot be kept, and says why', async () => {
+    const { ports, log } = stored({ copy: async () => ({ error: { message: 'boom' } }) })
+    const err = await saveVideo(ports, input()).catch((e: unknown) => e)
+    expect((err as VideoError).message).toMatch(/previous video could not be kept/i)
     expect(log).toEqual([])
   })
 
-  // Review Focus 4, the other half: never remove the old file when the new record was not written.
-  it('keeps the previous object and removes the new one when the record write fails', async () => {
-    const { ports, log } = fakePorts({
+  it('saves nothing when the earlier videos cannot be read, so none are dropped from the list', async () => {
+    const { ports, log } = stored({ readHistory: async () => ({ data: null, error: { message: 'offline' } }) })
+    await expect(saveVideo(ports, input())).rejects.toBeInstanceOf(VideoError)
+    expect(log).toEqual([])
+  })
+
+  it('without migration 0022, replaces the video as before and writes no history', async () => {
+    const histories: (VideoRecord[] | undefined)[] = []
+    const { ports, log } = stored({
+      readHistory: async () => ({ data: null, error: { code: '42703', message: 'no video_history' } }),
+      writeRecord: async (id, _r, history) => {
+        log.push(`write ${id}`)
+        histories.push(history)
+        return { error: null }
+      },
+    })
+    await saveVideo(ports, input())
+    expect(log).toEqual(['upload u1/p1.mp4', 'write p1'])
+    expect(histories).toEqual([undefined])
+  })
+
+  // A different browser can make a different container: the old name is removed once its copy is kept.
+  it('removes the current object under its old name, but only after the new record is written', async () => {
+    const { ports, log } = stored()
+    await saveVideo(ports, input({ format: WEBM_FORMAT }))
+    expect(log).toEqual([`copy u1/p1.mp4 -> ${KEPT}`, 'upload u1/p1.webm', 'write p1', 'remove u1/p1.mp4'])
+  })
+
+  it('keeps the current video when the upload fails, writes nothing, and removes the copy', async () => {
+    const { ports, log } = stored({
+      upload: async () => ({ error: { message: 'Bucket not found', statusCode: '404' } }),
+    })
+    const err = await saveVideo(ports, input({ format: WEBM_FORMAT })).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(VideoError)
+    expect((err as VideoError).message).toBe(MIGRATION_MESSAGE)
+    expect((err as VideoError).stage).toBe('uploading')
+    expect(log).toEqual([`copy u1/p1.mp4 -> ${KEPT}`, `remove ${KEPT}`])
+  })
+
+  // Never remove the current file when the new record was not written.
+  it('keeps the current object and removes the new one and the copy when the record write fails', async () => {
+    const { ports, log } = stored({
       writeRecord: async () => ({ error: { code: 'PGRST204', message: "no 'video' column" } }),
     })
-    const err = await saveVideo(ports, input({ previous, format: WEBM_FORMAT })).catch((e: unknown) => e)
+    const err = await saveVideo(ports, input({ format: WEBM_FORMAT })).catch((e: unknown) => e)
     expect((err as VideoError).message).toBe(MIGRATION_MESSAGE)
-    expect(log).toContain('remove u1/p1.webm')
+    expect(log).toContain(`remove ${KEPT},u1/p1.webm`)
     expect(log).not.toContain('remove u1/p1.mp4')
   })
 
   it('does not remove a file it just overwrote when the record write fails at the same path', async () => {
-    const { ports, log } = fakePorts({ writeRecord: async () => ({ error: { message: 'boom' } }) })
-    await expect(saveVideo(ports, input({ previous }))).rejects.toBeInstanceOf(VideoError)
-    expect(log.filter((l) => l.startsWith('remove'))).toEqual([])
+    const { ports, log } = stored({ writeRecord: async () => ({ error: { message: 'boom' } }) })
+    await expect(saveVideo(ports, input())).rejects.toBeInstanceOf(VideoError)
+    expect(log.filter((l) => l.startsWith('remove'))).toEqual([`remove ${KEPT}`])
   })
 
   it('removes the new object when there was no previous video and the record write fails', async () => {
@@ -139,8 +210,11 @@ describe('saveVideo', () => {
   })
 
   it('still succeeds when removing the previous object fails', async () => {
-    const { ports } = fakePorts({ remove: async () => Promise.reject(new Error('offline')) })
-    await expect(saveVideo(ports, input({ previous, format: WEBM_FORMAT }))).resolves.toMatchObject({ path: 'u1/p1.webm' })
+    const { ports } = fakePorts({
+      readRecord: async () => ({ data: previous, error: null }),
+      remove: async () => Promise.reject(new Error('offline')),
+    })
+    await expect(saveVideo(ports, input({ format: WEBM_FORMAT }))).resolves.toMatchObject({ path: 'u1/p1.webm' })
   })
 
   it('reports the original error, not a clean-up failure', async () => {
@@ -257,7 +331,35 @@ describe('signVideo', () => {
   })
 })
 
+describe('loadVideoHistory', () => {
+  const older: VideoRecord = { ...previous, path: 'u1/p1/2026-08-01T00-00-00-000Z.mp4' }
+
+  it('returns each earlier video with its links, in the stored order, leaving out bad entries', async () => {
+    const { ports } = fakePorts({ readHistory: async () => ({ data: [older, { path: 1 }, previous], error: null }) })
+    const views = await loadVideoHistory(ports, 'p1', 'Deck')
+    expect(views.map((v) => v.record.path)).toEqual([older.path, previous.path])
+    expect(views[0].url).toBe(`https://signed/${older.path}`)
+  })
+
+  it('is empty when the read fails, the column is missing, or it throws', async () => {
+    expect(await loadVideoHistory(fakePorts({ readHistory: async () => ({ data: null, error: { code: '42703' } }) }).ports, 'p1', 'x')).toEqual([])
+    expect(await loadVideoHistory(fakePorts({ readHistory: async () => Promise.reject(new Error('offline')) }).ports, 'p1', 'x')).toEqual([])
+  })
+})
+
 describe('deleteDeckWithVideo', () => {
+  it('removes the earlier videos along with the current one, after the row', async () => {
+    const older: VideoRecord = { ...previous, path: 'u1/p1/2026-08-01T00-00-00-000Z.mp4' }
+    const { ports, log } = fakePorts({
+      readRecord: async () => ({ data: previous, error: null }),
+      readHistory: async () => ({ data: [older], error: null }),
+    })
+    await deleteDeckWithVideo(ports, 'p1', async () => {
+      log.push('delete row')
+    })
+    expect(log).toEqual(['delete row', `remove u1/p1.mp4,${older.path}`])
+  })
+
   // The row goes first: a delete that fails must leave the deck with the video it had.
   it('deletes the row, then removes its video object', async () => {
     const { ports, log } = fakePorts({ readRecord: async () => ({ data: previous, error: null }) })

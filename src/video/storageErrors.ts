@@ -7,6 +7,11 @@ export interface PortError {
   statusCode?: string | number
 }
 
+/** PGRST204: PostgREST "column not found in the schema cache". 42703: Postgres "undefined_column". */
+export function isMissingColumn(err: PortError | null | undefined): boolean {
+  return err?.code === 'PGRST204' || err?.code === '42703'
+}
+
 /**
  * The message to show for a failed upload or record write. Only a missing bucket or column
  * says "run the migration": anything else (an expired session, a network drop) must not send
@@ -15,8 +20,7 @@ export interface PortError {
 export function describeStorageFailure(err: PortError | null | undefined): string {
   const message = err?.message ?? ''
   if (/bucket not found/i.test(message)) return MIGRATION_MESSAGE
-  // PGRST204: PostgREST "column not found in the schema cache". 42703: Postgres "undefined_column".
-  if (err?.code === 'PGRST204' || err?.code === '42703') return MIGRATION_MESSAGE
+  if (isMissingColumn(err)) return MIGRATION_MESSAGE
   if (String(err?.statusCode) === '413' || /exceeded the maximum allowed size|payload too large/i.test(message)) {
     return 'The video is too large to store.'
   }

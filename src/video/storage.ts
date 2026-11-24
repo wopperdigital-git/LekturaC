@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { VideoError } from './errors'
 import type { VideoFormat } from './format'
-import { VIDEO_BUCKET, videoPath } from './paths'
-import { describeStorageFailure, type PortError } from './storageErrors'
-import { parseVideo, type VideoRecord, type VideoSlideTiming } from './videoRecord'
+import { VIDEO_BUCKET, pastVideoPath, videoPath } from './paths'
+import { describeStorageFailure, isMissingColumn, type PortError } from './storageErrors'
+import { parseVideo, parseVideoHistory, type VideoRecord, type VideoSlideTiming } from './videoRecord'
 
 /*
   Where a deck's video goes and how it is found again. The rules (what is written first, what is
@@ -13,7 +13,16 @@ import { parseVideo, type VideoRecord, type VideoSlideTiming } from './videoReco
   The order is the point: upload, then write the record, then remove the previous object. A video the
   record does not point at is invisible, and the previous object is only ever removed once the new
   one is both stored and pointed at, so a failure at any step leaves the deck with the video it had.
+
+  Earlier videos are kept, not replaced (migration 0022, `presentations.video_history`). The current
+  video always sits at `videoPath`, the only name a lesson's student may read, so before a new one is
+  uploaded over it, the current file is copied to `pastVideoPath` and listed first in the history,
+  in the same write that points the deck at the new video. A copy that fails stops the save before
+  anything is overwritten: a video is never dropped silently. A project without 0022 has no history
+  to write and replaces the video as it always did.
 */
+
+const KEEP_FAILED = 'Your previous video could not be kept, so this one was not saved. Try again.'
 
 /** How long a playback or download link works. It is fetched when the modal opens. */
 const SIGNED_URL_SECONDS = 3600
@@ -21,9 +30,14 @@ const SIGNED_URL_SECONDS = 3600
 export interface StoragePorts {
   upload(path: string, blob: Blob, contentType: string): Promise<{ error: PortError | null }>
   remove(paths: string[]): Promise<{ error: PortError | null }>
-  writeRecord(presentationId: string, record: VideoRecord): Promise<{ error: PortError | null }>
+  /** Copies a stored object to a new name; the original stays. */
+  copy(from: string, to: string): Promise<{ error: PortError | null }>
+  /** Points the deck at `record`; with `history`, also sets its earlier videos, in the same write. */
+  writeRecord(presentationId: string, record: VideoRecord, history?: VideoRecord[]): Promise<{ error: PortError | null }>
   /** `data` is the deck's `video` column as stored (unparsed). */
   readRecord(presentationId: string): Promise<{ data: unknown; error: PortError | null }>
+  /** `data` is the deck's `video_history` column as stored (unparsed). */
+  readHistory(presentationId: string): Promise<{ data: unknown; error: PortError | null }>
   /** With `downloadName` the link makes the browser save the file rather than play it. */
   signedUrl(path: string, downloadName?: string): Promise<{ url: string | null; error: PortError | null }>
 }
@@ -36,7 +50,7 @@ export interface SaveVideoInput {
   durationSeconds: number
   /** Where each slide sits in the video; stored so lessons can place checkpoints. */
   slides?: VideoSlideTiming[]
-  /** The deck's video before this run, if it has one. */
+  /** The deck's video before this run, if it has one. Used only when the stored one cannot be read. */
   previous: VideoRecord | null
   now?: () => Date
 }
@@ -50,15 +64,60 @@ async function bestEffortRemove(ports: StoragePorts, paths: string[]): Promise<v
   }
 }
 
+/** The deck's video as stored now; the caller's copy when it cannot be read. */
+async function readCurrent(ports: StoragePorts, input: SaveVideoInput): Promise<VideoRecord | null> {
+  try {
+    const { data, error } = await ports.readRecord(input.presentationId)
+    return error ? input.previous : parseVideo(data)
+  } catch {
+    return input.previous
+  }
+}
+
+/** The deck's earlier videos, or `'none'` for a project without migration 0022. Throws on any other failure. */
+async function readHistoryForSave(ports: StoragePorts, presentationId: string): Promise<VideoRecord[] | 'none'> {
+  let result: { data: unknown; error: PortError | null }
+  try {
+    result = await ports.readHistory(presentationId)
+  } catch (err) {
+    console.warn('[video] could not read the earlier videos:', err)
+    throw new VideoError('uploading', 'The video could not be saved. Try again.')
+  }
+  if (result.error && isMissingColumn(result.error)) return 'none'
+  if (result.error) {
+    // Writing a history without the one stored would drop the earlier videos from the deck.
+    console.warn('[video] could not read the earlier videos:', result.error)
+    throw new VideoError('uploading', describeStorageFailure(result.error))
+  }
+  return parseVideoHistory(result.data)
+}
+
 export async function saveVideo(ports: StoragePorts, input: SaveVideoInput): Promise<VideoRecord> {
   const path = videoPath(input.uid, input.presentationId, input.format.ext)
+  const current = await readCurrent(ports, input)
+  const history = await readHistoryForSave(ports, input.presentationId)
 
+  // 1. Keep the current video under its own name before anything can overwrite it.
+  let kept: VideoRecord | null = null
+  if (history !== 'none' && current) {
+    const ext = current.contentType === 'video/webm' ? 'webm' : 'mp4'
+    kept = { ...current, path: pastVideoPath(input.uid, input.presentationId, current.generatedAt, ext) }
+    const copied = await ports.copy(current.path, kept.path)
+    if (copied.error) {
+      console.warn('[video] could not keep the previous video:', copied.error)
+      throw new VideoError('uploading', KEEP_FAILED)
+    }
+  }
+
+  // 2. The new video.
   const uploaded = await ports.upload(path, input.blob, input.format.contentType)
   if (uploaded.error) {
     console.warn('[video] upload failed:', uploaded.error)
+    if (kept) await bestEffortRemove(ports, [kept.path])
     throw new VideoError('uploading', describeStorageFailure(uploaded.error))
   }
 
+  // 3. Point the deck at it, with the kept one first in its history.
   const record: VideoRecord = {
     path,
     contentType: input.format.contentType,
@@ -66,16 +125,24 @@ export async function saveVideo(ports: StoragePorts, input: SaveVideoInput): Pro
     generatedAt: (input.now?.() ?? new Date()).toISOString(),
     ...(input.slides ? { slides: input.slides } : {}),
   }
-  const wrote = await ports.writeRecord(input.presentationId, record)
+  const nextHistory =
+    history === 'none'
+      ? undefined
+      : [...(kept ? [kept] : []), ...history.filter((h) => h.path !== kept?.path && h.path !== path)]
+  const wrote = await ports.writeRecord(input.presentationId, record, nextHistory)
   if (wrote.error) {
     console.warn('[video] could not record the video:', wrote.error)
-    // A new object nothing points at is removed again. At the same path the file was already
-    // overwritten in place: it cannot be restored, and removing it would lose the deck's video.
-    if (input.previous?.path !== path) await bestEffortRemove(ports, [path])
+    // Nothing points at the copy, or at a new object under a new name: both are removed again. At the
+    // same path the file was already overwritten in place: it cannot be restored, and removing it
+    // would lose the deck's video.
+    const orphans = [...(kept ? [kept.path] : []), ...(current?.path !== path ? [path] : [])]
+    if (orphans.length > 0) await bestEffortRemove(ports, orphans)
     throw new VideoError('uploading', describeStorageFailure(wrote.error))
   }
 
-  if (input.previous && input.previous.path !== path) await bestEffortRemove(ports, [input.previous.path])
+  // 4. A current video under another name (another container) is now kept as a copy, or, without
+  //    0022, replaced as before.
+  if (current && current.path !== path) await bestEffortRemove(ports, [current.path])
   return record
 }
 
@@ -152,6 +219,24 @@ export async function loadVideo(
 }
 
 /**
+ * The deck's earlier videos, newest first, each ready to play. Never throws: no history (or a read
+ * that failed, a project without migration 0022) is an empty list.
+ */
+export async function loadVideoHistory(
+  ports: StoragePorts,
+  presentationId: string,
+  baseName: string,
+): Promise<VideoView[]> {
+  try {
+    const { data, error } = await ports.readHistory(presentationId)
+    if (error) return []
+    return await Promise.all(parseVideoHistory(data).map((record) => signVideo(ports, record, baseName)))
+  } catch {
+    return []
+  }
+}
+
+/**
  * Deletes a deck (`deleteRow`) and then its video file (SQL cannot safely delete Storage objects).
  *
  * The record is read first, since the row is what says where the file is, but the file is removed
@@ -164,15 +249,22 @@ export async function deleteDeckWithVideo(
   presentationId: string,
   deleteRow: () => Promise<void>,
 ): Promise<void> {
-  let record: VideoRecord | null = null
+  const paths: string[] = []
   try {
     const { data, error } = await ports.readRecord(presentationId)
-    if (!error) record = parseVideo(data)
+    const record = error ? null : parseVideo(data)
+    if (record) paths.push(record.path)
   } catch {
     // Unreadable: the deck still goes, and its file (if any) is orphaned.
   }
+  try {
+    const { data, error } = await ports.readHistory(presentationId)
+    if (!error) paths.push(...parseVideoHistory(data).map((r) => r.path))
+  } catch {
+    // Likewise its earlier videos.
+  }
   await deleteRow()
-  if (record) await bestEffortRemove(ports, [record.path])
+  if (paths.length > 0) await bestEffortRemove(ports, paths)
 }
 
 /** The real ports, over the app's Supabase client. */
@@ -190,10 +282,19 @@ export function supabasePorts(client: SupabaseClient): StoragePorts {
       const { error } = await bucket().remove(paths)
       return { error }
     },
-    async writeRecord(presentationId, record) {
-      // Its own update, never the card upsert: a project without migration 0015 must still save decks.
-      const { error } = await client.from('presentations').update({ video: record }).eq('id', presentationId)
+    async copy(from, to) {
+      const { error } = await bucket().copy(from, to)
       return { error }
+    },
+    async writeRecord(presentationId, record, history) {
+      // Its own update, never the card upsert: a project without migration 0015 must still save decks.
+      const values = history ? { video: record, video_history: history } : { video: record }
+      const { error } = await client.from('presentations').update(values).eq('id', presentationId)
+      return { error }
+    },
+    async readHistory(presentationId) {
+      const { data, error } = await client.from('presentations').select('video_history').eq('id', presentationId).maybeSingle()
+      return { data: data?.video_history ?? null, error }
     },
     async readRecord(presentationId) {
       const { data, error } = await client.from('presentations').select('video').eq('id', presentationId).maybeSingle()
