@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { ensureSession, supabase, supabaseConfigured } from '@/lib/supabaseClient'
-import { DEFAULT_THEME, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
+import { DEFAULT_THEME, FRESH_THEME_LOOKBACK, pickFreshTheme, resolveTheme, type ThemeTokens } from '@/lib/theme-tokens'
 import { EMPTY_TEXT_STYLE, applyTextStylePatch, parseTextStyle, type TextStyle } from '@/engine/textStyle'
 import { clearDeckOverrides, clearStyleOverrides, patchKeys } from '@/engine/styleOverrides'
 import { dropUnreadableColors } from '@/engine/readableColor'
@@ -873,6 +873,29 @@ async function persistSnapshot(id: string, previousCards: Card[], snapshot: Deck
 export type GeneratedDeckInput = Parameters<PresentationState['createDeckFromGeneration']>[0]
 
 /**
+ * The theme ids of the owner's latest decks, newest first, so a new deck can
+ * avoid them. Best effort: any failure returns none and the pick is simply
+ * random, never a failed deck. RLS limits the read to the owner's own rows.
+ */
+async function recentThemeIds(): Promise<string[]> {
+  if (!supabaseConfigured || !supabase) return []
+  try {
+    const { data, error } = await supabase
+      .from('presentations')
+      .select('theme')
+      .order('created_at', { ascending: false })
+      .limit(FRESH_THEME_LOOKBACK)
+    if (error) throw error
+    return (data ?? [])
+      .map((row) => (row.theme as { id?: unknown } | null)?.id)
+      .filter((id): id is string => typeof id === 'string')
+  } catch (err) {
+    console.warn('[theme] could not read recent deck themes:', describeError(err))
+    return []
+  }
+}
+
+/**
  * Creates a generated deck's rows and returns them, touching no store state. The background deck
  * job calls this directly: the store method below also makes it the open deck, which run in the
  * background would replace whatever deck the user is editing when the job finishes.
@@ -881,7 +904,7 @@ export async function insertGeneratedDeck(
   deck: GeneratedDeckInput,
   requestedCount?: number | 'auto',
   result?: PipelineResult,
-): Promise<{ id: string; cards: Card[] }> {
+): Promise<{ id: string; cards: Card[]; theme: ThemeTokens }> {
   const id = newId()
 
   /*
@@ -941,15 +964,17 @@ export async function insertGeneratedDeck(
   // 'auto' can change, and only their layout (never blocks).
   const varied = varyLayouts(mapped)
   const cards: Card[] = mapped.map((card, i) => ({ ...card, layout: varied[i] }))
+  let theme: ThemeTokens = pickFreshTheme([])
 
   if (supabaseConfigured && supabase) {
     await ensureSession()
+    theme = pickFreshTheme(await recentThemeIds())
     const { data: userData } = await supabase.auth.getUser()
     const { error: presError } = await supabase.from('presentations').insert({
       id,
       owner_id: userData.user?.id,
       title: deck.title,
-      theme: DEFAULT_THEME,
+      theme,
     })
     if (presError) throw presError
 
@@ -1007,7 +1032,7 @@ export async function insertGeneratedDeck(
     }
   }
 
-  return { id, cards }
+  return { id, cards, theme }
 }
 
 export const usePresentationStore = create<PresentationState>((set, get) => ({
@@ -1052,24 +1077,26 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
   async createDeck(title = 'Untitled presentation') {
     const id = newId()
+    let theme: ThemeTokens = pickFreshTheme([])
     if (supabaseConfigured && supabase) {
       await ensureSession()
+      theme = pickFreshTheme(await recentThemeIds())
       const { data: userData } = await supabase.auth.getUser()
       const { error } = await supabase.from('presentations').insert({
         id,
         owner_id: userData.user?.id,
         title,
-        theme: DEFAULT_THEME,
+        theme,
       })
       if (error) throw error
     }
-    set({ presentationId: id, title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards: [], status: 'idle', errorMessage: null, loadError: null, past: [], future: [] })
+    set({ presentationId: id, title, theme, textStyle: EMPTY_TEXT_STYLE, cards: [], status: 'idle', errorMessage: null, loadError: null, past: [], future: [] })
     return id
   },
 
   async createDeckFromGeneration(deck, requestedCount, result) {
-    const { id, cards } = await insertGeneratedDeck(deck, requestedCount, result)
-    set({ presentationId: id, title: deck.title, theme: DEFAULT_THEME, textStyle: EMPTY_TEXT_STYLE, cards, status: 'idle', errorMessage: null, loadError: null, past: [], future: [] })
+    const { id, cards, theme } = await insertGeneratedDeck(deck, requestedCount, result)
+    set({ presentationId: id, title: deck.title, theme, textStyle: EMPTY_TEXT_STYLE, cards, status: 'idle', errorMessage: null, loadError: null, past: [], future: [] })
     return id
   },
 

@@ -869,6 +869,26 @@ export const BUILTIN_THEMES: ThemeTokens[] = [
 export const DEFAULT_THEME: ThemeTokens = BUILTIN_THEMES.find((t) => t.id === 'bordo')!
 
 /**
+ * How many of the owner's latest decks a new deck avoids matching. Thirteen
+ * presets minus these five still leaves eight to draw from.
+ */
+export const FRESH_THEME_LOOKBACK = 5
+
+/**
+ * The theme a brand-new deck starts in: a random preset, skipping the ones the
+ * owner's most recent decks already use so two new decks in a row never look
+ * alike. If every preset is recent (or `recentIds` is junk), it draws from all.
+ * `random` is injectable so tests can pin the draw.
+ */
+export function pickFreshTheme(recentIds: readonly string[], random: () => number = Math.random): ThemeTokens {
+  const recent = new Set(recentIds)
+  const fresh = BUILTIN_THEMES.filter((t) => !recent.has(t.id))
+  const pool = fresh.length > 0 ? fresh : BUILTIN_THEMES
+  const index = Math.min(pool.length - 1, Math.floor(random() * pool.length))
+  return pool[index]
+}
+
+/**
  * Resolves a theme loaded from storage back to its current preset definition.
  *
  * Deck rows store the whole theme object as JSON, so a deck saved before a

@@ -14,6 +14,8 @@ import {
   relativeLuminance,
   stageColor,
   DEFAULT_THEME,
+  FRESH_THEME_LOOKBACK,
+  pickFreshTheme,
   resolveTheme,
   SLIDE_BODY_FONT,
   SLIDE_FONT_VARS,
@@ -172,6 +174,34 @@ describe('resolveTheme', () => {
     expect(resolveTheme(undefined)).toBe(DEFAULT_THEME)
     expect(resolveTheme({})).toBe(DEFAULT_THEME)
     expect(resolveTheme({ id: 'deleted-custom-theme' })).toBe(DEFAULT_THEME)
+  })
+})
+
+describe('pickFreshTheme', () => {
+  it('can land on every preset, not only the default', () => {
+    const seen = new Set(BUILTIN_THEMES.map((_, i) => pickFreshTheme([], () => i / BUILTIN_THEMES.length).id))
+    expect(seen.size).toBe(BUILTIN_THEMES.length)
+  })
+
+  it('never repeats a theme the latest decks already use', () => {
+    const recent = BUILTIN_THEMES.slice(0, FRESH_THEME_LOOKBACK).map((t) => t.id)
+    for (let i = 0; i < 50; i++) {
+      expect(recent).not.toContain(pickFreshTheme(recent, () => i / 50).id)
+    }
+  })
+
+  it('draws from every preset when all of them are recent', () => {
+    const all = BUILTIN_THEMES.map((t) => t.id)
+    expect(BUILTIN_THEMES).toContain(pickFreshTheme(all, () => 0.5))
+  })
+
+  it('stays in range when random returns its upper edge', () => {
+    expect(BUILTIN_THEMES).toContain(pickFreshTheme([], () => 0.9999999999))
+    expect(BUILTIN_THEMES).toContain(pickFreshTheme([], () => 1))
+  })
+
+  it('ignores ids that are not presets', () => {
+    expect(BUILTIN_THEMES).toContain(pickFreshTheme(['deleted-custom-theme', ''], Math.random))
   })
 })
 
