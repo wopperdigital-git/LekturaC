@@ -53,28 +53,54 @@ describe('SlideWindowView', () => {
   })
 
   it('draws the shown slide while live', () => {
-    const html = render('live', { index: 1, black: false, ended: false })
+    const html = render('live', { index: 1, black: false, ended: false, board: false })
     expect(html).toContain('Slide 2')
     expect(html).not.toContain('Slide 1')
   })
 
   it('is black, with no slide text, when blacked out', () => {
-    const html = render('live', { index: 1, black: true, ended: false })
+    const html = render('live', { index: 1, black: true, ended: false, board: false })
     expect(html).not.toContain('Slide 1')
     expect(html).not.toContain('Slide 2')
   })
 
   it('shows the end screen after the last slide', () => {
-    const html = render('live', { index: 2, black: false, ended: true })
+    const html = render('live', { index: 2, black: false, ended: true, board: false })
     expect(html).toContain('End of presentation')
     expect(html).not.toContain('Slide 3')
   })
 
   it('shows the full screen hint only when asked to', () => {
-    const shown = { index: 0, black: false, ended: false }
+    const shown = { index: 0, black: false, ended: false, board: false }
     expect(render('live', shown, { showFullscreenHint: true })).toContain(
       'Click or press F for full screen',
     )
     expect(render('live', shown)).not.toContain('Click or press F for full screen')
   })
+
+  it('shows the whiteboard in place of the slide while it is up', () => {
+    const board = render('live', { index: 1, black: false, ended: false, board: true })
+    expect(board).toContain('data-whiteboard')
+    expect(board).not.toContain('Slide 2')
+    expect(render('live', { index: 1, black: false, ended: false, board: false })).not.toContain('data-whiteboard')
+  })
+
+  it('keeps the screen black over the whiteboard', () => {
+    expect(render('live', { index: 1, black: true, ended: false, board: true })).not.toContain('data-whiteboard')
+  })
+
+  it('shows the board where the console has it, without letting anyone grab it', () => {
+    const html = renderToStaticMarkup(
+      <SlideWindowView
+        phase="live"
+        deck={DECK}
+        shown={{ index: 0, black: false, ended: false, board: true }}
+        showFullscreenHint={false}
+        drawn={{ ink: {}, live: null, laser: null, view: { x: 1, y: 0, zoom: 0.5 } }}
+      />,
+    )
+    expect(html).toContain('transform:scale(0.5) translate(-976px, 0px)')
+    expect(html).not.toContain('cursor:grab')
+  })
 })
+

@@ -1211,7 +1211,6 @@ export function EditorPage() {
         onExport={exportPptx}
         exporting={exportStatus === 'working'}
         canExport={cards.length > 0}
-        onPresent={() => void navigate(`/deck/${id}/present`)}
         onPresenterView={presentFrom}
         presenterDisabledReason={cards.length === 0 ? 'Add a slide first' : null}
         onQuiz={() => {

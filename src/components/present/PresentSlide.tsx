@@ -6,31 +6,38 @@ import { LayoutRenderer } from '@/components/layouts/LayoutRenderer'
 import { SlideBody } from '@/components/layouts/SlideBody'
 import { SlideSurface } from '@/components/theme/SlideSurface'
 import { TextStyleScope } from '@/components/theme/TextStyleScope'
+import { DrawingContext, type CardDrawing } from '@/components/editor/drawingContext'
 
 /**
  * One slide drawn the way the presenter, the projector window and the console
- * draw it. Callers provide the `ThemeProvider` and the scaling frame.
+ * draw it. Callers provide the `ThemeProvider` and the scaling frame. The
+ * presenter view passes `drawing` for its live ink and laser
+ * (`presentDrawing.ts`); single-window Present passes none.
  */
 export function PresentSlide({
   card,
   textStyle,
   isFirstCard,
+  drawing = null,
 }: {
   card: Card
   textStyle: TextStyle
   isFirstCard: boolean
+  drawing?: CardDrawing | null
 }) {
   // The ground is read with the same first-card flag the layout is drawn with, so the two cannot disagree.
   const ground = groundOf(card, { isFirstCard })
   return (
-    <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
-      <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={ground}>
-        {/* Provides the card width every stored element nudge is a fraction of,
-            so every surface shows the same arrangement the editor does. */}
-        <SlideBody card={card}>
-          <LayoutRenderer card={card} context={{ isFirstCard }} />
-        </SlideBody>
-      </SlideSurface>
-    </TextStyleScope>
+    <DrawingContext.Provider value={drawing}>
+      <TextStyleScope style={mergeTextStyle(textStyle, card.textStyle)}>
+        <SlideSurface className="w-full rounded-slide shadow-slide-card" ground={ground}>
+          {/* Provides the card width every stored element nudge is a fraction of,
+              so every surface shows the same arrangement the editor does. */}
+          <SlideBody card={card}>
+            <LayoutRenderer card={card} context={{ isFirstCard }} />
+          </SlideBody>
+        </SlideSurface>
+      </TextStyleScope>
+    </DrawingContext.Provider>
   )
 }

@@ -51,6 +51,8 @@ export interface CardDrawing {
   onLiveStroke?: (stroke: Stroke | null) => void
   /** Presenter view: the laser pointer's dot and trail on this slide. */
   laser?: readonly LaserPoint[]
+  /** How far past the content box a press still draws, in layout px; the whiteboard reaches everywhere. */
+  bleed?: number
 }
 
 export const DrawingContext = createContext<CardDrawing | null>(null)

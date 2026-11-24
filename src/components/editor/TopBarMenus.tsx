@@ -209,7 +209,7 @@ export function ExportMenu({
                 onQuiz()
               }}
             >
-              Quiz…
+              Create Quiz
               {highlightQuiz && <span aria-hidden className="ml-auto size-2 rounded-full bg-app-track-sun" />}
             </MenuItem>
             <MenuItem
@@ -221,7 +221,7 @@ export function ExportMenu({
                 onVideo()
               }}
             >
-              Narrated video…
+              Narrate Video
             </MenuItem>
           </MenuGroup>
           <div aria-hidden="true" className="my-1 h-px bg-app-border" />
@@ -256,18 +256,17 @@ export function ExportMenu({
 }
 
 /**
- * Present, as an icon beside Create & export: the plain presentation, or the
- * presenter view (a console here, the slides on a second window) from the slide the
- * editor is on or from the first. The presenter view's window is opened by the
- * page inside the click itself, so a pop-up blocker lets it through.
+ * Present, as an icon beside Create & export. Presenting is always the presenter
+ * view (a console here with the script and the pen, laser and highlighter; the
+ * slides on a second window), from the slide the editor is on or from the first.
+ * The presenter view's window is opened by the page inside the click itself, so a
+ * pop-up blocker lets it through.
  */
 export function PresentMenu({
-  onPresent,
   onPresenterView,
   presenterDisabledReason,
   defaultOpen,
 }: {
-  onPresent: () => void
   onPresenterView: (from: 'current' | 'first') => void
   /** Why the presenter view cannot start (an empty deck), or `null` when it can. */
   presenterDisabledReason: string | null
@@ -282,42 +281,30 @@ export function PresentMenu({
       defaultOpen={defaultOpen}
     >
       {(close) => (
-        <>
+        <MenuGroup caption="Present">
           <MenuItem
             icon={<PlayIcon />}
+            disabled={presenterDisabledReason !== null}
+            title={presenterDisabledReason ?? 'Script and pen here, slides on a second window, from the slide you are on'}
             onClick={() => {
               close()
-              onPresent()
+              onPresenterView('current')
             }}
           >
-            Present
+            From current slide
           </MenuItem>
-          <div aria-hidden="true" className="my-1 h-px bg-app-border" />
-          <MenuGroup caption="Presenter view">
-            <MenuItem
-              icon={<PlayIcon />}
-              disabled={presenterDisabledReason !== null}
-              title={presenterDisabledReason ?? 'Console here, slides on a second window, from the slide you are on'}
-              onClick={() => {
-                close()
-                onPresenterView('current')
-              }}
-            >
-              From current slide
-            </MenuItem>
-            <MenuItem
-              icon={<PlayIcon />}
-              disabled={presenterDisabledReason !== null}
-              title={presenterDisabledReason ?? 'Console here, slides on a second window, from the first slide'}
-              onClick={() => {
-                close()
-                onPresenterView('first')
-              }}
-            >
-              From first slide
-            </MenuItem>
-          </MenuGroup>
-        </>
+          <MenuItem
+            icon={<PlayIcon />}
+            disabled={presenterDisabledReason !== null}
+            title={presenterDisabledReason ?? 'Script and pen here, slides on a second window, from the first slide'}
+            onClick={() => {
+              close()
+              onPresenterView('first')
+            }}
+          >
+            From first slide
+          </MenuItem>
+        </MenuGroup>
       )}
     </Dropdown>
   )

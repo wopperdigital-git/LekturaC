@@ -34,8 +34,8 @@ function buttonWith(html: string, label: string): string {
   return html.split('<button').find((chunk) => chunk.split('</button>')[0].includes(label)) ?? ''
 }
 
-const QUIZ = 'Quiz…'
-const VIDEO = 'Narrated video…'
+const QUIZ = 'Create Quiz'
+const VIDEO = 'Narrate Video'
 const PPTX = 'PowerPoint (.pptx)'
 const SCRIPT = 'Narration script (.txt)'
 
@@ -113,39 +113,37 @@ describe('AccountMenu', () => {
 })
 
 describe('PresentMenu', () => {
+  const menu = (extra: Partial<ComponentProps<typeof PresentMenu>> = {}) =>
+    renderToStaticMarkup(<PresentMenu onPresenterView={noop} presenterDisabledReason={null} {...extra} />)
+
   it('is an icon button that keeps its items out of the bar until it is opened', () => {
-    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason={null} />)
+    const html = menu()
     expect(html).toContain('aria-label="Present"')
     expect(html).toContain('title="Present this deck"')
-    expect(html).not.toContain('>Present</button>')
     expect(html).not.toContain('role="menuitem"')
   })
 
-  it('offers Present, then the presenter view from the current slide before the first', () => {
-    const html = renderToStaticMarkup(<PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason={null} defaultOpen />)
+  // Present and the presenter view were merged: every way in is the presenter view, with its pen.
+  it('offers only the presenter view, from the current slide before the first', () => {
+    const html = menu({ defaultOpen: true })
+    const items = html.match(/role="menuitem"/g) ?? []
+    expect(items).toHaveLength(2)
+    expect(html).not.toContain('>Present</button>')
     const at = (needle: string) => html.indexOf(needle)
-    expect(at('Present</button>')).toBeGreaterThan(-1)
-    expect(at('Present</button>')).toBeLessThan(at('Presenter view'))
-    expect(at('Presenter view')).toBeLessThan(at('From current slide'))
+    expect(at('From current slide')).toBeGreaterThan(-1)
     expect(at('From current slide')).toBeLessThan(at('From first slide'))
   })
 
-  it('disables both presenter view items, with the reason, for an empty deck', () => {
-    const html = renderToStaticMarkup(
-      <PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason="Add a slide first" defaultOpen />,
-    )
-    const items = html.match(/<button[^>]*role="menuitem"[^>]*>/g) ?? []
-    const presenter = items.filter((b) => b.includes('title="Add a slide first"'))
-    expect(presenter).toHaveLength(2)
-    for (const b of presenter) expect(b).toContain('disabled=""')
-    // plain Present stays available
-    expect(items.filter((b) => !b.includes('Add a slide first'))[0]).not.toContain('disabled=""')
+  it('disables both items, with the reason, for an empty deck', () => {
+    const items = menu({ presenterDisabledReason: 'Add a slide first', defaultOpen: true }).match(/<button[^>]*role="menuitem"[^>]*>/g) ?? []
+    expect(items).toHaveLength(2)
+    for (const b of items) {
+      expect(b).toContain('disabled=""')
+      expect(b).toContain('title="Add a slide first"')
+    }
   })
 
   it('leaves them enabled when there is a slide', () => {
-    const html = renderToStaticMarkup(
-      <PresentMenu onPresent={noop} onPresenterView={noop} presenterDisabledReason={null} defaultOpen />,
-    )
-    expect(html).not.toContain('disabled=""')
+    expect(menu({ defaultOpen: true })).not.toContain('disabled=""')
   })
 })

@@ -69,3 +69,12 @@ export const EXIT_CONFIRM_MS = 2000
 export function confirmsExit(lastExitAt: number | null, now: number): boolean {
   return lastExitAt !== null && now - lastExitAt <= EXIT_CONFIRM_MS
 }
+
+/** Ctrl/Cmd+Z undoes the live ink; with Shift, or Ctrl+Y, it redoes. Anything else is `null`. */
+export function inkUndoKey(e: { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }): 'undo' | 'redo' | null {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null
+  const key = e.key.toLowerCase()
+  if (key === 'z') return e.shiftKey ? 'redo' : 'undo'
+  if (key === 'y' && !e.shiftKey) return 'redo'
+  return null
+}

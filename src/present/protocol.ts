@@ -5,6 +5,7 @@ import type { TextStyle } from '@/engine/textStyle'
 import type { ThemeTokens } from '@/lib/theme-tokens'
 import type { PresenterAction } from './presenterState'
 import { parseLiveInk, type LiveInk } from './liveInk'
+import { parseBoardView, type BoardView } from './boardView'
 
 // Messages between the presenter console and the slide window, both windows of
 // this app, over a BroadcastChannel named by the session.
@@ -29,6 +30,8 @@ export interface ShownState {
   index: number
   black: boolean
   ended: boolean
+  /** The whiteboard is up in place of the slide. */
+  board: boolean
 }
 
 export type ConsoleMessage =
@@ -43,6 +46,8 @@ export type ConsoleMessage =
   | { type: 'inkLive'; cardId: string; stroke: Stroke | null }
   /** Where the laser pointer is on `cardId`; `null` when it leaves the slide. */
   | { type: 'laser'; cardId: string; point: [number, number] | null }
+  /** Where the whiteboard is panned and zoomed to. */
+  | { type: 'boardView'; view: BoardView }
 
 export type ScreenMessage =
   | { type: 'hello' }
@@ -81,6 +86,7 @@ const consoleSchema = z.discriminatedUnion('type', [
     index: z.number(),
     black: z.boolean(),
     ended: z.boolean(),
+    board: z.boolean().default(false),
   }),
   z.object({ type: z.literal('bye') }),
   z.object({ type: z.literal('end') }),
@@ -102,6 +108,7 @@ const consoleSchema = z.discriminatedUnion('type', [
     cardId: z.string(),
     point: z.tuple([z.number().refine(Number.isFinite), z.number().refine(Number.isFinite)]).nullable(),
   }),
+  z.object({ type: z.literal('boardView'), view: z.unknown().transform(parseBoardView) }),
 ])
 
 const screenSchema = z.discriminatedUnion('type', [

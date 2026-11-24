@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EXIT_CONFIRM_MS, confirmsExit, leavesKeyToBrowser, presenterKeyIntent, type KeyInput } from './keys'
+import { EXIT_CONFIRM_MS, confirmsExit, inkUndoKey, leavesKeyToBrowser, presenterKeyIntent, type KeyInput } from './keys'
 
 const key = (k: string, extra: Partial<KeyInput> = {}) =>
   presenterKeyIntent({ key: k, ctrlKey: false, metaKey: false, altKey: false, inField: false, ...extra })
@@ -74,5 +74,24 @@ describe('confirmsExit', () => {
 
   it('does not confirm after the window', () => {
     expect(confirmsExit(1000, 1000 + EXIT_CONFIRM_MS + 1)).toBe(false)
+  })
+})
+
+describe('inkUndoKey', () => {
+  const k = (key: string, over: Partial<{ ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }> = {}) =>
+    inkUndoKey({ key, ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, ...over })
+
+  it('reads Ctrl/Cmd+Z as undo, with Shift or Ctrl+Y as redo', () => {
+    expect(k('z')).toBe('undo')
+    expect(k('z', { ctrlKey: false, metaKey: true })).toBe('undo')
+    expect(k('Z', { shiftKey: true })).toBe('redo')
+    expect(k('y')).toBe('redo')
+  })
+
+  it('ignores the keys without Ctrl or Cmd, with Alt, and other letters', () => {
+    expect(k('z', { ctrlKey: false })).toBeNull()
+    expect(k('z', { altKey: true })).toBeNull()
+    expect(k('x')).toBeNull()
+    expect(k('y', { shiftKey: true })).toBeNull()
   })
 })

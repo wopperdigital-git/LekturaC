@@ -189,7 +189,7 @@ export function DrawingSurface({
         onClick={(e) => e.stopPropagation()}
         className="absolute z-30"
         style={{
-          inset: -BLEED_PX,
+          inset: -(drawing.bleed ?? BLEED_PX),
           touchAction: 'none',
           cursor: refused ? 'not-allowed' : 'crosshair',
         }}

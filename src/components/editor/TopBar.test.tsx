@@ -23,7 +23,6 @@ function render(extra: Partial<ComponentProps<typeof TopBar>> = {}) {
         onExport={noop}
         exporting={false}
         canExport
-        onPresent={noop}
         onPresenterView={noop}
         presenterDisabledReason={null}
         onQuiz={noop}
@@ -92,7 +91,7 @@ describe('TopBar', () => {
     expect(html).not.toContain('>Present</button>')
     expect(html).not.toContain('Generate quiz')
     expect(html).not.toContain('Generate Quiz')
-    expect(html).not.toContain('Quiz…')
+    expect(html).not.toContain('Create Quiz')
     expect(html).not.toContain('theme')
   })
 

@@ -1,7 +1,7 @@
 import type { CardDrawing } from '@/components/editor/drawingContext'
 import type { PenSettings } from '@/engine/penSettings'
 import type { Stroke } from '@/engine/overlay'
-import type { LaserPoint } from '@/present/liveInk'
+import { isLiveStroke, type LaserPoint, type LiveItem } from '@/present/liveInk'
 
 const noop = () => {}
 
@@ -17,19 +17,24 @@ export function presentDrawing({
   onCommit = noop,
   onErase = noop,
   onLiveStroke,
+  bleed,
 }: {
-  strokes: readonly Stroke[] | undefined
+  /** The slide's live items; only the strokes are ink (the whiteboard draws its text itself). */
+  strokes: readonly LiveItem[] | undefined
   settings?: PenSettings | null
   laser?: readonly LaserPoint[]
   onCommit?: (stroke: Stroke) => void
   onErase?: (ids: string[]) => void
   onLiveStroke?: (stroke: Stroke | null) => void
+  /** How far past the content box the pen reaches (the whiteboard's is everywhere). */
+  bleed?: number
 }): CardDrawing {
+  const ink = strokes?.filter(isLiveStroke) ?? []
   return {
     settings,
     shapeTool: null,
     storedOverlay: undefined,
-    temporaryOverlay: strokes && strokes.length > 0 ? [...strokes] : undefined,
+    temporaryOverlay: ink.length > 0 ? ink : undefined,
     commitStroke: (stroke) => onCommit(stroke),
     eraseItems: (ids) => onErase(ids),
     selectable: false,
@@ -40,5 +45,6 @@ export function presentDrawing({
     removeShape: noop,
     onLiveStroke,
     laser: laser && laser.length > 0 ? laser : undefined,
+    bleed,
   }
 }

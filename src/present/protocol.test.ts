@@ -33,7 +33,8 @@ describe('parseConsoleMessage', () => {
     const msgs = [
       { type: 'ping' },
       { type: 'deck', deck },
-      { type: 'state', index: 2, black: false, ended: true },
+      { type: 'state', index: 2, black: false, ended: true, board: false },
+      { type: 'state', index: 2, black: false, ended: false, board: true },
       { type: 'bye' },
       { type: 'end' },
       { type: 'ink', ink: { a: [stroke] } },
@@ -41,8 +42,34 @@ describe('parseConsoleMessage', () => {
       { type: 'inkLive', cardId: 'a', stroke: null },
       { type: 'laser', cardId: 'a', point: [0.2, 0.3] },
       { type: 'laser', cardId: 'a', point: null },
+      { type: 'boardView', view: { x: -1.5, y: 2, zoom: 0.5 } },
     ]
     for (const m of msgs) expect(parseConsoleMessage(m)).toEqual(m)
+  })
+
+  it('reads a state from an older window as the slide, not the whiteboard', () => {
+    expect(parseConsoleMessage({ type: 'state', index: 0, black: false, ended: false })).toEqual({
+      type: 'state',
+      index: 0,
+      black: false,
+      ended: false,
+      board: false,
+    })
+  })
+
+  it('carries whiteboard text in the ink', () => {
+    const text = { id: 't1', kind: 'text', x: 0.1, y: 0.1, text: 'Hi', color: '#ef4444', size: 0.035 }
+    expect(parseConsoleMessage({ type: 'ink', ink: { whiteboard: [stroke, text] } })).toEqual({
+      type: 'ink',
+      ink: { whiteboard: [stroke, text] },
+    })
+  })
+
+  it('falls back to the board start for an odd view', () => {
+    expect(parseConsoleMessage({ type: 'boardView', view: { x: Infinity, y: 0, zoom: 1 } })).toEqual({
+      type: 'boardView',
+      view: { x: 0, y: 0, zoom: 1 },
+    })
   })
 
   it('checks ink like stored ink', () => {

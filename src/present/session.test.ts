@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { loadSession, restoreState, saveSession, sessionKey, type SavedSession } from './session'
+import type { Stroke } from '@/engine/overlay'
+import { inkKey, loadInk, loadSession, restoreState, saveInk, saveSession, sessionKey, type SavedSession } from './session'
 
 const saved: SavedSession = {
   index: 2,
@@ -72,5 +73,34 @@ describe('restoreState', () => {
       black: true,
     })
     expect(restoreState({ ...saved, index: 3, ended: true }, 4).ended).toBe(true)
+  })
+})
+
+describe('live ink storage', () => {
+  const stroke: Stroke = { id: 'k1', kind: 'stroke', tool: 'pen', color: '#ef4444', width: 0.004, points: [[0.1, 0.1], [0.2, 0.2]] }
+
+  it('keeps ink apart from the session state', () => {
+    expect(inkKey('s1')).not.toBe(sessionKey('s1'))
+  })
+
+  it('saves then loads the ink', () => {
+    const s = memory()
+    saveInk(s, 's1', { a: [stroke] })
+    expect(loadInk(s, 's1')).toEqual({ a: [stroke] })
+  })
+
+  it('reads no ink when absent, blocked, malformed or not strokes', () => {
+    expect(loadInk(memory(), 's1')).toEqual({})
+    expect(loadInk(null, 's1')).toEqual({})
+    expect(loadInk({ getItem: () => { throw new Error('blocked') }, setItem: () => {} }, 's1')).toEqual({})
+    const s = memory()
+    s.setItem(inkKey('s1'), '{nope')
+    expect(loadInk(s, 's1')).toEqual({})
+    s.setItem(inkKey('s1'), JSON.stringify({ a: [{ id: 'x', kind: 'stroke', points: 'no' }] }))
+    expect(loadInk(s, 's1')).toEqual({})
+  })
+
+  it('does not throw when storage refuses the write', () => {
+    expect(() => saveInk({ getItem: () => null, setItem: () => { throw new Error('full') } }, 's1', { a: [stroke] })).not.toThrow()
   })
 })

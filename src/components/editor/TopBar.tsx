@@ -22,7 +22,6 @@ export function TopBar({
   canExport,
   onExportScript,
   scriptDisabledReason,
-  onPresent,
   onPresenterView,
   presenterDisabledReason,
   onQuiz,
@@ -47,7 +46,6 @@ export function TopBar({
   onExportScript: () => void
   /** Why there is no narration script to export, or `null` when there is. */
   scriptDisabledReason: string | null
-  onPresent: () => void
   /** Opens the presenter view; the page opens the slide window inside this very click. */
   onPresenterView: (from: 'current' | 'first') => void
   /** Why the presenter view cannot start (an empty deck), or `null` when it can. */
@@ -173,7 +171,6 @@ export function TopBar({
           highlightQuiz={exportHighlight}
         />
         <PresentMenu
-          onPresent={onPresent}
           onPresenterView={onPresenterView}
           presenterDisabledReason={presenterDisabledReason}
         />

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { PresenterState } from './presenterState'
+import { parseLiveInk, type LiveInk } from './liveInk'
 
 // The presenter console's state, saved per session so a reload resumes it.
 
@@ -56,5 +57,29 @@ export function restoreState(saved: SavedSession, count: number): PresenterState
     count,
     black: saved.black,
     ended: index === saved.index ? saved.ended : false,
+  }
+}
+
+/** Live ink is kept beside the session under its own key, so a reload keeps what was drawn. */
+export function inkKey(session: string): string {
+  return `lekturac:presenter-ink:${session}`
+}
+
+export function loadInk(storage: KeyValueStorage | null, session: string): LiveInk {
+  if (!storage) return {}
+  try {
+    const raw = storage.getItem(inkKey(session))
+    return raw === null ? {} : parseLiveInk(JSON.parse(raw))
+  } catch {
+    return {}
+  }
+}
+
+export function saveInk(storage: KeyValueStorage | null, session: string, ink: LiveInk): void {
+  if (!storage) return
+  try {
+    storage.setItem(inkKey(session), JSON.stringify(ink))
+  } catch {
+    // blocked or full storage: the ink just isn't remembered across a reload
   }
 }

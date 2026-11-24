@@ -4,6 +4,8 @@ import type { Card } from '@/engine/contentBlocks'
 import { BUILTIN_THEMES } from '@/lib/theme-tokens'
 import type { DeckSnapshot, ScreenLink } from '@/present/protocol'
 import type { PresenterState } from '@/present/presenterState'
+import { DEFAULT_LIVE_PEN, livePenSettings } from '@/present/liveInk'
+import { presentDrawing } from './presentDrawing'
 import { PresenterConsoleView, type PresenterConsoleViewProps } from './PresenterConsole'
 
 function card(id: string, orderIndex: number, script?: string): Card {
@@ -123,4 +125,110 @@ describe('PresenterConsoleView', () => {
     expect(html).toContain('aria-live="polite"')
     expect(html).toContain('Slide 2 of 3')
   })
+
+  it('offers the live tools as icon buttons, with the pointer chosen to start', () => {
+    const html = render()
+    expect(html).toContain('aria-label="Draw on the slide"')
+    for (const label of ['Pointer', 'Pen', 'Highlighter', 'Laser', 'Eraser']) {
+      const button = html.split('<button').find((b) => b.includes(`aria-label="${label}"`)) ?? ''
+      expect(button).toContain('<svg')
+      expect(button).not.toContain(`>${label}<`)
+    }
+    expect(html).toMatch(/aria-pressed="true" aria-label="Pointer"/)
+  })
+
+  it('enables Undo and Redo only when the slide has a step to take', () => {
+    const button = (html: string, label: string) => html.split('<button').find((b) => b.includes(`aria-label="${label}"`)) ?? ''
+    expect(button(render(), 'Undo')).toContain('disabled=""')
+    expect(button(render(), 'Redo')).toContain('disabled=""')
+    expect(button(render({ canUndo: true }), 'Undo')).not.toContain('disabled=""')
+    expect(button(render({ canRedo: true }), 'Redo')).not.toContain('disabled=""')
+  })
+
+  it('keeps the colours in the chosen tool menu, not the bar', () => {
+    expect(render({ pen: { ...DEFAULT_LIVE_PEN, tool: 'pen' } })).not.toContain('aria-label="Colour"')
+    const open = render({ pen: { ...DEFAULT_LIVE_PEN, tool: 'pen' }, toolMenu: 'pen' })
+    expect(open).toContain('aria-label="Pen settings"')
+    expect(open).toContain('aria-label="Colour"')
+    expect(open).toContain('aria-label="Size"')
+  })
+
+  it('opens a menu only for the chosen tool, and only for tools that have one', () => {
+    // Asked for a menu on a tool that is not chosen: nothing opens.
+    expect(render({ toolMenu: 'pen' })).not.toContain('data-tool-menu')
+    expect(render({ pen: { ...DEFAULT_LIVE_PEN, tool: 'laser' }, toolMenu: 'laser' })).not.toContain('data-tool-menu')
+    // The eraser has sizes but no colours.
+    const eraser = render({ pen: { ...DEFAULT_LIVE_PEN, tool: 'eraser' }, toolMenu: 'eraser' })
+    expect(eraser).toContain('aria-label="Size"')
+    expect(eraser).not.toContain('aria-label="Colour"')
+  })
+
+  it('marks the chosen size in the menu', () => {
+    const html = render({ pen: { ...DEFAULT_LIVE_PEN, tool: 'pen', penSize: 'big' }, toolMenu: 'pen' })
+    expect(html).toMatch(/aria-pressed="true" aria-label="Thick"/)
+    expect(html).toMatch(/aria-pressed="false" aria-label="Fine"/)
+  })
+
+  it('offers text sizes for the Text tool on the board', () => {
+    const html = render({ board: true, pen: { ...DEFAULT_LIVE_PEN, tool: 'text' }, toolMenu: 'text' })
+    for (const label of ['Small', 'Medium', 'Large']) expect(html).toContain(`aria-label="${label}"`)
+  })
+
+  it('says a tool with settings opens them on a second press, and shows its colour on the button', () => {
+    const html = render()
+    const pen = html.split('<button').find((b) => b.includes('aria-label="Pen"')) ?? ''
+    expect(pen).toContain('aria-haspopup="dialog"')
+    expect(pen).toContain('data-tool-color')
+    const laser = html.split('<button').find((b) => b.includes('aria-label="Laser"')) ?? ''
+    expect(laser).not.toContain('aria-haspopup')
+  })
+
+  it('enables Clear slide only when the slide has ink', () => {
+    const clear = (html: string) => html.split('<button').find((b) => b.includes('aria-label="Clear slide"')) ?? ''
+    expect(clear(render())).toContain('disabled=""')
+    expect(clear(render({ hasInk: true }))).not.toContain('disabled=""')
+  })
+
+  it('lays the drawing surface over the slide only while the pen captures', () => {
+    const pen = { ...DEFAULT_LIVE_PEN, tool: 'pen' as const }
+    const drawing = presentDrawing({ strokes: undefined, settings: livePenSettings(pen) })
+    expect(render({ pen, drawing })).toContain('data-drawing-surface')
+    expect(render({ drawing: presentDrawing({ strokes: undefined }) })).not.toContain('data-drawing-surface')
+  })
+
+  it('offers the whiteboard, and the Text tool only while it is up', () => {
+    const boardButton = (html: string) => html.split('<button').find((b) => b.includes('Whiteboard</button>')) ?? ''
+    const slide = render()
+    expect(boardButton(slide)).toContain('aria-pressed="false"')
+    expect(slide).not.toContain('aria-label="Text"')
+    expect(slide).not.toContain('data-whiteboard')
+
+    const board = render({ board: true })
+    expect(boardButton(board)).toContain('aria-pressed="true"')
+    expect(board).toContain('aria-label="Text"')
+    expect(board).toContain('data-whiteboard')
+  })
+
+  it('shows the end, not the whiteboard, once the presentation has ended', () => {
+    const html = render({ board: true, state: state({ ended: true }) })
+    expect(html).toContain('End of presentation')
+    expect(html).not.toContain('data-whiteboard')
+  })
+
+  it('offers zoom only while the board is up, showing the zoom as a percentage', () => {
+    expect(render()).not.toContain('aria-label="Zoom in"')
+    const html = render({ board: true, boardView: { x: 0, y: 0, zoom: 1.5 } })
+    expect(html).toContain('aria-label="Zoom out"')
+    expect(html).toContain('aria-label="Zoom in"')
+    expect(html).toContain('>150%</button>')
+  })
+
+  it('moves and scales the board to the view, and lets the pointer grab it', () => {
+    const html = render({ board: true, boardView: { x: 0.5, y: -0.25, zoom: 2 }, onBoardView: () => {} })
+    expect(html).toContain('transform:scale(2) translate(-488px, 244px)')
+    expect(html).toContain('cursor:grab')
+    // The pen draws instead of grabbing.
+    expect(render({ board: true, onBoardView: () => {}, pen: { ...DEFAULT_LIVE_PEN, tool: 'pen' } })).not.toContain('cursor:grab')
+  })
 })
+

@@ -8,6 +8,7 @@ import { OverlayLayer } from '@/components/editor/OverlayLayer'
 import { DrawingSurface } from '@/components/editor/DrawingSurface'
 import { ShapeSelectionLayer } from '@/components/editor/ShapeSelectionLayer'
 import { DrawingContext } from '@/components/editor/drawingContext'
+import { LaserLayer } from '@/components/present/LaserLayer'
 import { useEditorGrid } from '@/components/editor/gridContext'
 import {
   BlockAdjustContext,
@@ -135,6 +136,8 @@ export function SlideBody({
               onPressItem={drawing.selectable ? (id) => drawing.selectShape(id, 'temporary') : undefined}
             />
           )}
+          {/* The presenter view's laser pointer, in the ink's coordinates. */}
+          {drawing?.laser && <LaserLayer trail={drawing.laser} width={width} />}
           {/* Captures the drags of the pen, the eraser and the shape tool; only while one is active. */}
           {(drawing?.settings || drawing?.shapeTool) && (
             <DrawingSurface boxRef={ref} width={width} onFading={setFading} />
