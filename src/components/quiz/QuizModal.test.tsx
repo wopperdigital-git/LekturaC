@@ -70,7 +70,29 @@ describe('QuizModal', () => {
   it('disables Generate while a quiz is generating', () => {
     const html = renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} quizRunning />)
     expect(html).toContain('A quiz is already generating')
-    expect(buttonTag(html, '>Generate<')).toMatch(DISABLED_ATTR)
+    expect(buttonTag(html, '>Generate quiz<')).toMatch(DISABLED_ATTR)
+  })
+
+  it('pins Generate and the running total in the footer, below both panels (outside their scroll)', () => {
+    const html = renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} />)
+    const generate = html.indexOf('>Generate quiz<')
+    expect(generate).toBeGreaterThan(html.indexOf('id="quiz-panel-list"'))
+    expect(buttonTag(html, '>Generate quiz<')).not.toMatch(DISABLED_ATTR)
+    expect(html).toContain('10 questions</span> in 1 test')
+  })
+
+  it('says why Generate is off beside it, not only in a tooltip', () => {
+    const html = renderToStaticMarkup(<QuizModal presentationId="p" title="Cells" cards={[]} onClose={noop} />)
+    expect(buttonTag(html, '>Generate quiz<')).toMatch(DISABLED_ATTR)
+    expect(html).toMatch(/role="status"[^>]*>[^<]*(Add some slide content first|set up)/i)
+  })
+
+  it('offers New quiz in the list tab footer instead of Generate', () => {
+    const html = renderToStaticMarkup(
+      <QuizModal presentationId="p" title="Cells" cards={CARDS} onClose={noop} initialTab="list" />,
+    )
+    expect(html).toContain('>New quiz<')
+    expect(html).not.toContain('>Generate quiz<')
   })
 
   it('keeps both tab panels mounted inside one fixed-height area, so switching tabs never resizes it', () => {
@@ -95,12 +117,34 @@ describe('SectionList', () => {
     expect(html).not.toContain('Remove Test 1')
   })
 
+  it('numbers each card and names the sub-option after its type', () => {
+    let s = drafts(3)
+    s = sectionsReducer(s, { kind: 'setType', index: 1, type: 'fill_blank' })
+    s = sectionsReducer(s, { kind: 'setType', index: 2, type: 'true_false' })
+    const html = renderToStaticMarkup(<SectionList drafts={s} dispatch={noop} onAdd={noop} disabled={false} />)
+    expect(html).toMatch(/aria-hidden="true"[^>]*>1<\/span>/)
+    expect(html).toMatch(/aria-hidden="true"[^>]*>3<\/span>/)
+    expect(html).toContain('>Choices<')
+    expect(html).toContain('>Word box<')
+    expect(html).toContain('>Answer format<')
+    expect(html).not.toContain('>Options<')
+  })
+
+  it('steps Items with − / + buttons that stop at 1 and 20', () => {
+    let s = drafts(1)
+    s = sectionsReducer(s, { kind: 'setCountText', index: 0, text: '20' })
+    s = sectionsReducer(s, { kind: 'commitCount', index: 0 })
+    const atMax = renderToStaticMarkup(<SectionList drafts={s} dispatch={noop} onAdd={noop} disabled={false} />)
+    expect(buttonTag(atMax, 'aria-label="More Test 1 items"')).toMatch(DISABLED_ATTR)
+    expect(buttonTag(atMax, 'aria-label="Fewer Test 1 items"')).not.toMatch(DISABLED_ATTR)
+  })
+
   it('disables Add test at three tests and offers remove on each', () => {
     const html = renderToStaticMarkup(<SectionList drafts={drafts(3)} dispatch={noop} onAdd={noop} disabled={false} />)
-    expect(buttonTag(html, 'Add test')).toMatch(DISABLED_ATTR)
+    expect(buttonTag(html, 'A quiz holds at most 3 tests')).toMatch(DISABLED_ATTR)
+    expect(html).not.toContain('Add test')
     expect(html).toContain('Remove Test 1')
     expect(html).toContain('Remove Test 3')
-    expect(html).toContain('3 tests · 30 items')
   })
 })
 

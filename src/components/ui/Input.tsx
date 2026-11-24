@@ -104,9 +104,12 @@ export function Textarea({
   )
 }
 
+/** The field label's look, for a caption that can't be a `<label>` (e.g. over a radio group). */
+export const LABEL_CLASSES = 'caps mb-1.5 block text-[0.6875rem] text-app-muted'
+
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="caps mb-1.5 block text-[0.6875rem] text-app-muted">
+    <label htmlFor={htmlFor} className={LABEL_CLASSES}>
       {children}
     </label>
   )

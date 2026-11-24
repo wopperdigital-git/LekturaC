@@ -89,7 +89,7 @@ export function QuizPreviewModal({
   return (
     <Modal title={summary.title} maxWidth="max-w-2xl" onClose={onClose}>
       <QuizPreviewBody summary={summary} state={state} isTeacher={isTeacher} />
-      {notices}
+      {notices && <div className="mt-3">{notices}</div>}
       <div className="mt-6 flex items-center justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>
           Close

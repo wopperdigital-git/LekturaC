@@ -85,6 +85,23 @@ describe('sectionsReducer', () => {
     s = sectionsReducer(s, { kind: 'commitAll' })
     expect([s[0].count, s[0].countText]).toEqual([20, '20'])
   })
+
+  it('steps the count from what is typed, within 1–20', () => {
+    let s = [newSection(0, 'a')]
+    s = sectionsReducer(s, { kind: 'setCountText', index: 0, text: '7' })
+    s = sectionsReducer(s, { kind: 'stepCount', index: 0, by: 1 })
+    expect([s[0].count, s[0].countText]).toEqual([8, '8'])
+    s = sectionsReducer(s, { kind: 'setCountText', index: 0, text: '20' })
+    s = sectionsReducer(s, { kind: 'stepCount', index: 0, by: 1 })
+    expect([s[0].count, s[0].countText]).toEqual([20, '20'])
+    s = sectionsReducer(s, { kind: 'setCountText', index: 0, text: '1' })
+    s = sectionsReducer(s, { kind: 'stepCount', index: 0, by: -1 })
+    expect([s[0].count, s[0].countText]).toEqual([1, '1'])
+    // Junk in the box steps from the last good count.
+    s = sectionsReducer(s, { kind: 'setCountText', index: 0, text: 'x' })
+    s = sectionsReducer(s, { kind: 'stepCount', index: 0, by: 1 })
+    expect([s[0].count, s[0].countText]).toEqual([2, '2'])
+  })
 })
 
 describe('toSectionRequests / totalItems', () => {
@@ -108,6 +125,10 @@ describe('toSectionRequests / totalItems', () => {
 })
 
 describe('changesForm', () => {
+  it('counts a − / + press as a change', () => {
+    expect(changesForm({ kind: 'stepCount', index: 0, by: 1 })).toBe(true)
+  })
+
   it('is false only for settling a count already typed (a blur must not drop written tests)', () => {
     expect(changesForm({ kind: 'commitCount', index: 0 })).toBe(false)
     expect(changesForm({ kind: 'commitAll' })).toBe(false)

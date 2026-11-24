@@ -12,7 +12,7 @@ import { listQuizzesForDeck, loadOwnerQuiz } from '@/quiz/api'
 import type { DeckQuizSummary, OwnerQuiz } from '@/quiz/rows'
 import { exportQuizPdf } from '@/quiz/pdf/quizPdf'
 import { startQuizJob } from '@/jobs/start'
-import { changesForm, newSection, sectionsReducer, toSectionRequests, type SectionAction } from '@/quiz/sectionForm'
+import { changesForm, newSection, sectionsReducer, toSectionRequests, totalItems, type SectionAction } from '@/quiz/sectionForm'
 import type { Card } from '@/engine/contentBlocks'
 import { describeError } from '@/store/presentationStore'
 import { useAuthStore } from '@/store/authStore'
@@ -29,6 +29,10 @@ const TABS: { id: Tab; label: string }[] = [
  * background job (`startQuizJob`) and closes: the top-bar strip and the corner
  * panel carry the progress, and the finished quiz shows on the second tab. Both
  * tab panels stay mounted, so switching tabs never loses the form.
+ *
+ * Generate lives in the pinned footer (outside the scroll), so it stays in
+ * reach however many tests are open. Both tabs have a footer, so switching
+ * tabs never resizes the dialog.
  */
 export function QuizModal({
   presentationId,
@@ -138,15 +142,15 @@ export function QuizModal({
     tabRefs.current[next]?.focus()
   }
 
-  const notices = (
+  const notices = (pdfNotice || pdfError) && (
     <>
       {pdfNotice && (
-        <p role="status" className="mt-3 text-xs text-app-muted">
+        <p role="status" className="text-xs text-app-muted">
           {pdfNotice}
         </p>
       )}
       {pdfError && (
-        <p role="alert" className="mt-3 text-sm text-app-danger-text">
+        <p role="alert" className="text-sm text-app-danger-text">
           {pdfError}
         </p>
       )}
@@ -157,40 +161,67 @@ export function QuizModal({
     return (
       <div>
         <p className="mb-4 text-sm text-app-muted">
-          Questions are written once from your slides and saved. Each test is written separately; the answer key is for
-          you, and students see only the questions.
+          Written once from your slides and saved. Students see only the questions; the answer key is yours.
         </p>
-
         <SectionList drafts={drafts} dispatch={edit} onAdd={addTest} disabled={false} />
-
-        {noKey && <p className="mt-4 text-xs text-app-muted">{QUIZ_NOT_SET_UP}</p>}
-        {!noKey && noContent && <p className="mt-4 text-xs text-app-muted">Add some slide content first.</p>}
-        {quizRunning && <p className="mt-4 text-xs text-app-muted">A quiz is already generating.</p>}
-        {startError && (
-          <p role="alert" className="mt-4 text-sm text-app-danger-text">
-            {startError}
-          </p>
-        )}
-        {notices}
-
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <Button
-            variant="primary"
-            disabled={noKey || noContent || quizRunning}
-            title={quizRunning ? 'A quiz is already generating' : undefined}
-            onClick={generate}
-          >
-            Generate
-          </Button>
-        </div>
       </div>
     )
   }
 
+  /** Why Generate is off, if it is: said beside the button, not in a tooltip. */
+  const blocker = noKey
+    ? QUIZ_NOT_SET_UP
+    : noContent
+      ? 'Add some slide content first.'
+      : quizRunning
+        ? 'A quiz is already generating.'
+        : null
+  const total = totalItems(drafts)
+
+  const createFooter = (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0 text-sm">
+        {startError ? (
+          <p role="alert" className="text-app-danger-text">
+            {startError}
+          </p>
+        ) : blocker ? (
+          <p role="status" className="text-app-muted">
+            {blocker}
+          </p>
+        ) : (
+          <p className="text-app-muted tabular-nums">
+            <span className="font-bold text-app-foreground">
+              {total} {total === 1 ? 'question' : 'questions'}
+            </span>{' '}
+            in {drafts.length} {drafts.length === 1 ? 'test' : 'tests'}
+          </p>
+        )}
+      </div>
+      <Button variant="primary" className="shrink-0" disabled={blocker !== null} onClick={generate}>
+        Generate quiz
+      </Button>
+    </div>
+  )
+
+  const listFooter = (
+    <div className="flex items-center justify-between gap-4">
+      <div className="min-w-0">{!previewing && notices}</div>
+      <Button variant="secondary" className="shrink-0" onClick={() => setTab('create')}>
+        New quiz
+      </Button>
+    </div>
+  )
+
   return (
     // While the preview is open, Escape and a backdrop press belong to it alone:
     // both modals listen for Escape on the window, so this one stands down.
-    <Modal title="Generate a quiz" maxWidth="max-w-3xl" onClose={previewing || deleting ? () => {} : onClose}>
+    <Modal
+      title="Generate a quiz"
+      maxWidth="max-w-3xl"
+      onClose={previewing || deleting ? () => {} : onClose}
+      footer={tab === 'create' ? createFooter : listFooter}
+    >
       <div role="tablist" aria-label="Quiz" onKeyDown={onTabKeyDown} className="mb-5 flex gap-1 border-b border-app-border">
         {TABS.map((t, i) => {
           const selected = tab === t.id
@@ -259,7 +290,6 @@ export function QuizModal({
             }}
             onDelete={setDeleting}
           />
-          {tab === 'list' && !previewing && notices}
         </div>
       </div>
 

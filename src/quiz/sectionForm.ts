@@ -41,6 +41,8 @@ export type SectionAction =
   | { kind: 'setConfig'; index: number; config: QuizConfig }
   | { kind: 'setCountText'; index: number; text: string }
   | { kind: 'commitCount'; index: number }
+  /** The − / + buttons: one step from what the box holds, kept within 1–20. */
+  | { kind: 'stepCount'; index: number; by: 1 | -1 }
   | { kind: 'commitAll' }
   | { kind: 'setTitle'; index: number; title: string }
   | { kind: 'setInstructions'; index: number; text: string }
@@ -111,6 +113,11 @@ export function sectionsReducer(state: SectionDraft[], action: SectionAction): S
       return update(state, action.index, (d) => ({ ...d, countText: action.text }))
     case 'commitCount':
       return update(state, action.index, commit)
+    case 'stepCount':
+      return update(state, action.index, (d) => {
+        const count = clampItemCount(committedCount(d) + action.by)
+        return { ...d, count, countText: String(count) }
+      })
     case 'commitAll':
       return state.map(commit)
     case 'setTitle':
